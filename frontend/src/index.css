@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'OPPOSans';
+  src: url('/fonts/OPPO%20Sans%204.0.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  background: #0f172a;
+  color: #ffffff;
+}
+
+body,
+button,
+input,
+textarea,
+select {
+  font-family: 'OPPOSans', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Roboto, sans-serif;
+}
+
+#root,
+#root * {
+  color: #ffffff !important;
+}
+
+::placeholder {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* ---- Dashboard bar chart ---- */
+@keyframes barGrow {
+  from { height: 0; }
+  to { height: var(--bar-h); }
+}
+
+.bar-chart .bar {
+  animation: barGrow 0.6s ease-out forwards;
+}
