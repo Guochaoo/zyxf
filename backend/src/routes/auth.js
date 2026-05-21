@@ -1,11 +1,23 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import rateLimit from 'express-rate-limit';
 import { db } from '../db.js';
 import { signToken } from '../auth.js';
 
 const router = Router();
 
-router.post('/login', (req, res) => {
+// Brute-force protection: 10 attempts per 15 min per IP.
+// Successful logins do not count toward the cap.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: '尝试次数过多,请稍后再试' },
+});
+
+router.post('/login', loginLimiter, (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: 'username and password required' });

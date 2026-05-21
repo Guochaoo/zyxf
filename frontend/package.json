@@ -9,16 +9,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@react-three/drei": "^9.92.7",
-    "@react-three/fiber": "^8.15.12",
+    "@react-three/fiber": "^8.18.0",
     "axios": "^1.7.7",
     "gsap": "^3.15.0",
     "lucide-react": "^0.453.0",
-    "maath": "^0.10.8",
+    "ogl": "^1.0.11",
+    "pdfjs-dist": "^5.7.284",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-icons": "^5.6.0",
     "react-router-dom": "^6.27.0",
-    "three": "^0.160.0"
+    "three": "^0.169.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",

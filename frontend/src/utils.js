@@ -22,7 +22,7 @@ const OFFICE_EXT = ['ppt', 'pptx', 'doc', 'docx', 'xls', 'xlsx'];
 // Works around OSS's force-download header on un-filed domains by going through
 // fetch + Blob URL, which lets us set the filename via <a download>.
 export async function downloadFileById(file, getFileUrl) {
-  const meta = await getFileUrl(file.id);
+  const meta = await getFileUrl(file.id, { download: true });
   const resp = await fetch(meta.url);
   if (!resp.ok) throw new Error(`下载失败 (${resp.status})`);
   const blob = await resp.blob();

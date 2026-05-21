@@ -1,16 +1,19 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import {
-  ArrowUp,
-  ArrowDown,
-  FolderPlus,
-  Upload,
-  Trash2,
-  Download,
   Loader2,
-  RefreshCw,
-  GripVertical,
 } from 'lucide-react';
+import {
+  BsArrowCounterclockwise,
+  BsCloudArrowUp,
+  BsDownload,
+  BsFolderPlus,
+  BsGripVertical,
+  BsPen,
+  BsTrash,
+  BsSortAlphaDown,
+  BsSortAlphaDownAlt,
+} from 'react-icons/bs';
 import {
   createFolder,
   deleteFile,
@@ -19,12 +22,15 @@ import {
   listFolder,
   moveFile,
   moveFolder,
+  renameFile,
+  renameFolder,
   reorderItems,
 } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import FileIcon from '../components/FileIcon.jsx';
 import GlassSurface from '../components/GlassSurface.jsx';
 import Preview from '../components/Preview.jsx';
+import SearchBar from '../components/SearchBar.jsx';
 import UploadDialog from '../components/UploadDialog.jsx';
 import { downloadFileById, formatDate, formatSize } from '../utils.js';
 import {
@@ -48,6 +54,7 @@ export default function BrowsePage() {
   const { id: idParam } = useParams();
   const folderId = Number(idParam) || 0;
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAdmin } = useAuth();
 
   const [data, setData] = useState(null);
@@ -63,6 +70,9 @@ export default function BrowsePage() {
   orderRef.current = order;
   const [previewing, setPreviewing] = useState(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renaming, setRenaming] = useState(false);
 
   // Drag state. dragging mirrors to ref so DOM event handlers see fresh value
   // even before the next React render finishes.
@@ -88,6 +98,13 @@ export default function BrowsePage() {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folderId, sort, order]);
+
+  useEffect(() => {
+    const previewFile = location.state?.previewFile;
+    if (!previewFile || loading || !data) return;
+    setPreviewing(previewFile);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [data, loading, location.pathname, location.state, navigate]);
 
   const onCreateFolder = async () => {
     const name = window.prompt('新建文件夹名称');
@@ -117,6 +134,64 @@ export default function BrowsePage() {
       refresh();
     } catch (e) {
       alert(e.response?.data?.error || '删除失败');
+    }
+  };
+
+  const onRenameFolder = async (f) => {
+    const name = window.prompt('请输入新的文件夹名称', f.name);
+    if (!name || name.trim() === f.name) return;
+    try {
+      await renameFolder(f.id, name.trim());
+      refresh();
+    } catch (e) {
+      alert(e.response?.data?.error || '重命名失败');
+    }
+  };
+
+  const onRenameFile = async (f) => {
+    const name = window.prompt('请输入新的文件名', f.name);
+    if (!name || name.trim() === f.name) return;
+    try {
+      await renameFile(f.id, name.trim());
+      refresh();
+    } catch (e) {
+      alert(e.response?.data?.error || '重命名失败');
+    }
+  };
+
+  const openRenameDialog = (item) => {
+    setRenameTarget(item);
+    setRenameValue(item.name);
+  };
+
+  const closeRenameDialog = () => {
+    if (renaming) return;
+    setRenameTarget(null);
+    setRenameValue('');
+  };
+
+  const submitRenameDialog = async (e) => {
+    e.preventDefault();
+    if (!renameTarget) return;
+    const name = renameValue.trim();
+    if (!name || name === renameTarget.name) {
+      closeRenameDialog();
+      return;
+    }
+    setRenaming(true);
+    try {
+      if (renameTarget.type === 'folder') {
+        await renameFolder(renameTarget.id, name);
+      } else {
+        await renameFile(renameTarget.id, name);
+      }
+      setRenameTarget(null);
+      setRenameValue('');
+      refresh();
+    } catch (err) {
+      alert(err.response?.data?.error || '重命名失败');
+    } finally {
+      setRenaming(false);
     }
   };
 
@@ -295,20 +370,22 @@ export default function BrowsePage() {
   return (
     <div className="space-y-4">
       {/* Breadcrumb + Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
-        <Breadcrumb
-          crumbs={data?.breadcrumb}
-          currentId={folderId}
-          dragging={dragging}
-          dropZone={dropZone}
-          onDragOver={onCrumbDragOver}
-          onDragLeave={onCrumbDragLeave}
-          onDrop={onCrumbDrop}
-        />
-        <div className="flex w-full sm:w-auto flex-wrap items-center gap-2">
+      <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
+        <div className="order-last flex justify-start md:order-none md:col-start-1">
+          <Breadcrumb
+            crumbs={data?.breadcrumb}
+            currentId={folderId}
+            dragging={dragging}
+            dropZone={dropZone}
+            onDragOver={onCrumbDragOver}
+            onDragLeave={onCrumbDragLeave}
+            onDrop={onCrumbDrop}
+          />
+        </div>
+        <div className="flex w-full flex-wrap items-center justify-end gap-2 md:col-start-3 md:w-auto">
           <button
             onClick={refresh}
-            className="p-0"
+            className="order-2 p-0 sm:order-none"
             title="刷新"
           >
             <GlassSurface
@@ -320,11 +397,13 @@ export default function BrowsePage() {
               className="toolbar-glass"
             >
               <span className="toolbar-glass-button flex h-full w-full items-center justify-center">
-                <RefreshCw className="w-4 h-4" />
+                <BsArrowCounterclockwise className="w-4 h-4" />
               </span>
             </GlassSurface>
           </button>
-          <SortControl sort={sort} order={order} onChange={toggleSort} />
+          <div className="order-1 sm:order-none">
+            <SortControl sort={sort} order={order} onChange={toggleSort} />
+          </div>
           {isAdmin && (
             <>
               <GlassSurface
@@ -333,25 +412,28 @@ export default function BrowsePage() {
                 borderRadius={14}
                 backgroundOpacity={0.06}
                 saturation={1.4}
-                className="toolbar-glass shrink-0"
+                className="toolbar-glass order-3 shrink-0 sm:order-none"
               >
               <button
                 onClick={onCreateFolder}
                 className="toolbar-glass-button flex h-full items-center gap-1 px-3 text-sm"
               >
-                <FolderPlus className="w-4 h-4" />
+                <BsFolderPlus className="w-4 h-4" />
                 新建文件夹
               </button>
               </GlassSurface>
               <button
                 onClick={() => setUploadOpen(true)}
-                className="flex h-[34px] items-center gap-1 rounded-[14px] bg-brand-600 px-3 text-sm hover:bg-brand-700"
+                className="order-3 flex h-[34px] items-center gap-1 rounded-[14px] bg-brand-600 px-3 text-sm hover:bg-brand-700 sm:order-none"
               >
-                <Upload className="w-4 h-4" />
+                <BsCloudArrowUp className="w-4 h-4" />
                 上传
               </button>
             </>
           )}
+        </div>
+        <div className="hidden">
+          <SearchBar />
         </div>
       </div>
 
@@ -379,7 +461,7 @@ export default function BrowsePage() {
         ) : err ? (
           <div className="py-16 text-center text-red-500">{err}</div>
         ) : (
-          <ItemList
+          <ItemListWithRename
             data={data}
             isAdmin={isAdmin}
             dragging={dragging}
@@ -388,6 +470,8 @@ export default function BrowsePage() {
             onPreviewFile={setPreviewing}
             onDeleteFolder={onDeleteFolder}
             onDeleteFile={onDeleteFile}
+            onRenameFolder={(f) => openRenameDialog({ ...f, type: 'folder' })}
+            onRenameFile={(f) => openRenameDialog({ ...f, type: 'file' })}
             onDownloadFile={onDownloadFile}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
@@ -397,6 +481,43 @@ export default function BrowsePage() {
           />
         )}
       </div>
+
+      {renameTarget && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/35 px-4">
+          <form
+            onSubmit={submitRenameDialog}
+            className="w-full max-w-sm rounded-[18px] border border-white/10 bg-black/55 p-4 text-white shadow-2xl backdrop-blur-2xl"
+          >
+            <h2 className="text-base font-semibold">重命名</h2>
+            <p className="mt-1 text-xs text-slate-400">
+              {renameTarget.type === 'folder' ? '文件夹名称' : '文件名'}
+            </p>
+            <input
+              autoFocus
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              className="mt-4 w-full rounded-[12px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-white/30"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeRenameDialog}
+                disabled={renaming}
+                className="rounded-[10px] px-3 py-1.5 text-sm text-slate-300 hover:bg-white/10 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={renaming}
+                className="rename-dialog-save rounded-[10px] bg-white px-3 py-1.5 text-sm font-semibold text-black disabled:opacity-50"
+              >
+                {renaming ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {previewing && <Preview file={previewing} onClose={() => setPreviewing(null)} />}
       {uploadOpen && (
@@ -419,8 +540,8 @@ function Breadcrumb({ crumbs, currentId, dragging, dropZone, onDragOver, onDragL
         const isCurrent = i === crumbs.length - 1;
         const droppable = !!dragging && c.id !== currentId;
         const active = droppable && dropZone?.mode === 'crumb' && dropZone.id === c.id;
-        const linkCls = `px-1.5 py-0.5 rounded transition-colors ${
-          active ? 'bg-brand-100 ring-1 ring-brand-400 text-brand-700' : 'hover:text-brand-600'
+        const linkCls = `px-1.5 py-0.5 rounded text-white transition-colors ${
+          active ? 'bg-brand-100 ring-1 ring-brand-400 !text-brand-700' : 'hover:text-white/80'
         }`;
         const dndProps = droppable
           ? {
@@ -434,7 +555,7 @@ function Breadcrumb({ crumbs, currentId, dragging, dropZone, onDragOver, onDragL
             {i > 0 && <BreadcrumbSeparator />}
             <BreadcrumbItem>
               {isCurrent ? (
-                <BreadcrumbPage>{c.name}</BreadcrumbPage>
+                <BreadcrumbPage className="text-white">{c.name}</BreadcrumbPage>
               ) : (
                 <BreadcrumbLink asChild className={linkCls} {...dndProps}>
                   <Link to={c.id === 0 ? '/' : `/folder/${c.id}`}>{c.name}</Link>
@@ -486,7 +607,7 @@ function SortControl({ sort, order, onChange }) {
     >
     <div ref={listRef} className="relative flex max-w-full items-center overflow-x-auto text-xs">
       <span
-        className="pointer-events-none absolute inset-y-0 rounded-[14px] bg-white/20 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]"
+        className="pointer-events-none absolute inset-y-0 rounded-[14px] bg-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]"
         style={{
           width: indicator.width,
           transform: `translateX(${indicator.left}px)`,
@@ -506,6 +627,8 @@ function SortControl({ sort, order, onChange }) {
             key={opt.key}
             onClick={() => onChange(opt.key)}
             className={`sort-option relative z-10 flex h-[34px] shrink-0 items-center justify-center bg-transparent px-2.5 transition-colors focus:outline-none ${
+              active ? 'sort-option--active' : ''
+            } ${
               opt.key === 'manual' ? '' : 'pr-6'
             }`}
           >
@@ -513,9 +636,9 @@ function SortControl({ sort, order, onChange }) {
             <span className="absolute right-2 top-1/2 flex w-3 -translate-y-1/2 items-center justify-center">
               {opt.key !== 'manual' &&
                 (order === 'asc' ? (
-                  <ArrowUp className={`w-3 h-3 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
+                  <BsSortAlphaDown className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
                 ) : (
-                  <ArrowDown className={`w-3 h-3 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
+                  <BsSortAlphaDownAlt className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
                 ))}
             </span>
           </button>
@@ -523,6 +646,243 @@ function SortControl({ sort, order, onChange }) {
       })}
     </div>
     </GlassSurface>
+  );
+}
+
+function ItemListWithRename({
+  data,
+  isAdmin,
+  dragging,
+  dropZone,
+  onEnterFolder,
+  onPreviewFile,
+  onDeleteFolder,
+  onDeleteFile,
+  onRenameFolder,
+  onRenameFile,
+  onDownloadFile,
+  onDragStart,
+  onDragEnd,
+  onRowDragOver,
+  onRowDragLeave,
+  onRowDrop,
+}) {
+  const total = (data?.folders?.length || 0) + (data?.files?.length || 0);
+  if (total === 0) {
+    return <div className="py-16 text-center text-slate-500 text-sm">此文件夹为空</div>;
+  }
+  const actionWidthClass = isAdmin ? 'w-28' : 'w-16';
+  return (
+    <ul className="divide-y divide-white/10">
+      <li className="rb-table-heading hidden sm:flex items-center px-4 py-2 text-xs text-slate-400 bg-white/5">
+        <span className="flex-1">名称</span>
+        <span className="w-24 text-right">大小</span>
+        <span className="w-40 text-right">修改时间</span>
+        <span className={`${actionWidthClass} text-right`}>操作</span>
+      </li>
+      {data.folders.map((f) => (
+        <Row
+          key={`d-${f.id}`}
+          item={{ ...f, type: 'folder' }}
+          isAdmin={isAdmin}
+          dragging={dragging}
+          dropZone={dropZone}
+          actionWidthClass={actionWidthClass}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onRowDragOver={onRowDragOver}
+          onRowDragLeave={onRowDragLeave}
+          onRowDrop={onRowDrop}
+          onClick={() => onEnterFolder(f)}
+          actions={
+            isAdmin && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onRenameFolder(f)}
+                  className="p-1 rounded hover:bg-brand-500/20"
+                  title="重命名"
+                >
+                  <BsPen className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDeleteFolder(f)}
+                  className="p-1 rounded hover:bg-red-500/20"
+                  title="删除"
+                >
+                  <BsTrash className="w-4 h-4" />
+                </button>
+              </>
+            )
+          }
+        />
+      ))}
+      {data.files.map((f) => (
+        <Row
+          key={`f-${f.id}`}
+          item={{ ...f, type: 'file' }}
+          isAdmin={isAdmin}
+          dragging={dragging}
+          dropZone={dropZone}
+          actionWidthClass={actionWidthClass}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onRowDragOver={onRowDragOver}
+          onRowDragLeave={onRowDragLeave}
+          onRowDrop={onRowDrop}
+          onClick={() => onPreviewFile(f)}
+          actions={
+            <>
+              <button
+                type="button"
+                onClick={() => onDownloadFile(f)}
+                className="p-1 rounded hover:bg-brand-500/20"
+                title="下载"
+              >
+                <BsDownload className="w-4 h-4" />
+              </button>
+              {isAdmin && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onRenameFile(f)}
+                    className="p-1 rounded hover:bg-brand-500/20"
+                    title="重命名"
+                  >
+                    <BsPen className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteFile(f)}
+                    className="p-1 rounded hover:bg-red-500/20"
+                    title="删除"
+                  >
+                    <BsTrash className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </>
+          }
+        />
+      ))}
+    </ul>
+  );
+}
+
+function ItemListWithRenameLegacy({
+  data,
+  isAdmin,
+  dragging,
+  dropZone,
+  onEnterFolder,
+  onPreviewFile,
+  onDeleteFolder,
+  onDeleteFile,
+  onRenameFolder,
+  onRenameFile,
+  onDownloadFile,
+  onDragStart,
+  onDragEnd,
+  onRowDragOver,
+  onRowDragLeave,
+  onRowDrop,
+}) {
+  const total = (data?.folders?.length || 0) + (data?.files?.length || 0);
+  if (total === 0) {
+    return <div className="py-16 text-center text-slate-500 text-sm">此文件夹为空</div>;
+  }
+  const actionWidthClass = isAdmin ? 'w-24' : 'w-16';
+  return (
+    <ul className="divide-y divide-white/10">
+      <li className="rb-table-heading hidden sm:flex items-center px-4 py-2 text-xs text-slate-400 bg-white/5">
+        <span className="flex-1">名称</span>
+        <span className="w-24 text-right">大小</span>
+        <span className="w-40 text-right">修改时间</span>
+        <span className={`${actionWidthClass} text-right`}>操作</span>
+      </li>
+      {data.folders.map((f) => (
+        <Row
+          key={`d-${f.id}`}
+          item={{ ...f, type: 'folder' }}
+          isAdmin={isAdmin}
+          dragging={dragging}
+          dropZone={dropZone}
+          actionWidthClass={actionWidthClass}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onRowDragOver={onRowDragOver}
+          onRowDragLeave={onRowDragLeave}
+          onRowDrop={onRowDrop}
+          onClick={() => onEnterFolder(f)}
+          actions={
+            isAdmin && (
+              <>
+                <button
+                  onClick={() => onRenameFolder(f)}
+                  className="p-1 rounded hover:bg-brand-500/20"
+                  title="重命名"
+                >
+                  <BsPen className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => onDeleteFolder(f)}
+                  className="p-1 rounded hover:bg-red-500/20"
+                  title="删除"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </>
+            )
+          }
+        />
+      ))}
+      {data.files.map((f) => (
+        <Row
+          key={`f-${f.id}`}
+          item={{ ...f, type: 'file' }}
+          isAdmin={isAdmin}
+          dragging={dragging}
+          dropZone={dropZone}
+          actionWidthClass={actionWidthClass}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onRowDragOver={onRowDragOver}
+          onRowDragLeave={onRowDragLeave}
+          onRowDrop={onRowDrop}
+          onClick={() => onPreviewFile(f)}
+          actions={
+            <>
+              <button
+                onClick={() => onDownloadFile(f)}
+                className="p-1 rounded hover:bg-brand-500/20"
+                title="下载"
+              >
+                <BsDownload className="w-4 h-4" />
+              </button>
+              {isAdmin && (
+                <>
+                  <button
+                    onClick={() => onRenameFile(f)}
+                    className="p-1 rounded hover:bg-brand-500/20"
+                    title="重命名"
+                  >
+                    <BsPen className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => onDeleteFile(f)}
+                    className="p-1 rounded hover:bg-red-500/20"
+                    title="删除"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </>
+          }
+        />
+      ))}
+    </ul>
   );
 }
 
@@ -549,7 +909,7 @@ function ItemList({
   const actionWidthClass = isAdmin ? 'w-24' : 'w-16';
   return (
     <ul className="divide-y divide-white/10">
-      <li className="hidden sm:flex items-center px-4 py-2 text-xs text-slate-400 bg-white/5">
+      <li className="rb-table-heading hidden sm:flex items-center px-4 py-2 text-xs text-slate-400 bg-white/5">
         <span className="flex-1">名称</span>
         <span className="w-24 text-right">大小</span>
         <span className="w-40 text-right">修改时间</span>
@@ -576,7 +936,7 @@ function ItemList({
                 className="p-1 rounded hover:bg-red-500/20"
                 title="删除"
               >
-                <Trash2 className="w-4 h-4" />
+                <BsTrash className="w-4 h-4" />
               </button>
             )
           }
@@ -611,7 +971,7 @@ function ItemList({
                   className="p-1 rounded hover:bg-red-500/20"
                   title="删除"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <BsTrash className="w-4 h-4" />
                 </button>
               )}
             </>
@@ -662,7 +1022,7 @@ function Row({
       onClick={onClick}
     >
       {isAdmin && (
-        <GripVertical className="w-4 h-4 -ml-1 sm:mr-1 sm:-ml-2 shrink-0 cursor-grab" />
+        <BsGripVertical className="w-4 h-4 -ml-1 sm:mr-1 sm:-ml-2 shrink-0 cursor-grab" />
       )}
       <span className="flex-1 flex items-center gap-2 min-w-0">
         <FileIcon type={item.type} ext={item.ext} />
@@ -675,7 +1035,7 @@ function Row({
         {formatDate(item.created_at)}
       </span>
       <span
-        className={`flex ${isAdmin ? 'w-16 sm:w-24' : 'w-9 sm:w-16'} shrink-0 justify-end gap-1`}
+        className={`flex ${isAdmin ? 'w-24 sm:w-28' : 'w-9 sm:w-16'} shrink-0 justify-end gap-1`}
         onClick={(e) => e.stopPropagation()}
       >
         {actions}
