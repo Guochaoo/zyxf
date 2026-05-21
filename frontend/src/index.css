@@ -10,11 +10,18 @@
   font-display: swap;
 }
 
+html {
+  /* Reserve space for the vertical scrollbar so its appear/disappear
+     between routes doesn't shift centered layouts (top bar, etc.) */
+  scrollbar-gutter: stable;
+  overflow-y: scroll;
+}
+
 html,
 body,
 #root {
   height: 100%;
-  background: #0f172a;
+  background: #ffffff;
   color: #ffffff;
 }
 
@@ -25,15 +32,431 @@ textarea,
 select {
   font-family: 'OPPOSans', -apple-system, BlinkMacSystemFont, 'Segoe UI',
     'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
 }
 
-#root,
-#root * {
-  color: #ffffff !important;
+button,
+a,
+[role='button'] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus,
+button:focus-visible,
+a:focus,
+a:focus-visible,
+[role='button']:focus,
+[role='button']:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 ::placeholder {
-  color: rgba(255, 255, 255, 0.7) !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.reactbits-grainient-theme {
+  min-height: 100%;
+  color: #ffffff;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.reactbits-grainient-theme,
+.reactbits-grainient-theme .text-white,
+.reactbits-grainient-theme .text-slate-100,
+.reactbits-grainient-theme .text-slate-200,
+.reactbits-grainient-theme .text-slate-300 {
+  color: #ffffff !important;
+}
+
+.reactbits-grainient-theme .text-slate-400,
+.reactbits-grainient-theme .text-slate-500,
+.reactbits-grainient-theme .text-slate-600,
+.reactbits-grainient-theme footer,
+.reactbits-grainient-theme .text-xs {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.reactbits-grainient-theme .text-sm {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.reactbits-grainient-theme .rb-brand-title {
+  color: #ffffff !important;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+@media (min-width: 640px) {
+  .reactbits-grainient-theme .rb-brand-title {
+    font-size: 17px;
+  }
+}
+
+.reactbits-grainient-theme .rb-search-pill,
+.rb-search-pill {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50px;
+  background: rgba(18, 15, 23, 0.5);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+}
+
+.reactbits-grainient-theme .rb-search-pill:focus-within,
+.rb-search-pill:focus-within {
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+}
+
+.reactbits-grainient-theme .rb-search-pill input,
+.rb-search-pill input {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  border-radius: 50px !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.reactbits-grainient-theme .rb-search-pill input:focus,
+.rb-search-pill input:focus {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.reactbits-grainient-theme .rb-search-dropdown,
+.rb-search-dropdown {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  background: rgba(18, 15, 23, 0.5);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+}
+
+.reactbits-grainient-theme .rb-search-dropdown .bg-white\/5,
+.rb-search-dropdown .bg-white\/5 {
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+.rb-search-dropdown,
+.rb-search-dropdown * {
+  color: #ffffff;
+}
+
+.rb-search-dropdown .text-slate-400,
+.rb-search-dropdown .text-slate-500,
+.rb-search-dropdown .text-xs {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.rb-search-dropdown .text-sm {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.rb-search-dropdown .hover\:bg-white\/10:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.reactbits-grainient-theme h1,
+.reactbits-grainient-theme h2,
+.reactbits-grainient-theme h3 {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+}
+
+.reactbits-grainient-theme p,
+.reactbits-grainient-theme li,
+.reactbits-grainient-theme input,
+.reactbits-grainient-theme button,
+.reactbits-grainient-theme a {
+  letter-spacing: 0 !important;
+}
+
+.reactbits-grainient-theme .rb-topbar,
+.reactbits-grainient-theme .bg-white\/10,
+.reactbits-grainient-theme .bg-white\/5 {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15) !important;
+  backdrop-filter: blur(20px) saturate(1.4) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.4) !important;
+}
+
+.reactbits-grainient-theme .rb-topbar {
+  position: relative;
+  width: 92%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  min-height: 48px;
+}
+
+.reactbits-grainient-theme .rb-topbar-search {
+  display: none;
+}
+
+.reactbits-grainient-theme .rb-desktop-nav {
+  display: none;
+  align-items: center;
+  gap: 20px;
+}
+
+.reactbits-grainient-theme .rb-desktop-nav-indicator {
+  pointer-events: none;
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  transition:
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease;
+}
+
+.reactbits-grainient-theme .rb-desktop-nav-link {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4) !important;
+  cursor: pointer;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  line-height: 1;
+  padding: 0 7px;
+  position: relative;
+  text-decoration: none;
+  transition: color 220ms ease, font-weight 220ms ease;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.reactbits-grainient-theme .rb-desktop-nav-link:hover {
+  color: rgba(255, 255, 255, 0.72) !important;
+}
+
+.reactbits-grainient-theme .rb-desktop-nav-link.is-active {
+  color: #000000 !important;
+  font-weight: 600 !important;
+}
+
+.reactbits-grainient-theme .rb-desktop-nav-action {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+@media (min-width: 768px) {
+  .reactbits-grainient-theme .rb-topbar {
+    width: 70%;
+  }
+
+  .reactbits-grainient-theme .rb-topbar-search {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    display: block;
+    width: clamp(240px, 28vw, 360px);
+    transform: translate(-50%, -50%);
+    z-index: 1;
+  }
+
+  .reactbits-grainient-theme .rb-topbar-search .rb-search-pill input {
+    padding-bottom: 8px;
+    padding-top: 8px;
+  }
+}
+
+@media (min-width: 641px) {
+  .reactbits-grainient-theme .rb-desktop-nav {
+    display: flex;
+    position: relative;
+    z-index: 2;
+  }
+}
+
+.reactbits-grainient-theme .border-white\/10,
+.reactbits-grainient-theme .border-white\/15,
+.reactbits-grainient-theme .border-white\/20 {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.reactbits-grainient-theme input,
+.reactbits-grainient-theme textarea,
+.reactbits-grainient-theme select {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+}
+
+.reactbits-grainient-theme input:focus,
+.reactbits-grainient-theme textarea:focus,
+.reactbits-grainient-theme select:focus {
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.1),
+    0 4px 24px rgba(0, 0, 0, 0.15) !important;
+}
+
+.reactbits-grainient-theme .rounded-xl {
+  border-radius: 14px !important;
+}
+
+.reactbits-grainient-theme .divide-white\/10 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.reactbits-grainient-theme .hover\:bg-white\/10:hover,
+.reactbits-grainient-theme .hover\:bg-white\/15:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.reactbits-grainient-theme .bg-brand-600,
+.reactbits-grainient-theme .bg-brand-500 {
+  background: rgba(255, 255, 255, 0.82) !important;
+  color: #000000 !important;
+}
+
+.reactbits-grainient-theme .hover\:bg-brand-700:hover,
+.reactbits-grainient-theme .hover\:bg-brand-600:hover {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #000000 !important;
+}
+
+.reactbits-grainient-theme .text-brand-400,
+.reactbits-grainient-theme .text-brand-500,
+.reactbits-grainient-theme .text-brand-600 {
+  color: #6d5fa8 !important;
+}
+
+.reactbits-grainient-theme footer {
+  text-shadow: 0 1px 16px rgba(255, 255, 255, 0.55);
+}
+
+.reactbits-grainient-theme .rb-selected,
+.reactbits-grainient-theme .sort-option--active {
+  color: #000000 !important;
+}
+
+.reactbits-grainient-theme .sort-option,
+.reactbits-grainient-theme .toolbar-glass-button,
+.reactbits-grainient-theme input {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+.reactbits-grainient-theme .bg-brand-600,
+.reactbits-grainient-theme .bg-brand-500,
+.reactbits-grainient-theme .hover\:bg-brand-700:hover,
+.reactbits-grainient-theme .hover\:bg-brand-600:hover {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+.reactbits-grainient-theme .rename-dialog-save {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+.reactbits-grainient-theme .rb-muted {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.reactbits-grainient-theme .rb-table-heading,
+.reactbits-grainient-theme .rb-table-heading * {
+  color: #ffffff !important;
+}
+
+/* ---- Login page: light scope overrides global dark theme ---- */
+.reactbits-grainient-theme .login-light,
+.reactbits-grainient-theme .login-light * {
+  color: inherit;
+}
+
+.reactbits-grainient-theme .login-light {
+  color: #171717 !important;
+}
+
+.reactbits-grainient-theme .login-light h1,
+.reactbits-grainient-theme .login-light h2,
+.reactbits-grainient-theme .login-light h3 {
+  color: #171717 !important;
+}
+
+.reactbits-grainient-theme .login-light .text-neutral-900 { color: #171717 !important; }
+.reactbits-grainient-theme .login-light .text-neutral-700 { color: #404040 !important; }
+.reactbits-grainient-theme .login-light .text-neutral-500 { color: #737373 !important; }
+.reactbits-grainient-theme .login-light .text-neutral-400 { color: #a3a3a3 !important; }
+.reactbits-grainient-theme .login-light .text-sm { color: inherit; }
+.reactbits-grainient-theme .login-light .text-xs { color: inherit !important; }
+
+.reactbits-grainient-theme .login-light input {
+  background: #f1f1f0 !important;
+  border: 0 !important;
+  color: #171717 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.reactbits-grainient-theme .login-light input:hover {
+  background: #ebebea !important;
+}
+
+.reactbits-grainient-theme .login-light input:focus {
+  background: #e7e7e6 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.reactbits-grainient-theme .login-light input::placeholder {
+  color: #a3a3a3 !important;
+}
+
+/* Kill Chrome's blue/yellow autofill background */
+.reactbits-grainient-theme .login-light input:-webkit-autofill,
+.reactbits-grainient-theme .login-light input:-webkit-autofill:hover,
+.reactbits-grainient-theme .login-light input:-webkit-autofill:focus,
+.reactbits-grainient-theme .login-light input:-webkit-autofill:active {
+  -webkit-text-fill-color: #171717 !important;
+  -webkit-box-shadow: 0 0 0 1000px #f1f1f0 inset !important;
+  box-shadow: 0 0 0 1000px #f1f1f0 inset !important;
+  caret-color: #171717 !important;
+  transition: background-color 9999s ease-in-out 0s !important;
+}
+
+.reactbits-grainient-theme .login-light button[type='submit'] {
+  color: #ffffff !important;
+}
+
+.reactbits-grainient-theme .login-light .login-light-eye {
+  background: transparent !important;
+  color: #a3a3a3 !important;
+}
+
+.reactbits-grainient-theme .login-light .login-light-eye:hover {
+  color: #404040 !important;
+  background: transparent !important;
+}
+
+.reactbits-grainient-theme .login-light .login-light-eye:focus,
+.reactbits-grainient-theme .login-light .login-light-eye:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* ---- Dashboard bar chart ---- */

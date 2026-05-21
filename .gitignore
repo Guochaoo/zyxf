@@ -6,3 +6,8 @@ dist
 data.db
 data.db-journal
 .DS_Store
+
+# local dev / scratch
+.tmp-*
+page.html
+backend/run-backend-hidden.ps1

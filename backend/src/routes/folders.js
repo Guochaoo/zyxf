@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { copyOssObject, deleteOssObjectIfExists, putEmptyOssObject } from '../oss.js';
-import { objectKeyForFile, placeholderKeyForFolder } from '../storagePath.js';
+import { objectKeyForFile, parseOptionalFolderId, placeholderKeyForFolder } from '../storagePath.js';
 
 const router = Router();
 
@@ -24,13 +24,25 @@ function nextSortOrder(table, column, parentId) {
 }
 export { nextSortOrder };
 
+function findFolderByNameInParent(name, parentId, excludeId = null) {
+  const normalizedParentId = parentId == null || parentId === 0 ? null : Number(parentId);
+  const base =
+    normalizedParentId === null
+      ? 'SELECT id FROM folders WHERE name = ? AND parent_id IS NULL'
+      : 'SELECT id FROM folders WHERE name = ? AND parent_id = ?';
+  const sql = excludeId ? `${base} AND id != ?` : base;
+  const args = normalizedParentId === null ? [name] : [name, normalizedParentId];
+  if (excludeId) args.push(excludeId);
+  return db.prepare(sql).get(...args);
+}
+
 function getFolder(id) {
-  if (id === 0 || id === '0' || id == null) return { id: 0, name: '根目录', parent_id: null };
+  if (id === 0 || id === '0' || id == null) return { id: 0, name: '首页', parent_id: null };
   return db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
 }
 
 function getBreadcrumb(id) {
-  const crumbs = [{ id: 0, name: '根目录' }];
+  const crumbs = [{ id: 0, name: '首页' }];
   if (!id || id === 0) return crumbs;
   const chain = [];
   const seen = new Set();
@@ -51,7 +63,8 @@ function getBreadcrumb(id) {
 
 // List the contents (subfolders + files) of a folder. id=0 means root.
 router.get('/:id/contents', (req, res) => {
-  const id = Number(req.params.id) || 0;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 0) return res.status(400).json({ error: 'invalid folder id' });
   const folder = getFolder(id);
   if (!folder) return res.status(404).json({ error: 'folder not found' });
 
@@ -93,10 +106,14 @@ router.post('/', requireAdmin, async (req, res) => {
   const { name, parent_id } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: 'name required' });
   const trimmed = name.trim();
-  const pid = parent_id ? Number(parent_id) : null;
-  if (pid) {
+  const pid = parseOptionalFolderId(parent_id);
+  if (Number.isNaN(pid)) return res.status(400).json({ error: 'invalid parent id' });
+  if (pid !== null) {
     const parent = db.prepare('SELECT id FROM folders WHERE id = ?').get(pid);
     if (!parent) return res.status(400).json({ error: 'parent not found' });
+  }
+  if (findFolderByNameInParent(trimmed, pid)) {
+    return res.status(409).json({ error: 'folder already exists' });
   }
   try {
     const so = nextSortOrder('folders', 'parent_id', pid);
@@ -123,11 +140,88 @@ router.post('/', requireAdmin, async (req, res) => {
 // Move folder to a new parent (parent_id = null means root)
 router.patch('/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid folder id' });
   const folder = db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
   if (!folder) return res.status(404).json({ error: 'not found' });
 
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
+    const newName = String(req.body?.name || '').trim();
+    if (!newName) return res.status(400).json({ error: 'name required' });
+    if (newName === folder.name) return res.json({ ok: true, unchanged: true });
+    const parentId = folder.parent_id ?? null;
+    if (findFolderByNameInParent(newName, parentId, id)) {
+      return res.status(409).json({ error: 'folder already exists' });
+    }
+
+    try {
+      const collectFolders = (folderId, acc) => {
+        const row = db.prepare('SELECT id FROM folders WHERE id = ?').get(folderId);
+        if (row) acc.push(row.id);
+        const subs = db.prepare('SELECT id FROM folders WHERE parent_id = ?').all(folderId);
+        for (const sub of subs) collectFolders(sub.id, acc);
+      };
+      const folderIds = [];
+      collectFolders(id, folderIds);
+      const files = [];
+      for (const folderId of folderIds) {
+        files.push(
+          ...db
+            .prepare('SELECT id, folder_id, name, oss_key FROM files WHERE folder_id = ?')
+            .all(folderId)
+        );
+      }
+
+      const nameOverrides = new Map([[id, newName]]);
+      const fileMoves = files.map((file) => ({
+        ...file,
+        newKey: objectKeyForFile(db, file.folder_id, file.name, new Map(), nameOverrides),
+      }));
+      for (const move of fileMoves) {
+        const conflict = db
+          .prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?')
+          .get(move.newKey, move.id);
+        if (conflict) return res.status(409).json({ error: 'target OSS path already exists' });
+      }
+
+      const placeholderMoves = folderIds
+        .map((folderId) => ({
+          oldKey: placeholderKeyForFolder(db, folderId),
+          newKey: placeholderKeyForFolder(db, folderId, new Map(), nameOverrides),
+        }))
+        .filter((move) => move.oldKey && move.newKey);
+
+      for (const move of fileMoves) {
+        if (move.oss_key !== move.newKey) await copyOssObject(move.oss_key, move.newKey);
+      }
+      for (const move of placeholderMoves) {
+        if (move.oldKey !== move.newKey) await putEmptyOssObject(move.newKey);
+      }
+
+      const updateFile = db.prepare('UPDATE files SET oss_key = ? WHERE id = ?');
+      const tx = db.transaction(() => {
+        db.prepare('UPDATE folders SET name = ? WHERE id = ?').run(newName, id);
+        for (const move of fileMoves) updateFile.run(move.newKey, move.id);
+      });
+      tx();
+
+      for (const move of fileMoves) {
+        if (move.oss_key !== move.newKey) await deleteOssObjectIfExists(move.oss_key);
+      }
+      for (const move of placeholderMoves) {
+        if (move.oldKey !== move.newKey) await deleteOssObjectIfExists(move.oldKey);
+      }
+      return res.json({ ok: true, name: newName });
+    } catch (e) {
+      if (String(e.message).includes('UNIQUE')) {
+        return res.status(409).json({ error: 'folder already exists' });
+      }
+      throw e;
+    }
+  }
+
   const raw = req.body?.parent_id;
-  const newParent = raw === null || raw === undefined || raw === 0 || raw === '0' ? null : Number(raw);
+  const newParent = parseOptionalFolderId(raw);
+  if (Number.isNaN(newParent)) return res.status(400).json({ error: 'invalid parent id' });
 
   if (newParent === id) return res.status(400).json({ error: 'cannot move into itself' });
 
@@ -146,6 +240,9 @@ router.patch('/:id', requireAdmin, async (req, res) => {
   }
 
   if (newParent === (folder.parent_id ?? null)) return res.json({ ok: true, unchanged: true });
+  if (findFolderByNameInParent(folder.name, newParent, id)) {
+    return res.status(409).json({ error: 'target folder already has a folder with this name' });
+  }
 
   try {
     const collectFolders = (folderId, acc) => {
@@ -224,7 +321,8 @@ router.patch('/:id', requireAdmin, async (req, res) => {
 router.post('/reorder', requireAdmin, (req, res) => {
   const { parent_folder_id, order } = req.body || {};
   if (!Array.isArray(order)) return res.status(400).json({ error: 'order must be an array' });
-  const pid = parent_folder_id == null || parent_folder_id === 0 ? null : Number(parent_folder_id);
+  const pid = parseOptionalFolderId(parent_folder_id);
+  if (Number.isNaN(pid)) return res.status(400).json({ error: 'invalid parent folder id' });
 
   // Validate every entry belongs to the claimed parent folder.
   for (const it of order) {

@@ -52,8 +52,18 @@ export async function moveFile(id, folderId) {
   return data;
 }
 
+export async function renameFile(id, name) {
+  const { data } = await api.patch(`/files/${id}`, { name });
+  return data;
+}
+
 export async function moveFolder(id, parentId) {
   const { data } = await api.patch(`/folders/${id}`, { parent_id: parentId ?? null });
+  return data;
+}
+
+export async function renameFolder(id, name) {
+  const { data } = await api.patch(`/folders/${id}`, { name });
   return data;
 }
 
@@ -71,8 +81,8 @@ export async function getFileUrl(id, { download = false } = {}) {
   return data;
 }
 
-export async function getStats() {
-  const { data } = await api.get('/stats');
+export async function getStats(range = 30) {
+  const { data } = await api.get('/stats', { params: { range } });
   return data;
 }
 

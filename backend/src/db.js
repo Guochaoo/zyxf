@@ -71,6 +71,13 @@ if (!hasColumn('files', 'sort_order')) {
   db.exec(`ALTER TABLE files ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`);
   db.exec(`UPDATE files SET sort_order = id`);
 }
+// --- migration: add ip / ua audit columns to download_logs ---
+if (!hasColumn('download_logs', 'ip')) {
+  db.exec(`ALTER TABLE download_logs ADD COLUMN ip TEXT`);
+}
+if (!hasColumn('download_logs', 'ua')) {
+  db.exec(`ALTER TABLE download_logs ADD COLUMN ua TEXT`);
+}
 db.exec(`
 CREATE INDEX IF NOT EXISTS idx_folders_sort ON folders(parent_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_files_sort ON files(folder_id, sort_order);

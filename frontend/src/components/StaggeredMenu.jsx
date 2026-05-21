@@ -355,6 +355,7 @@ const StaggeredMenu = ({
       data-position={position}
       data-open={open || undefined}
     >
+      <div className="sm-backdrop" aria-hidden="true" onClick={closeMenu} />
       <div ref={preLayersRef} className="sm-prelayers" aria-hidden="true">
         {(() => {
           const raw = colors && colors.length ? colors.slice(0, 4) : ['#1e1e22', '#35353c'];
@@ -435,8 +436,8 @@ const StaggeredMenu = ({
             )}
           </ul>
           {displaySocials && socialItems && socialItems.length > 0 && (
-            <div className="sm-socials" aria-label="Social links">
-              <h3 className="sm-socials-title">Socials</h3>
+            <div className="sm-socials" aria-label="Official Channels">
+              <h3 className="sm-socials-title">Official Channels</h3>
               <ul className="sm-socials-list" role="list">
                 {socialItems.map((s, i) => (
                   <li key={s.label + i} className="sm-socials-item">

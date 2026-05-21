@@ -1,6 +1,10 @@
+sandbox_mode = "workspace-write"
 [mcp_servers.shadcn]
 args = [
     "shadcn@latest",
     "mcp",
 ]
 command = "npx"
+
+[sandbox_workspace_write]
+network_access = true

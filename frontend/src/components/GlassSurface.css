@@ -30,43 +30,34 @@
 }
 
 .glass-surface--svg {
-  background: hsl(0 0% 100% / var(--glass-frost, 0));
-  backdrop-filter: var(--filter-id, url(#glass-filter)) saturate(var(--glass-saturation, 1));
-  box-shadow:
-    0 0 2px 1px rgba(255, 255, 255, 0.35) inset,
-    0 0 10px 4px rgba(255, 255, 255, 0.14) inset,
-    0 8px 24px rgba(15, 23, 42, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: var(--filter-id, url(#glass-filter)) blur(20px) saturate(var(--glass-saturation, 1.4));
+  -webkit-backdrop-filter: var(--filter-id, url(#glass-filter)) blur(20px) saturate(var(--glass-saturation, 1.4));
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
 }
 
 .glass-surface--fallback {
-  background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(12px) saturate(1.8) brightness(1.12);
-  -webkit-backdrop-filter: blur(12px) saturate(1.8) brightness(1.12);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  box-shadow:
-    0 8px 32px 0 rgba(31, 38, 135, 0.18),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.28),
-    inset 0 -1px 0 0 rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
 }
 
 .glass-surface:focus-visible {
-  outline: 2px solid #60a5fa;
-  outline-offset: 2px;
+  outline: none;
 }
 
 .toolbar-glass {
   flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .toolbar-glass--stable.glass-surface--svg {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(12px) saturate(var(--glass-saturation, 1));
-  -webkit-backdrop-filter: blur(12px) saturate(var(--glass-saturation, 1));
-  box-shadow:
-    0 8px 24px rgba(15, 23, 42, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px) saturate(var(--glass-saturation, 1.4));
+  -webkit-backdrop-filter: blur(20px) saturate(var(--glass-saturation, 1.4));
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
 }
 
 .toolbar-glass-button {
@@ -78,7 +69,7 @@
 
 .toolbar-glass-button:hover,
 .toolbar-glass button:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .toolbar-glass .sort-option,
