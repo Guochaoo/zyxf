@@ -29,7 +29,7 @@ import {
 import { useAuth } from '../auth.jsx';
 import FileIcon from '../components/FileIcon.jsx';
 import GlassSurface from '../components/GlassSurface.jsx';
-import Preview from '../components/Preview.jsx';
+import Preview from '../components/Preview/index.jsx';
 import SearchBar from '../components/SearchBar.jsx';
 import UploadDialog from '../components/UploadDialog.jsx';
 import { downloadFileById, formatDate, formatSize } from '../utils.js';
@@ -467,7 +467,7 @@ export default function BrowsePage() {
             dragging={dragging}
             dropZone={dropZone}
             onEnterFolder={(f) => navigate(`/folder/${f.id}`)}
-            onPreviewFile={setPreviewing}
+                        onPreviewFile={setPreviewing}
             onDeleteFolder={onDeleteFolder}
             onDeleteFile={onDeleteFile}
             onRenameFolder={(f) => openRenameDialog({ ...f, type: 'folder' })}

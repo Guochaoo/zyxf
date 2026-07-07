@@ -18,30 +18,27 @@ export const BLOCKED_EXTS = new Set([
   'dll', 'so', 'dylib',
 ]);
 
+// Only these file types are allowed for upload.
+// All previewable files go through Alibaba Cloud WebOffice (IMM doc/preview).
+// Archives are download-only.
 export const ALLOWED_EXTS = new Set([
-  // documents
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-  'odt', 'ods', 'odp',
-  // plain text & structured
-  'txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'xml', 'yaml', 'yml', 'log',
-  // images
-  'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'ico', 'heic', 'svg',
-  // archives
+  // Word
+  'doc', 'dot', 'wps', 'wpt', 'docx', 'dotx', 'docm', 'dotm', 'rtf',
+  // PPT
+  'ppt', 'pptx', 'pptm', 'ppsx', 'ppsm', 'pps', 'potx', 'potm', 'dpt', 'dps',
+  // Excel
+  'xls', 'xlt', 'et', 'xlsx', 'xltx', 'csv', 'xlsm', 'xltm',
+  // PDF
+  'pdf',
+  // 文本
+  'txt',
+  // 压缩包（仅下载，不预览）
   'zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2',
-  // audio / video
-  'mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac',
-  'mp4', 'mov', 'webm', 'mkv', 'avi', 'wmv', 'm4v',
-  // misc safe
-  'epub', 'rtf',
 ]);
 
-// Inline-preview is allowed only for these. Everything else is downloaded.
-const INLINE_OK = new Set([
-  'pdf',
-  'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'ico',
-  'mp4', 'mov', 'webm', 'm4v',
-  'mp3', 'wav', 'ogg', 'm4a',
-  'txt', 'md', 'csv', 'json', 'log',
+// Archives and unknown types are forced to download.
+const ARCHIVE_EXTS = new Set([
+  'zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2',
 ]);
 
 export function normalizeExt(ext) {
@@ -59,5 +56,6 @@ export function shouldForceDownload(ext) {
   const e = normalizeExt(ext);
   if (!e) return true;
   if (BLOCKED_EXTS.has(e)) return true;
-  return !INLINE_OK.has(e);
+  // Archives are download-only; everything else can be previewed
+  return ARCHIVE_EXTS.has(e);
 }

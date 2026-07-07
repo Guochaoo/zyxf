@@ -23,6 +23,7 @@ services:
       OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:?OSS_ACCESS_KEY_SECRET is required}
       OSS_KEY_PREFIX: ${OSS_KEY_PREFIX:-zyxf/}
       OSS_ENDPOINT: ${OSS_ENDPOINT:-}
+      IMM_STYLE: ${IMM_STYLE:-}
     volumes:
       - zyxf-data:/data
 

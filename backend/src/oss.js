@@ -20,12 +20,38 @@ export function ossClient() {
   return _client;
 }
 
-export function ossPublicHost() {
-  const region = envOrThrow('OSS_REGION');
-  const bucket = envOrThrow('OSS_BUCKET');
+let _immClient = null;
+/**
+ * Get an OSS client configured for IMM (WebOffice) preview.
+ * Requires V4 signature and custom domain (cname) support.
+ */
+function immClient() {
+  if (_immClient) return _immClient;
+  _immClient = new OSS({
+    region: envOrThrow('OSS_REGION'),
+    accessKeyId: envOrThrow('OSS_ACCESS_KEY_ID'),
+    accessKeySecret: envOrThrow('OSS_ACCESS_KEY_SECRET'),
+    bucket: envOrThrow('OSS_BUCKET'),
+    endpoint: envOrThrow('OSS_ENDPOINT'),
+    cname: true,
+    secure: true,
+  });
+  return _immClient;
+}
+
+// ---- cached module-level constants (env vars are static at runtime) ----
+
+const _ossPublicHost = (() => {
   const ep = process.env.OSS_ENDPOINT;
-  if (ep) return ep.replace(/\/+$/, '');
-  return `https://${bucket}.${region}.aliyuncs.com`;
+  if (ep) {
+    const trimmed = ep.replace(/\/+$/, '');
+    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  }
+  return `https://${envOrThrow('OSS_BUCKET')}.${envOrThrow('OSS_REGION')}.aliyuncs.com`;
+})();
+
+export function ossPublicHost() {
+  return _ossPublicHost;
 }
 
 /**
@@ -73,10 +99,35 @@ export function signedGetUrl(key, expiresSec = 3600, opts = {}) {
   const response = {};
   if (opts.contentType) response['content-type'] = opts.contentType;
   if (opts.disposition) response['content-disposition'] = opts.disposition;
-  const url = client.signatureUrl(key, {
-    expires: expiresSec,
-    response: Object.keys(response).length ? response : undefined,
-  });
+
+  const signOpts = { expires: expiresSec };
+  if (opts.process) signOpts.process = opts.process;
+  if (Object.keys(response).length) signOpts.response = response;
+
+  const url = client.signatureUrl(key, signOpts);
+  return url.replace(/^http:/, 'https:');
+}
+
+// ---- IMM preview constants ----
+
+const DEFAULT_IMM_STYLE = process.env.IMM_STYLE
+  ? `style/${process.env.IMM_STYLE}`
+  : 'doc/preview,export_0,print_0';
+
+/**
+ * Generate a signed GET URL for IMM (WebOffice) document preview.
+ *
+ * IMPORTANT: IMM preview requires a custom domain bound to the OSS bucket.
+ * Set OSS_ENDPOINT in .env to your custom domain, e.g. https://zyxf.top.
+ *
+ * @param key        OSS object key
+ * @param expiresSec URL validity in seconds
+ * @param style      Override IMM processing style
+ */
+export function immPreviewUrl(key, expiresSec = 1800, style = null) {
+  const processStyle = style || DEFAULT_IMM_STYLE;
+  const client = immClient();
+  const url = client.signatureUrl(key, { expires: expiresSec, process: processStyle });
   return url.replace(/^http:/, 'https:');
 }
 
