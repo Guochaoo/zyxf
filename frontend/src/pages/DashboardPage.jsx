@@ -17,14 +17,14 @@ import {
 
 // Shared BorderGlow defaults for all dashboard cards (dark theme).
 const GLOW_DEFAULTS = {
-  backgroundColor: '#0a0a0a',
+  backgroundColor: '#6496f3',
   borderRadius: 16,
   edgeSensitivity: 35,
   glowRadius: 28,
   glowIntensity: 0.8,
   coneSpread: 25,
   glowColor: '230 90 65',
-  colors: ['#a78bfa', '#f472b6', '#60a5fa'],
+  colors: ['#62ff3b', '#e5ff00', '#38e8ff'],
   fillOpacity: 0.4,
 };
 

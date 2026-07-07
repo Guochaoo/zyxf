@@ -35,16 +35,10 @@ export default function App() {
 
   const activeDesktopMenuItem = menuItems.find(isActiveMenuItem);
 
-  // ---- Dynamic document.title: "仲英学辅 - <页面>" ----
+  // ---- Document title ----
   useEffect(() => {
-    const PREFIX = '仲英学辅';
-    const path = location.pathname;
-    let suffix = '资料库';
-    if (path.startsWith('/dashboard')) suffix = '统计';
-    else if (path.startsWith('/about')) suffix = '关于我们';
-    else if (path.startsWith('/login')) suffix = '管理员登录';
-    document.title = `${PREFIX} - ${suffix}`;
-  }, [location.pathname]);
+    document.title = '仲英学辅';
+  }, []);
 
   useLayoutEffect(() => {
     if (!ready) {
@@ -84,8 +78,8 @@ export default function App() {
     <div className="reactbits-grainient-theme min-h-full flex flex-col relative bg-white">
       <div className="fixed inset-0 z-0 bg-white">
         <Grainient
-          color1="#b8b6cc"
-          color2="#316ea3"
+          color1="#c2b6b2"
+          color2="#276DA9"
           color3="#184872"
           timeSpeed={0.25}
           colorBalance={0.7}

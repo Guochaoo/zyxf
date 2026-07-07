@@ -15,12 +15,28 @@ export function formatDate(ts) {
   )}:${pad(d.getMinutes())}`;
 }
 
-const IMAGE_EXT = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
-const OFFICE_EXT = ['ppt', 'pptx', 'doc', 'docx', 'xls', 'xlsx'];
+// ---- extension classification (mirrors backend extPolicy.js) ----
 
-// Download a file as Blob and trigger a save dialog with the original filename.
-// Works around OSS's force-download header on un-filed domains by going through
-// fetch + Blob URL, which lets us set the filename via <a download>.
+const OFFICE_EXT = new Set([
+  // Word
+  'doc', 'dot', 'wps', 'wpt', 'docx', 'dotx', 'docm', 'dotm', 'rtf',
+  // PPT
+  'ppt', 'pptx', 'pptm', 'ppsx', 'ppsm', 'pps', 'potx', 'potm', 'dpt', 'dps',
+  // Excel
+  'xls', 'xlt', 'et', 'xlsx', 'xltx', 'csv', 'xlsm', 'xltm',
+  // PDF
+  'pdf',
+  // 文本
+  'txt',
+]);
+
+const ARCHIVE_EXT = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2']);
+
+export const LARGE_FILE_THRESHOLD = 20 * 1024 * 1024; // 20 MB
+export const LARGE_FILE_HINT = '文件较大（>20MB），建议在 WiFi 下预览或直接下载';
+
+// ---- helpers ----
+
 export async function downloadFileById(file, getFileUrl) {
   const meta = await getFileUrl(file.id, { download: true });
   const resp = await fetch(meta.url);
@@ -38,9 +54,11 @@ export async function downloadFileById(file, getFileUrl) {
 
 export function getPreviewKind(ext) {
   ext = (ext || '').toLowerCase().replace(/^\./, '');
-  if (ext === 'pdf') return 'pdf';
-  if (IMAGE_EXT.includes(ext)) return 'image';
-  if (OFFICE_EXT.includes(ext)) return 'office';
-  if (['txt', 'md', 'json', 'csv', 'log'].includes(ext)) return 'text';
+  if (OFFICE_EXT.has(ext)) return 'office';
+  if (ARCHIVE_EXT.has(ext)) return 'archive';
   return 'unknown';
+}
+
+export function isLargeFile(size) {
+  return size != null && size > LARGE_FILE_THRESHOLD;
 }

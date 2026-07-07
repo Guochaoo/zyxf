@@ -3,7 +3,7 @@ import path from 'node:path';
 import rateLimit from 'express-rate-limit';
 import { db } from '../db.js';
 import { requireAdmin } from '../auth.js';
-import { buildPostPolicy, copyOssObject, deleteOssObjectIfExists, signedGetUrl } from '../oss.js';
+import { buildPostPolicy, copyOssObject, deleteOssObjectIfExists, signedGetUrl, immPreviewUrl } from '../oss.js';
 import { mimeOf } from '../mime.js';
 import { nextSortOrder } from './folders.js';
 import { findFileByNameInFolder, objectKeyForFile, parseOptionalFolderId } from '../storagePath.js';
@@ -43,7 +43,23 @@ function dispositionFor(name, asAttachment) {
   return `${type}; filename="${fallback}"; filename*=UTF-8''${encodeRfc5987(name)}`;
 }
 
-const SHORT_SIGN_TTL = 600; // 10 min — enough for browser to fetch+blob, less link-sharing risk
+const SHORT_SIGN_TTL = 1800; // 30 min — enough for long preview sessions, short enough to limit link-sharing risk
+
+// IMM doc/preview: file types eligible for WebOffice preview. Archives and blocked types excluded.
+const OFFICE_EXT_IMM = new Set([
+  // Word
+  'doc', 'dot', 'wps', 'wpt', 'docx', 'dotx', 'docm', 'dotm', 'rtf',
+  // PPT
+  'ppt', 'pptx', 'pptm', 'ppsx', 'ppsm', 'pps', 'potx', 'potm', 'dpt', 'dps',
+  // Excel
+  'xls', 'xlt', 'et', 'xlsx', 'xltx', 'csv', 'xlsm', 'xltm',
+  // PDF
+  'pdf',
+  // 文本
+  'txt',
+]);
+
+const HAS_CUSTOM_DOMAIN = !!process.env.OSS_ENDPOINT;
 
 // In-memory dedupe: same file_id + IP within window counts once.
 const DOWNLOAD_DEDUP_WINDOW_MS = 5 * 60 * 1000;
@@ -144,15 +160,20 @@ router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => 
   const contentType = mimeOf(ext) || 'application/octet-stream';
   // Defence in depth: any type not on the inline whitelist (and anything risky)
   // is served with Content-Disposition: attachment so it cannot execute in the OSS origin.
-  const forceAttach = req.query.download === '1' || shouldForceDownload(ext);
-  const disposition = dispositionFor(file.name, forceAttach);
+  const isDownload = req.query.download === '1';
+  const forceAttach = isDownload || shouldForceDownload(ext);
+  const urlOptions = {};
+  // For downloads: skip response-content-type (OSS may reject) and
+  // Content-Disposition (frontend uses <a download> to set filename).
+  // For previews: include both so Office Online fallback can detect the format.
+  if (!isDownload) {
+    urlOptions.contentType = contentType;
+    urlOptions.disposition = dispositionFor(file.name, forceAttach);
+  }
 
-  const url = signedGetUrl(file.oss_key, SHORT_SIGN_TTL, {
-    contentType,
-    disposition,
-  });
+  const url = signedGetUrl(file.oss_key, SHORT_SIGN_TTL, urlOptions);
 
-  if (req.query.download === '1') {
+  if (isDownload) {
     const ip = req.ip || req.socket?.remoteAddress || '';
     const ua = String(req.headers['user-agent'] || '').slice(0, 256);
     if (shouldLogDownload(file.id, ip)) {
@@ -169,8 +190,16 @@ router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => 
     }
   }
 
+  // IMM doc/preview URL for eligible file types (not for download).
+  // Requires a custom domain bound to the bucket.
+  const immUrl =
+    !isDownload && HAS_CUSTOM_DOMAIN && OFFICE_EXT_IMM.has(ext)
+      ? immPreviewUrl(file.oss_key, SHORT_SIGN_TTL)
+      : null;
+
   res.json({
     url,
+    imm_url: immUrl || undefined,
     name: file.name,
     ext: file.ext,
     mime_type: contentType,
