@@ -193,7 +193,7 @@ export default function App() {
       />
 
       <footer className="text-center text-xs text-slate-500 py-4 relative z-10">
-        仲英书院学业辅导中心
+        仲英书院学业辅导中心 · 陕ICP备2026017448号
       </footer>
     </div>
   );
