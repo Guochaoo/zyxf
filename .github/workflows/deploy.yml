@@ -17,6 +17,7 @@ jobs:
           port: ${{ secrets.SERVER_PORT || '22' }}
           script: |
             cd /opt/zyxf
+            git config --global --add safe.directory /opt/zyxf
             git pull origin main
             docker compose up -d --build --remove-orphans
             docker image prune -f
