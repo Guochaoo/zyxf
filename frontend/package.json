@@ -14,7 +14,6 @@
     "gsap": "^3.15.0",
     "lucide-react": "^0.453.0",
     "ogl": "^1.0.11",
-    "pdfjs-dist": "^5.7.284",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-icons": "^5.6.0",

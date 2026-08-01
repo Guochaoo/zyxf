@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { db, ensureAdmin } from './db.js';
-import { attachUser } from './auth.js';
+import { attachUser, DEV_JWT_SECRET } from './auth.js';
 import authRoutes from './routes/auth.js';
 import folderRoutes from './routes/folders.js';
 import fileRoutes from './routes/files.js';
@@ -17,7 +17,7 @@ const isProd = process.env.NODE_ENV === 'production';
 // ---- Production safety: refuse to start with insecure defaults ----
 if (isProd) {
   const missing = [];
-  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'dev-secret') missing.push('JWT_SECRET');
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === DEV_JWT_SECRET) missing.push('JWT_SECRET');
   if (!process.env.ADMIN_PASSWORD) missing.push('ADMIN_PASSWORD');
   if (missing.length) {
     console.error(

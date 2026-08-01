@@ -62,3 +62,8 @@ export function getPreviewKind(ext) {
 export function isLargeFile(size) {
   return size != null && size > LARGE_FILE_THRESHOLD;
 }
+
+// Pull the backend error message out of an axios error, with a fallback.
+export function errMsg(e, fallback = '操作失败') {
+  return e?.response?.data?.error || e?.message || fallback;
+}

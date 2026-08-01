@@ -118,10 +118,6 @@ const GlassSurface = ({
   }, []);
 
   useEffect(() => {
-    setTimeout(updateDisplacementMap, 0);
-  }, [width, height]);
-
-  useEffect(() => {
     setSvgSupported(supportsSVGFilters());
   }, []);
 

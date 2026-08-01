@@ -5,29 +5,24 @@ import { db } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { buildPostPolicy, copyOssObject, deleteOssObjectIfExists, signedGetUrl, immPreviewUrl } from '../oss.js';
 import { mimeOf } from '../mime.js';
-import { nextSortOrder } from './folders.js';
-import { findFileByNameInFolder, objectKeyForFile, parseOptionalFolderId } from '../storagePath.js';
-import { isExtAllowed, normalizeExt, shouldForceDownload } from '../extPolicy.js';
+import { findFileByNameInFolder, findOssKeyConflict, nextSortOrder } from '../dbHelpers.js';
+import { objectKeyForFile, ossPrefix, parseOptionalFolderId } from '../storagePath.js';
+import { isExtAllowed, normalizeExt, PREVIEWABLE_EXTS, shouldForceDownload } from '../extPolicy.js';
 
 // ---- Anti-abuse: per-IP download rate limit ----
 // Only counts download requests (?download=1). Previews are not limited.
 // Admins bypass the cap.
-const downloadLimiterShort = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 20, // 20 downloads / minute / IP
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => req.query.download !== '1' || req.user?.role === 'admin',
-  message: { error: '下载过于频繁,请稍后再试' },
-});
-const downloadLimiterLong = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 200, // 200 downloads / hour / IP
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => req.query.download !== '1' || req.user?.role === 'admin',
-  message: { error: '本小时下载次数已达上限,请稍后再试' },
-});
+const downloadLimiter = (windowMs, max, message) =>
+  rateLimit({
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => req.query.download !== '1' || req.user?.role === 'admin',
+    message: { error: message },
+  });
+const downloadLimiterShort = downloadLimiter(60 * 1000, 20, '下载过于频繁,请稍后再试');
+const downloadLimiterLong = downloadLimiter(60 * 60 * 1000, 200, '本小时下载次数已达上限,请稍后再试');
 
 // RFC 5987 encode for Content-Disposition filename* parameter.
 function encodeRfc5987(value) {
@@ -44,20 +39,6 @@ function dispositionFor(name, asAttachment) {
 }
 
 const SHORT_SIGN_TTL = 1800; // 30 min — enough for long preview sessions, short enough to limit link-sharing risk
-
-// IMM doc/preview: file types eligible for WebOffice preview. Archives and blocked types excluded.
-const OFFICE_EXT_IMM = new Set([
-  // Word
-  'doc', 'dot', 'wps', 'wpt', 'docx', 'dotx', 'docm', 'dotm', 'rtf',
-  // PPT
-  'ppt', 'pptx', 'pptm', 'ppsx', 'ppsm', 'pps', 'potx', 'potm', 'dpt', 'dps',
-  // Excel
-  'xls', 'xlt', 'et', 'xlsx', 'xltx', 'csv', 'xlsm', 'xltm',
-  // PDF
-  'pdf',
-  // 文本
-  'txt',
-]);
 
 const HAS_CUSTOM_DOMAIN = !!process.env.OSS_ENDPOINT;
 
@@ -79,67 +60,75 @@ function shouldLogDownload(fileId, ip) {
 
 const router = Router();
 
+// Shared validation for both upload steps: filename, parent folder, duplicate
+// name and extension whitelist. Returns { trimmed, pid, ext } or { error, status }.
+function validateUploadInput(name, folderId) {
+  const trimmed = String(name || '').trim();
+  if (!trimmed) return { error: 'filename required' };
+  const pid = parseOptionalFolderId(folderId);
+  if (Number.isNaN(pid)) return { error: 'invalid folder id' };
+  if (pid !== null) {
+    const f = db.prepare('SELECT id FROM folders WHERE id = ?').get(pid);
+    if (!f) return { error: 'folder not found' };
+  }
+  if (findFileByNameInFolder(db, trimmed, pid)) {
+    return { error: 'same filename already exists in this folder', status: 409 };
+  }
+  const ext = normalizeExt(path.extname(trimmed));
+  if (!isExtAllowed(ext)) {
+    return { error: `不允许的文件类型: ${ext ? '.' + ext : '(无扩展名)'}`, status: 415 };
+  }
+  return { trimmed, pid, ext };
+}
+
+function getFileOr404(req, res) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: 'invalid file id' });
+    return null;
+  }
+  const file = db.prepare('SELECT * FROM files WHERE id = ?').get(id);
+  if (!file) {
+    res.status(404).json({ error: 'not found' });
+    return null;
+  }
+  return file;
+}
+
 // Step 1: ask backend for a signed upload policy
 router.post('/upload-url', requireAdmin, (req, res) => {
   const { filename, folder_id } = req.body || {};
-  const trimmed = String(filename || '').trim();
-  if (!trimmed) return res.status(400).json({ error: 'filename required' });
-  const folderId = parseOptionalFolderId(folder_id);
-  if (Number.isNaN(folderId)) return res.status(400).json({ error: 'invalid folder id' });
-  if (folderId !== null) {
-    const f = db.prepare('SELECT id FROM folders WHERE id = ?').get(folderId);
-    if (!f) return res.status(400).json({ error: 'folder not found' });
-  }
-  if (findFileByNameInFolder(db, trimmed, folderId)) {
-    return res.status(409).json({ error: 'same filename already exists in this folder' });
-  }
-  const ext = path.extname(trimmed).toLowerCase();
-  if (!isExtAllowed(ext)) {
-    return res.status(415).json({ error: `不允许的文件类型: ${ext || '(无扩展名)'}` });
-  }
-  const key = objectKeyForFile(db, folderId, trimmed);
-
-  const policy = buildPostPolicy({ key });
-  res.json({ ...policy, ext });
+  const v = validateUploadInput(filename, folder_id);
+  if (v.error) return res.status(v.status || 400).json({ error: v.error });
+  const key = objectKeyForFile(db, v.pid, v.trimmed);
+  res.json({ ...buildPostPolicy({ key }), ext: `.${v.ext}` });
 });
 
 // Step 2: after the browser uploads to OSS, register metadata
 router.post('/', requireAdmin, (req, res) => {
   const { name, oss_key, size, mime_type, folder_id } = req.body || {};
-  const trimmed = String(name || '').trim();
-  if (!trimmed || !oss_key || !Number.isFinite(size)) {
+  if (!oss_key || !Number.isFinite(size)) {
     return res.status(400).json({ error: 'name/oss_key/size required' });
   }
-  const folderId = parseOptionalFolderId(folder_id);
-  if (Number.isNaN(folderId)) return res.status(400).json({ error: 'invalid folder id' });
-  if (folderId !== null) {
-    const folder = db.prepare('SELECT id FROM folders WHERE id = ?').get(folderId);
-    if (!folder) return res.status(400).json({ error: 'folder not found' });
-  }
-  if (findFileByNameInFolder(db, trimmed, folderId)) {
-    return res.status(409).json({ error: 'same filename already exists in this folder' });
-  }
-  const expectedKey = objectKeyForFile(db, folderId, trimmed);
+  const v = validateUploadInput(name, folder_id);
+  if (v.error) return res.status(v.status || 400).json({ error: v.error });
+  const expectedKey = objectKeyForFile(db, v.pid, v.trimmed);
   if (oss_key !== expectedKey) {
     return res.status(400).json({ error: 'oss_key does not match folder path' });
   }
-  const ext = path.extname(trimmed).toLowerCase().replace(/^\./, '');
-  if (!isExtAllowed(ext)) {
-    return res.status(415).json({ error: `不允许的文件类型: ${ext || '(无扩展名)'}` });
-  }
-  const so = nextSortOrder('files', 'folder_id', folderId);
+  const so = nextSortOrder(db, 'files', 'folder_id', v.pid);
   const info = db
     .prepare(
       `INSERT INTO files (folder_id, name, oss_key, size, mime_type, ext, uploader, sort_order, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
-      folderId,
-      trimmed,
+      v.pid,
+      v.trimmed,
       oss_key,
       size,
       mime_type || null,
-      ext || null,
+      v.ext || null,
       req.user?.username || null,
       so,
       Date.now()
@@ -151,10 +140,8 @@ router.post('/', requireAdmin, (req, res) => {
 // and convert to a Blob URL so the browser ignores OSS's force-download header
 // (added automatically on un-filed bucket domains for certain MIME types).
 router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid file id' });
-  const file = db.prepare('SELECT * FROM files WHERE id = ?').get(id);
-  if (!file) return res.status(404).json({ error: 'not found' });
+  const file = getFileOr404(req, res);
+  if (!file) return;
 
   const ext = normalizeExt(file.ext);
   const contentType = mimeOf(ext) || 'application/octet-stream';
@@ -177,23 +164,16 @@ router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => 
     const ip = req.ip || req.socket?.remoteAddress || '';
     const ua = String(req.headers['user-agent'] || '').slice(0, 256);
     if (shouldLogDownload(file.id, ip)) {
-      try {
-        db.prepare(
-          'INSERT INTO download_logs (file_id, file_name, downloaded_at, ip, ua) VALUES (?, ?, ?, ?, ?)'
-        ).run(file.id, file.name, Date.now(), ip || null, ua || null);
-      } catch {
-        // Older schema may not have ip/ua columns yet; fall back silently.
-        db.prepare(
-          'INSERT INTO download_logs (file_id, file_name, downloaded_at) VALUES (?, ?, ?)'
-        ).run(file.id, file.name, Date.now());
-      }
+      db.prepare(
+        'INSERT INTO download_logs (file_id, file_name, downloaded_at, ip, ua) VALUES (?, ?, ?, ?, ?)'
+      ).run(file.id, file.name, Date.now(), ip || null, ua || null);
     }
   }
 
   // IMM doc/preview URL for eligible file types (not for download).
   // Requires a custom domain bound to the bucket.
   const immUrl =
-    !isDownload && HAS_CUSTOM_DOMAIN && OFFICE_EXT_IMM.has(ext)
+    !isDownload && HAS_CUSTOM_DOMAIN && PREVIEWABLE_EXTS.has(ext)
       ? immPreviewUrl(file.oss_key, SHORT_SIGN_TTL)
       : null;
 
@@ -210,74 +190,65 @@ router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => 
 
 // Move a file to another folder (folder_id = null means root)
 router.patch('/:id', requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid file id' });
-    const file = db.prepare('SELECT * FROM files WHERE id = ?').get(id);
-    if (!file) return res.status(404).json({ error: 'not found' });
+  const file = getFileOr404(req, res);
+  if (!file) return;
+  const id = file.id;
 
-    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
-      const newName = String(req.body?.name || '').trim();
-      if (!newName) return res.status(400).json({ error: 'name required' });
-      if (newName === file.name) return res.json({ ok: true, unchanged: true });
-      const newExt = path.extname(newName).toLowerCase();
-      if (!isExtAllowed(newExt)) {
-        return res.status(415).json({ error: `不允许的文件类型: ${newExt || '(无扩展名)'}` });
-      }
-      if (findFileByNameInFolder(db, newName, file.folder_id, file.id)) {
-        return res.status(409).json({ error: 'same filename already exists in this folder' });
-      }
-
-      const newKey = objectKeyForFile(db, file.folder_id, newName);
-      const conflict = db.prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?').get(newKey, id);
-      if (conflict) return res.status(409).json({ error: 'target OSS path already exists' });
-
-      if (file.oss_key !== newKey) await copyOssObject(file.oss_key, newKey);
-      const ext = path.extname(newName).toLowerCase().replace(/^\./, '');
-      db.prepare('UPDATE files SET name = ?, ext = ?, oss_key = ? WHERE id = ?').run(
-        newName,
-        ext || null,
-        newKey,
-        id
-      );
-      if (file.oss_key !== newKey) await deleteOssObjectIfExists(file.oss_key);
-      return res.json({ ok: true, name: newName, oss_key: newKey });
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
+    const newName = String(req.body?.name || '').trim();
+    if (!newName) return res.status(400).json({ error: 'name required' });
+    if (newName === file.name) return res.json({ ok: true, unchanged: true });
+    const ext = normalizeExt(path.extname(newName));
+    if (!isExtAllowed(ext)) {
+      return res.status(415).json({ error: `不允许的文件类型: ${ext ? '.' + ext : '(无扩展名)'}` });
+    }
+    if (findFileByNameInFolder(db, newName, file.folder_id, file.id)) {
+      return res.status(409).json({ error: 'same filename already exists in this folder' });
     }
 
-    const raw = req.body?.folder_id;
-    const target = parseOptionalFolderId(raw);
-    if (Number.isNaN(target)) return res.status(400).json({ error: 'invalid folder id' });
-    if (target !== null) {
-      const exists = db.prepare('SELECT id FROM folders WHERE id = ?').get(target);
-      if (!exists) return res.status(400).json({ error: 'target folder not found' });
+    const newKey = objectKeyForFile(db, file.folder_id, newName);
+    if (findOssKeyConflict(db, newKey, id)) {
+      return res.status(409).json({ error: 'target OSS path already exists' });
     }
-    if (target === file.folder_id) return res.json({ ok: true, unchanged: true });
-    if (findFileByNameInFolder(db, file.name, target, file.id)) {
-      return res.status(409).json({ error: 'target folder already has a file with this name' });
-    }
-    const newKey = objectKeyForFile(db, target, file.name);
-    await copyOssObject(file.oss_key, newKey);
-    const so = nextSortOrder('files', 'folder_id', target);
-    db.prepare('UPDATE files SET folder_id = ?, oss_key = ?, sort_order = ? WHERE id = ?').run(
-      target,
+
+    if (file.oss_key !== newKey) await copyOssObject(file.oss_key, newKey);
+    db.prepare('UPDATE files SET name = ?, ext = ?, oss_key = ? WHERE id = ?').run(
+      newName,
+      ext || null,
       newKey,
-      so,
       id
     );
-    await deleteOssObjectIfExists(file.oss_key);
-    res.json({ ok: true });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: e.message || 'move failed' });
+    if (file.oss_key !== newKey) await deleteOssObjectIfExists(file.oss_key);
+    return res.json({ ok: true, name: newName, oss_key: newKey });
   }
+
+  const target = parseOptionalFolderId(req.body?.folder_id);
+  if (Number.isNaN(target)) return res.status(400).json({ error: 'invalid folder id' });
+  if (target !== null) {
+    const exists = db.prepare('SELECT id FROM folders WHERE id = ?').get(target);
+    if (!exists) return res.status(400).json({ error: 'target folder not found' });
+  }
+  if (target === file.folder_id) return res.json({ ok: true, unchanged: true });
+  if (findFileByNameInFolder(db, file.name, target, file.id)) {
+    return res.status(409).json({ error: 'target folder already has a file with this name' });
+  }
+  const newKey = objectKeyForFile(db, target, file.name);
+  await copyOssObject(file.oss_key, newKey);
+  const so = nextSortOrder(db, 'files', 'folder_id', target);
+  db.prepare('UPDATE files SET folder_id = ?, oss_key = ?, sort_order = ? WHERE id = ?').run(
+    target,
+    newKey,
+    so,
+    id
+  );
+  await deleteOssObjectIfExists(file.oss_key);
+  res.json({ ok: true });
 });
 
 // Delete a file
 router.delete('/:id', requireAdmin, async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid file id' });
-  const file = db.prepare('SELECT * FROM files WHERE id = ?').get(id);
-  if (!file) return res.status(404).json({ error: 'not found' });
+  const file = getFileOr404(req, res);
+  if (!file) return;
   try {
     await deleteOssObjectIfExists(file.oss_key);
   } catch (e) {
@@ -293,7 +264,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
 router.post('/cleanup-upload', requireAdmin, (req, res) => {
   const { oss_key } = req.body || {};
   if (!oss_key) return res.status(400).json({ error: 'oss_key required' });
-  const prefix = (process.env.OSS_KEY_PREFIX || '').replace(/^\/+|\/+$/g, '');
+  const prefix = ossPrefix();
   if (prefix && !oss_key.startsWith(prefix + '/') && oss_key !== prefix) {
     return res.status(400).json({ error: 'key does not match configured prefix' });
   }

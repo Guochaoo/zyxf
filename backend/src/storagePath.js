@@ -50,15 +50,3 @@ export function parseOptionalFolderId(value) {
   const id = Number(value);
   return Number.isInteger(id) && id > 0 ? id : NaN;
 }
-
-export function findFileByNameInFolder(db, name, folderId, excludeId = null) {
-  const normalizedFolderId = folderId == null || folderId === 0 ? null : Number(folderId);
-  const base =
-    normalizedFolderId === null
-      ? 'SELECT id FROM files WHERE name = ? AND folder_id IS NULL'
-      : 'SELECT id FROM files WHERE name = ? AND folder_id = ?';
-  const sql = excludeId ? `${base} AND id != ?` : base;
-  const args = normalizedFolderId === null ? [name] : [name, normalizedFolderId];
-  if (excludeId) args.push(excludeId);
-  return db.prepare(sql).get(...args);
-}

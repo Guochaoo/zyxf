@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { copyOssObject, deleteOssObjectIfExists, putEmptyOssObject } from '../oss.js';
+import { findByNameInParent, findOssKeyConflict, nextSortOrder } from '../dbHelpers.js';
 import { objectKeyForFile, parseOptionalFolderId, placeholderKeyForFolder } from '../storagePath.js';
 
 const router = Router();
@@ -13,32 +14,83 @@ const SORT_FIELDS = {
   manual: 'sort_order',
 };
 
-function nextSortOrder(table, column, parentId) {
-  const sql =
-    parentId === null
-      ? `SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM ${table} WHERE ${column} IS NULL`
-      : `SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM ${table} WHERE ${column} = ?`;
-  const stmt = db.prepare(sql);
-  const row = parentId === null ? stmt.get() : stmt.get(parentId);
-  return row.n;
-}
-export { nextSortOrder };
-
-function findFolderByNameInParent(name, parentId, excludeId = null) {
-  const normalizedParentId = parentId == null || parentId === 0 ? null : Number(parentId);
-  const base =
-    normalizedParentId === null
-      ? 'SELECT id FROM folders WHERE name = ? AND parent_id IS NULL'
-      : 'SELECT id FROM folders WHERE name = ? AND parent_id = ?';
-  const sql = excludeId ? `${base} AND id != ?` : base;
-  const args = normalizedParentId === null ? [name] : [name, normalizedParentId];
-  if (excludeId) args.push(excludeId);
-  return db.prepare(sql).get(...args);
-}
-
 function getFolder(id) {
   if (id === 0 || id === '0' || id == null) return { id: 0, name: '首页', parent_id: null };
   return db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
+}
+
+// Every descendant folder id and its files (one query per node).
+function collectFolderTree(folderId) {
+  const folderIds = [];
+  const files = [];
+  const walk = (fid) => {
+    folderIds.push(fid);
+    files.push(
+      ...db.prepare('SELECT id, folder_id, name, oss_key FROM files WHERE folder_id = ?').all(fid)
+    );
+    for (const sub of db.prepare('SELECT id FROM folders WHERE parent_id = ?').all(fid)) {
+      walk(sub.id);
+    }
+  };
+  walk(folderId);
+  return { folderIds, files };
+}
+
+// Run OSS object operations concurrently in small batches (each is an HTTP round trip).
+async function batchOss(items, op, size = 10) {
+  for (let i = 0; i < items.length; i += size) {
+    await Promise.all(items.slice(i, i + size).map(op));
+  }
+}
+
+// Rename or move a folder subtree: copy objects to their new keys, update the
+// DB in one transaction, then delete the old objects. overrides tell
+// objectKeyForFile / placeholderKeyForFolder how the top folder moved.
+// Returns { conflict: true } when a target OSS path is already taken.
+async function relocateFolderSubtree(folderId, { parentOverrides, nameOverrides, updateFolder }) {
+  const { folderIds, files } = collectFolderTree(folderId);
+
+  const fileMoves = files.map((file) => ({
+    ...file,
+    newKey: objectKeyForFile(db, file.folder_id, file.name, parentOverrides, nameOverrides),
+  }));
+  for (const move of fileMoves) {
+    if (findOssKeyConflict(db, move.newKey, move.id)) return { conflict: true };
+  }
+
+  const placeholderMoves = folderIds
+    .map((fid) => ({
+      oldKey: placeholderKeyForFolder(db, fid),
+      newKey: placeholderKeyForFolder(db, fid, parentOverrides, nameOverrides),
+    }))
+    .filter((move) => move.oldKey && move.newKey);
+
+  // Copy first (both stores in sync), then update DB, then delete old objects.
+  await batchOss(
+    fileMoves.filter((m) => m.oss_key !== m.newKey),
+    (m) => copyOssObject(m.oss_key, m.newKey)
+  );
+  await batchOss(
+    placeholderMoves.filter((m) => m.oldKey !== m.newKey),
+    (m) => putEmptyOssObject(m.newKey)
+  );
+
+  const updateFile = db.prepare('UPDATE files SET oss_key = ? WHERE id = ?');
+  const tx = db.transaction(() => {
+    updateFolder();
+    for (const move of fileMoves) updateFile.run(move.newKey, move.id);
+  });
+  tx();
+
+  await batchOss(
+    fileMoves.filter((m) => m.oss_key !== m.newKey),
+    (m) => deleteOssObjectIfExists(m.oss_key)
+  );
+  await batchOss(
+    placeholderMoves.filter((m) => m.oldKey !== m.newKey),
+    (m) => deleteOssObjectIfExists(m.oldKey)
+  );
+  return { ok: true };
 }
 
 function getBreadcrumb(id) {
@@ -112,11 +164,11 @@ router.post('/', requireAdmin, async (req, res) => {
     const parent = db.prepare('SELECT id FROM folders WHERE id = ?').get(pid);
     if (!parent) return res.status(400).json({ error: 'parent not found' });
   }
-  if (findFolderByNameInParent(trimmed, pid)) {
+  if (findByNameInParent(db, 'folders', 'parent_id', trimmed, pid)) {
     return res.status(409).json({ error: 'folder already exists' });
   }
   try {
-    const so = nextSortOrder('folders', 'parent_id', pid);
+    const so = nextSortOrder(db, 'folders', 'parent_id', pid);
     const info = db
       .prepare(
         'INSERT INTO folders (name, parent_id, sort_order, created_at) VALUES (?, ?, ?, ?)'
@@ -149,67 +201,17 @@ router.patch('/:id', requireAdmin, async (req, res) => {
     if (!newName) return res.status(400).json({ error: 'name required' });
     if (newName === folder.name) return res.json({ ok: true, unchanged: true });
     const parentId = folder.parent_id ?? null;
-    if (findFolderByNameInParent(newName, parentId, id)) {
+    if (findByNameInParent(db, 'folders', 'parent_id', newName, parentId, id)) {
       return res.status(409).json({ error: 'folder already exists' });
     }
 
     try {
-      const collectFolders = (folderId, acc) => {
-        const row = db.prepare('SELECT id FROM folders WHERE id = ?').get(folderId);
-        if (row) acc.push(row.id);
-        const subs = db.prepare('SELECT id FROM folders WHERE parent_id = ?').all(folderId);
-        for (const sub of subs) collectFolders(sub.id, acc);
-      };
-      const folderIds = [];
-      collectFolders(id, folderIds);
-      const files = [];
-      for (const folderId of folderIds) {
-        files.push(
-          ...db
-            .prepare('SELECT id, folder_id, name, oss_key FROM files WHERE folder_id = ?')
-            .all(folderId)
-        );
-      }
-
-      const nameOverrides = new Map([[id, newName]]);
-      const fileMoves = files.map((file) => ({
-        ...file,
-        newKey: objectKeyForFile(db, file.folder_id, file.name, new Map(), nameOverrides),
-      }));
-      for (const move of fileMoves) {
-        const conflict = db
-          .prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?')
-          .get(move.newKey, move.id);
-        if (conflict) return res.status(409).json({ error: 'target OSS path already exists' });
-      }
-
-      const placeholderMoves = folderIds
-        .map((folderId) => ({
-          oldKey: placeholderKeyForFolder(db, folderId),
-          newKey: placeholderKeyForFolder(db, folderId, new Map(), nameOverrides),
-        }))
-        .filter((move) => move.oldKey && move.newKey);
-
-      for (const move of fileMoves) {
-        if (move.oss_key !== move.newKey) await copyOssObject(move.oss_key, move.newKey);
-      }
-      for (const move of placeholderMoves) {
-        if (move.oldKey !== move.newKey) await putEmptyOssObject(move.newKey);
-      }
-
-      const updateFile = db.prepare('UPDATE files SET oss_key = ? WHERE id = ?');
-      const tx = db.transaction(() => {
-        db.prepare('UPDATE folders SET name = ? WHERE id = ?').run(newName, id);
-        for (const move of fileMoves) updateFile.run(move.newKey, move.id);
+      const result = await relocateFolderSubtree(id, {
+        nameOverrides: new Map([[id, newName]]),
+        updateFolder: () =>
+          db.prepare('UPDATE folders SET name = ? WHERE id = ?').run(newName, id),
       });
-      tx();
-
-      for (const move of fileMoves) {
-        if (move.oss_key !== move.newKey) await deleteOssObjectIfExists(move.oss_key);
-      }
-      for (const move of placeholderMoves) {
-        if (move.oldKey !== move.newKey) await deleteOssObjectIfExists(move.oldKey);
-      }
+      if (result.conflict) return res.status(409).json({ error: 'target OSS path already exists' });
       return res.json({ ok: true, name: newName });
     } catch (e) {
       if (String(e.message).includes('UNIQUE')) {
@@ -240,73 +242,20 @@ router.patch('/:id', requireAdmin, async (req, res) => {
   }
 
   if (newParent === (folder.parent_id ?? null)) return res.json({ ok: true, unchanged: true });
-  if (findFolderByNameInParent(folder.name, newParent, id)) {
+  if (findByNameInParent(db, 'folders', 'parent_id', folder.name, newParent, id)) {
     return res.status(409).json({ error: 'target folder already has a folder with this name' });
   }
 
   try {
-    const collectFolders = (folderId, acc) => {
-      const row = db.prepare('SELECT id FROM folders WHERE id = ?').get(folderId);
-      if (row) acc.push(row.id);
-      const subs = db.prepare('SELECT id FROM folders WHERE parent_id = ?').all(folderId);
-      for (const sub of subs) collectFolders(sub.id, acc);
-    };
-    const folderIds = [];
-    collectFolders(id, folderIds);
-    const files = [];
-    for (const folderId of folderIds) {
-      files.push(
-        ...db
-          .prepare('SELECT id, folder_id, name, oss_key FROM files WHERE folder_id = ?')
-          .all(folderId)
-      );
-    }
-
-    const parentOverrides = new Map([[id, newParent]]);
-    const fileMoves = files.map((file) => ({
-      ...file,
-      newKey: objectKeyForFile(db, file.folder_id, file.name, parentOverrides),
-    }));
-    for (const move of fileMoves) {
-      const conflict = db
-        .prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?')
-        .get(move.newKey, move.id);
-      if (conflict) return res.status(409).json({ error: 'target OSS path already exists' });
-    }
-
-    const placeholderMoves = folderIds
-      .map((folderId) => ({
-        oldKey: placeholderKeyForFolder(db, folderId),
-        newKey: placeholderKeyForFolder(db, folderId, parentOverrides),
-      }))
-      .filter((move) => move.oldKey && move.newKey);
-
-    for (const move of fileMoves) {
-      if (move.oss_key !== move.newKey) await copyOssObject(move.oss_key, move.newKey);
-    }
-    for (const move of placeholderMoves) {
-      await putEmptyOssObject(move.newKey);
-    }
-
-    const so = nextSortOrder('folders', 'parent_id', newParent);
-    const updateFolder = db.prepare('UPDATE folders SET parent_id = ?, sort_order = ? WHERE id = ?');
-    const updateFile = db.prepare('UPDATE files SET oss_key = ? WHERE id = ?');
-    const tx = db.transaction(() => {
-      updateFolder.run(newParent, so, id);
-      for (const move of fileMoves) updateFile.run(move.newKey, move.id);
+    const so = nextSortOrder(db, 'folders', 'parent_id', newParent);
+    const result = await relocateFolderSubtree(id, {
+      parentOverrides: new Map([[id, newParent]]),
+      updateFolder: () =>
+        db
+          .prepare('UPDATE folders SET parent_id = ?, sort_order = ? WHERE id = ?')
+          .run(newParent, so, id),
     });
-    tx();
-
-    for (const move of fileMoves) {
-      if (move.oss_key !== move.newKey) {
-        await deleteOssObjectIfExists(move.oss_key);
-      }
-    }
-    for (const move of placeholderMoves) {
-      if (move.oldKey !== move.newKey) {
-        await deleteOssObjectIfExists(move.oldKey);
-      }
-    }
+    if (result.conflict) return res.status(409).json({ error: 'target OSS path already exists' });
     res.json({ ok: true });
   } catch (e) {
     if (String(e.message).includes('UNIQUE')) {
@@ -363,26 +312,26 @@ router.post('/reorder', requireAdmin, (req, res) => {
 router.delete('/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ error: 'invalid id' });
-  // Gather all descendant files to clean up OSS objects.
-  const collectKeys = (folderId, acc) => {
-    const placeholder = placeholderKeyForFolder(db, folderId);
-    if (placeholder) acc.push(placeholder);
-    const fs = db.prepare('SELECT oss_key FROM files WHERE folder_id = ?').all(folderId);
-    for (const f of fs) acc.push(f.oss_key);
-    const subs = db.prepare('SELECT id FROM folders WHERE parent_id = ?').all(folderId);
-    for (const s of subs) collectKeys(s.id, acc);
-  };
+  // Gather all descendant keys to clean up OSS objects.
   const keys = [];
-  collectKeys(id, keys);
+  const collectKeys = (folderId) => {
+    const placeholder = placeholderKeyForFolder(db, folderId);
+    if (placeholder) keys.push(placeholder);
+    for (const f of db.prepare('SELECT oss_key FROM files WHERE folder_id = ?').all(folderId)) {
+      keys.push(f.oss_key);
+    }
+    for (const s of db.prepare('SELECT id FROM folders WHERE parent_id = ?').all(folderId)) {
+      collectKeys(s.id);
+    }
+  };
+  collectKeys(id);
 
   // Delete OSS objects before removing database rows so the two stores stay in sync.
-  for (const k of keys) {
-    try {
-      await deleteOssObjectIfExists(k);
-    } catch (e) {
-      console.warn('oss delete failed', k, e.message);
-      return res.status(502).json({ error: 'oss delete failed' });
-    }
+  try {
+    await batchOss(keys, (k) => deleteOssObjectIfExists(k));
+  } catch (e) {
+    console.warn('oss delete failed', e.message);
+    return res.status(502).json({ error: 'oss delete failed' });
   }
 
   db.prepare('DELETE FROM folders WHERE id = ?').run(id);
