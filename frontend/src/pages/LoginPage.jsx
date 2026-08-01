@@ -119,7 +119,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPwd((v) => !v)}
                   aria-label={showPwd ? '隐藏密码' : '显示密码'}
-                  className="login-light-eye absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center text-neutral-400 transition-colors hover:text-neutral-700"
+                  className="login-light-eye absolute right-3 top-1/2 -translate-y-1/2 inline-flex w-8 h-8 items-center justify-center text-neutral-400 transition-colors hover:text-neutral-700"
                 >
                   {showPwd ? <BsEyeSlashFill className="w-4 h-4" /> : <BsEyeFill className="w-4 h-4" />}
                 </button>

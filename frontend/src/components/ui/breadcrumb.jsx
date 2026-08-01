@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronRight, MoreHorizontal } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 function cn(...classes) {
   return classes.filter(Boolean).join(' ');
@@ -68,19 +68,6 @@ const BreadcrumbSeparator = ({ children, className, ...props }) => (
 );
 BreadcrumbSeparator.displayName = 'BreadcrumbSeparator';
 
-const BreadcrumbEllipsis = ({ className, ...props }) => (
-  <span
-    role="presentation"
-    aria-hidden="true"
-    className={cn('flex h-6 w-6 items-center justify-center', className)}
-    {...props}
-  >
-    <MoreHorizontal className="h-4 w-4" />
-    <span className="sr-only">More</span>
-  </span>
-);
-BreadcrumbEllipsis.displayName = 'BreadcrumbEllipsis';
-
 export {
   Breadcrumb,
   BreadcrumbList,
@@ -88,5 +75,4 @@ export {
   BreadcrumbLink,
   BreadcrumbPage,
   BreadcrumbSeparator,
-  BreadcrumbEllipsis,
 };

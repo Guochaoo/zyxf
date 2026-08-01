@@ -21,13 +21,15 @@ export const BLOCKED_EXTS = new Set([
 // Only these file types are allowed for upload.
 // All previewable files go through Alibaba Cloud WebOffice (IMM doc/preview).
 // Archives are download-only.
+// Macro-enabled Office formats (docm/dotm/xlsm/xltm/pptm/potm) are rejected:
+// they are the standard vector for distributing malware to students.
 export const ALLOWED_EXTS = new Set([
   // Word
-  'doc', 'dot', 'wps', 'wpt', 'docx', 'dotx', 'docm', 'dotm', 'rtf',
+  'doc', 'dot', 'wps', 'wpt', 'docx', 'dotx', 'rtf',
   // PPT
-  'ppt', 'pptx', 'pptm', 'ppsx', 'ppsm', 'pps', 'potx', 'potm', 'dpt', 'dps',
+  'ppt', 'pptx', 'ppsx', 'ppsm', 'pps', 'potx', 'dpt', 'dps',
   // Excel
-  'xls', 'xlt', 'et', 'xlsx', 'xltx', 'csv', 'xlsm', 'xltm',
+  'xls', 'xlt', 'et', 'xlsx', 'xltx', 'csv',
   // PDF
   'pdf',
   // 文本

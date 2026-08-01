@@ -1,8 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
-import {
-  Loader2,
-} from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import {
   BsArrowCounterclockwise,
   BsCloudArrowUp,
@@ -428,7 +426,7 @@ export default function BrowsePage() {
             dragging={dragging}
             dropZone={dropZone}
             onEnterFolder={(f) => navigate(`/folder/${f.id}`)}
-                        onPreviewFile={setPreviewing}
+            onPreviewFile={setPreviewing}
             onDeleteFolder={onDeleteFolder}
             onDeleteFile={onDeleteFile}
             onRenameFolder={(f) => openRenameDialog({ ...f, type: 'folder' })}
@@ -497,37 +495,52 @@ function Breadcrumb({ crumbs, currentId, dragging, dropZone, onDragOver, onDragL
   return (
     <BreadcrumbRoot>
       <BreadcrumbList>
-      {crumbs.map((c, i) => {
-        const isCurrent = i === crumbs.length - 1;
-        const droppable = !!dragging && c.id !== currentId;
-        const active = droppable && dropZone?.mode === 'crumb' && dropZone.id === c.id;
-        const linkCls = `px-1.5 py-0.5 rounded text-white transition-colors ${
-          active ? 'bg-brand-100 ring-1 ring-brand-400 !text-brand-700' : 'hover:text-white/80'
-        }`;
-        const dndProps = droppable
-          ? {
-              onDragOver: (e) => onDragOver(e, c.id),
-              onDragLeave: () => onDragLeave(c.id),
-              onDrop: (e) => onDrop(e, c.id),
-            }
-          : {};
-        return (
-          <Fragment key={c.id}>
-            {i > 0 && <BreadcrumbSeparator />}
-            <BreadcrumbItem>
-              {isCurrent ? (
-                <BreadcrumbPage className="text-white">{c.name}</BreadcrumbPage>
-              ) : (
-                <BreadcrumbLink asChild className={linkCls} {...dndProps}>
-                  <Link to={c.id === 0 ? '/' : `/folder/${c.id}`}>{c.name}</Link>
-                </BreadcrumbLink>
-              )}
-            </BreadcrumbItem>
-          </Fragment>
-        );
-      })}
+        {crumbs.map((c, i) => {
+          const isCurrent = i === crumbs.length - 1;
+          const droppable = !!dragging && c.id !== currentId;
+          const active = droppable && dropZone?.mode === 'crumb' && dropZone.id === c.id;
+          const linkCls = `px-1.5 py-0.5 rounded text-white transition-colors ${
+            active ? 'bg-brand-100 ring-1 ring-brand-400 !text-brand-700' : 'hover:text-white/80'
+          }`;
+          const dndProps = droppable
+            ? {
+                onDragOver: (e) => onDragOver(e, c.id),
+                onDragLeave: () => onDragLeave(c.id),
+                onDrop: (e) => onDrop(e, c.id),
+              }
+            : {};
+          return (
+            <Fragment key={c.id}>
+              {i > 0 && <BreadcrumbSeparator />}
+              <BreadcrumbItem>
+                {isCurrent ? (
+                  <BreadcrumbPage className="text-white">{c.name}</BreadcrumbPage>
+                ) : (
+                  <BreadcrumbLink asChild className={linkCls} {...dndProps}>
+                    <Link to={c.id === 0 ? '/' : `/folder/${c.id}`}>{c.name}</Link>
+                  </BreadcrumbLink>
+                )}
+              </BreadcrumbItem>
+            </Fragment>
+          );
+        })}
       </BreadcrumbList>
     </BreadcrumbRoot>
+  );
+}
+
+// Shared glass styling for the browse toolbar buttons.
+function ToolbarGlass({ width = 'auto', className = '', children }) {
+  return (
+    <GlassSurface
+      width={width}
+      height={34}
+      borderRadius={14}
+      saturation={1.4}
+      className={`toolbar-glass ${className}`}
+    >
+      {children}
+    </GlassSurface>
   );
 }
 
@@ -538,46 +551,44 @@ function SortControl({ sort, order, onChange }) {
 
   return (
     <ToolbarGlass className="max-w-full">
-    <div ref={listRef} className="relative flex max-w-full items-center overflow-x-auto text-xs">
-      <span
-        className="pointer-events-none absolute inset-y-0 rounded-[14px] bg-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]"
-        style={{
-          width: indicator.width,
-          transform: `translateX(${indicator.left}px)`,
-          opacity: indicator.ready ? 1 : 0,
-          transition:
-            'transform 360ms cubic-bezier(0.22, 1, 0.36, 1), width 360ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease',
-        }}
-      />
-      {SORT_OPTIONS.map((opt) => {
-        const active = sort === opt.key;
-        const showArrow = active && opt.key !== 'manual';
-        return (
-          <button
-            ref={(node) => {
-              if (node) buttonRefs.current[opt.key] = node;
-            }}
-            key={opt.key}
-            onClick={() => onChange(opt.key)}
-            className={`sort-option relative z-10 flex h-[34px] shrink-0 items-center justify-center bg-transparent px-2.5 transition-colors focus:outline-none ${
-              active ? 'sort-option--active' : ''
-            } ${
-              opt.key === 'manual' ? '' : 'pr-6'
-            }`}
-          >
-            <span className="leading-none">{opt.label}</span>
-            <span className="absolute right-2 top-1/2 flex w-3 -translate-y-1/2 items-center justify-center">
-              {opt.key !== 'manual' &&
-                (order === 'asc' ? (
-                  <BsSortAlphaDown className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
-                ) : (
-                  <BsSortAlphaDownAlt className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
-                ))}
-            </span>
-          </button>
-        );
-      })}
-    </div>
+      <div ref={listRef} className="relative flex max-w-full items-center overflow-x-auto text-xs">
+        <span
+          className="pointer-events-none absolute inset-y-0 rounded-[14px] bg-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]"
+          style={{
+            width: indicator.width,
+            transform: `translateX(${indicator.left}px)`,
+            opacity: indicator.ready ? 1 : 0,
+            transition:
+              'transform 360ms cubic-bezier(0.22, 1, 0.36, 1), width 360ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease',
+          }}
+        />
+        {SORT_OPTIONS.map((opt) => {
+          const active = sort === opt.key;
+          const showArrow = active && opt.key !== 'manual';
+          return (
+            <button
+              ref={(node) => {
+                if (node) buttonRefs.current[opt.key] = node;
+              }}
+              key={opt.key}
+              onClick={() => onChange(opt.key)}
+              className={`sort-option relative z-10 flex h-[34px] shrink-0 items-center justify-center bg-transparent px-2.5 transition-colors focus:outline-none ${
+                active ? 'sort-option--active' : ''
+              } ${opt.key === 'manual' ? '' : 'pr-6'}`}
+            >
+              <span className="leading-none">{opt.label}</span>
+              <span className="absolute right-2 top-1/2 flex w-3 -translate-y-1/2 items-center justify-center">
+                {opt.key !== 'manual' &&
+                  (order === 'asc' ? (
+                    <BsSortAlphaDown className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
+                  ) : (
+                    <BsSortAlphaDownAlt className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
+                  ))}
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </ToolbarGlass>
   );
 }
@@ -732,14 +743,13 @@ function Row({
       onDragOver={(e) => onRowDragOver(e, { type: item.type, id: item.id })}
       onDragLeave={() => onRowDragLeave({ type: item.type, id: item.id })}
       onDrop={(e) => onRowDrop(e, { type: item.type, id: item.id })}
-      className={[
-        'relative flex items-center gap-2 px-3 sm:px-4 py-3 sm:py-2.5 cursor-pointer transition-colors',
-        isInto ? 'bg-white/20 ring-1 ring-inset ring-brand-400' : '',
-        isBefore ? 'shadow-[inset_0_2px_0_0] shadow-brand-500' : '',
-        isAfter ? 'shadow-[inset_0_-2px_0_0] shadow-brand-500' : '',
-        !targetMatch && isSelf ? 'opacity-40' : '',
-        !targetMatch && !isSelf ? 'hover:bg-white/10 hover:ring-1 hover:ring-inset hover:ring-white/20' : '',
-      ].join(' ')}
+      className={`relative flex items-center gap-2 px-3 sm:px-4 py-3 sm:py-2.5 cursor-pointer transition-colors ${
+        isInto ? 'bg-white/20 ring-1 ring-inset ring-brand-400' : ''
+      } ${isBefore ? 'shadow-[inset_0_2px_0_0] shadow-brand-500' : ''} ${
+        isAfter ? 'shadow-[inset_0_-2px_0_0] shadow-brand-500' : ''
+      } ${!targetMatch && isSelf ? 'opacity-40' : ''} ${
+        !targetMatch && !isSelf ? 'hover:bg-white/10 hover:ring-1 hover:ring-inset hover:ring-white/20' : ''
+      }`}
       onClick={onClick}
     >
       {isAdmin && (

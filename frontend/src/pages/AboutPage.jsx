@@ -24,8 +24,8 @@ export default function AboutPage() {
       <section className="rounded-xl border border-white/10 bg-white/10 p-6 shadow-sm backdrop-blur-md sm:p-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-3xl space-y-4">
-            <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600/10">
-              <GraduationCap className="h-6 w-6 text-brand-600" />
+            <div className="inline-flex w-11 h-11 items-center justify-center rounded-xl bg-brand-600/10">
+              <GraduationCap className="w-6 h-6 text-brand-600" />
             </div>
             <div>
               <h1 className="text-xl font-semibold sm:text-2xl">仲英书院学业辅导中心</h1>
@@ -44,8 +44,8 @@ export default function AboutPage() {
             key={title}
             className="rounded-xl border border-white/10 bg-white/10 p-5 shadow-sm backdrop-blur-md transition-colors hover:bg-white/15"
           >
-            <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-brand-600/10">
-              <Icon className="h-5 w-5 text-brand-600" />
+            <div className="mb-4 inline-flex w-10 h-10 items-center justify-center rounded-lg bg-brand-600/10">
+              <Icon className="w-5 h-5 text-brand-600" />
             </div>
             <h2 className="text-sm font-semibold">{title}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">{text}</p>
