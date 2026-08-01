@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "test": "node --test --experimental-test-module-mocks --import ./test/setup.js \"test/*.test.js\""
   },
   "dependencies": {
     "ali-oss": "^6.20.0",

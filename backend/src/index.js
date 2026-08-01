@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -89,6 +91,11 @@ app.use((err, _req, res, _next) => {
   res.status(err.status || 500).json({ error: err.message || 'internal error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`[zyxf-backend] listening on http://localhost:${PORT}`);
-});
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+if (isMain) {
+  app.listen(PORT, () => {
+    console.log(`[zyxf-backend] listening on http://localhost:${PORT}`);
+  });
+}
+
+export { app };
