@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Download, Loader2 } from 'lucide-react';
 import { getFileUrl } from '../../api.js';
-import { getPreviewKind, isLargeFile, LARGE_FILE_HINT } from '../../utils.js';
+import { downloadFileById, errMsg, getPreviewKind, isLargeFile, LARGE_FILE_HINT } from '../../utils.js';
 import PreviewBody from './Body.jsx';
 
 /**
@@ -18,12 +18,6 @@ export default function Preview({ file, onClose }) {
   const [downloading, setDownloading] = useState(false);
   const kind = useMemo(() => getPreviewKind(file.ext), [file.ext]);
   const [isMobile, setIsMobile] = useState(false);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
 
   useEffect(() => {
     const query = window.matchMedia('(max-width: 640px)');
@@ -33,45 +27,24 @@ export default function Preview({ file, onClose }) {
     return () => query.removeEventListener?.('change', update);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  // Fetch the signed URL; shared by the initial load and the retry button.
+  const loadUrl = useCallback(async () => {
     setLoading(true);
     setErr('');
-    (async () => {
-      try {
-        const meta = await getFileUrl(file.id);
-        if (cancelled) return;
-        setSignedUrl(meta.url);
-        if (meta.imm_url) setImmUrl(meta.imm_url);
-      } catch (e) {
-        if (!cancelled && e.name !== 'AbortError') {
-          setErr(e.response?.data?.error || e.message || '加载失败');
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+    try {
+      const meta = await getFileUrl(file.id);
+      setSignedUrl(meta.url);
+      if (meta.imm_url) setImmUrl(meta.imm_url);
+    } catch (e) {
+      if (e.name !== 'AbortError') setErr(errMsg(e, '加载失败'));
+    } finally {
+      setLoading(false);
+    }
   }, [file.id]);
 
-  const retry = useCallback(() => {
-    let cancelled = false;
-    setErr('');
-    setLoading(true);
-    getFileUrl(file.id)
-      .then((meta) => {
-        if (cancelled) return;
-        setSignedUrl(meta.url);
-        if (meta.imm_url) setImmUrl(meta.imm_url);
-        setLoading(false);
-      })
-      .catch((e2) => {
-        if (cancelled) return;
-        setErr(e2.response?.data?.error || e2.message || '重试失败');
-        setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [file.id]);
+  useEffect(() => {
+    loadUrl();
+  }, [loadUrl]);
 
   // Download: fetch a fresh signed URL with ?download=1 so the backend
   // applies rate limiting and logs the event.
@@ -80,26 +53,13 @@ export default function Preview({ file, onClose }) {
     setDownloadErr('');
     setDownloading(true);
     try {
-      const meta = await getFileUrl(file.id, { download: true });
-      const resp = await fetch(meta.url);
-      if (!resp.ok) throw new Error(`下载失败 (${resp.status})`);
-      const blob = await resp.blob();
-      const href = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = href;
-      a.download = file.name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(href), 1000);
+      await downloadFileById(file, getFileUrl);
     } catch (e) {
-      if (mountedRef.current) {
-        setDownloadErr(e.response?.data?.error || e.message || '下载失败，请关闭后重新打开');
-      }
+      setDownloadErr(errMsg(e, '下载失败，请关闭后重新打开'));
     } finally {
-      if (mountedRef.current) setDownloading(false);
+      setDownloading(false);
     }
-  }, [file.id, file.name, downloading]);
+  }, [file, downloading]);
 
   const largeFileWarn = isMobile && isLargeFile(file.size);
 
@@ -163,7 +123,7 @@ export default function Preview({ file, onClose }) {
             <div className="h-full flex flex-col items-center justify-center gap-3 p-4">
               <div className="text-red-500 text-sm text-center">{err}</div>
               <button
-                onClick={retry}
+                onClick={loadUrl}
                 className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm hover:bg-brand-700 transition-colors"
               >
                 重新加载

@@ -1,4 +1,4 @@
-﻿import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef } from 'react';
 import { Route, Routes, Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import BrowsePage from './pages/BrowsePage.jsx';
@@ -8,13 +8,13 @@ import AboutPage from './pages/AboutPage.jsx';
 import StaggeredMenu from './components/StaggeredMenu.jsx';
 import Grainient from './components/Grainient.jsx';
 import SearchBar from './components/SearchBar.jsx';
+import { useSlidingIndicator } from './hooks/useSlidingIndicator.js';
 
 export default function App() {
   const { user, logout, ready } = useAuth();
   const location = useLocation();
   const desktopNavRef = useRef(null);
   const desktopNavItemRefs = useRef({});
-  const [desktopNavIndicator, setDesktopNavIndicator] = useState({ left: 0, width: 0, ready: false });
 
   const menuItems = [
     { label: '资料库', ariaLabel: '浏览资料库', link: '/' },
@@ -35,40 +35,16 @@ export default function App() {
 
   const activeDesktopMenuItem = menuItems.find(isActiveMenuItem);
 
+  const desktopNavIndicator = useSlidingIndicator(
+    desktopNavRef,
+    desktopNavItemRefs,
+    ready ? activeDesktopMenuItem?.link : null
+  );
+
   // ---- Document title ----
   useEffect(() => {
     document.title = '仲英学辅';
   }, []);
-
-  useLayoutEffect(() => {
-    if (!ready) {
-      setDesktopNavIndicator((prev) => ({ ...prev, ready: false }));
-      return undefined;
-    }
-
-    const activeLink = activeDesktopMenuItem?.link;
-    const activeElement = activeLink ? desktopNavItemRefs.current[activeLink] : null;
-    const nav = desktopNavRef.current;
-    if (!activeElement || !nav) {
-      setDesktopNavIndicator((prev) => ({ ...prev, ready: false }));
-      return undefined;
-    }
-
-    const updateIndicator = () => {
-      setDesktopNavIndicator({
-        left: activeElement.offsetLeft,
-        width: activeElement.offsetWidth,
-        ready: true,
-      });
-    };
-
-    updateIndicator();
-    const resizeObserver = new ResizeObserver(updateIndicator);
-    resizeObserver.observe(nav);
-    resizeObserver.observe(activeElement);
-
-    return () => resizeObserver.disconnect();
-  }, [activeDesktopMenuItem?.link, ready, user]);
 
   if (!ready) {
     return <div className="h-full flex items-center justify-center text-slate-400">加载中...</div>;

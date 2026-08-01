@@ -1,9 +1,11 @@
 import axios from 'axios';
 
+export const TOKEN_KEY = 'zyxf_token';
+
 const api = axios.create({ baseURL: '/api' });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('zyxf_token');
+  const token = localStorage.getItem(TOKEN_KEY);
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -11,8 +13,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response?.status === 401) {
-      // token invalid; do not auto-redirect, let UI decide
+    // Expired/invalid token: drop it so the user can log back in, and let the
+    // AuthProvider clear the UI state.
+    if (err.response?.status === 401 && localStorage.getItem(TOKEN_KEY)) {
+      localStorage.removeItem(TOKEN_KEY);
+      window.dispatchEvent(new CustomEvent('auth:expired'));
     }
     return Promise.reject(err);
   }

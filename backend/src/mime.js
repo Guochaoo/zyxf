@@ -1,3 +1,5 @@
+import { normalizeExt } from './extPolicy.js';
+
 const MIME = {
   pdf: 'application/pdf',
   png: 'image/png',
@@ -24,7 +26,7 @@ const MIME = {
 };
 
 export function mimeOf(ext) {
-  if (!ext) return null;
-  const k = String(ext).toLowerCase().replace(/^\./, '');
+  const k = normalizeExt(ext);
+  if (!k) return null;
   return MIME[k] || null;
 }

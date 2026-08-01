@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { Loader2 } from 'lucide-react';
 import { BsCaretLeftFill, BsEyeFill, BsEyeSlashFill } from 'react-icons/bs';
+import { errMsg } from '../utils.js';
 import Silk from '../components/Silk.jsx';
 
 export default function LoginPage() {
@@ -22,7 +23,7 @@ export default function LoginPage() {
       await login(username, password);
       nav('/');
     } catch (e) {
-      setErr(e.response?.data?.error || '登录失败');
+      setErr(errMsg(e, '登录失败'));
     } finally {
       setLoading(false);
     }

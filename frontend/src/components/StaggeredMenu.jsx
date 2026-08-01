@@ -286,7 +286,6 @@ const StaggeredMenu = ({
       last = last === 'Menu' ? 'Close' : 'Menu';
       seq.push(last);
     }
-    if (last !== targetLabel) seq.push(targetLabel);
     seq.push(targetLabel);
     setTextLines(seq);
 

@@ -41,6 +41,11 @@ const ARCHIVE_EXTS = new Set([
   'zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2',
 ]);
 
+// Everything on the allow-list that isn't an archive is previewable.
+export const PREVIEWABLE_EXTS = new Set(
+  [...ALLOWED_EXTS].filter((e) => !ARCHIVE_EXTS.has(e))
+);
+
 export function normalizeExt(ext) {
   return String(ext || '').toLowerCase().replace(/^\./, '');
 }

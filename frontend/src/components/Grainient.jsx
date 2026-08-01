@@ -101,31 +101,61 @@ void main(){
 
 const ctxMap = new WeakMap();
 
-const Grainient = ({
-  timeSpeed = 0.25,
-  colorBalance = 0.0,
-  warpStrength = 1.0,
-  warpFrequency = 5.0,
-  warpSpeed = 2.0,
-  warpAmplitude = 50.0,
-  blendAngle = 0.0,
-  blendSoftness = 0.05,
-  rotationAmount = 500.0,
-  noiseScale = 2.0,
-  grainAmount = 0.1,
-  grainScale = 2.0,
-  grainAnimated = false,
-  contrast = 1.5,
-  gamma = 1.0,
-  saturation = 1.0,
-  centerX = 0.0,
-  centerY = 0.0,
-  zoom = 0.9,
-  color1 = '#FF9FFC',
-  color2 = '#5227FF',
-  color3 = '#B497CF',
-  className = ''
-}) => {
+const DEFAULT_PROPS = {
+  timeSpeed: 0.25,
+  colorBalance: 0.0,
+  warpStrength: 1.0,
+  warpFrequency: 5.0,
+  warpSpeed: 2.0,
+  warpAmplitude: 50.0,
+  blendAngle: 0.0,
+  blendSoftness: 0.05,
+  rotationAmount: 500.0,
+  noiseScale: 2.0,
+  grainAmount: 0.1,
+  grainScale: 2.0,
+  grainAnimated: false,
+  contrast: 1.5,
+  gamma: 1.0,
+  saturation: 1.0,
+  centerX: 0.0,
+  centerY: 0.0,
+  zoom: 0.9,
+  color1: '#FF9FFC',
+  color2: '#5227FF',
+  color3: '#B497CF',
+};
+
+// Shader uniforms driven by props. Float32Array is needed by the GL program.
+function uniformValues(p) {
+  return {
+    uTimeSpeed: { value: p.timeSpeed },
+    uColorBalance: { value: p.colorBalance },
+    uWarpStrength: { value: p.warpStrength },
+    uWarpFrequency: { value: p.warpFrequency },
+    uWarpSpeed: { value: p.warpSpeed },
+    uWarpAmplitude: { value: p.warpAmplitude },
+    uBlendAngle: { value: p.blendAngle },
+    uBlendSoftness: { value: p.blendSoftness },
+    uRotationAmount: { value: p.rotationAmount },
+    uNoiseScale: { value: p.noiseScale },
+    uGrainAmount: { value: p.grainAmount },
+    uGrainScale: { value: p.grainScale },
+    uGrainAnimated: { value: p.grainAnimated ? 1.0 : 0.0 },
+    uContrast: { value: p.contrast },
+    uGamma: { value: p.gamma },
+    uSaturation: { value: p.saturation },
+    uCenterOffset: { value: new Float32Array([p.centerX, p.centerY]) },
+    uZoom: { value: p.zoom },
+    uColor1: { value: new Float32Array(hexToRgb(p.color1)) },
+    uColor2: { value: new Float32Array(hexToRgb(p.color2)) },
+    uColor3: { value: new Float32Array(hexToRgb(p.color3)) },
+  };
+}
+
+const Grainient = (props) => {
+  const { className = '', ...propValues } = props;
+  const p = { ...DEFAULT_PROPS, ...propValues };
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -153,27 +183,7 @@ const Grainient = ({
       uniforms: {
         iTime: { value: 0 },
         iResolution: { value: new Float32Array([1, 1]) },
-        uTimeSpeed: { value: 0.25 },
-        uColorBalance: { value: 0.0 },
-        uWarpStrength: { value: 1.0 },
-        uWarpFrequency: { value: 5.0 },
-        uWarpSpeed: { value: 2.0 },
-        uWarpAmplitude: { value: 50.0 },
-        uBlendAngle: { value: 0.0 },
-        uBlendSoftness: { value: 0.05 },
-        uRotationAmount: { value: 500.0 },
-        uNoiseScale: { value: 2.0 },
-        uGrainAmount: { value: 0.1 },
-        uGrainScale: { value: 2.0 },
-        uGrainAnimated: { value: 0.0 },
-        uContrast: { value: 1.5 },
-        uGamma: { value: 1.0 },
-        uSaturation: { value: 1.0 },
-        uCenterOffset: { value: new Float32Array([0, 0]) },
-        uZoom: { value: 0.9 },
-        uColor1: { value: new Float32Array([1, 1, 1]) },
-        uColor2: { value: new Float32Array([1, 1, 1]) },
-        uColor3: { value: new Float32Array([1, 1, 1]) }
+        ...uniformValues(p),
       }
     });
 
@@ -252,54 +262,12 @@ const Grainient = ({
     if (!container) return;
     const ctx = ctxMap.get(container);
     if (!ctx) return;
-    const { program } = ctx;
-    const u = program.uniforms;
-
-    u.uTimeSpeed.value = timeSpeed;
-    u.uColorBalance.value = colorBalance;
-    u.uWarpStrength.value = warpStrength;
-    u.uWarpFrequency.value = warpFrequency;
-    u.uWarpSpeed.value = warpSpeed;
-    u.uWarpAmplitude.value = warpAmplitude;
-    u.uBlendAngle.value = blendAngle;
-    u.uBlendSoftness.value = blendSoftness;
-    u.uRotationAmount.value = rotationAmount;
-    u.uNoiseScale.value = noiseScale;
-    u.uGrainAmount.value = grainAmount;
-    u.uGrainScale.value = grainScale;
-    u.uGrainAnimated.value = grainAnimated ? 1.0 : 0.0;
-    u.uContrast.value = contrast;
-    u.uGamma.value = gamma;
-    u.uSaturation.value = saturation;
-    u.uCenterOffset.value = new Float32Array([centerX, centerY]);
-    u.uZoom.value = zoom;
-    u.uColor1.value = new Float32Array(hexToRgb(color1));
-    u.uColor2.value = new Float32Array(hexToRgb(color2));
-    u.uColor3.value = new Float32Array(hexToRgb(color3));
-  }, [
-    timeSpeed,
-    colorBalance,
-    warpStrength,
-    warpFrequency,
-    warpSpeed,
-    warpAmplitude,
-    blendAngle,
-    blendSoftness,
-    rotationAmount,
-    noiseScale,
-    grainAmount,
-    grainScale,
-    grainAnimated,
-    contrast,
-    gamma,
-    saturation,
-    centerX,
-    centerY,
-    zoom,
-    color1,
-    color2,
-    color3
-  ]);
+    const u = ctx.program.uniforms;
+    for (const [name, { value }] of Object.entries(uniformValues(p))) {
+      if (u[name]) u[name].value = value;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, Object.values(p));
 
   return <div ref={containerRef} className={`grainient-container ${className}`.trim()} />;
 };

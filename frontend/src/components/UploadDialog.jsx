@@ -1,50 +1,56 @@
 import { useRef, useState } from 'react';
 import { Upload, X, Loader2 } from 'lucide-react';
 import { uploadFile } from '../api.js';
-import { formatSize } from '../utils.js';
+import { errMsg, formatSize } from '../utils.js';
+
+const CONCURRENCY = 3; // files upload in parallel; each is an independent OSS direct-upload
 
 export default function UploadDialog({ folderId, onClose, onDone }) {
   const inputRef = useRef(null);
   const [files, setFiles] = useState([]); // {file, progress, status, error}
   const [busy, setBusy] = useState(false);
 
+  const addFiles = (list) =>
+    setFiles((prev) => [
+      ...prev,
+      ...Array.from(list).map((f) => ({ file: f, progress: 0, status: 'pending' })),
+    ]);
+
   const onPick = (e) => {
-    const list = Array.from(e.target.files || []);
-    setFiles((prev) => [...prev, ...list.map((f) => ({ file: f, progress: 0, status: 'pending' }))]);
+    addFiles(e.target.files || []);
     e.target.value = '';
   };
 
   const onDrop = (e) => {
     e.preventDefault();
-    const list = Array.from(e.dataTransfer.files || []);
-    setFiles((prev) => [...prev, ...list.map((f) => ({ file: f, progress: 0, status: 'pending' }))]);
+    addFiles(e.dataTransfer.files || []);
+  };
+
+  const uploadOne = async (item) => {
+    setFiles((prev) => prev.map((it) => (it === item ? { ...it, status: 'uploading' } : it)));
+    try {
+      await uploadFile({
+        file: item.file,
+        folderId,
+        onProgress: (p) =>
+          setFiles((prev) => prev.map((it) => (it === item ? { ...it, progress: p } : it))),
+      });
+      setFiles((prev) =>
+        prev.map((it) => (it === item ? { ...it, status: 'done', progress: 100 } : it))
+      );
+    } catch (e) {
+      setFiles((prev) =>
+        prev.map((it) => (it === item ? { ...it, status: 'error', error: errMsg(e) } : it))
+      );
+    }
   };
 
   const start = async () => {
     if (!files.length) return;
     setBusy(true);
-    for (let i = 0; i < files.length; i++) {
-      if (files[i].status === 'done') continue;
-      setFiles((prev) => prev.map((it, idx) => (idx === i ? { ...it, status: 'uploading' } : it)));
-      try {
-        await uploadFile({
-          file: files[i].file,
-          folderId,
-          onProgress: (p) =>
-            setFiles((prev) =>
-              prev.map((it, idx) => (idx === i ? { ...it, progress: p } : it))
-            ),
-        });
-        setFiles((prev) =>
-          prev.map((it, idx) => (idx === i ? { ...it, status: 'done', progress: 100 } : it))
-        );
-      } catch (e) {
-        setFiles((prev) =>
-          prev.map((it, idx) =>
-            idx === i ? { ...it, status: 'error', error: e.response?.data?.error || e.message } : it
-          )
-        );
-      }
+    const pending = files.filter((f) => f.status !== 'done');
+    for (let i = 0; i < pending.length; i += CONCURRENCY) {
+      await Promise.all(pending.slice(i, i + CONCURRENCY).map(uploadOne));
     }
     setBusy(false);
     onDone?.();

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getStats } from '../api.js';
-import { formatSize } from '../utils.js';
+import { errMsg, formatSize } from '../utils.js';
 import FileIcon from '../components/FileIcon.jsx';
 import BorderGlow from '../components/BorderGlow.jsx';
 import {
@@ -33,7 +33,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState('');
-  const [hoverIdx, setHoverIdx] = useState(null);
 
   const [range, setRange] = useState(30);
 
@@ -45,7 +44,7 @@ export default function DashboardPage() {
         setStats(d);
         setErr('');
       })
-      .catch((e) => setErr(e.response?.data?.error || '加载失败'))
+      .catch((e) => setErr(errMsg(e, '加载失败')))
       .finally(() => {
         setLoading(false);
         setRefreshing(false);
@@ -181,11 +180,7 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-          <ActivityChart
-            series={stats.series}
-            hoverIdx={hoverIdx}
-            setHoverIdx={setHoverIdx}
-          />
+          <ActivityChart series={stats.series} />
         </BorderGlow>
 
         <BorderGlow {...GLOW_DEFAULTS} className="lg:col-span-4" innerClassName="p-6">
@@ -296,7 +291,8 @@ function MiniStat({ label, value, hint }) {
   );
 }
 
-function ActivityChart({ series, hoverIdx, setHoverIdx }) {
+function ActivityChart({ series }) {
+  const [hoverIdx, setHoverIdx] = useState(null);
   const W = 720;
   const H = 260;
   const PAD_L = 40;
