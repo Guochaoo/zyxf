@@ -10,7 +10,6 @@ import {
   BsArrowClockwise,
   BsCloudUpload,
   BsDownload,
-  BsFileEarmarkText,
   BsFolder2Open,
   BsHdd,
 } from 'react-icons/bs';
@@ -83,7 +82,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="py-24 text-center">
-        <div className="mx-auto mb-3 h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-transparent" />
+        <div className="mx-auto mb-3 w-5 h-5 animate-spin rounded-full border-2 border-white/30 border-t-transparent" />
         <p className="text-[13px] text-white/45">加载中…</p>
       </div>
     );
@@ -147,7 +146,7 @@ export default function DashboardPage() {
             disabled={refreshing}
             className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-1.5 text-[12px] text-white/60 shadow-sm transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
           >
-            <BsArrowClockwise className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            <BsArrowClockwise className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             刷新
           </button>
         </div>
@@ -250,7 +249,7 @@ function KpiCard({ label, title, value, icon: Icon, delta, deltaHint, sub }) {
     <BorderGlow {...GLOW_DEFAULTS} glowRadius={20} innerClassName="group p-5">
       <div className="flex items-center justify-between">
         <span className="text-[10px] uppercase tracking-[0.2em] text-white/40">{label}</span>
-        <Icon className="h-4 w-4 text-white/30 transition-colors group-hover:text-white/60" />
+        <Icon className="w-4 h-4 text-white/30 transition-colors group-hover:text-white/60" />
       </div>
       <div className="mt-7 text-[32px] font-semibold leading-none tracking-tight text-white tabular-nums">
         {value}
@@ -265,9 +264,9 @@ function KpiCard({ label, title, value, icon: Icon, delta, deltaHint, sub }) {
             title={deltaHint}
           >
             {delta >= 0 ? (
-              <BsArrowUpRight className="h-3 w-3" />
+              <BsArrowUpRight className="w-3 h-3" />
             ) : (
-              <BsArrowDownRight className="h-3 w-3" />
+              <BsArrowDownRight className="w-3 h-3" />
             )}
             {Math.abs(delta).toFixed(0)}%
           </span>
@@ -450,11 +449,11 @@ function ActivityChart({ series }) {
           </div>
           <div className="mt-1 flex items-center gap-3">
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-1.5 w-3 rounded-full bg-white" />
+              <span className="w-3 h-1.5 rounded-full bg-white" />
               下载 {ptsDl[hoverIdx].downloads}
             </span>
             <span className="inline-flex items-center gap-1.5 text-emerald-400">
-              <span className="h-1.5 w-3 rounded-full bg-emerald-500" />
+              <span className="w-3 h-1.5 rounded-full bg-emerald-500" />
               上传 {ptsUp[hoverIdx].uploads}
             </span>
           </div>
@@ -475,7 +474,7 @@ function TypeBreakdown({ rows, totalFiles }) {
           <li key={r.ext}>
             <div className="flex items-center justify-between text-[12px]">
               <span className="inline-flex items-center gap-2 text-white/80">
-                <FileIcon type="file" ext={r.ext === 'other' ? '' : r.ext} className="h-3.5 w-3.5" />
+                <FileIcon type="file" ext={r.ext === 'other' ? '' : r.ext} className="w-3.5 h-3.5" />
                 <span className="uppercase tracking-wider">{r.ext}</span>
               </span>
               <span className="tabular-nums text-white/55">
@@ -508,7 +507,7 @@ function TopDownloads({ items }) {
           className="group flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-white/[0.04]"
         >
           <span className="w-5 text-right text-[11px] tabular-nums text-white/35">{i + 1}</span>
-          <FileIcon type="file" ext={f.ext} className="h-4 w-4 shrink-0" />
+          <FileIcon type="file" ext={f.ext} className="w-4 h-4 shrink-0" />
           <Link
             to={f.folder_id ? `/folder/${f.folder_id}` : '/'}
             className="min-w-0 flex-1 truncate text-[13px] text-white/85 hover:text-white"
@@ -541,7 +540,7 @@ function RecentUploads({ items }) {
             to={f.folder_id ? `/folder/${f.folder_id}` : '/'}
             className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-white/[0.04]"
           >
-            <FileIcon type="file" ext={f.ext} className="h-4 w-4 shrink-0" />
+            <FileIcon type="file" ext={f.ext} className="w-4 h-4 shrink-0" />
             <span className="min-w-0 flex-1 truncate text-[13px] text-white/85" title={f.name}>
               {f.name}
             </span>
@@ -570,7 +569,7 @@ function TopFolders({ items }) {
               to={`/folder/${f.id}`}
               className="inline-flex items-center gap-2 text-white/85 hover:text-white"
             >
-              <BsFolder2Open className="h-3.5 w-3.5 text-white/45" />
+              <BsFolder2Open className="w-3.5 h-3.5 text-white/45" />
               <span className="truncate">{f.name}</span>
             </Link>
             <span className="tabular-nums text-white/55">

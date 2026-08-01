@@ -97,8 +97,7 @@ a:focus-visible,
   }
 }
 
-.reactbits-grainient-theme .rb-search-pill,
-.rb-search-pill {
+.reactbits-grainient-theme .rb-search-pill {
   width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 50px;
@@ -108,14 +107,12 @@ a:focus-visible,
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
 }
 
-.reactbits-grainient-theme .rb-search-pill:focus-within,
-.rb-search-pill:focus-within {
+.reactbits-grainient-theme .rb-search-pill:focus-within {
   border-color: rgba(255, 255, 255, 0.16);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
 }
 
-.reactbits-grainient-theme .rb-search-pill input,
-.rb-search-pill input {
+.reactbits-grainient-theme .rb-search-pill input {
   background: transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
@@ -125,14 +122,12 @@ a:focus-visible,
   -webkit-backdrop-filter: none !important;
 }
 
-.reactbits-grainient-theme .rb-search-pill input:focus,
-.rb-search-pill input:focus {
+.reactbits-grainient-theme .rb-search-pill input:focus {
   border-color: transparent !important;
   box-shadow: none !important;
   outline: none !important;
 }
 
-.reactbits-grainient-theme .rb-search-dropdown,
 .rb-search-dropdown {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 22px;
@@ -142,7 +137,6 @@ a:focus-visible,
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
 }
 
-.reactbits-grainient-theme .rb-search-dropdown .bg-white\/5,
 .rb-search-dropdown .bg-white\/5 {
   background: rgba(255, 255, 255, 0.03) !important;
 }
@@ -347,7 +341,6 @@ a:focus-visible,
   text-shadow: 0 1px 16px rgba(255, 255, 255, 0.55);
 }
 
-.reactbits-grainient-theme .rb-selected,
 .reactbits-grainient-theme .sort-option--active {
   color: #000000 !important;
 }
@@ -370,10 +363,6 @@ a:focus-visible,
 .reactbits-grainient-theme .rename-dialog-save {
   background: #ffffff !important;
   color: #000000 !important;
-}
-
-.reactbits-grainient-theme .rb-muted {
-  color: rgba(255, 255, 255, 0.4) !important;
 }
 
 .reactbits-grainient-theme .rb-table-heading,
@@ -459,12 +448,3 @@ a:focus-visible,
   box-shadow: none !important;
 }
 
-/* ---- Dashboard bar chart ---- */
-@keyframes barGrow {
-  from { height: 0; }
-  to { height: var(--bar-h); }
-}
-
-.bar-chart .bar {
-  animation: barGrow 0.6s ease-out forwards;
-}

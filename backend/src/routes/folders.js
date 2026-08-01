@@ -116,9 +116,9 @@ function getBreadcrumb(id) {
 // List the contents (subfolders + files) of a folder. id=0 means root.
 router.get('/:id/contents', (req, res) => {
   const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id < 0) return res.status(400).json({ error: 'invalid folder id' });
+  if (!Number.isInteger(id) || id < 0) return res.status(400).json({ error: '无效的文件夹 ID' });
   const folder = getFolder(id);
-  if (!folder) return res.status(404).json({ error: 'folder not found' });
+  if (!folder) return res.status(404).json({ error: '文件夹不存在' });
 
   const sort = SORT_FIELDS[req.query.sort] || SORT_FIELDS.name;
   const order = req.query.order === 'desc' ? 'DESC' : 'ASC';
@@ -138,9 +138,10 @@ router.get('/:id/contents', (req, res) => {
     .all(...args)
     .map((f) => ({ ...f, type: 'folder' }));
 
+  // oss_key is internal storage layout — not exposed to (anonymous) clients.
   const files = db
     .prepare(
-      `SELECT id, name, size, mime_type, ext, oss_key, sort_order, created_at FROM files WHERE ${folderClause} ORDER BY ${sort} ${order}${tieBreak}`
+      `SELECT id, name, size, mime_type, ext, sort_order, created_at FROM files WHERE ${folderClause} ORDER BY ${sort} ${order}${tieBreak}`
     )
     .all(...args)
     .map((f) => ({ ...f, type: 'file' }));
@@ -156,16 +157,16 @@ router.get('/:id/contents', (req, res) => {
 // Create folder
 router.post('/', requireAdmin, async (req, res) => {
   const { name, parent_id } = req.body || {};
-  if (!name || !name.trim()) return res.status(400).json({ error: 'name required' });
+  if (!name || !name.trim()) return res.status(400).json({ error: '名称不能为空' });
   const trimmed = name.trim();
   const pid = parseOptionalFolderId(parent_id);
-  if (Number.isNaN(pid)) return res.status(400).json({ error: 'invalid parent id' });
+  if (Number.isNaN(pid)) return res.status(400).json({ error: '无效的父级 ID' });
   if (pid !== null) {
     const parent = db.prepare('SELECT id FROM folders WHERE id = ?').get(pid);
-    if (!parent) return res.status(400).json({ error: 'parent not found' });
+    if (!parent) return res.status(400).json({ error: '父文件夹不存在' });
   }
   if (findByNameInParent(db, 'folders', 'parent_id', trimmed, pid)) {
-    return res.status(409).json({ error: 'folder already exists' });
+    return res.status(409).json({ error: '同名文件夹已存在' });
   }
   try {
     const so = nextSortOrder(db, 'folders', 'parent_id', pid);
@@ -183,7 +184,7 @@ router.post('/', requireAdmin, async (req, res) => {
     res.json({ id: info.lastInsertRowid, name: trimmed, parent_id: pid });
   } catch (e) {
     if (String(e.message).includes('UNIQUE')) {
-      return res.status(409).json({ error: 'folder already exists' });
+      return res.status(409).json({ error: '同名文件夹已存在' });
     }
     throw e;
   }
@@ -192,17 +193,17 @@ router.post('/', requireAdmin, async (req, res) => {
 // Move folder to a new parent (parent_id = null means root)
 router.patch('/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid folder id' });
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: '无效的文件夹 ID' });
   const folder = db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
-  if (!folder) return res.status(404).json({ error: 'not found' });
+  if (!folder) return res.status(404).json({ error: '资源不存在' });
 
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
     const newName = String(req.body?.name || '').trim();
-    if (!newName) return res.status(400).json({ error: 'name required' });
+    if (!newName) return res.status(400).json({ error: '名称不能为空' });
     if (newName === folder.name) return res.json({ ok: true, unchanged: true });
     const parentId = folder.parent_id ?? null;
     if (findByNameInParent(db, 'folders', 'parent_id', newName, parentId, id)) {
-      return res.status(409).json({ error: 'folder already exists' });
+      return res.status(409).json({ error: '同名文件夹已存在' });
     }
 
     try {
@@ -211,11 +212,11 @@ router.patch('/:id', requireAdmin, async (req, res) => {
         updateFolder: () =>
           db.prepare('UPDATE folders SET name = ? WHERE id = ?').run(newName, id),
       });
-      if (result.conflict) return res.status(409).json({ error: 'target OSS path already exists' });
+      if (result.conflict) return res.status(409).json({ error: '目标存储路径已存在同名文件' });
       return res.json({ ok: true, name: newName });
     } catch (e) {
       if (String(e.message).includes('UNIQUE')) {
-        return res.status(409).json({ error: 'folder already exists' });
+        return res.status(409).json({ error: '同名文件夹已存在' });
       }
       throw e;
     }
@@ -223,18 +224,18 @@ router.patch('/:id', requireAdmin, async (req, res) => {
 
   const raw = req.body?.parent_id;
   const newParent = parseOptionalFolderId(raw);
-  if (Number.isNaN(newParent)) return res.status(400).json({ error: 'invalid parent id' });
+  if (Number.isNaN(newParent)) return res.status(400).json({ error: '无效的父级 ID' });
 
-  if (newParent === id) return res.status(400).json({ error: 'cannot move into itself' });
+  if (newParent === id) return res.status(400).json({ error: '不能移动到自己内部' });
 
   if (newParent !== null) {
     const exists = db.prepare('SELECT id FROM folders WHERE id = ?').get(newParent);
-    if (!exists) return res.status(400).json({ error: 'target parent not found' });
+    if (!exists) return res.status(400).json({ error: '目标父文件夹不存在' });
     // Walk up from newParent; if we hit id, it's a descendant => cycle.
     let cur = newParent;
     const seen = new Set();
     while (cur != null && !seen.has(cur)) {
-      if (cur === id) return res.status(400).json({ error: 'cannot move into descendant' });
+      if (cur === id) return res.status(400).json({ error: '不能移动到自身的子文件夹中' });
       seen.add(cur);
       const row = db.prepare('SELECT parent_id FROM folders WHERE id = ?').get(cur);
       cur = row?.parent_id ?? null;
@@ -243,7 +244,7 @@ router.patch('/:id', requireAdmin, async (req, res) => {
 
   if (newParent === (folder.parent_id ?? null)) return res.json({ ok: true, unchanged: true });
   if (findByNameInParent(db, 'folders', 'parent_id', folder.name, newParent, id)) {
-    return res.status(409).json({ error: 'target folder already has a folder with this name' });
+    return res.status(409).json({ error: '目标文件夹中已存在同名文件夹' });
   }
 
   try {
@@ -255,7 +256,7 @@ router.patch('/:id', requireAdmin, async (req, res) => {
           .prepare('UPDATE folders SET parent_id = ?, sort_order = ? WHERE id = ?')
           .run(newParent, so, id),
     });
-    if (result.conflict) return res.status(409).json({ error: 'target OSS path already exists' });
+    if (result.conflict) return res.status(409).json({ error: '目标存储路径已存在同名文件' });
     res.json({ ok: true });
   } catch (e) {
     if (String(e.message).includes('UNIQUE')) {
@@ -269,9 +270,9 @@ router.patch('/:id', requireAdmin, async (req, res) => {
 // Body: { parent_folder_id: number|null, order: [{type:'file'|'folder', id}, ...] }
 router.post('/reorder', requireAdmin, (req, res) => {
   const { parent_folder_id, order } = req.body || {};
-  if (!Array.isArray(order)) return res.status(400).json({ error: 'order must be an array' });
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'order 必须是数组' });
   const pid = parseOptionalFolderId(parent_folder_id);
-  if (Number.isNaN(pid)) return res.status(400).json({ error: 'invalid parent folder id' });
+  if (Number.isNaN(pid)) return res.status(400).json({ error: '无效的父文件夹 ID' });
 
   // Validate every entry belongs to the claimed parent folder.
   for (const it of order) {
@@ -311,7 +312,7 @@ router.post('/reorder', requireAdmin, (req, res) => {
 // Delete folder (cascade)
 router.delete('/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  if (!id) return res.status(400).json({ error: 'invalid id' });
+  if (!id) return res.status(400).json({ error: '无效的 ID' });
   // Gather all descendant keys to clean up OSS objects.
   const keys = [];
   const collectKeys = (folderId) => {
@@ -330,8 +331,8 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     await batchOss(keys, (k) => deleteOssObjectIfExists(k));
   } catch (e) {
-    console.warn('oss delete failed', e.message);
-    return res.status(502).json({ error: 'oss delete failed' });
+    console.warn('OSS 删除失败', e.message);
+    return res.status(502).json({ error: 'OSS 删除失败' });
   }
 
   db.prepare('DELETE FROM folders WHERE id = ?').run(id);

@@ -12,7 +12,6 @@ const GlassSurface = ({
   opacity = 0.93,
   blur = 11,
   displace = 0,
-  backgroundOpacity = 0,
   saturation = 1,
   distortionScale = -180,
   redOffset = 0,
@@ -144,7 +143,6 @@ const GlassSurface = ({
     width: typeof width === 'number' ? `${width}px` : width,
     height: typeof height === 'number' ? `${height}px` : height,
     borderRadius: `${borderRadius}px`,
-    '--glass-frost': backgroundOpacity,
     '--glass-saturation': saturation,
     '--filter-id': `url(#${filterId})`,
   };

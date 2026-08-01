@@ -129,7 +129,7 @@ export default function SearchBar({ className = '' }) {
   return (
     <div ref={wrapRef} className={`relative z-[70] w-full max-w-[520px] ${className}`.trim()}>
       <div className="rb-search-pill relative">
-        <BsSearch className="absolute left-[15px] top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        <BsSearch className="absolute left-[15px] top-1/2 w-4 h-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
         <input
           ref={inputRef}
           type="text"
@@ -188,7 +188,7 @@ export default function SearchBar({ className = '' }) {
                   {results.files.map((f) => (
                     <div
                       key={`f-${f.id}`}
-                    className="flex w-full items-center gap-2 hover:bg-white/10 transition-colors"
+                      className="flex w-full items-center gap-2 hover:bg-white/10 transition-colors"
                     >
                       <button
                         type="button"
@@ -202,11 +202,11 @@ export default function SearchBar({ className = '' }) {
                       <button
                         type="button"
                         onClick={(e) => handleDownload(e, f)}
-                        className="mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-white/10 hover:text-white"
+                        className="mr-2 flex w-8 h-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-white/10 hover:text-white"
                         title="下载"
                         aria-label={`下载 ${f.name}`}
                       >
-                        <Download className="h-4 w-4" />
+                        <Download className="w-4 h-4" />
                       </button>
                     </div>
                   ))}

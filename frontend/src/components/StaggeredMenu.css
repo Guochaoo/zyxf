@@ -127,10 +127,6 @@
   outline: none;
 }
 
-.sm-line:last-of-type {
-  margin-top: 6px;
-}
-
 .sm-toggle-textWrap {
   position: relative;
   display: inline-block;
@@ -180,10 +176,6 @@
   border-radius: 2px;
   transform: translate(-50%, -50%);
   will-change: transform;
-}
-
-.sm-line {
-  display: none !important;
 }
 
 .staggered-menu-panel {

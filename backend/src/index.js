@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { db, ensureAdmin } from './db.js';
 import { attachUser, DEV_JWT_SECRET } from './auth.js';
 import authRoutes from './routes/auth.js';
@@ -17,8 +18,12 @@ const isProd = process.env.NODE_ENV === 'production';
 // ---- Production safety: refuse to start with insecure defaults ----
 if (isProd) {
   const missing = [];
-  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === DEV_JWT_SECRET) missing.push('JWT_SECRET');
-  if (!process.env.ADMIN_PASSWORD) missing.push('ADMIN_PASSWORD');
+  const jwt = process.env.JWT_SECRET || '';
+  const pwd = process.env.ADMIN_PASSWORD || '';
+  // Reject placeholder/example values from the repo, not just the literal dev default.
+  const weak = /change|example|placeholder|secret|dev|test|admin123|123456/i;
+  if (!jwt || jwt === DEV_JWT_SECRET || jwt.length < 32 || weak.test(jwt)) missing.push('JWT_SECRET');
+  if (!pwd || pwd.length < 12 || weak.test(pwd)) missing.push('ADMIN_PASSWORD');
   if (missing.length) {
     console.error(
       `[index] FATAL: in production but ${missing.join(', ')} not set. Refusing to start with insecure defaults.`
@@ -30,6 +35,16 @@ if (isProd) {
   }
 }
 
+// ---- Loose anti-abuse limit for anonymous API traffic ----
+// login/download have their own tighter limits; this only stops scripted floods.
+const publicLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '请求过于频繁,请稍后再试' },
+});
+
 const adminUser = process.env.ADMIN_USER || 'admin';
 const adminPass = process.env.ADMIN_PASSWORD || 'admin123';
 if (!process.env.ADMIN_PASSWORD && !isProd) {
@@ -37,7 +52,9 @@ if (!process.env.ADMIN_PASSWORD && !isProd) {
 }
 ensureAdmin(adminUser, adminPass);
 
-// Behind nginx / load balancer: trust the first proxy so req.ip is the client IP.
+// Behind nginx: trust the first proxy so req.ip is the client IP.
+// Requires nginx to overwrite X-Forwarded-For with $remote_addr (see nginx.conf);
+// otherwise clients can spoof the leftmost XFF entry and bypass all rate limits.
 app.set('trust proxy', 1);
 
 app.use(
@@ -53,6 +70,7 @@ app.use(
   })
 );
 app.use(express.json({ limit: '1mb' }));
+app.use('/api', publicLimiter);
 app.use(attachUser);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, time: Date.now() }));

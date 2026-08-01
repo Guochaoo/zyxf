@@ -86,7 +86,7 @@ export default function App() {
               src="/brand-logo-transparent.png"
               alt=""
               aria-hidden="true"
-              className="h-7 w-7 object-contain"
+              className="w-7 h-7 object-contain"
             />
             <span className="rb-brand-title whitespace-nowrap">仲英学辅资料库</span>
           </Link>
