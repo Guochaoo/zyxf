@@ -1,4 +1,4 @@
-﻿import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+﻿import { useEffect } from 'react';
 import { Route, Routes, Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import BrowsePage from './pages/BrowsePage.jsx';
@@ -6,15 +6,20 @@ import LoginPage from './pages/LoginPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import AboutPage from './pages/AboutPage.jsx';
 import StaggeredMenu from './components/StaggeredMenu.jsx';
-import Grainient from './components/Grainient.jsx';
 import SearchBar from './components/SearchBar.jsx';
+import FolderTree from './components/FolderTree.jsx';
+import KnowledgeGraph from './components/KnowledgeGraph.jsx';
+import useMediaQuery from './hooks/useMediaQuery.js';
 
 export default function App() {
   const { user, logout, ready } = useAuth();
   const location = useLocation();
-  const desktopNavRef = useRef(null);
-  const desktopNavItemRefs = useRef({});
-  const [desktopNavIndicator, setDesktopNavIndicator] = useState({ left: 0, width: 0, ready: false });
+  const isXl = useMediaQuery('(min-width: 1280px)');
+
+  // Docs layout: brand + search + folder tree live in the left rail, which
+  // appears on browse routes only. Other pages are standalone.
+  const isBrowse = location.pathname === '/' || location.pathname.startsWith('/folder/');
+  const folderId = Number(location.pathname.match(/^\/folder\/(\d+)/)?.[1]) || 0;
 
   const menuItems = [
     { label: '资料库', ariaLabel: '浏览资料库', link: '/' },
@@ -25,145 +30,62 @@ export default function App() {
       : [{ label: '管理员登录', ariaLabel: '管理员登录', link: '/login' }]),
   ];
 
-  const isActiveMenuItem = (item) => {
-    if (!item.link) return false;
-    if (item.link === '/') {
-      return location.pathname === '/' || location.pathname.startsWith('/folder/');
-    }
-    return location.pathname === item.link;
-  };
-
-  const activeDesktopMenuItem = menuItems.find(isActiveMenuItem);
+  const brand = (
+    <Link to="/" className="flex items-center gap-2 shrink-0 hover:text-brand-500">
+      <img
+        src="/favicon.png"
+        alt=""
+        aria-hidden="true"
+        className="w-7 h-7 rounded-full object-cover"
+      />
+      <span className="rb-brand-title whitespace-nowrap">仲英学辅资料库</span>
+    </Link>
+  );
 
   // ---- Document title ----
   useEffect(() => {
     document.title = '仲英学辅';
   }, []);
 
-  useLayoutEffect(() => {
-    if (!ready) {
-      setDesktopNavIndicator((prev) => ({ ...prev, ready: false }));
-      return undefined;
-    }
-
-    const activeLink = activeDesktopMenuItem?.link;
-    const activeElement = activeLink ? desktopNavItemRefs.current[activeLink] : null;
-    const nav = desktopNavRef.current;
-    if (!activeElement || !nav) {
-      setDesktopNavIndicator((prev) => ({ ...prev, ready: false }));
-      return undefined;
-    }
-
-    const updateIndicator = () => {
-      setDesktopNavIndicator({
-        left: activeElement.offsetLeft,
-        width: activeElement.offsetWidth,
-        ready: true,
-      });
-    };
-
-    updateIndicator();
-    const resizeObserver = new ResizeObserver(updateIndicator);
-    resizeObserver.observe(nav);
-    resizeObserver.observe(activeElement);
-
-    return () => resizeObserver.disconnect();
-  }, [activeDesktopMenuItem?.link, ready, user]);
-
   if (!ready) {
     return <div className="h-full flex items-center justify-center text-slate-400">加载中...</div>;
   }
 
   return (
-    <div className="reactbits-grainient-theme min-h-full flex flex-col relative bg-white">
-      <div className="fixed inset-0 z-0 bg-white">
-        <Grainient
-          color1="#c2b6b2"
-          color2="#276DA9"
-          color3="#184872"
-          timeSpeed={0.25}
-          colorBalance={0.7}
-          warpStrength={1.0}
-          warpFrequency={5.0}
-          warpSpeed={2.0}
-          warpAmplitude={50.0}
-          blendAngle={0.0}
-          blendSoftness={0.23}
-          rotationAmount={500.0}
-          noiseScale={2.0}
-          grainAmount={0.1}
-          grainScale={2.0}
-          grainAnimated={false}
-          contrast={1.5}
-          gamma={1.0}
-          saturation={1.0}
-          centerX={0.0}
-          centerY={0.0}
-          zoom={0.9}
-        />
-      </div>
-
-      <header className="relative z-50 pt-5">
-        <div className="rb-topbar mx-auto flex h-12 items-center justify-center px-[14px] sm:justify-between sm:pr-2">
-          <Link to="/" className="flex items-center justify-center sm:justify-start gap-2 text-white hover:text-brand-400 shrink-0">
-            <img
-              src="/brand-logo-transparent.png"
-              alt=""
-              aria-hidden="true"
-              className="h-7 w-7 object-contain"
-            />
-            <span className="rb-brand-title whitespace-nowrap">仲英学辅资料库</span>
-          </Link>
-          <div className="rb-topbar-search">
-            <SearchBar />
-          </div>
-          <nav ref={desktopNavRef} className="rb-desktop-nav" aria-label="桌面导航">
-            <span
-              className="rb-desktop-nav-indicator"
-              style={{
-                width: desktopNavIndicator.width,
-                transform: `translateX(${desktopNavIndicator.left}px)`,
-                opacity: desktopNavIndicator.ready ? 1 : 0,
-              }}
-            />
-            {menuItems.map((item) => {
-              if (item.action) {
-                return (
-                  <button
-                    key={item.label}
-                    type="button"
-                    className="rb-desktop-nav-link rb-desktop-nav-action"
-                    aria-label={item.ariaLabel}
-                    onClick={item.action}
-                  >
-                    {item.label}
-                  </button>
-                );
-              }
-
-              const active = isActiveMenuItem(item);
-              return (
-                <Link
-                  ref={(node) => {
-                    if (node) desktopNavItemRefs.current[item.link] = node;
-                  }}
-                  key={item.label}
-                  to={item.link}
-                  className={`rb-desktop-nav-link ${active ? 'is-active' : ''}`}
-                  aria-label={item.ariaLabel}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
+    <div className="app-theme min-h-full flex flex-col relative bg-white">
+      {/* Mobile-only brand row on browse pages (no topbar on any layout) */}
+      {isBrowse && (
+        <div className="flex h-14 items-center px-4 lg:hidden">
+          {brand}
         </div>
-        <div className="mx-auto mt-3 flex w-[92%] justify-center md:hidden">
+      )}
+      {isBrowse && (
+        <div className="mx-auto mt-3 flex w-[92%] justify-center lg:hidden">
           <SearchBar />
         </div>
-      </header>
+      )}
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-4 py-4 sm:py-6 relative z-10">
+      {/* Docs layout: three columns on wide screens.
+          Left rail = folder tree, right column = knowledge graph. Both are
+          position:fixed to the viewport edges so they never move while the
+          page scrolls (sticky rails drift at scroll extremes). */}
+      {isBrowse && (
+        <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-10 lg:flex lg:w-[250px] lg:flex-col lg:gap-4 lg:overflow-hidden lg:bg-[#FAFAFA] lg:px-4 lg:pt-6">
+          {brand}
+          <SearchBar />
+          <FolderTree currentId={folderId} />
+          <footer className="shrink-0 pb-5 text-center text-[11px] leading-relaxed text-slate-400">
+            陕ICP备2026017448号
+          </footer>
+        </div>
+      )}
+      <main
+        className={`min-w-0 overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6 ${
+          isBrowse
+            ? 'w-full lg:pl-[calc(250px+1rem)] xl:pr-[calc(300px+1rem)]'
+            : 'mx-auto w-full max-w-7xl'
+        }`}
+      >
         <Routes>
           <Route path="/" element={<BrowsePage />} />
           <Route path="/folder/:id" element={<BrowsePage />} />
@@ -173,9 +95,17 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      {/* Right column — the original StaggeredMenu toggle button stays
+          fixed at the top-right; the knowledge graph sits below it. */}
+      {isBrowse && isXl && (
+        <div className="fixed inset-y-0 right-0 z-10 hidden flex-col gap-4 overflow-hidden px-4 pt-16 xl:flex xl:w-[300px]">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <KnowledgeGraph currentId={folderId} />
+          </div>
+        </div>
+      )}
 
       <StaggeredMenu
-        className="mobile-staggered-menu"
         position="right"
         items={menuItems}
         socialItems={[
@@ -185,16 +115,13 @@ export default function App() {
         ]}
         displaySocials
         displayItemNumbering={false}
-        menuButtonColor="rgba(255, 255, 255, 0.4)"
-        openMenuButtonColor="#2b2118"
+        menuButtonColor="#171717"
+        openMenuButtonColor="#171717"
         changeMenuColorOnOpen
-        accentColor="#c96442"
+        accentColor="#171717"
+        colors={['#171717', '#404040', '#666666']}
         isFixed
       />
-
-      <footer className="text-center text-xs text-slate-500 py-4 relative z-10">
-        仲英书院学业辅导中心 · 陕ICP备2026017448号
-      </footer>
     </div>
   );
 }

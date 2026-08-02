@@ -47,23 +47,26 @@ router.get('/', (req, res) => {
   const files_added_7d = cnt('SELECT COUNT(*) c FROM files WHERE created_at >= ?', sevenAgo);
   const size_added_7d = sum('SELECT COALESCE(SUM(size),0) s FROM files WHERE created_at >= ?', sevenAgo);
 
-  // ---- Daily series (downloads + uploads) ----
-  const series = [];
-  for (let i = range - 1; i >= 0; i--) {
-    const start = todayStart - i * DAY;
-    const end = start + DAY;
-    const dl = cnt(
-      'SELECT COUNT(*) c FROM download_logs WHERE downloaded_at >= ? AND downloaded_at < ?',
-      start,
-      end
-    );
-    const up = cnt(
-      'SELECT COUNT(*) c FROM files WHERE created_at >= ? AND created_at < ?',
-      start,
-      end
-    );
-    series.push({ date: dayLabel(start), ts: start, downloads: dl, uploads: up });
-  }
+  // ---- Daily series (downloads + uploads): one GROUP BY per table ----
+  const seriesStart = todayStart - (range - 1) * DAY;
+  const dlByDay = db
+    .prepare(
+      `SELECT (downloaded_at - ?) / ? AS i, COUNT(*) AS c FROM download_logs
+       WHERE downloaded_at >= ? GROUP BY i`
+    )
+    .all(todayStart, DAY, seriesStart);
+  const upByDay = db
+    .prepare(
+      `SELECT (created_at - ?) / ? AS i, COUNT(*) AS c FROM files
+       WHERE created_at >= ? GROUP BY i`
+    )
+    .all(todayStart, DAY, seriesStart);
+  const series = Array.from({ length: range }, (_, k) => {
+    const start = todayStart - (range - 1 - k) * DAY;
+    return { date: dayLabel(start), ts: start, downloads: 0, uploads: 0 };
+  });
+  for (const r of dlByDay) if (series[r.i]) series[r.i].downloads = r.c;
+  for (const r of upByDay) if (series[r.i]) series[r.i].uploads = r.c;
 
   // ---- File type breakdown ----
   const typeRows = db

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { Loader2 } from 'lucide-react';
 import { BsCaretLeftFill, BsEyeFill, BsEyeSlashFill } from 'react-icons/bs';
+import { errMsg } from '../utils.js';
 import Silk from '../components/Silk.jsx';
 
 export default function LoginPage() {
@@ -22,16 +23,16 @@ export default function LoginPage() {
       await login(username, password);
       nav('/');
     } catch (e) {
-      setErr(e.response?.data?.error || '登录失败');
+      setErr(errMsg(e, '登录失败'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="relative mt-3 sm:mt-6 mx-auto w-full max-w-[1100px] grid items-stretch overflow-hidden rounded-2xl border border-white/10 shadow-2xl md:min-h-[640px] md:grid-cols-[1.15fr_1fr]">
+    <div className="relative mt-3 sm:mt-6 mx-auto w-full max-w-[1100px] grid items-stretch overflow-hidden rounded-lg shadow-[rgba(0,0,0,0.08)_0px_0px_0px_1px,rgba(0,0,0,0.04)_0px_2px_2px,rgba(0,0,0,0.04)_0px_8px_8px_-8px,#fafafa_0px_0px_0px_1px] md:min-h-[640px] md:grid-cols-[1.15fr_1fr]">
       {/* Left — silky brand panel with animated Silk background */}
-      <div className="relative hidden md:flex md:flex-col md:justify-between p-12 overflow-hidden">
+      <div className="rb-dark relative hidden md:flex md:flex-col md:justify-between p-12 overflow-hidden">
         <div className="absolute inset-0 -z-10">
           <Silk
             speed={6.5}
@@ -118,7 +119,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPwd((v) => !v)}
                   aria-label={showPwd ? '隐藏密码' : '显示密码'}
-                  className="login-light-eye absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center text-neutral-400 transition-colors hover:text-neutral-700"
+                  className="login-light-eye absolute right-3 top-1/2 -translate-y-1/2 inline-flex w-8 h-8 items-center justify-center text-neutral-400 transition-colors hover:text-neutral-700"
                 >
                   {showPwd ? <BsEyeSlashFill className="w-4 h-4" /> : <BsEyeFill className="w-4 h-4" />}
                 </button>
@@ -133,7 +134,7 @@ export default function LoginPage() {
 
             <button
               disabled={loading}
-              className="mt-2 sm:mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-black px-4 py-2.5 sm:py-3 text-sm font-semibold text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-2 sm:mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-4 py-2.5 sm:py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               {loading ? '登录中…' : '登录'}

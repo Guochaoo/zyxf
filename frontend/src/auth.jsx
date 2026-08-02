@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import api, { login as loginApi } from './api.js';
+import api, { TOKEN_KEY, login as loginApi } from './api.js';
 
 const AuthContext = createContext(null);
 
@@ -8,7 +8,7 @@ export function AuthProvider({ children }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('zyxf_token');
+    const token = localStorage.getItem(TOKEN_KEY);
     if (!token) {
       setReady(true);
       return;
@@ -20,15 +20,22 @@ export function AuthProvider({ children }) {
       .finally(() => setReady(true));
   }, []);
 
+  // A 401 response clears the token in api.js; sync the UI state here.
+  useEffect(() => {
+    const onExpired = () => setUser(null);
+    window.addEventListener('auth:expired', onExpired);
+    return () => window.removeEventListener('auth:expired', onExpired);
+  }, []);
+
   const login = useCallback(async (username, password) => {
     const { token, user } = await loginApi(username, password);
-    localStorage.setItem('zyxf_token', token);
+    localStorage.setItem(TOKEN_KEY, token);
     setUser(user);
     return user;
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('zyxf_token');
+    localStorage.removeItem(TOKEN_KEY);
     setUser(null);
   }, []);
 

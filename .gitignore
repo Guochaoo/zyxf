@@ -4,7 +4,7 @@ dist
 .env.local
 *.log
 data.db
-data.db-journal
+data.db-*
 .DS_Store
 
 # local dev / scratch

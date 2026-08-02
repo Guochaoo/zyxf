@@ -1,50 +1,56 @@
 import { useRef, useState } from 'react';
 import { Upload, X, Loader2 } from 'lucide-react';
 import { uploadFile } from '../api.js';
-import { formatSize } from '../utils.js';
+import { errMsg, formatSize } from '../utils.js';
+
+const CONCURRENCY = 3; // files upload in parallel; each is an independent OSS direct-upload
 
 export default function UploadDialog({ folderId, onClose, onDone }) {
   const inputRef = useRef(null);
   const [files, setFiles] = useState([]); // {file, progress, status, error}
   const [busy, setBusy] = useState(false);
 
+  const addFiles = (list) =>
+    setFiles((prev) => [
+      ...prev,
+      ...Array.from(list).map((f) => ({ file: f, progress: 0, status: 'pending' })),
+    ]);
+
   const onPick = (e) => {
-    const list = Array.from(e.target.files || []);
-    setFiles((prev) => [...prev, ...list.map((f) => ({ file: f, progress: 0, status: 'pending' }))]);
+    addFiles(e.target.files || []);
     e.target.value = '';
   };
 
   const onDrop = (e) => {
     e.preventDefault();
-    const list = Array.from(e.dataTransfer.files || []);
-    setFiles((prev) => [...prev, ...list.map((f) => ({ file: f, progress: 0, status: 'pending' }))]);
+    addFiles(e.dataTransfer.files || []);
+  };
+
+  const uploadOne = async (item) => {
+    setFiles((prev) => prev.map((it) => (it === item ? { ...it, status: 'uploading' } : it)));
+    try {
+      await uploadFile({
+        file: item.file,
+        folderId,
+        onProgress: (p) =>
+          setFiles((prev) => prev.map((it) => (it === item ? { ...it, progress: p } : it))),
+      });
+      setFiles((prev) =>
+        prev.map((it) => (it === item ? { ...it, status: 'done', progress: 100 } : it))
+      );
+    } catch (e) {
+      setFiles((prev) =>
+        prev.map((it) => (it === item ? { ...it, status: 'error', error: errMsg(e) } : it))
+      );
+    }
   };
 
   const start = async () => {
     if (!files.length) return;
     setBusy(true);
-    for (let i = 0; i < files.length; i++) {
-      if (files[i].status === 'done') continue;
-      setFiles((prev) => prev.map((it, idx) => (idx === i ? { ...it, status: 'uploading' } : it)));
-      try {
-        await uploadFile({
-          file: files[i].file,
-          folderId,
-          onProgress: (p) =>
-            setFiles((prev) =>
-              prev.map((it, idx) => (idx === i ? { ...it, progress: p } : it))
-            ),
-        });
-        setFiles((prev) =>
-          prev.map((it, idx) => (idx === i ? { ...it, status: 'done', progress: 100 } : it))
-        );
-      } catch (e) {
-        setFiles((prev) =>
-          prev.map((it, idx) =>
-            idx === i ? { ...it, status: 'error', error: e.response?.data?.error || e.message } : it
-          )
-        );
-      }
+    const pending = files.filter((f) => f.status !== 'done');
+    for (let i = 0; i < pending.length; i += CONCURRENCY) {
+      await Promise.all(pending.slice(i, i + CONCURRENCY).map(uploadOne));
     }
     setBusy(false);
     onDone?.();
@@ -56,7 +62,7 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg max-h-[88vh] overflow-y-auto rounded-[18px] border border-white/15 bg-slate-950/95 p-4 sm:p-5 shadow-2xl"
+        className="w-full max-w-lg max-h-[88vh] overflow-y-auto rb-card rounded-lg border-0 bg-white p-4 sm:p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
@@ -64,7 +70,7 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
             <Upload className="w-5 h-5" />
             上传文件
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-white/10">
+          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -73,7 +79,7 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
           onDragOver={(e) => e.preventDefault()}
           onDrop={onDrop}
           onClick={() => inputRef.current?.click()}
-          className="border-2 border-dashed border-white/25 rounded-[14px] px-4 py-10 flex flex-col items-center justify-center hover:bg-white/10 cursor-pointer text-center text-sm"
+          className="border-2 border-dashed border-slate-300 rounded-[10px] px-4 py-10 flex flex-col items-center justify-center hover:bg-slate-100 cursor-pointer text-center text-sm"
         >
           <Upload className="w-7 h-7 mb-2" />
           <div>点击选择文件，或拖拽到此处</div>
@@ -88,20 +94,20 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
                   <span className="truncate mr-2">{it.file.name}</span>
                   <span className="shrink-0">{formatSize(it.file.size)}</span>
                 </div>
-                <div className="h-1.5 mt-1 bg-white/15 rounded">
+                <div className="h-1.5 mt-1 bg-slate-200 rounded">
                   <div
                     className={`h-full rounded ${
                       it.status === 'error'
-                        ? 'bg-red-400'
+                        ? 'bg-red-500'
                         : it.status === 'done'
-                          ? 'bg-green-500'
+                          ? 'bg-[#1E8E3E]'
                           : 'bg-brand-500'
                     }`}
                     style={{ width: `${it.progress}%` }}
                   />
                 </div>
                 {it.status === 'error' && (
-                  <div className="text-red-300 mt-0.5">{it.error}</div>
+                  <div className="text-red-600 mt-0.5">{it.error}</div>
                 )}
               </li>
             ))}
@@ -111,7 +117,7 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
         <div className="mt-5 flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="text-sm px-3 py-1.5 rounded-[14px] hover:bg-white/10"
+            className="text-sm px-3 py-1.5 rounded-[14px] hover:bg-slate-100"
           >
             关闭
           </button>

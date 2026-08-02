@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 
-const SECRET = process.env.JWT_SECRET || 'dev-secret';
+export const DEV_JWT_SECRET = 'dev-secret';
+
+const SECRET = process.env.JWT_SECRET || DEV_JWT_SECRET;
 const EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 if (!process.env.JWT_SECRET && process.env.NODE_ENV !== 'development') {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Download, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import { DownloadIcon } from '../icons';
 
 /**
  * OfficeViewer — previews Office documents & PDF via Alibaba Cloud IMM doc/preview.
@@ -55,7 +56,7 @@ export default function OfficeViewer({ signedUrl, immUrl, name, onDownload }) {
           onClick={onDownload}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors mt-2"
         >
-          <Download className="w-4 h-4" />
+          <DownloadIcon className="w-4 h-4" />
           下载文件
         </button>
         <button
