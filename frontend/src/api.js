@@ -37,6 +37,11 @@ export async function listFolder(id = 0, sort = 'name', order = 'asc') {
   return data;
 }
 
+export async function getFolderTree() {
+  const { data } = await api.get('/folders/tree');
+  return data;
+}
+
 export async function createFolder(name, parent_id) {
   const { data } = await api.post('/folders', { name, parent_id });
   return data;
@@ -88,6 +93,13 @@ export async function getFileUrl(id, { download = false } = {}) {
 
 export async function getStats(range = 30) {
   const { data } = await api.get('/stats', { params: { range } });
+  return data;
+}
+
+// Sync the local library with the shared OSS bucket (multi-deployment support).
+// Rate-limited server-side to 5/min per IP.
+export async function syncOss() {
+  const { data } = await api.post('/sync');
   return data;
 }
 

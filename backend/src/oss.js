@@ -1,5 +1,6 @@
 import OSS from 'ali-oss';
 import crypto from 'node:crypto';
+import { ossPrefix } from './storagePath.js';
 
 function envOrThrow(name) {
   const v = process.env[name];
@@ -110,9 +111,13 @@ export function signedGetUrl(key, expiresSec = 3600, opts = {}) {
 
 // ---- IMM preview constants ----
 
+// Files are uploaded directly to OSS (browser PostObject), so from IMM's
+// perspective they are *externally uploaded* and MUST be previewed with
+// ExternalUploaded=true, otherwise IMM rejects them with StatusConflict
+// (error code 0056-00000001).
 const DEFAULT_IMM_STYLE = process.env.IMM_STYLE
   ? `style/${process.env.IMM_STYLE}`
-  : 'doc/preview,export_0,print_0';
+  : 'doc/preview,export_0,print_0,ExternalUploaded=true';
 
 /**
  * Generate a signed GET URL for IMM (WebOffice) document preview.
@@ -125,7 +130,11 @@ const DEFAULT_IMM_STYLE = process.env.IMM_STYLE
  * @param style      Override IMM processing style
  */
 export function immPreviewUrl(key, expiresSec = 1800, style = null) {
-  const processStyle = style || DEFAULT_IMM_STYLE;
+  let processStyle = style || DEFAULT_IMM_STYLE;
+  // Externally uploaded (direct-to-OSS) files always need the flag.
+  if (!/ExternalUploaded/i.test(processStyle)) {
+    processStyle = `${processStyle},ExternalUploaded=true`;
+  }
   const client = immClient();
   const url = client.signatureUrl(key, { expires: expiresSec, process: processStyle });
   return url.replace(/^http:/, 'https:');
@@ -134,6 +143,25 @@ export function immPreviewUrl(key, expiresSec = 1800, style = null) {
 export async function deleteOssObject(key) {
   const client = ossClient();
   await client.delete(key);
+}
+
+/**
+ * List every object key under the configured OSS_KEY_PREFIX (paginated).
+ * Folder placeholders (keys ending with '/') are included.
+ * Returns [{ key, size }].
+ */
+export async function listOssObjects() {
+  const client = ossClient();
+  const prefix = ossPrefix() ? `${ossPrefix()}/` : '';
+  const out = [];
+  let marker;
+  do {
+    const res = await client.list({ prefix, marker, 'max-keys': 1000 });
+    for (const o of res.objects || []) out.push({ key: o.name, size: o.size });
+    marker = res.nextMarker;
+    if (!res.isTruncated) break;
+  } while (marker);
+  return out;
 }
 
 export async function deleteOssObjectIfExists(key) {

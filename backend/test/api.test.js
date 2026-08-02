@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
 import { signToken } from '../src/auth.js';
 import { app } from '../src/index.js';
+import { ossObjectStore } from './setup.js';
 
 let server;
 let base;
@@ -19,6 +20,7 @@ after(async () => {
 
 // Fresh data for every test; the seeded admin user stays.
 beforeEach(() => {
+  ossObjectStore.keys = [];
   db.prepare('DELETE FROM download_logs').run();
   db.prepare('DELETE FROM files').run();
   db.prepare('DELETE FROM folders').run();
@@ -157,6 +159,41 @@ describe('folders', () => {
     const list = await request('GET', `/api/folders/${b.body.id}/contents`, { token });
     assert.deepEqual(list.body.breadcrumb.map((c) => c.name), ['\u9996\u9875', 'A', 'B']);
     assert.equal(list.body.folder.parent_id, a.body.id);
+  });
+
+  test('GET /folders/tree returns the full hierarchy', async () => {
+    const token = await adminLogin();
+    await createFolder(token, 'Top1');
+    const top2 = await createFolder(token, 'Top2');
+    const nested = await createFolder(token, 'Nested', top2.body.id);
+    await registerFile(token, { name: 'root.pdf', folder_id: null });
+    await registerFile(token, {
+      name: 'inside.pdf',
+      folder_id: top2.body.id,
+      oss_key: 'zyxf-test/Top2/inside.pdf',
+    });
+
+    const tree = await request('GET', '/api/folders/tree');
+    assert.equal(tree.status, 200);
+    assert.deepEqual(
+      tree.body.tree.map((n) => n.name),
+      ['Top1', 'Top2']
+    );
+    assert.deepEqual(
+      tree.body.tree[1].children.map((n) => n.name),
+      ['Nested']
+    );
+    assert.deepEqual(
+      tree.body.files.map((f) => f.name),
+      ['root.pdf']
+    );
+    assert.deepEqual(
+      tree.body.tree[1].files.map((f) => f.name),
+      ['inside.pdf']
+    );
+    assert.equal(tree.body.tree[1].files[0].folder_id, top2.body.id);
+    assert.deepEqual(tree.body.tree[0].children, []);
+    assert.deepEqual(tree.body.tree[0].files, []);
   });
 
   test('missing/garbage folder ids', async () => {
@@ -475,5 +512,104 @@ describe('stats', () => {
     await request('GET', `/api/files/${f.body.id}/url?download=1`);
     const { body } = await request('GET', '/api/stats');
     assert.equal(body.today_downloads, 1);
+  });
+});
+
+describe('sync', () => {
+  test('imports files and folders that exist in OSS but not locally', async () => {
+    ossObjectStore.keys = [
+      'zyxf-test/\u8bfe\u7a0b/', // 课程/
+      'zyxf-test/\u8bfe\u7a0b/\u9ad8\u6570.pdf', // 高数.pdf
+      'zyxf-test/\u8bfe\u7a0b/\u56fe\u4e66/\u4f5c\u4e1a.pdf', // 图书/作业.pdf
+      'zyxf-test/root-file.txt',
+    ];
+    const { status, body } = await request('POST', '/api/sync');
+    assert.equal(status, 200);
+    assert.deepEqual(body.added, { folders: 2, files: 3 });
+    assert.equal(body.removed.files, 0);
+
+    const tree = await request('GET', '/api/folders/tree');
+    assert.deepEqual(tree.body.tree.map((f) => f.name), ['\u8bfe\u7a0b']);
+    assert.deepEqual(
+      tree.body.tree[0].children.map((f) => f.name),
+      ['\u56fe\u4e66']
+    );
+
+    const root = await request('GET', '/api/folders/0/contents');
+    assert.deepEqual(root.body.files.map((f) => f.name), ['root-file.txt']);
+    assert.equal(root.body.files[0].ext, 'txt');
+    const course = await request('GET', '/api/folders/' + tree.body.tree[0].id + '/contents');
+    assert.deepEqual(course.body.files.map((f) => f.name), ['\u9ad8\u6570.pdf']);
+    assert.equal(course.body.files[0].ext, 'pdf');
+  });
+
+  test('sync repairs broken ext columns (whole filename stored)', async () => {
+    const token = await adminLogin();
+    await registerFile(token, {
+      name: 'broken.pdf',
+      oss_key: 'zyxf-test/broken.pdf',
+      // simulate the old bug: ext stored as the whole filename
+      mime_type: null,
+    });
+    db.prepare("UPDATE files SET ext = 'broken.pdf' WHERE oss_key = 'zyxf-test/broken.pdf'").run();
+
+    ossObjectStore.keys = ['zyxf-test/broken.pdf'];
+    const { body } = await request('POST', '/api/sync', { token });
+    assert.equal(body.repaired_files, 1);
+    const row = db.prepare("SELECT ext FROM files WHERE oss_key = 'zyxf-test/broken.pdf'").get();
+    assert.equal(row.ext, 'pdf');
+  });
+
+  test('sync is idempotent — second run adds nothing', async () => {
+    ossObjectStore.keys = ['zyxf-test/a.pdf'];
+    await request('POST', '/api/sync');
+    const second = await request('POST', '/api/sync');
+    assert.deepEqual(second.body.added, { folders: 0, files: 0 });
+  });
+
+  test('removes local records whose OSS object is gone, then prunes empty folders', async () => {
+    const token = await adminLogin();
+    await createFolder(token, '\u65e7\u6587\u4ef6\u5939'); // 旧文件夹
+    await registerFile(token, { name: 'stale.pdf', oss_key: 'zyxf-test/stale.pdf' });
+
+    ossObjectStore.keys = ['zyxf-test/\u4fdd\u7559/\u5b58\u5728.pdf']; // 保留/存在.pdf
+    const { body } = await request('POST', '/api/sync', { token });
+    assert.equal(body.removed.files, 1);
+    assert.equal(body.removed.folders, 1); // 旧文件夹 is empty & unrepresented
+
+    const tree = await request('GET', '/api/folders/tree');
+    assert.deepEqual(tree.body.tree.map((f) => f.name), ['\u4fdd\u7559']);
+  });
+
+  test('empty listing never wipes the local library', async () => {
+    const token = await adminLogin();
+    await registerFile(token, { name: 'keep.pdf' });
+    const { body } = await request('POST', '/api/sync', { token }); // ossObjectStore.keys = []
+    assert.equal(body.scanned, 0);
+    assert.deepEqual(body.removed, { folders: 0, files: 0 });
+    const root = await request('GET', '/api/folders/0/contents');
+    assert.equal(root.body.files.length, 1);
+  });
+
+  test('admin bypasses the per-IP rate limit', async () => {
+    const token = await adminLogin();
+    for (let i = 0; i < 6; i++) {
+      const { status } = await request('POST', '/api/sync', { token });
+      assert.equal(status, 200);
+    }
+  });
+
+  test('anonymous is rate limited to 5 syncs per minute per IP', async () => {
+    // Unique XFF IP so this test never shares quota with other tests.
+    const xff = { 'x-forwarded-for': '203.0.113.99' };
+    let ok = 0;
+    let limited = 0;
+    for (let i = 0; i < 6; i++) {
+      const { status } = await request('POST', '/api/sync', { headers: xff });
+      if (status === 200) ok += 1;
+      else if (status === 429) limited += 1;
+    }
+    assert.equal(ok, 5);
+    assert.equal(limited, 1);
   });
 });

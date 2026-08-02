@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Download, Loader2 } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
+import { DownloadIcon } from '../icons';
 import { getFileUrl } from '../../api.js';
 import { downloadFileById, errMsg, getPreviewKind, isLargeFile, LARGE_FILE_HINT } from '../../utils.js';
 import PreviewBody from './Body.jsx';
@@ -90,7 +91,7 @@ export default function Preview({ file, onClose }) {
               {downloading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <Download className="w-4 h-4" />
+                <DownloadIcon className="w-4 h-4" />
               )}
               <span className="hidden sm:inline">{downloading ? '下载中…' : '下载'}</span>
             </button>

@@ -30,9 +30,9 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative mt-3 sm:mt-6 mx-auto w-full max-w-[1100px] grid items-stretch overflow-hidden rounded-2xl border border-white/10 shadow-2xl md:min-h-[640px] md:grid-cols-[1.15fr_1fr]">
+    <div className="relative mt-3 sm:mt-6 mx-auto w-full max-w-[1100px] grid items-stretch overflow-hidden rounded-lg shadow-[rgba(0,0,0,0.08)_0px_0px_0px_1px,rgba(0,0,0,0.04)_0px_2px_2px,rgba(0,0,0,0.04)_0px_8px_8px_-8px,#fafafa_0px_0px_0px_1px] md:min-h-[640px] md:grid-cols-[1.15fr_1fr]">
       {/* Left — silky brand panel with animated Silk background */}
-      <div className="relative hidden md:flex md:flex-col md:justify-between p-12 overflow-hidden">
+      <div className="rb-dark relative hidden md:flex md:flex-col md:justify-between p-12 overflow-hidden">
         <div className="absolute inset-0 -z-10">
           <Silk
             speed={6.5}
@@ -134,7 +134,7 @@ export default function LoginPage() {
 
             <button
               disabled={loading}
-              className="mt-2 sm:mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-black px-4 py-2.5 sm:py-3 text-sm font-semibold text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-2 sm:mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-4 py-2.5 sm:py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               {loading ? '登录中…' : '登录'}

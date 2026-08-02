@@ -1,17 +1,14 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import {
-  BsArrowCounterclockwise,
   BsCloudArrowUp,
-  BsDownload,
   BsFolderPlus,
   BsGripVertical,
-  BsPen,
-  BsTrash,
   BsSortAlphaDown,
   BsSortAlphaDownAlt,
 } from 'react-icons/bs';
+import { DownloadIcon, PenLineIcon, RotateCwIcon, TrashIcon } from '../components/icons';
 import {
   createFolder,
   deleteFile,
@@ -23,22 +20,16 @@ import {
   renameFile,
   renameFolder,
   reorderItems,
+  syncOss,
 } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import FileIcon from '../components/FileIcon.jsx';
-import GlassSurface from '../components/GlassSurface.jsx';
+import KnowledgeGraph from '../components/KnowledgeGraph.jsx';
 import Preview from '../components/Preview/index.jsx';
 import UploadDialog from '../components/UploadDialog.jsx';
 import { downloadFileById, errMsg, formatDate, formatSize } from '../utils.js';
 import { useSlidingIndicator } from '../hooks/useSlidingIndicator.js';
-import {
-  Breadcrumb as BreadcrumbRoot,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '../components/ui/breadcrumb.jsx';
+import useMediaQuery from '../hooks/useMediaQuery.js';
 
 // Default = admin-controlled manual order. Comes first.
 const SORT_OPTIONS = [
@@ -48,12 +39,21 @@ const SORT_OPTIONS = [
   { key: 'size', label: '大小' },
 ];
 
+// Tell the sidebar FolderTree that folder structure changed (create/rename/
+// move/delete/reorder) so it refetches.
+function notifyFoldersChanged() {
+  window.dispatchEvent(new Event('folders-changed'));
+}
+
 export default function BrowsePage() {
   const { id: idParam } = useParams();
   const folderId = Number(idParam) || 0;
   const navigate = useNavigate();
   const location = useLocation();
   const { isAdmin } = useAuth();
+  // Below xl the knowledge graph falls back to an inline card under the list
+  // (on xl+ it lives in the App right column).
+  const isXl = useMediaQuery('(min-width: 1280px)');
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -72,6 +72,20 @@ export default function BrowsePage() {
   const [renameValue, setRenameValue] = useState('');
   const [renaming, setRenaming] = useState(false);
 
+  // OSS sync state — the refresh button syncs the shared bucket into the local
+  // DB (multi-deployment), then reloads the current folder.
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
+  const [syncMsgOk, setSyncMsgOk] = useState(true);
+  const syncTimerRef = useRef(null);
+  const showSyncMsg = (msg, ok = true) => {
+    setSyncMsg(msg);
+    setSyncMsgOk(ok);
+    clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => setSyncMsg(''), 5000);
+  };
+  useEffect(() => () => clearTimeout(syncTimerRef.current), []);
+
   // Drag state. dragging mirrors to ref so DOM event handlers see fresh value
   // even before the next React render finishes.
   const [dragging, setDragging] = useState(null);
@@ -79,7 +93,6 @@ export default function BrowsePage() {
   // dropZone shapes:
   //   { mode: 'into',  targetType: 'folder', id }   — drop INTO a folder (move)
   //   { mode: 'before'|'after', targetType, id }    — reorder relative to a row
-  //   { mode: 'crumb', id }                          — drop on a breadcrumb crumb
   const [dropZone, setDropZone] = useState(null);
   const [moveError, setMoveError] = useState('');
 
@@ -91,6 +104,30 @@ export default function BrowsePage() {
       .catch((e) => setErr(errMsg(e, '加载失败')))
       .finally(() => setLoading(false));
   }, [folderId]);
+
+  // Sync the shared OSS bucket into the local DB, then reload the folder.
+  const onSyncRefresh = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const r = await syncOss();
+      notifyFoldersChanged();
+      const a = r.added || {};
+      const rm = r.removed || {};
+      if (a.files || a.folders || rm.files) {
+        showSyncMsg(
+          `同步完成：新增 ${a.folders || 0} 个文件夹 / ${a.files || 0} 个文件，清理 ${rm.files || 0} 个失效文件`
+        );
+      } else {
+        showSyncMsg('已与远端同步，无变化');
+      }
+    } catch (e) {
+      showSyncMsg(errMsg(e, '同步失败'), false);
+    } finally {
+      setSyncing(false);
+      refresh();
+    }
+  };
 
   useEffect(() => {
     refresh();
@@ -109,6 +146,7 @@ export default function BrowsePage() {
     if (!name) return;
     try {
       await createFolder(name, folderId || null);
+      notifyFoldersChanged();
       refresh();
     } catch (e) {
       alert(errMsg(e, '创建失败'));
@@ -119,6 +157,7 @@ export default function BrowsePage() {
     if (!confirm(`确认删除文件夹「${f.name}」及其所有内容？此操作不可恢复。`)) return;
     try {
       await deleteFolder(f.id);
+      notifyFoldersChanged();
       refresh();
     } catch (e) {
       alert(errMsg(e, '删除失败'));
@@ -161,6 +200,7 @@ export default function BrowsePage() {
       } else {
         await renameFile(renameTarget.id, name);
       }
+      notifyFoldersChanged();
       setRenameTarget(null);
       setRenameValue('');
       refresh();
@@ -273,6 +313,7 @@ export default function BrowsePage() {
         const dest = z.id;
         if (item.type === 'file') await moveFile(item.id, dest);
         else await moveFolder(item.id, dest);
+        notifyFoldersChanged();
         refresh();
       } else {
         // before / after — reorder
@@ -286,6 +327,7 @@ export default function BrowsePage() {
         // Switch to manual sort if user wasn't already, so they can see the change.
         // When switching sort, useEffect will trigger refresh automatically.
         // When already in manual mode, refresh explicitly.
+        notifyFoldersChanged();
         if (sort !== 'manual') {
           setSort('manual');
         } else {
@@ -294,43 +336,6 @@ export default function BrowsePage() {
       }
     } catch (err) {
       setMoveError(errMsg(err, '操作失败'));
-      setTimeout(() => setMoveError(''), 4000);
-    }
-  };
-
-  // Breadcrumb drop = move into that folder (id=0 means root)
-  const canDropCrumb = (crumbId) => {
-    const drag = draggingRef.current;
-    if (!isAdmin || !drag) return false;
-    if (drag.type === 'folder' && drag.id === crumbId) return false;
-    return true;
-  };
-  const onCrumbDragOver = (e, crumbId) => {
-    if (!canDropCrumb(crumbId)) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDropZone((p) =>
-      p && p.mode === 'crumb' && p.id === crumbId ? p : { mode: 'crumb', id: crumbId }
-    );
-  };
-  const onCrumbDragLeave = (crumbId) => {
-    setDropZone((p) => (p && p.mode === 'crumb' && p.id === crumbId ? null : p));
-  };
-  const onCrumbDrop = async (e, crumbId) => {
-    e.preventDefault();
-    if (!canDropCrumb(crumbId)) return;
-    const item = draggingRef.current;
-    draggingRef.current = null;
-    setDragging(null);
-    setDropZone(null);
-    setMoveError('');
-    const dest = crumbId === 0 ? null : crumbId;
-    try {
-      if (item.type === 'file') await moveFile(item.id, dest);
-      else await moveFolder(item.id, dest);
-      refresh();
-    } catch (err) {
-      setMoveError(errMsg(err, '移动失败'));
       setTimeout(() => setMoveError(''), 4000);
     }
   };
@@ -345,64 +350,47 @@ export default function BrowsePage() {
 
   return (
     <div className="space-y-4">
-      {/* Breadcrumb + Toolbar */}
-      <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
-        <div className="order-last flex justify-start md:order-none md:col-start-1">
-          <Breadcrumb
-            crumbs={data?.breadcrumb}
-            currentId={folderId}
-            dragging={dragging}
-            dropZone={dropZone}
-            onDragOver={onCrumbDragOver}
-            onDragLeave={onCrumbDragLeave}
-            onDrop={onCrumbDrop}
-          />
+      {/* Toolbar — sits above the file list */}
+      <div className="flex w-full flex-wrap items-center justify-end gap-2">
+        <button
+          onClick={onSyncRefresh}
+          className="order-2 p-0 sm:order-none"
+          title="刷新（同步远端资料库）"
+        >
+          <span className="rb-toolbar-btn w-[38.5px] p-0">
+            <RotateCwIcon className={`w-6 h-6 ${syncing ? 'animate-spin' : ''}`} />
+          </span>
+        </button>
+        <div className="order-1 sm:order-none">
+          <SortControl sort={sort} order={order} onChange={toggleSort} />
         </div>
-        <div className="flex w-full flex-wrap items-center justify-end gap-2 md:col-start-3 md:w-auto">
-          <button
-            onClick={refresh}
-            className="order-2 p-0 sm:order-none"
-            title="刷新"
-          >
-            <ToolbarGlass width={34}>
-              <span className="toolbar-glass-button flex h-full w-full items-center justify-center">
-                <BsArrowCounterclockwise className="w-4 h-4" />
-              </span>
-            </ToolbarGlass>
-          </button>
-          <div className="order-1 sm:order-none">
-            <SortControl sort={sort} order={order} onChange={toggleSort} />
-          </div>
-          {isAdmin && (
-            <>
-              <ToolbarGlass className="order-3 shrink-0 sm:order-none">
-                <button
-                  onClick={onCreateFolder}
-                  className="toolbar-glass-button flex h-full items-center gap-1 px-3 text-sm"
-                >
-                  <BsFolderPlus className="w-4 h-4" />
-                  新建文件夹
-                </button>
-              </ToolbarGlass>
-              <button
-                onClick={() => setUploadOpen(true)}
-                className="order-3 flex h-[34px] items-center gap-1 rounded-[14px] bg-brand-600 px-3 text-sm hover:bg-brand-700 sm:order-none"
-              >
-                <BsCloudArrowUp className="w-4 h-4" />
-                上传
-              </button>
-            </>
-          )}
-        </div>
+        {isAdmin && (
+          <>
+            <button
+              onClick={onCreateFolder}
+              className="rb-toolbar-btn order-3 sm:order-none"
+            >
+              <BsFolderPlus className="w-4 h-4" />
+              新建文件夹
+            </button>
+            <button
+              onClick={() => setUploadOpen(true)}
+              className="rb-btn-dark order-3 h-[34px] sm:order-none"
+            >
+              <BsCloudArrowUp className="w-4 h-4" />
+              上传
+            </button>
+          </>
+        )}
       </div>
 
       {/* Floating banners — fixed so they don't disrupt drag layout */}
       {isAdmin && dragging && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-40 pointer-events-none text-xs text-brand-700 bg-brand-50 border border-brand-200 rounded-full shadow-md px-4 py-1.5">
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-40 pointer-events-none text-xs text-black/70 bg-black/5 border border-black/10 rounded-full shadow-md px-4 py-1.5">
           正在移动「{dragging.name}」
           {sort === 'manual'
             ? ' — 在行的上/下边缘可插入排序，拖到文件夹中部可移入'
-            : ' — 拖到文件夹或上方面包屑'}
+            : ' — 拖到左侧目录中的文件夹'}
         </div>
       )}
       {moveError && (
@@ -410,42 +398,59 @@ export default function BrowsePage() {
           {moveError}
         </div>
       )}
+      {syncMsg && (
+        <div
+          className={`fixed left-1/2 -translate-x-1/2 bottom-14 z-40 text-xs rounded-full shadow-md px-4 py-1.5 ${
+            syncMsgOk
+              ? 'text-black/70 bg-black/5 border border-black/10'
+              : 'text-red-700 bg-red-50 border border-red-200'
+          }`}
+          role="status"
+        >
+          {syncMsg}
+        </div>
+      )}
 
-      {/* Body */}
-      <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-        {loading ? (
-          <div className="py-16 flex items-center justify-center text-slate-400">
-            <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-400" /> 加载中…
-          </div>
-        ) : err ? (
-          <div className="py-16 text-center text-red-500">{err}</div>
-        ) : (
-          <ItemListWithRename
-            data={data}
-            isAdmin={isAdmin}
-            dragging={dragging}
-            dropZone={dropZone}
-            onEnterFolder={(f) => navigate(`/folder/${f.id}`)}
-            onPreviewFile={setPreviewing}
-            onDeleteFolder={onDeleteFolder}
-            onDeleteFile={onDeleteFile}
-            onRenameFolder={(f) => openRenameDialog({ ...f, type: 'folder' })}
-            onRenameFile={(f) => openRenameDialog({ ...f, type: 'file' })}
-            onDownloadFile={onDownloadFile}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-            onRowDragOver={onRowDragOver}
-            onRowDragLeave={onRowDragLeave}
-            onRowDrop={onRowDrop}
-          />
-        )}
+      {/* Body: file list takes the full middle column width (the graph lives
+          in the App right column on xl+, inline below the list otherwise). */}
+      <div>
+        <div className="bg-white rb-card rounded-lg overflow-hidden">
+          {loading ? (
+            <div className="py-16 flex items-center justify-center text-slate-400">
+              <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-400" /> 加载中…
+            </div>
+          ) : err ? (
+            <div className="py-16 text-center text-red-500">{err}</div>
+          ) : (
+            <ItemListWithRename
+              data={data}
+              isAdmin={isAdmin}
+              dragging={dragging}
+              dropZone={dropZone}
+              onEnterFolder={(f) => navigate(`/folder/${f.id}`)}
+              onPreviewFile={setPreviewing}
+              onDeleteFolder={onDeleteFolder}
+              onDeleteFile={onDeleteFile}
+              onRenameFolder={(f) => openRenameDialog({ ...f, type: 'folder' })}
+              onRenameFile={(f) => openRenameDialog({ ...f, type: 'file' })}
+              onDownloadFile={onDownloadFile}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              onRowDragOver={onRowDragOver}
+              onRowDragLeave={onRowDragLeave}
+              onRowDrop={onRowDrop}
+            />
+          )}
+        </div>
+
+        {!isXl && <KnowledgeGraph currentId={folderId} className="mt-4" />}
       </div>
 
       {renameTarget && (
         <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/35 px-4">
           <form
             onSubmit={submitRenameDialog}
-            className="w-full max-w-sm rounded-[18px] border border-white/10 bg-black/55 p-4 text-white shadow-2xl backdrop-blur-2xl"
+            className="w-full max-w-sm rb-card rounded-lg bg-white p-4 text-slate-900"
           >
             <h2 className="text-base font-semibold">重命名</h2>
             <p className="mt-1 text-xs text-slate-400">
@@ -455,21 +460,21 @@ export default function BrowsePage() {
               autoFocus
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
-              className="mt-4 w-full rounded-[12px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-white/30"
+              className="mt-4 w-full rounded-[6px] border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={closeRenameDialog}
                 disabled={renaming}
-                className="rounded-[10px] px-3 py-1.5 text-sm text-slate-300 hover:bg-white/10 disabled:opacity-50"
+                className="rb-btn-ghost h-[34px] px-3 text-sm disabled:opacity-50"
               >
                 取消
               </button>
               <button
                 type="submit"
                 disabled={renaming}
-                className="rename-dialog-save rounded-[10px] bg-white px-3 py-1.5 text-sm font-semibold text-black disabled:opacity-50"
+                className="rename-dialog-save rb-btn-dark h-[34px] px-3 text-sm font-semibold disabled:opacity-50"
               >
                 {renaming ? '保存中...' : '保存'}
               </button>
@@ -490,70 +495,16 @@ export default function BrowsePage() {
   );
 }
 
-function Breadcrumb({ crumbs, currentId, dragging, dropZone, onDragOver, onDragLeave, onDrop }) {
-  if (!crumbs) return <div className="h-6" />;
-  return (
-    <BreadcrumbRoot>
-      <BreadcrumbList>
-        {crumbs.map((c, i) => {
-          const isCurrent = i === crumbs.length - 1;
-          const droppable = !!dragging && c.id !== currentId;
-          const active = droppable && dropZone?.mode === 'crumb' && dropZone.id === c.id;
-          const linkCls = `px-1.5 py-0.5 rounded text-white transition-colors ${
-            active ? 'bg-brand-100 ring-1 ring-brand-400 !text-brand-700' : 'hover:text-white/80'
-          }`;
-          const dndProps = droppable
-            ? {
-                onDragOver: (e) => onDragOver(e, c.id),
-                onDragLeave: () => onDragLeave(c.id),
-                onDrop: (e) => onDrop(e, c.id),
-              }
-            : {};
-          return (
-            <Fragment key={c.id}>
-              {i > 0 && <BreadcrumbSeparator />}
-              <BreadcrumbItem>
-                {isCurrent ? (
-                  <BreadcrumbPage className="text-white">{c.name}</BreadcrumbPage>
-                ) : (
-                  <BreadcrumbLink asChild className={linkCls} {...dndProps}>
-                    <Link to={c.id === 0 ? '/' : `/folder/${c.id}`}>{c.name}</Link>
-                  </BreadcrumbLink>
-                )}
-              </BreadcrumbItem>
-            </Fragment>
-          );
-        })}
-      </BreadcrumbList>
-    </BreadcrumbRoot>
-  );
-}
-
-// Shared glass styling for the browse toolbar buttons.
-function ToolbarGlass({ width = 'auto', className = '', children }) {
-  return (
-    <GlassSurface
-      width={width}
-      height={34}
-      borderRadius={14}
-      saturation={1.4}
-      className={`toolbar-glass ${className}`}
-    >
-      {children}
-    </GlassSurface>
-  );
-}
-
 function SortControl({ sort, order, onChange }) {
   const listRef = useRef(null);
   const buttonRefs = useRef({});
   const indicator = useSlidingIndicator(listRef, buttonRefs, sort);
 
   return (
-    <ToolbarGlass className="max-w-full">
-      <div ref={listRef} className="relative flex max-w-full items-center overflow-x-auto text-xs">
+    <div className="rb-toolbar-btn max-w-full !px-0">
+      <div ref={listRef} className="sort-scroll relative flex max-w-full items-center overflow-x-auto text-xs">
         <span
-          className="pointer-events-none absolute inset-y-0 rounded-[14px] bg-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]"
+          className="pointer-events-none absolute inset-y-0 rounded-[6px] bg-white shadow-[inset_0_0_0_1px_rgba(23,23,23,0.1)]"
           style={{
             width: indicator.width,
             transform: `translateX(${indicator.left}px)`,
@@ -589,7 +540,7 @@ function SortControl({ sort, order, onChange }) {
           );
         })}
       </div>
-    </ToolbarGlass>
+    </div>
   );
 }
 
@@ -618,7 +569,7 @@ function ItemListWithRename({
   const actionWidthClass = isAdmin ? 'w-28' : 'w-16';
   return (
     <ul className="divide-y divide-white/10">
-      <li className="rb-table-heading hidden sm:flex items-center px-4 py-2 text-xs text-slate-400 bg-white/5">
+      <li className="rb-table-heading hidden sm:flex items-center px-4 py-2 text-xs text-slate-500 bg-slate-50">
         <span className="flex-1">名称</span>
         <span className="w-24 text-right">大小</span>
         <span className="w-40 text-right">修改时间</span>
@@ -644,18 +595,18 @@ function ItemListWithRename({
                 <button
                   type="button"
                   onClick={() => onRenameFolder(f)}
-                  className="p-1 rounded hover:bg-brand-500/20"
+                  className="p-1 rounded hover:bg-black/5"
                   title="重命名"
                 >
-                  <BsPen className="w-4 h-4" />
+                  <PenLineIcon className="w-4 h-4" />
                 </button>
                 <button
                   type="button"
                   onClick={() => onDeleteFolder(f)}
-                  className="p-1 rounded hover:bg-red-500/20"
+                  className="p-1 rounded hover:bg-black/5"
                   title="删除"
                 >
-                  <BsTrash className="w-4 h-4" />
+                  <TrashIcon className="w-4 h-4" />
                 </button>
               </>
             )
@@ -681,28 +632,28 @@ function ItemListWithRename({
               <button
                 type="button"
                 onClick={() => onDownloadFile(f)}
-                className="p-1 rounded hover:bg-brand-500/20"
+                className="p-1 rounded hover:bg-black/5"
                 title="下载"
               >
-                <BsDownload className="w-4 h-4" />
+                <DownloadIcon className="w-4 h-4" />
               </button>
               {isAdmin && (
                 <>
                   <button
                     type="button"
                     onClick={() => onRenameFile(f)}
-                    className="p-1 rounded hover:bg-brand-500/20"
+                    className="p-1 rounded hover:bg-black/5"
                     title="重命名"
                   >
-                    <BsPen className="w-4 h-4" />
+                    <PenLineIcon className="w-4 h-4" />
                   </button>
                   <button
                     type="button"
                     onClick={() => onDeleteFile(f)}
-                    className="p-1 rounded hover:bg-red-500/20"
+                    className="p-1 rounded hover:bg-black/5"
                     title="删除"
                   >
-                    <BsTrash className="w-4 h-4" />
+                    <TrashIcon className="w-4 h-4" />
                   </button>
                 </>
               )}
@@ -730,7 +681,7 @@ function Row({
 }) {
   const isSelf = dragging?.type === item.type && dragging.id === item.id;
   const targetMatch =
-    dropZone && dropZone.mode !== 'crumb' && dropZone.targetType === item.type && dropZone.id === item.id;
+    dropZone && dropZone.targetType === item.type && dropZone.id === item.id;
   const isInto = targetMatch && dropZone.mode === 'into';
   const isBefore = targetMatch && dropZone.mode === 'before';
   const isAfter = targetMatch && dropZone.mode === 'after';
@@ -744,11 +695,13 @@ function Row({
       onDragLeave={() => onRowDragLeave({ type: item.type, id: item.id })}
       onDrop={(e) => onRowDrop(e, { type: item.type, id: item.id })}
       className={`relative flex items-center gap-2 px-3 sm:px-4 py-3 sm:py-2.5 cursor-pointer transition-colors ${
-        isInto ? 'bg-white/20 ring-1 ring-inset ring-brand-400' : ''
-      } ${isBefore ? 'shadow-[inset_0_2px_0_0] shadow-brand-500' : ''} ${
-        isAfter ? 'shadow-[inset_0_-2px_0_0] shadow-brand-500' : ''
+        isInto ? 'bg-black/5 ring-1 ring-inset ring-black/10' : ''
+      } ${
+        isBefore ? 'shadow-[inset_0_2px_0_0_rgba(0,0,0,0.6)]' : ''
+      } ${
+        isAfter ? 'shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.6)]' : ''
       } ${!targetMatch && isSelf ? 'opacity-40' : ''} ${
-        !targetMatch && !isSelf ? 'hover:bg-white/10 hover:ring-1 hover:ring-inset hover:ring-white/20' : ''
+        !targetMatch && !isSelf ? 'hover:bg-slate-50' : ''
       }`}
       onClick={onClick}
     >

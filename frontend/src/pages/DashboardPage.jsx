@@ -3,29 +3,24 @@ import { Link } from 'react-router-dom';
 import { getStats } from '../api.js';
 import { errMsg, formatSize } from '../utils.js';
 import FileIcon from '../components/FileIcon.jsx';
-import BorderGlow from '../components/BorderGlow.jsx';
+import { DownloadIcon } from '../components/icons';
 import {
   BsArrowDownRight,
   BsArrowUpRight,
   BsArrowClockwise,
   BsCloudUpload,
-  BsDownload,
   BsFolder2Open,
   BsHdd,
 } from 'react-icons/bs';
 
-// Shared BorderGlow defaults for all dashboard cards (dark theme).
-const GLOW_DEFAULTS = {
-  backgroundColor: '#6496f3',
-  borderRadius: 16,
-  edgeSensitivity: 35,
-  glowRadius: 28,
-  glowIntensity: 0.8,
-  coneSpread: 25,
-  glowColor: '230 90 65',
-  colors: ['#62ff3b', '#e5ff00', '#38e8ff'],
-  fillOpacity: 0.4,
-};
+// DESIGN.md §4 Metric Card — white surface, shadow stack, 48px metric
+function Card({ className = '', children }) {
+  return (
+    <div className={`bg-white rb-card rounded-lg ${className}`.trim()}>
+      <div className="p-6">{children}</div>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const [stats, setStats] = useState(null);
@@ -82,14 +77,14 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="py-24 text-center">
-        <div className="mx-auto mb-3 w-5 h-5 animate-spin rounded-full border-2 border-white/30 border-t-transparent" />
-        <p className="text-[13px] text-white/45">加载中…</p>
+        <div className="mx-auto mb-3 w-5 h-5 animate-spin rounded-full border-2 border-slate-300 border-t-transparent" />
+        <p className="text-[13px] text-slate-500">加载中…</p>
       </div>
     );
   }
 
   if (err) {
-    return <div className="py-24 text-center text-[14px] text-rose-300">{err}</div>;
+    return <div className="py-24 text-center text-[14px] text-red-600">{err}</div>;
   }
 
   if (!stats) return null;
@@ -99,7 +94,7 @@ export default function DashboardPage() {
       label: 'TODAY',
       title: '今日下载',
       value: stats.today_downloads.toLocaleString(),
-      icon: BsDownload,
+      icon: DownloadIcon,
       delta: insights?.dod,
       deltaHint: '较昨日',
     },
@@ -107,7 +102,7 @@ export default function DashboardPage() {
       label: '7-DAY',
       title: '7 日下载',
       value: stats.downloads_7d.toLocaleString(),
-      icon: BsDownload,
+      icon: DownloadIcon,
       delta: insights?.wow,
       deltaHint: '较上周',
     },
@@ -132,11 +127,11 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.22em] text-white/40">Overview</p>
-          <h1 className="mt-1.5 text-[30px] font-semibold leading-none tracking-tight text-white">
+          <p className="text-[12px] uppercase tracking-[0.22em] text-slate-500">Overview</p>
+          <h1 className="mt-2 text-[32px] sm:text-[40px] font-semibold leading-[1.2] tracking-[-0.025em] text-slate-900">
             数据概览
           </h1>
-          <p className="mt-2 text-[13px] text-white/55">仲英学辅资料库 · 实时运营指标</p>
+          <p className="mt-2 text-[13px] text-slate-600">仲英学辅资料库 · 实时运营指标</p>
         </div>
         <div className="flex items-center gap-3">
           <RangeSwitch value={range} onChange={setRange} />
@@ -144,7 +139,7 @@ export default function DashboardPage() {
             type="button"
             onClick={() => load(true)}
             disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-1.5 text-[12px] text-white/60 shadow-sm transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+            className="rb-btn-ghost rounded-md px-3.5 py-1.5 text-[12px] disabled:opacity-50"
           >
             <BsArrowClockwise className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             刷新
@@ -161,11 +156,11 @@ export default function DashboardPage() {
 
       {/* Activity chart + Type breakdown */}
       <section className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-        <BorderGlow {...GLOW_DEFAULTS} className="lg:col-span-8" innerClassName="p-6">
+        <Card className="lg:col-span-8">
           <div className="mb-5 flex items-end justify-between gap-4">
             <div>
-              <h2 className="text-[15px] font-medium text-white">近 {range} 日活动</h2>
-              <p className="mt-1 text-[12px] text-white/45">下载(实线) · 上传(虚线)</p>
+              <h2 className="text-[15px] font-medium text-slate-900">近 {range} 日活动</h2>
+              <p className="mt-1 text-[12px] text-slate-500">下载(实线) · 上传(虚线)</p>
             </div>
             {insights && (
               <div className="flex gap-6">
@@ -180,36 +175,36 @@ export default function DashboardPage() {
             )}
           </div>
           <ActivityChart series={stats.series} />
-        </BorderGlow>
+        </Card>
 
-        <BorderGlow {...GLOW_DEFAULTS} className="lg:col-span-4" innerClassName="p-6">
-          <h2 className="text-[15px] font-medium text-white">文件类型分布</h2>
-          <p className="mt-1 text-[12px] text-white/45">按文件数排序 · 显示前 8 类</p>
+        <Card className="lg:col-span-4">
+          <h2 className="text-[15px] font-medium text-slate-900">文件类型分布</h2>
+          <p className="mt-1 text-[12px] text-slate-500">按文件数排序 · 显示前 8 类</p>
           <TypeBreakdown rows={stats.type_breakdown} totalFiles={stats.total_files} />
-        </BorderGlow>
+        </Card>
       </section>
 
       {/* Top downloads + Recent uploads */}
       <section className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-        <BorderGlow {...GLOW_DEFAULTS} className="lg:col-span-7" innerClassName="p-6">
-          <h2 className="text-[15px] font-medium text-white">热门下载 TOP 10</h2>
-          <p className="mt-1 text-[12px] text-white/45">近 30 日下载次数最多</p>
+        <Card className="lg:col-span-7">
+          <h2 className="text-[15px] font-medium text-slate-900">热门下载 TOP 10</h2>
+          <p className="mt-1 text-[12px] text-slate-500">近 30 日下载次数最多</p>
           <TopDownloads items={stats.top_downloads} />
-        </BorderGlow>
+        </Card>
 
-        <BorderGlow {...GLOW_DEFAULTS} className="lg:col-span-5" innerClassName="p-6">
-          <h2 className="text-[15px] font-medium text-white">最近上传</h2>
-          <p className="mt-1 text-[12px] text-white/45">最新 8 个文件</p>
+        <Card className="lg:col-span-5">
+          <h2 className="text-[15px] font-medium text-slate-900">最近上传</h2>
+          <p className="mt-1 text-[12px] text-slate-500">最新 8 个文件</p>
           <RecentUploads items={stats.recent_uploads} />
-        </BorderGlow>
+        </Card>
       </section>
 
       {/* Top folders */}
-      <BorderGlow {...GLOW_DEFAULTS} innerClassName="p-6">
-        <h2 className="text-[15px] font-medium text-white">占用最大的目录 TOP 5</h2>
-        <p className="mt-1 text-[12px] text-white/45">按存储体积排序</p>
+      <Card>
+        <h2 className="text-[15px] font-medium text-slate-900">占用最大的目录 TOP 5</h2>
+        <p className="mt-1 text-[12px] text-slate-500">按存储体积排序</p>
         <TopFolders items={stats.top_folders} />
-      </BorderGlow>
+      </Card>
     </div>
   );
 }
@@ -225,16 +220,14 @@ function RangeSwitch({ value, onChange }) {
     { v: 90, label: '90日' },
   ];
   return (
-    <div className="inline-flex rounded-full border border-white/10 bg-white/[0.06] p-0.5 shadow-sm">
+    <div className="inline-flex rounded-full rb-ringlight bg-white p-0.5">
       {opts.map((o) => (
         <button
           key={o.v}
           type="button"
           onClick={() => onChange(o.v)}
           className={`rounded-full px-3 py-1 text-[12px] transition-colors ${
-            value === o.v
-              ? 'bg-white/15 text-white'
-              : 'text-white/45 hover:text-white'
+            value === o.v ? 'bg-brand-600 text-white' : 'text-slate-500 hover:text-slate-900'
           }`}
         >
           {o.label}
@@ -246,20 +239,20 @@ function RangeSwitch({ value, onChange }) {
 
 function KpiCard({ label, title, value, icon: Icon, delta, deltaHint, sub }) {
   return (
-    <BorderGlow {...GLOW_DEFAULTS} glowRadius={20} innerClassName="group p-5">
+    <Card className="group">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-[0.2em] text-white/40">{label}</span>
-        <Icon className="w-4 h-4 text-white/30 transition-colors group-hover:text-white/60" />
+        <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{label}</span>
+        <Icon className="w-4 h-4 text-slate-400 transition-colors group-hover:text-slate-600" />
       </div>
-      <div className="mt-7 text-[32px] font-semibold leading-none tracking-tight text-white tabular-nums">
+      <div className="mt-6 text-[40px] xl:text-[48px] font-semibold leading-[1.1] tracking-[-0.02em] text-slate-900 tabular-nums">
         {value}
       </div>
       <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="text-[12px] text-white/45">{title}</span>
+        <span className="text-[12px] text-slate-500">{title}</span>
         {typeof delta === 'number' ? (
           <span
             className={`inline-flex items-center gap-0.5 text-[11px] tabular-nums ${
-              delta >= 0 ? 'text-emerald-300/90' : 'text-rose-300/90'
+              delta >= 0 ? 'text-[#DE1D8D]' : 'text-red-600'
             }`}
             title={deltaHint}
           >
@@ -271,21 +264,21 @@ function KpiCard({ label, title, value, icon: Icon, delta, deltaHint, sub }) {
             {Math.abs(delta).toFixed(0)}%
           </span>
         ) : sub ? (
-          <span className="truncate text-[11px] text-white/40">{sub}</span>
+          <span className="truncate text-[11px] text-slate-500">{sub}</span>
         ) : null}
       </div>
-    </BorderGlow>
+    </Card>
   );
 }
 
 function MiniStat({ label, value, hint }) {
   return (
     <div className="text-right">
-      <div className="text-[10px] uppercase tracking-[0.22em] text-white/40">{label}</div>
-      <div className="mt-1 text-[16px] font-medium leading-none text-white tabular-nums">
+      <div className="text-[10px] uppercase tracking-[0.22em] text-slate-500">{label}</div>
+      <div className="mt-1 text-[16px] font-medium leading-none text-slate-900 tabular-nums">
         {value}
       </div>
-      {hint && <div className="mt-1 text-[10px] text-white/35">{hint}</div>}
+      {hint && <div className="mt-1 text-[10px] text-slate-400">{hint}</div>}
     </div>
   );
 }
@@ -328,7 +321,7 @@ function ActivityChart({ series }) {
       <svg viewBox={`0 0 ${W} ${H}`} className="block h-[280px] w-full" preserveAspectRatio="none">
         <defs>
           <linearGradient id="dl-area-v2" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.08)" />
+            <stop offset="0%" stopColor="rgba(10,114,239,0.12)" />
             <stop offset="100%" stopColor="rgba(255,255,255,0)" />
           </linearGradient>
         </defs>
@@ -343,7 +336,7 @@ function ActivityChart({ series }) {
                 x2={W - PAD_R}
                 y1={y}
                 y2={y}
-                stroke="rgba(255,255,255,0.06)"
+                stroke="rgba(23,23,23,0.08)"
                 strokeDasharray={t === 1 ? '0' : '2 4'}
               />
               <text
@@ -351,7 +344,7 @@ function ActivityChart({ series }) {
                 y={y + 3}
                 fontSize="10"
                 textAnchor="end"
-                fill="rgba(255,255,255,0.35)"
+                fill="rgba(23,23,23,0.45)"
               >
                 {v}
               </text>
@@ -365,7 +358,7 @@ function ActivityChart({ series }) {
             <path
               d={linePath(ptsDl)}
               fill="none"
-              stroke="#e5e5e5"
+              stroke="#0A72EF"
               strokeWidth="1.5"
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -373,7 +366,7 @@ function ActivityChart({ series }) {
             <path
               d={linePath(ptsUp)}
               fill="none"
-              stroke="#10b981"
+              stroke="#DE1D8D"
               strokeWidth="1.4"
               strokeDasharray="3 3"
               strokeLinejoin="round"
@@ -393,19 +386,19 @@ function ActivityChart({ series }) {
                   x2={p.x}
                   y1={PAD_T}
                   y2={PAD_T + innerH}
-                  stroke="rgba(255,255,255,0.15)"
+                  stroke="rgba(23,23,23,0.12)"
                   strokeDasharray="2 3"
                 />
               )}
               {active && (
                 <>
-                  <circle cx={p.x} cy={p.y} r="4" fill="#0a0a0a" stroke="#e5e5e5" strokeWidth="1.5" />
+                  <circle cx={p.x} cy={p.y} r="4" fill="#FFFFFF" stroke="#0A72EF" strokeWidth="1.5" />
                   <circle
                     cx={ptsUp[i].x}
                     cy={ptsUp[i].y}
                     r="3.5"
-                    fill="#0a0a0a"
-                    stroke="#10b981"
+                    fill="#FFFFFF"
+                    stroke="#DE1D8D"
                     strokeWidth="1.5"
                   />
                 </>
@@ -416,7 +409,7 @@ function ActivityChart({ series }) {
                   y={H - 10}
                   fontSize="10"
                   textAnchor="middle"
-                  fill="rgba(255,255,255,0.35)"
+                  fill="rgba(23,23,23,0.45)"
                 >
                   {p.date}
                 </text>
@@ -438,22 +431,22 @@ function ActivityChart({ series }) {
       {/* Floating tooltip (HTML for nicer formatting) */}
       {hoverIdx != null && ptsDl[hoverIdx] && (
         <div
-          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-lg border border-white/10 bg-neutral-900 px-3 py-2 text-[11px] text-white shadow-lg"
+          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-lg bg-white rb-ringlight px-3 py-2 text-[11px] text-slate-900"
           style={{
             left: `${(ptsDl[hoverIdx].x / W) * 100}%`,
             top: `${(ptsDl[hoverIdx].y / H) * 100 - 2}%`,
           }}
         >
-          <div className="text-white/45 text-[10px] uppercase tracking-wider">
+          <div className="text-slate-500 text-[10px] uppercase tracking-wider">
             {ptsDl[hoverIdx].date}
           </div>
           <div className="mt-1 flex items-center gap-3">
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-3 h-1.5 rounded-full bg-white" />
+              <span className="w-3 h-1.5 rounded-full bg-brand-500" />
               下载 {ptsDl[hoverIdx].downloads}
             </span>
-            <span className="inline-flex items-center gap-1.5 text-emerald-400">
-              <span className="w-3 h-1.5 rounded-full bg-emerald-500" />
+            <span className="inline-flex items-center gap-1.5 text-[#DE1D8D]">
+              <span className="w-3 h-1.5 rounded-full bg-[#DE1D8D]" />
               上传 {ptsUp[hoverIdx].uploads}
             </span>
           </div>
@@ -473,22 +466,22 @@ function TypeBreakdown({ rows, totalFiles }) {
         return (
           <li key={r.ext}>
             <div className="flex items-center justify-between text-[12px]">
-              <span className="inline-flex items-center gap-2 text-white/80">
+              <span className="inline-flex items-center gap-2 text-slate-800">
                 <FileIcon type="file" ext={r.ext === 'other' ? '' : r.ext} className="w-3.5 h-3.5" />
                 <span className="uppercase tracking-wider">{r.ext}</span>
               </span>
-              <span className="tabular-nums text-white/55">
+              <span className="tabular-nums text-slate-600">
                 {r.count.toLocaleString()}
-                <span className="ml-2 text-white/30">{pct.toFixed(1)}%</span>
+                <span className="ml-2 text-slate-400">{pct.toFixed(1)}%</span>
               </span>
             </div>
-            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100">
               <div
-                className="h-full rounded-full bg-white/60"
+                className="h-full rounded-full bg-brand-500"
                 style={{ width: `${(r.count / max) * 100}%` }}
               />
             </div>
-            <div className="mt-1 text-right text-[10px] text-white/35">{formatSize(r.size)}</div>
+            <div className="mt-1 text-right text-[10px] text-slate-400">{formatSize(r.size)}</div>
           </li>
         );
       })}
@@ -504,25 +497,25 @@ function TopDownloads({ items }) {
       {items.map((f, i) => (
         <li
           key={f.file_id || `${f.file_name}-${i}`}
-          className="group flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-white/[0.04]"
+          className="group flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-slate-50"
         >
-          <span className="w-5 text-right text-[11px] tabular-nums text-white/35">{i + 1}</span>
+          <span className="w-5 text-right text-[11px] tabular-nums text-slate-400">{i + 1}</span>
           <FileIcon type="file" ext={f.ext} className="w-4 h-4 shrink-0" />
           <Link
             to={f.folder_id ? `/folder/${f.folder_id}` : '/'}
-            className="min-w-0 flex-1 truncate text-[13px] text-white/85 hover:text-white"
+            className="min-w-0 flex-1 truncate text-[13px] text-slate-800 hover:text-slate-900"
             title={f.file_name}
           >
             {f.file_name}
           </Link>
           <div className="flex w-32 items-center gap-2">
-            <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="h-1 flex-1 overflow-hidden rounded-full bg-slate-100">
               <div
-                className="h-full rounded-full bg-white/60 group-hover:bg-white/80"
+                className="h-full rounded-full bg-brand-500 group-hover:bg-brand-500/80"
                 style={{ width: `${(f.count / max) * 100}%` }}
               />
             </div>
-            <span className="w-8 text-right text-[11px] tabular-nums text-white/70">{f.count}</span>
+            <span className="w-8 text-right text-[11px] tabular-nums text-slate-700">{f.count}</span>
           </div>
         </li>
       ))}
@@ -538,16 +531,16 @@ function RecentUploads({ items }) {
         <li key={f.id}>
           <Link
             to={f.folder_id ? `/folder/${f.folder_id}` : '/'}
-            className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-white/[0.04]"
+            className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-slate-50"
           >
             <FileIcon type="file" ext={f.ext} className="w-4 h-4 shrink-0" />
-            <span className="min-w-0 flex-1 truncate text-[13px] text-white/85" title={f.name}>
+            <span className="min-w-0 flex-1 truncate text-[13px] text-slate-800" title={f.name}>
               {f.name}
             </span>
-            <span className="shrink-0 text-[11px] tabular-nums text-white/40">
+            <span className="shrink-0 text-[11px] tabular-nums text-slate-500">
               {formatSize(f.size)}
             </span>
-            <span className="w-16 shrink-0 text-right text-[11px] text-white/35">
+            <span className="w-16 shrink-0 text-right text-[11px] text-slate-400">
               {timeAgo(f.created_at)}
             </span>
           </Link>
@@ -567,19 +560,19 @@ function TopFolders({ items }) {
           <div className="flex items-center justify-between text-[12px]">
             <Link
               to={`/folder/${f.id}`}
-              className="inline-flex items-center gap-2 text-white/85 hover:text-white"
+              className="inline-flex items-center gap-2 text-slate-800 hover:text-slate-900"
             >
-              <BsFolder2Open className="w-3.5 h-3.5 text-white/45" />
+              <BsFolder2Open className="w-3.5 h-3.5 text-slate-500" />
               <span className="truncate">{f.name}</span>
             </Link>
-            <span className="tabular-nums text-white/55">
+            <span className="tabular-nums text-slate-600">
               {formatSize(f.size)}
-              <span className="ml-2 text-white/30">{f.file_count} 文件</span>
+              <span className="ml-2 text-slate-400">{f.file_count} 文件</span>
             </span>
           </div>
-          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/[0.06]">
+          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100">
             <div
-              className="h-full rounded-full bg-white/60"
+              className="h-full rounded-full bg-brand-500"
               style={{ width: `${(f.size / max) * 100}%` }}
             />
           </div>
@@ -590,7 +583,7 @@ function TopFolders({ items }) {
 }
 
 function Empty({ children }) {
-  return <div className="mt-6 py-8 text-center text-[12px] text-white/35">{children}</div>;
+  return <div className="mt-6 py-8 text-center text-[12px] text-slate-400">{children}</div>;
 }
 
 function timeAgo(ts) {

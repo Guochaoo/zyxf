@@ -156,11 +156,12 @@ router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => 
   const isDownload = req.query.download === '1';
   const forceAttach = isDownload || shouldForceDownload(ext);
   const urlOptions = {};
-  // For downloads: skip response-content-type (OSS may reject) and
-  // Content-Disposition (frontend uses <a download> to set filename).
-  // For previews: include both so Office Online fallback can detect the format.
+  // NOTE: we never override response-content-type — this OSS bucket rejects
+  // that parameter with InvalidRequest (EC 0017-00000902, "Can not override
+  // response header on content-type") for every object. Browser uploads store
+  // a correct Content-Type already, so the raw object header is served as-is.
+  // Only Content-Disposition is overridden (allowed).
   if (!isDownload) {
-    urlOptions.contentType = contentType;
     urlOptions.disposition = dispositionFor(file.name, forceAttach);
   }
 

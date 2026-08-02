@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { FolderOpen, Loader2, X, Download } from 'lucide-react';
-import { BsSearch } from 'react-icons/bs';
+import { Loader2, X } from 'lucide-react';
+import { DownloadIcon, FolderIcon, SearchIcon } from './icons';
 import { getFileUrl, search as searchApi } from '../api.js';
 import { downloadFileById, formatSize } from '../utils.js';
 import FileIcon from './FileIcon.jsx';
@@ -129,7 +129,7 @@ export default function SearchBar({ className = '' }) {
   return (
     <div ref={wrapRef} className={`relative z-[70] w-full max-w-[520px] ${className}`.trim()}>
       <div className="rb-search-pill relative">
-        <BsSearch className="absolute left-[15px] top-1/2 w-4 h-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        <SearchIcon className="absolute left-[15px] top-1/2 w-4 h-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
         <input
           ref={inputRef}
           type="text"
@@ -137,12 +137,12 @@ export default function SearchBar({ className = '' }) {
           onChange={onChange}
           onFocus={() => results && setOpen(true)}
           placeholder="搜索文件"
-          className="w-full rounded-full border-0 bg-transparent py-[10px] pl-11 pr-10 text-sm text-white placeholder:text-slate-500 outline-none focus:outline-none focus:ring-0"
+          className="w-full rounded-full border-0 bg-transparent py-[10px] pl-11 pr-10 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:outline-none focus:ring-0"
         />
         {q && (
           <button
             onClick={clear}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -174,10 +174,10 @@ export default function SearchBar({ className = '' }) {
                     <button
                       key={`d-${f.id}`}
                       onClick={() => handleResult(f)}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/10 transition-colors"
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50 transition-colors"
                     >
-                      <FolderOpen className="w-4 h-4 text-amber-400 shrink-0" />
-                      <span className="text-sm text-slate-200 truncate">{f.name}</span>
+                      <FolderIcon className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span className="text-sm text-slate-900 truncate">{f.name}</span>
                     </button>
                   ))}
                 </div>
@@ -188,7 +188,7 @@ export default function SearchBar({ className = '' }) {
                   {results.files.map((f) => (
                     <div
                       key={`f-${f.id}`}
-                      className="flex w-full items-center gap-2 hover:bg-white/10 transition-colors"
+                      className="flex w-full items-center gap-2 hover:bg-slate-50 transition-colors"
                     >
                       <button
                         type="button"
@@ -196,17 +196,17 @@ export default function SearchBar({ className = '' }) {
                         className="min-w-0 flex flex-1 items-center gap-3 px-4 py-2.5 text-left"
                       >
                         <FileIcon type="file" ext={f.ext} className="w-4 h-4 shrink-0" />
-                        <span className="text-sm text-slate-200 truncate flex-1">{f.name}</span>
+                        <span className="text-sm text-slate-900 truncate flex-1">{f.name}</span>
                         <span className="text-xs text-slate-500 shrink-0">{formatSize(f.size)}</span>
                       </button>
                       <button
                         type="button"
                         onClick={(e) => handleDownload(e, f)}
-                        className="mr-2 flex w-8 h-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-white/10 hover:text-white"
+                        className="mr-2 flex w-8 h-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-900"
                         title="下载"
                         aria-label={`下载 ${f.name}`}
                       >
-                        <Download className="w-4 h-4" />
+                        <DownloadIcon className="w-4 h-4" />
                       </button>
                     </div>
                   ))}
@@ -214,7 +214,7 @@ export default function SearchBar({ className = '' }) {
               )}
             </div>
           )}
-          <div className="border-t border-white/10 bg-white/5 px-4 py-2 text-xs text-slate-400">
+          <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-400">
             {total} 个结果 · Esc 关闭
           </div>
         </div>,
