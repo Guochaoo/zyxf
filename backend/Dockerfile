@@ -1,7 +1,11 @@
-# Debian slim (glibc) so better-sqlite3 uses its prebuilt binary — no C++ compile.
-# Faster build, larger image (~150MB vs 50MB) — worth it.
+# Debian slim (glibc). better-sqlite3 normally ships a prebuilt binary, but
+# when GitHub download fails it falls back to source compile — so the builder
+# stage installs the toolchain (python3/make/g++) as a fallback.
 FROM node:20-slim AS builder
 WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 RUN npm config set registry https://registry.npmmirror.com
 COPY package*.json ./
 RUN npm install --omit=dev --no-audit --no-fund
