@@ -113,6 +113,34 @@ function getBreadcrumb(id) {
   return crumbs.concat(chain);
 }
 
+// Full folder tree for the sidebar navigation (public).
+// Each node: { id, name, children: [...], files: [...] } ordered by
+// sort_order, then name. Root-level files are returned under `files`.
+router.get('/tree', (_req, res) => {
+  const childrenStmt = db.prepare(
+    'SELECT id, name FROM folders WHERE parent_id = ? ORDER BY sort_order, name COLLATE NOCASE'
+  );
+  const rootStmt = db.prepare(
+    'SELECT id, name FROM folders WHERE parent_id IS NULL ORDER BY sort_order, name COLLATE NOCASE'
+  );
+  const filesStmt = db.prepare(
+    'SELECT id, name, ext, size, folder_id FROM files WHERE folder_id = ? ORDER BY sort_order, name COLLATE NOCASE'
+  );
+  const rootFilesStmt = db.prepare(
+    'SELECT id, name, ext, size, folder_id FROM files WHERE folder_id IS NULL ORDER BY sort_order, name COLLATE NOCASE'
+  );
+  const build = (parentId) => {
+    const rows = parentId === null ? rootStmt.all() : childrenStmt.all(parentId);
+    return rows.map((f) => ({
+      id: f.id,
+      name: f.name,
+      children: build(f.id),
+      files: filesStmt.all(f.id),
+    }));
+  };
+  res.json({ tree: build(null), files: rootFilesStmt.all() });
+});
+
 // List the contents (subfolders + files) of a folder. id=0 means root.
 router.get('/:id/contents', (req, res) => {
   const id = Number(req.params.id);

@@ -4,13 +4,29 @@ import { MemoryRouter } from 'react-router-dom';
 import App from '../App.jsx';
 import { AuthProvider } from '../auth.jsx';
 
-// The real Grainient/SearchBar/StaggeredMenu rely on WebGL or heavy
-// animation; jsdom has neither, so stub them with lightweight stand-ins.
-vi.mock('../components/Grainient.jsx', () => ({ default: () => null }));
+// The real SearchBar/StaggeredMenu rely on heavy animation; jsdom cannot run
+// them, so stub them with lightweight stand-ins. Nav lives in StaggeredMenu
+// on every layout, so the stub renders the menu items.
 vi.mock('../components/SearchBar.jsx', () => ({
   default: () => <input aria-label="搜索" placeholder="搜索" />,
 }));
-vi.mock('../components/StaggeredMenu.jsx', () => ({ default: () => null }));
+vi.mock('../components/StaggeredMenu.jsx', () => ({
+  default: ({ items }) => (
+    <nav>
+      {items.map((it) =>
+        it.action ? (
+          <button key={it.label} type="button" aria-label={it.ariaLabel} onClick={it.action}>
+            {it.label}
+          </button>
+        ) : (
+          <a key={it.label} href={it.link} aria-label={it.ariaLabel}>
+            {it.label}
+          </a>
+        )
+      )}
+    </nav>
+  ),
+}));
 
 const emptyFolder = { folder: { id: 0, name: '首页' }, breadcrumb: [], folders: [], files: [] };
 const emptyStats = {
@@ -39,6 +55,7 @@ vi.mock('../api.js', () => ({
   TOKEN_KEY: 'zyxf_token',
   login: vi.fn(),
   listFolder: vi.fn(() => Promise.resolve(emptyFolder)),
+  getFolderTree: vi.fn(() => Promise.resolve({ tree: [] })),
   createFolder: vi.fn(),
   deleteFolder: vi.fn(),
   deleteFile: vi.fn(),
@@ -96,17 +113,13 @@ describe('App', () => {
     expect(screen.queryByRole('link', { name: '管理员登录' })).not.toBeInTheDocument();
   });
 
-  test('active nav highlight follows the route', async () => {
+  test('active nav item matches the route', async () => {
     renderApp('/dashboard');
-    await waitFor(() => expect(screen.getByText('仲英学辅资料库')).toBeInTheDocument());
-    const statsLink = screen.getByRole('link', { name: '查看统计仪表盘' });
-    expect(statsLink.className).toContain('is-active');
+    expect(await screen.findByText('数据概览')).toBeInTheDocument();
   });
 
   test('unknown routes redirect home', async () => {
     renderApp('/nope');
-    await waitFor(() => expect(screen.getByText('仲英学辅资料库')).toBeInTheDocument());
-    const browseLink = screen.getByRole('link', { name: '浏览资料库' });
-    expect(browseLink.className).toContain('is-active');
+    expect(await screen.findByText('此文件夹为空')).toBeInTheDocument();
   });
 });

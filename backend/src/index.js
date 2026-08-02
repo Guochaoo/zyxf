@@ -12,6 +12,7 @@ import folderRoutes from './routes/folders.js';
 import fileRoutes from './routes/files.js';
 import searchRoutes from './routes/search.js';
 import statsRoutes from './routes/stats.js';
+import syncRoutes from './routes/sync.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -81,6 +82,7 @@ app.use('/api/folders', folderRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/sync', syncRoutes);
 
 // Sanitize errors in production — never leak internals to clients.
 app.use((err, _req, res, _next) => {

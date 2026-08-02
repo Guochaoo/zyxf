@@ -1,5 +1,4 @@
 import {
-  BsFolder,
   BsFileEarmark,
   BsFiletypeCsv,
   BsFiletypeDoc,
@@ -19,6 +18,7 @@ import {
   BsFiletypeXls,
   BsFiletypeXlsx,
 } from 'react-icons/bs';
+import { FolderIcon } from './icons';
 
 const EXT_MAP = {
   pdf: BsFiletypePdf,
@@ -41,14 +41,14 @@ const EXT_MAP = {
   mp4: BsFiletypeMp4,
 };
 
-const ICON_COLOR = 'text-white/80';
+const ICON_COLOR = 'text-slate-600';
 
 export default function FileIcon({ type, ext, className = 'w-5 h-5' }) {
   const key = (ext || '').toLowerCase().replace(/^\./, '');
   if (type === 'folder') {
     return (
       <span className={`${className} inline-flex shrink-0 items-center justify-center`}>
-        <BsFolder className={`h-full w-full ${ICON_COLOR}`} />
+        <FolderIcon className={`h-full w-full ${ICON_COLOR}`} />
       </span>
     );
   }
