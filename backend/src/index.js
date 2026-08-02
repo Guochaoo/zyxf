@@ -1,14 +1,18 @@
 import 'dotenv/config';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { db, ensureAdmin } from './db.js';
-import { attachUser } from './auth.js';
+import { attachUser, DEV_JWT_SECRET } from './auth.js';
 import authRoutes from './routes/auth.js';
 import folderRoutes from './routes/folders.js';
 import fileRoutes from './routes/files.js';
 import searchRoutes from './routes/search.js';
 import statsRoutes from './routes/stats.js';
+import syncRoutes from './routes/sync.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -17,8 +21,12 @@ const isProd = process.env.NODE_ENV === 'production';
 // ---- Production safety: refuse to start with insecure defaults ----
 if (isProd) {
   const missing = [];
-  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'dev-secret') missing.push('JWT_SECRET');
-  if (!process.env.ADMIN_PASSWORD) missing.push('ADMIN_PASSWORD');
+  const jwt = process.env.JWT_SECRET || '';
+  const pwd = process.env.ADMIN_PASSWORD || '';
+  // Reject placeholder/example values from the repo, not just the literal dev default.
+  const weak = /change|example|placeholder|secret|dev|test|admin123|123456/i;
+  if (!jwt || jwt === DEV_JWT_SECRET || jwt.length < 32 || weak.test(jwt)) missing.push('JWT_SECRET');
+  if (!pwd || pwd.length < 12 || weak.test(pwd)) missing.push('ADMIN_PASSWORD');
   if (missing.length) {
     console.error(
       `[index] FATAL: in production but ${missing.join(', ')} not set. Refusing to start with insecure defaults.`
@@ -30,6 +38,16 @@ if (isProd) {
   }
 }
 
+// ---- Loose anti-abuse limit for anonymous API traffic ----
+// login/download have their own tighter limits; this only stops scripted floods.
+const publicLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '请求过于频繁,请稍后再试' },
+});
+
 const adminUser = process.env.ADMIN_USER || 'admin';
 const adminPass = process.env.ADMIN_PASSWORD || 'admin123';
 if (!process.env.ADMIN_PASSWORD && !isProd) {
@@ -37,7 +55,9 @@ if (!process.env.ADMIN_PASSWORD && !isProd) {
 }
 ensureAdmin(adminUser, adminPass);
 
-// Behind nginx / load balancer: trust the first proxy so req.ip is the client IP.
+// Behind nginx: trust the first proxy so req.ip is the client IP.
+// Requires nginx to overwrite X-Forwarded-For with $remote_addr (see nginx.conf);
+// otherwise clients can spoof the leftmost XFF entry and bypass all rate limits.
 app.set('trust proxy', 1);
 
 app.use(
@@ -53,6 +73,7 @@ app.use(
   })
 );
 app.use(express.json({ limit: '1mb' }));
+app.use('/api', publicLimiter);
 app.use(attachUser);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, time: Date.now() }));
@@ -61,6 +82,7 @@ app.use('/api/folders', folderRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/sync', syncRoutes);
 
 // Sanitize errors in production — never leak internals to clients.
 app.use((err, _req, res, _next) => {
@@ -71,6 +93,11 @@ app.use((err, _req, res, _next) => {
   res.status(err.status || 500).json({ error: err.message || 'internal error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`[zyxf-backend] listening on http://localhost:${PORT}`);
-});
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+if (isMain) {
+  app.listen(PORT, () => {
+    console.log(`[zyxf-backend] listening on http://localhost:${PORT}`);
+  });
+}
+
+export { app };

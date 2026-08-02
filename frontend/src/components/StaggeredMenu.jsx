@@ -1,26 +1,30 @@
-import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { Link } from 'react-router-dom';
 import './StaggeredMenu.css';
 
-const StaggeredMenu = ({
-  position = 'right',
-  colors = ['#B497CF', '#5227FF'],
-  items = [],
-  socialItems = [],
-  displaySocials = true,
-  displayItemNumbering = true,
-  className,
-  logoUrl,
-  menuButtonColor = '#fff',
-  openMenuButtonColor = '#fff',
-  accentColor = '#5227FF',
-  changeMenuColorOnOpen = true,
-  isFixed = false,
-  closeOnClickAway = true,
-  onMenuOpen,
-  onMenuClose
-}) => {
+const StaggeredMenu = forwardRef(function StaggeredMenu(
+  {
+    position = 'right',
+    colors = ['#B497CF', '#5227FF'],
+    items = [],
+    socialItems = [],
+    displaySocials = true,
+    displayItemNumbering = true,
+    className,
+    logoUrl,
+    menuButtonColor = '#fff',
+    openMenuButtonColor = '#fff',
+    accentColor = '#5227FF',
+    changeMenuColorOnOpen = true,
+    isFixed = false,
+    closeOnClickAway = true,
+    hideToggleButton = false,
+    onMenuOpen,
+    onMenuClose
+  },
+  ref
+) {
   const [open, setOpen] = useState(false);
   const openRef = useRef(false);
   const panelRef = useRef(null);
@@ -261,7 +265,7 @@ const StaggeredMenu = ({
     [openMenuButtonColor, menuButtonColor, changeMenuColorOnOpen]
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (toggleBtnRef.current) {
       if (changeMenuColorOnOpen) {
         const targetColor = openRef.current ? openMenuButtonColor : menuButtonColor;
@@ -286,7 +290,6 @@ const StaggeredMenu = ({
       last = last === 'Menu' ? 'Close' : 'Menu';
       seq.push(last);
     }
-    if (last !== targetLabel) seq.push(targetLabel);
     seq.push(targetLabel);
     setTextLines(seq);
 
@@ -328,7 +331,7 @@ const StaggeredMenu = ({
     }
   }, [playClose, animateIcon, animateColor, animateText, onMenuClose]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!closeOnClickAway || !open) return;
 
     const handleClickOutside = event => {
@@ -347,6 +350,18 @@ const StaggeredMenu = ({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [closeOnClickAway, open, closeMenu]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      open: () => {
+        if (!openRef.current) toggleMenu();
+      },
+      close: closeMenu,
+      toggle: toggleMenu,
+    }),
+    [toggleMenu, closeMenu]
+  );
 
   return (
     <div
@@ -381,29 +396,31 @@ const StaggeredMenu = ({
           </div>
         )}
         {!logoUrl && <div />}
-        <button
-          ref={toggleBtnRef}
-          className="sm-toggle"
-          aria-label={open ? 'Close menu' : 'Open menu'}
-          aria-expanded={open}
-          aria-controls="staggered-menu-panel"
-          onClick={toggleMenu}
-          type="button"
-        >
-          <span ref={textWrapRef} className="sm-toggle-textWrap" aria-hidden="true">
-            <span ref={textInnerRef} className="sm-toggle-textInner">
-              {textLines.map((l, i) => (
-                <span className="sm-toggle-line" key={i}>
-                  {l}
-                </span>
-              ))}
+        {!hideToggleButton && (
+          <button
+            ref={toggleBtnRef}
+            className="sm-toggle"
+            aria-label={open ? 'Close menu' : 'Open menu'}
+            aria-expanded={open}
+            aria-controls="staggered-menu-panel"
+            onClick={toggleMenu}
+            type="button"
+          >
+            <span ref={textWrapRef} className="sm-toggle-textWrap" aria-hidden="true">
+              <span ref={textInnerRef} className="sm-toggle-textInner">
+                {textLines.map((l, i) => (
+                  <span className="sm-toggle-line" key={i}>
+                    {l}
+                  </span>
+                ))}
+              </span>
             </span>
-          </span>
-          <span ref={iconRef} className="sm-icon" aria-hidden="true">
-            <span ref={plusHRef} className="sm-icon-line" />
-            <span ref={plusVRef} className="sm-icon-line sm-icon-line-v" />
-          </span>
-        </button>
+            <span ref={iconRef} className="sm-icon" aria-hidden="true">
+              <span ref={plusHRef} className="sm-icon-line" />
+              <span ref={plusVRef} className="sm-icon-line sm-icon-line-v" />
+            </span>
+          </button>
+        )}
       </header>
 
       <aside id="staggered-menu-panel" ref={panelRef} className="staggered-menu-panel" aria-hidden={!open}>
@@ -453,6 +470,6 @@ const StaggeredMenu = ({
       </aside>
     </div>
   );
-};
+});
 
 export default StaggeredMenu;

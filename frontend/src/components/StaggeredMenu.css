@@ -6,12 +6,6 @@
   pointer-events: none;
 }
 
-@media (min-width: 641px) {
-  .mobile-staggered-menu {
-    display: none;
-  }
-}
-
 .staggered-menu-wrapper.fixed-wrapper {
   position: fixed;
   top: 0;
@@ -82,26 +76,24 @@
   justify-content: center;
   gap: 0.3rem;
   min-height: 30px;
-  background: rgba(255,255,255,0.1);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 12px;
+  background: #ffffff;
+  border: 0;
+  border-radius: 6px;
+  box-shadow: rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;
   padding: 0.3rem 0.68rem;
   cursor: pointer;
-  color: #e2e8f0;
+  color: #171717;
   font-weight: 500;
   font-size: 0.8125rem;
   line-height: 1;
   overflow: visible;
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
+  transition: background 0.2s, box-shadow 0.2s, color 0.2s;
 }
 
 #root .staggered-menu-wrapper[data-open] .sm-toggle,
 #root .staggered-menu-wrapper[data-open] .sm-toggle * {
-  background: rgba(255,255,255,0.92);
-  border-color: rgba(0,0,0,0.16);
-  color: #000 !important;
+  background: #ffffff;
+  color: #171717 !important;
 }
 
 #root .staggered-menu-wrapper[data-open] .sm-toggle .sm-icon,
@@ -110,25 +102,25 @@
 }
 
 #root .staggered-menu-wrapper[data-open] .sm-toggle .sm-icon-line {
-  background: #000 !important;
+  background: #171717 !important;
 }
 
 .sm-toggle:hover {
-  background: rgba(255,255,255,0.15);
-  border-color: rgba(255,255,255,0.22);
+  background: #ffffff;
+  box-shadow:
+    rgba(0, 0, 0, 0.08) 0px 0px 0px 1px,
+    rgba(0, 0, 0, 0.04) 0px 2px 2px;
 }
 
 #root .staggered-menu-wrapper[data-open] .sm-toggle:hover {
-  background: #fff;
-  border-color: rgba(0,0,0,0.24);
+  background: #ffffff;
+  box-shadow:
+    rgba(0, 0, 0, 0.08) 0px 0px 0px 1px,
+    rgba(0, 0, 0, 0.04) 0px 2px 2px;
 }
 
 .sm-toggle:focus-visible {
   outline: none;
-}
-
-.sm-line:last-of-type {
-  margin-top: 6px;
 }
 
 .sm-toggle-textWrap {
@@ -180,10 +172,6 @@
   border-radius: 2px;
   transform: translate(-50%, -50%);
   will-change: transform;
-}
-
-.sm-line {
-  display: none !important;
 }
 
 .staggered-menu-panel {
@@ -336,12 +324,12 @@
   width: 100%;
   border: 0;
   background: transparent;
-  color: #000;
-  font-weight: 700;
+  color: #171717;
+  font-weight: 600;
   font-size: clamp(1.8rem, 8vw, 2.2rem);
   cursor: pointer;
   line-height: 1.2;
-  letter-spacing: 0;
+  letter-spacing: -0.02em;
   text-align: left;
   transition:
     background 0.25s,
