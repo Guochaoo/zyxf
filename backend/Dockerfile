@@ -1,13 +1,15 @@
-# Builder uses the full node image — it bundles python3/make/g++ so
-# better-sqlite3 can compile from source when the GitHub prebuilt download
-# fails (no slow apt-get install needed). The final image stays slim.
-FROM node:20 AS builder
+# better-sqlite3 v12 requires Node >= 22 — no prebuilt binary exists for
+# node 20, so we build on node:24-slim and pull the prebuilt binary from the
+# npmmirror mirror (GitHub releases are unreachable from the server, and
+# compiling from source needs a toolchain that slim images lack).
+FROM node:24-slim AS builder
 WORKDIR /app
 RUN npm config set registry https://registry.npmmirror.com
+ENV npm_config_better_sqlite3_binary_host=https://registry.npmmirror.com/-/binary/better-sqlite3
 COPY package*.json ./
 RUN npm install --omit=dev --no-audit --no-fund
 
-FROM node:20-slim
+FROM node:24-slim
 WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tini \
