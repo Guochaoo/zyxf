@@ -18,7 +18,9 @@
 
 .staggered-menu-header {
   position: absolute;
-  top: 20px;
+  /* top:17px aligns the 30px toggle (vertically centered in this 48px row)
+     with the browse toolbar buttons, whose center sits at 41px. */
+  top: 17px;
   left: 0;
   width: 100%;
   height: 48px;
@@ -416,8 +418,9 @@
 
 @media (max-width: 640px) {
   .staggered-menu-header {
-    left: 4%;
+    left: 6.5%;
     width: 92%;
+    top: 5px;
     padding: 0 8px 0 14px;
   }
 
