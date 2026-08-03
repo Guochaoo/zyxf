@@ -71,7 +71,10 @@ export default function App() {
           page scrolls (sticky rails drift at scroll extremes). */}
       {isBrowse && (
         <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-10 lg:flex lg:w-[250px] lg:flex-col lg:gap-4 lg:overflow-hidden lg:bg-[#FAFAFA] lg:px-4 lg:pt-6">
-          {brand}
+          {/* 34px-high row keeps the brand aligned with the middle toolbar (41px center). */}
+          <div className="flex h-[34px] items-center">
+            {brand}
+          </div>
           <SearchBar />
           <FolderTree currentId={folderId} />
           <footer className="shrink-0 pb-5 text-center text-[11px] leading-relaxed text-slate-400">
