@@ -3,6 +3,9 @@ services:
     build: ./backend
     container_name: zyxf-backend
     restart: unless-stopped
+    # Replaces the tini entrypoint previously installed via apt (keeps the
+    # image build free of Debian-mirror downloads).
+    init: true
     # Backend is internal-only; frontend container reaches it via docker DNS.
     expose:
       - "4000"

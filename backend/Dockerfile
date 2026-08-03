@@ -11,11 +11,8 @@ RUN npm install --omit=dev --no-audit --no-fund
 
 FROM node:24-slim
 WORKDIR /app
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends tini \
-    && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /data && chown node:node /data
-
+# No apt packages: tini comes from docker compose `init: true` instead,
+# keeping the build free of Debian-mirror downloads (slow on the server).
 COPY --from=builder /app/node_modules ./node_modules
 COPY package.json ./
 COPY src ./src
@@ -24,8 +21,10 @@ ENV NODE_ENV=production \
     PORT=4000 \
     DB_PATH=/data/data.db
 
+# Data dir must exist and be writable by node
+RUN mkdir -p /data && chown node:node /data
+
 USER node
 EXPOSE 4000
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "src/index.js"]
