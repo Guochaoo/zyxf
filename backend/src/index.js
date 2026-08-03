@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './env.js';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import express from 'express';
