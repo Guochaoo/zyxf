@@ -91,6 +91,23 @@ export async function getFileUrl(id, { download = false } = {}) {
   return data;
 }
 
+// WebOffice preview credentials (IMM GenerateWebofficeToken) for the official
+// WebOffice JS-SDK. Works for browser-uploaded files, mobile WebViews included.
+export async function getWebofficeToken(id) {
+  const { data } = await api.get(`/files/${id}/weboffice-token`);
+  return data;
+}
+
+// Rotate the WebOffice access token (30-min lifetime) using the refresh token
+// (1-day lifetime). Called by the JS-SDK's refreshToken callback.
+export async function refreshWebofficeToken(id, accessToken, refreshToken) {
+  const { data } = await api.post(`/files/${id}/weboffice-refresh`, {
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
+  return data;
+}
+
 export async function getStats(range = 30) {
   const { data } = await api.get('/stats', { params: { range } });
   return data;
