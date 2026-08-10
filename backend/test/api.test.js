@@ -382,12 +382,47 @@ describe('files', () => {
     assert.equal(preview.body.ext, 'pdf');
     assert.equal(preview.body.mime_type, 'application/pdf');
     assert.equal(preview.body.force_download, false);
-    assert.ok(preview.body.imm_url); // custom domain configured in tests
 
     const download = await request('GET', `/api/files/${id}/url?download=1`);
     assert.equal(download.status, 200);
     assert.equal(download.body.force_download, true);
-    assert.equal(download.body.imm_url, undefined);
+  });
+
+  test('GET /:id/weboffice-token returns preview credentials', async () => {
+    const token = await adminLogin();
+    const f = await registerFile(token, { name: 'doc.pdf' });
+    const r = await request('GET', `/api/files/${f.body.id}/weboffice-token`);
+    assert.equal(r.status, 200);
+    assert.ok(r.body.url && r.body.url.startsWith('https://'));
+    assert.ok(r.body.token);
+  });
+
+  test('weboffice-token rejects non-previewable types', async () => {
+    const token = await adminLogin();
+    const f = await registerFile(token, { name: 'pack.zip' });
+    const r = await request('GET', `/api/files/${f.body.id}/weboffice-token`);
+    assert.equal(r.status, 415);
+  });
+
+  test('POST /:id/weboffice-refresh rotates the access token', async () => {
+    const token = await adminLogin();
+    const f = await registerFile(token, { name: 'doc.pdf' });
+    const r = await request('POST', `/api/files/${f.body.id}/weboffice-refresh`, {
+      token,
+      body: { access_token: 'old-token', refresh_token: 'refresh-me' },
+    });
+    assert.equal(r.status, 200);
+    assert.ok(r.body.token);
+    assert.notEqual(r.body.token, 'old-token');
+  });
+
+  test('weboffice-refresh requires tokens', async () => {
+    const token = await adminLogin();
+    const f = await registerFile(token, { name: 'doc.pdf' });
+    assert.equal(
+      (await request('POST', `/api/files/${f.body.id}/weboffice-refresh`, { token, body: {} })).status,
+      400
+    );
   });
 
   test('archives always force download, even in preview mode', async () => {

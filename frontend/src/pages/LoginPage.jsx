@@ -30,15 +30,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative mt-3 sm:mt-6 mx-auto w-full max-w-[1100px] grid items-stretch overflow-hidden rounded-lg shadow-[rgba(0,0,0,0.08)_0px_0px_0px_1px,rgba(0,0,0,0.04)_0px_2px_2px,rgba(0,0,0,0.04)_0px_8px_8px_-8px,#fafafa_0px_0px_0px_1px] md:min-h-[640px] md:grid-cols-[1.15fr_1fr]">
+    <div className="relative mt-3 sm:mt-6 mx-auto w-full max-w-[1100px] grid items-stretch overflow-hidden rounded-lg shadow-[rgba(0,0,0,0.08)_0px_0px_0px_1px,rgba(0,0,0,0.04)_0px_2px_2px,rgba(0,0,0,0.04)_0px_8px_8px_-8px,#fafafa_0px_0px_0px_1px] sm:min-h-[640px] sm:grid-cols-[1.15fr_1fr]">
       {/* Left — silky brand panel with animated Silk background */}
-      <div className="rb-dark relative hidden md:flex md:flex-col md:justify-between p-12 overflow-hidden">
+      <div className="rb-dark relative z-0 hidden sm:flex sm:flex-col sm:justify-between p-12 overflow-hidden">
         <div className="absolute inset-0 -z-10">
           <Silk
-            speed={6.5}
-            scale={0.8}
-            color="#1f1f1f"
-            noiseIntensity={0}
+            speed={1}
+            scale={0.9}
+            color="#2d2d31"
+            noiseIntensity={0.8}
             rotation={0}
           />
         </div>
@@ -70,7 +70,7 @@ export default function LoginPage() {
         <div className="w-full max-w-[360px]">
           <Link
             to="/"
-            className="mb-4 sm:mb-8 inline-flex items-center gap-1.5 text-sm text-neutral-500 transition-colors hover:text-neutral-900 md:hidden"
+            className="mb-4 sm:mb-8 inline-flex items-center gap-1.5 text-sm text-neutral-500 transition-colors hover:text-neutral-900 sm:hidden"
           >
             <BsCaretLeftFill className="w-4 h-4" />
             返回
