@@ -1,7 +1,26 @@
 /* eslint-disable react/no-unknown-property */
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { forwardRef, useRef, useMemo, useLayoutEffect } from 'react';
-import { Color } from 'three';
+import { useEffect, useRef } from 'react';
+import {
+  Color,
+  Mesh,
+  PerspectiveCamera,
+  PlaneGeometry,
+  Scene,
+  ShaderMaterial,
+  WebGLRenderer,
+} from 'three';
+
+/**
+ * Silk — animated silk-texture background (React Bits "Silk", vanilla three.js).
+ *
+ * Implemented with plain three.js instead of @react-three/fiber: the fiber
+ * render loop can stall (root stays inactive) in some embedding environments,
+ * which froze the canvas blank even though the shader itself compiled and
+ * rendered fine. Direct three gives us full control over the animation loop.
+ *
+ * Props (unchanged from the original component):
+ *   speed, scale, color, noiseIntensity, rotation
+ */
 
 const hexToNormalizedRGB = (hex) => {
   hex = hex.replace('#', '');
@@ -69,48 +88,94 @@ void main() {
 }
 `;
 
-const SilkPlane = forwardRef(function SilkPlane({ uniforms }, ref) {
-  const { viewport } = useThree();
-
-  useLayoutEffect(() => {
-    if (ref.current) {
-      ref.current.scale.set(viewport.width, viewport.height, 1);
-    }
-  }, [ref, viewport]);
-
-  useFrame((_, delta) => {
-    ref.current.material.uniforms.uTime.value += 0.1 * delta;
-  });
-
-  return (
-    <mesh ref={ref}>
-      <planeGeometry args={[1, 1, 1, 1]} />
-      <shaderMaterial uniforms={uniforms} vertexShader={vertexShader} fragmentShader={fragmentShader} />
-    </mesh>
-  );
-});
-SilkPlane.displayName = 'SilkPlane';
-
 const Silk = ({ speed = 5, scale = 1, color = '#7B7481', noiseIntensity = 1.5, rotation = 0 }) => {
-  const meshRef = useRef();
+  const hostRef = useRef(null);
+  const rafRef = useRef(0);
+  const uniformsRef = useRef(null);
 
-  const uniforms = useMemo(
-    () => ({
+  // Mount the three.js scene once.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return undefined;
+
+    const uniforms = {
+      uTime: { value: 0 },
+      uColor: { value: new Color(...hexToNormalizedRGB(color)) },
       uSpeed: { value: speed },
       uScale: { value: scale },
-      uNoiseIntensity: { value: noiseIntensity },
-      uColor: { value: new Color(...hexToNormalizedRGB(color)) },
       uRotation: { value: rotation },
-      uTime: { value: 0 },
-    }),
-    [speed, scale, noiseIntensity, color, rotation]
-  );
+      uNoiseIntensity: { value: noiseIntensity },
+    };
+    uniformsRef.current = uniforms;
 
-  return (
-    <Canvas dpr={[1, 2]} frameloop="always">
-      <SilkPlane ref={meshRef} uniforms={uniforms} />
-    </Canvas>
-  );
+    const renderer = new WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    host.appendChild(renderer.domElement);
+
+    const scene = new Scene();
+    const camera = new PerspectiveCamera(45, 1, 0.1, 100);
+    camera.position.z = 1;
+
+    const geometry = new PlaneGeometry(1, 1, 1, 1);
+    const material = new ShaderMaterial({ uniforms, vertexShader, fragmentShader });
+    const mesh = new Mesh(geometry, material);
+    scene.add(mesh);
+
+    // Fit the plane to the visible area.
+    const resize = () => {
+      const w = host.clientWidth || 1;
+      const h = host.clientHeight || 1;
+      // Update the canvas CSS size too (setSize's 2nd arg, default true), so
+      // the buffer fills the host instead of staying at the browser default
+      // 300x150 while the buffer is 588x640 — that mismatch showed only a
+      // tiny corner of the silk, i.e. a blank panel.
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      const dist = camera.position.z;
+      const vFov = (camera.fov * Math.PI) / 180;
+      const viewH = 2 * Math.tan(vFov / 2) * dist;
+      const viewW = viewH * camera.aspect;
+      mesh.scale.set(viewW, viewH, 1);
+    };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(host);
+
+    const clock = { last: performance.now() };
+    const tick = (now) => {
+      const delta = Math.min(0.05, (now - clock.last) / 1000);
+      clock.last = now;
+      uniforms.uTime.value += delta;
+      renderer.render(scene, camera);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+      renderer.dispose();
+      material.dispose();
+      geometry.dispose();
+      if (renderer.domElement.parentNode === host) host.removeChild(renderer.domElement);
+      uniformsRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Propagate prop changes into the (single) uniforms object.
+  useEffect(() => {
+    const u = uniformsRef.current;
+    if (!u) return;
+    u.uSpeed.value = speed;
+    u.uScale.value = scale;
+    u.uNoiseIntensity.value = noiseIntensity;
+    u.uRotation.value = rotation;
+    u.uColor.value.setRGB(...hexToNormalizedRGB(color));
+  }, [speed, scale, noiseIntensity, color, rotation]);
+
+  return <div ref={hostRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden' }} />;
 };
 
 export default Silk;

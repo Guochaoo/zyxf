@@ -271,6 +271,9 @@ textarea:focus-visible {
   color: #000000;
 }
 
+/* Dark panels (e.g. login brand panel). The Silk WebGL animation paints the
+   background; this class intentionally has no solid fallback so the silk
+   texture shows through when WebGL renders. */
 .app-theme .rb-dark svg,
 .app-theme .text-white svg,
 .app-theme .rb-btn-dark svg {

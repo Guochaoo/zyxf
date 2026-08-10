@@ -21,3 +21,18 @@ mock.module('../src/oss.js', {
     deleteOssObjectIfExists: async () => {},
   },
 });
+
+// IMM WebOffice token generation hits the live IMM API — stub it.
+mock.module('../src/imm.js', {
+  exports: {
+    generateWebofficeToken: async (file) => ({
+      url: `https://imm.test/office/f/${encodeURIComponent(file.oss_key)}`,
+      token: 'test-access-token',
+      refresh_token: 'test-refresh-token',
+    }),
+    refreshWebofficeToken: async ({ accessToken }) => ({
+      token: `refreshed-${accessToken}`,
+      refresh_token: 'test-refresh-token-2',
+    }),
+  },
+});

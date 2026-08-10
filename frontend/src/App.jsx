@@ -14,7 +14,7 @@ import useMediaQuery from './hooks/useMediaQuery.js';
 export default function App() {
   const { user, logout, ready } = useAuth();
   const location = useLocation();
-  const isXl = useMediaQuery('(min-width: 1280px)');
+  const isLg = useMediaQuery('(min-width: 1024px)');
 
   // Docs layout: brand + search + folder tree live in the left rail, which
   // appears on browse routes only. Other pages are standalone.
@@ -85,7 +85,7 @@ export default function App() {
       <main
         className={`min-w-0 overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6 ${
           isBrowse
-            ? 'w-full lg:pl-[calc(250px+1rem)] xl:pr-[calc(300px+1rem)]'
+            ? 'w-full lg:pl-[calc(250px+1rem)] lg:pr-[calc(300px+1rem)]'
             : 'mx-auto w-full max-w-7xl'
         }`}
       >
@@ -100,8 +100,8 @@ export default function App() {
       </main>
       {/* Right column — the original StaggeredMenu toggle button stays
           fixed at the top-right; the knowledge graph sits below it. */}
-      {isBrowse && isXl && (
-        <div className="fixed inset-y-0 right-0 z-10 hidden flex-col gap-4 overflow-hidden px-4 pt-16 xl:flex xl:w-[300px]">
+      {isBrowse && isLg && (
+        <div className="fixed inset-y-0 right-0 z-10 hidden flex-col gap-4 overflow-hidden px-4 pt-16 lg:flex lg:w-[300px]">
           <div className="min-h-0 flex-1 overflow-y-auto">
             <KnowledgeGraph currentId={folderId} />
           </div>
