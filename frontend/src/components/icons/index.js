@@ -4,3 +4,4 @@ export { default as DownloadIcon } from './DownloadIcon.jsx';
 export { default as PenLineIcon } from './PenLineIcon.jsx';
 export { default as TrashIcon } from './TrashIcon.jsx';
 export { default as RotateCwIcon } from './RotateCwIcon.jsx';
+export { default as ArrowLeftIcon } from './ArrowLeftIcon.jsx';

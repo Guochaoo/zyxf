@@ -2,20 +2,20 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2 } from 'lucide-react';
 import { DownloadIcon } from '../icons';
-import { getFileUrl } from '../../api.js';
+import { getFileUrl, getWebofficeToken } from '../../api.js';
 import { downloadFileById, errMsg, getPreviewKind, isLargeFile, LARGE_FILE_HINT } from '../../utils.js';
 import PreviewBody from './Body.jsx';
 
 /**
- * Preview — full-screen overlay that fetches a file's OSS signed URL
- * and renders the appropriate viewer.
+ * Preview — full-screen overlay that fetches a file's OSS signed URL and (for
+ * previewable types) WebOffice credentials, then renders the right viewer.
  */
 export default function Preview({ file, onClose }) {
   const [signedUrl, setSignedUrl] = useState(null);
+  const [wbToken, setWbToken] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [downloadErr, setDownloadErr] = useState('');
-  const [immUrl, setImmUrl] = useState(null);
   const [downloading, setDownloading] = useState(false);
   const kind = useMemo(() => getPreviewKind(file.ext), [file.ext]);
   const [isMobile, setIsMobile] = useState(false);
@@ -28,14 +28,21 @@ export default function Preview({ file, onClose }) {
     return () => query.removeEventListener?.('change', update);
   }, []);
 
-  // Fetch the signed URL; shared by the initial load and the retry button.
+  // Fetch the signed URL (downloads / fallbacks) and WebOffice token
+  // (interactive preview) in parallel; shared by the retry button.
   const loadUrl = useCallback(async () => {
     setLoading(true);
     setErr('');
     try {
-      const meta = await getFileUrl(file.id);
-      setSignedUrl(meta.url);
-      if (meta.imm_url) setImmUrl(meta.imm_url);
+      const [urlMeta, wb] = await Promise.allSettled([
+        getFileUrl(file.id),
+        getWebofficeToken(file.id),
+      ]);
+      if (urlMeta.status === 'fulfilled') setSignedUrl(urlMeta.value.url);
+      if (wb.status === 'fulfilled') setWbToken(wb.value);
+      // A signed-URL failure is fatal; a WebOffice-token failure just falls
+      // back to the native/iframe preview path.
+      if (urlMeta.status === 'rejected') setErr(errMsg(urlMeta.reason, '加载失败'));
     } catch (e) {
       if (e.name !== 'AbortError') setErr(errMsg(e, '加载失败'));
     } finally {
@@ -136,7 +143,8 @@ export default function Preview({ file, onClose }) {
             <PreviewBody
               kind={kind}
               signedUrl={signedUrl}
-              immUrl={immUrl}
+              wbToken={wbToken}
+              fileId={file.id}
               name={file.name}
               ext={file.ext}
               onDownload={download}

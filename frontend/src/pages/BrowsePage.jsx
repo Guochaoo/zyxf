@@ -8,7 +8,7 @@ import {
   BsSortAlphaDown,
   BsSortAlphaDownAlt,
 } from 'react-icons/bs';
-import { DownloadIcon, PenLineIcon, RotateCwIcon, TrashIcon } from '../components/icons';
+import { DownloadIcon, PenLineIcon, RotateCwIcon, TrashIcon, ArrowLeftIcon } from '../components/icons';
 import {
   createFolder,
   deleteFile,
@@ -24,12 +24,10 @@ import {
 } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import FileIcon from '../components/FileIcon.jsx';
-import KnowledgeGraph from '../components/KnowledgeGraph.jsx';
 import Preview from '../components/Preview/index.jsx';
 import UploadDialog from '../components/UploadDialog.jsx';
 import { downloadFileById, errMsg, formatDate, formatSize } from '../utils.js';
 import { useSlidingIndicator } from '../hooks/useSlidingIndicator.js';
-import useMediaQuery from '../hooks/useMediaQuery.js';
 
 // Default = admin-controlled manual order. Comes first.
 const SORT_OPTIONS = [
@@ -51,9 +49,6 @@ export default function BrowsePage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAdmin } = useAuth();
-  // Below xl the knowledge graph falls back to an inline card under the list
-  // (on xl+ it lives in the App right column).
-  const isXl = useMediaQuery('(min-width: 1280px)');
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -127,6 +122,12 @@ export default function BrowsePage() {
       setSyncing(false);
       refresh();
     }
+  };
+
+  // Go up one level: current folder's parent (root when at top).
+  const onGoBack = () => {
+    const parentId = data?.folder?.parent_id;
+    navigate(parentId ? `/folder/${parentId}` : '/');
   };
 
   useEffect(() => {
@@ -352,30 +353,41 @@ export default function BrowsePage() {
     <div className="space-y-4">
       {/* Toolbar — sits above the file list */}
       <div className="flex w-full flex-wrap items-center justify-end gap-2">
+        <div>
+          <SortControl sort={sort} order={order} onChange={toggleSort} />
+        </div>
         <button
           onClick={onSyncRefresh}
-          className="order-2 p-0 sm:order-none"
+          className="p-0"
           title="刷新（同步远端资料库）"
         >
           <span className="rb-toolbar-btn w-[38.5px] p-0">
             <RotateCwIcon className={`w-6 h-6 ${syncing ? 'animate-spin' : ''}`} />
           </span>
         </button>
-        <div className="order-1 sm:order-none">
-          <SortControl sort={sort} order={order} onChange={toggleSort} />
-        </div>
+        {folderId !== 0 && (
+          <button
+            onClick={onGoBack}
+            className="p-0"
+            title="返回上一级"
+          >
+            <span className="rb-toolbar-btn w-[38.5px] p-0">
+              <ArrowLeftIcon className="w-6 h-6" />
+            </span>
+          </button>
+        )}
         {isAdmin && (
           <>
             <button
               onClick={onCreateFolder}
-              className="rb-toolbar-btn order-3 sm:order-none"
+              className="rb-toolbar-btn"
             >
               <BsFolderPlus className="w-4 h-4" />
               新建文件夹
             </button>
             <button
               onClick={() => setUploadOpen(true)}
-              className="rb-btn-dark order-3 h-[34px] sm:order-none"
+              className="rb-btn-dark h-[34px]"
             >
               <BsCloudArrowUp className="w-4 h-4" />
               上传
@@ -442,8 +454,6 @@ export default function BrowsePage() {
             />
           )}
         </div>
-
-        {!isXl && <KnowledgeGraph currentId={folderId} className="mt-4" />}
       </div>
 
       {renameTarget && (

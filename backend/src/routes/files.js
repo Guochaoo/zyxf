@@ -3,7 +3,8 @@ import path from 'node:path';
 import rateLimit from 'express-rate-limit';
 import { db } from '../db.js';
 import { requireAdmin } from '../auth.js';
-import { buildPostPolicy, copyOssObject, deleteOssObjectIfExists, signedGetUrl, immPreviewUrl } from '../oss.js';
+import { buildPostPolicy, copyOssObject, deleteOssObjectIfExists, signedGetUrl } from '../oss.js';
+import { generateWebofficeToken, refreshWebofficeToken } from '../imm.js';
 import { mimeOf } from '../mime.js';
 import { findFileByNameInFolder, findOssKeyConflict, nextSortOrder } from '../dbHelpers.js';
 import { objectKeyForFile, ossPrefix, parseOptionalFolderId } from '../storagePath.js';
@@ -39,8 +40,6 @@ function dispositionFor(name, asAttachment) {
 }
 
 const SHORT_SIGN_TTL = 1800; // 30 min — enough for long preview sessions, short enough to limit link-sharing risk
-
-const HAS_CUSTOM_DOMAIN = !!process.env.OSS_ENDPOINT;
 
 // In-memory dedupe: same file_id + IP within window counts once.
 const DOWNLOAD_DEDUP_WINDOW_MS = 5 * 60 * 1000;
@@ -145,7 +144,7 @@ router.post('/', requireAdmin, (req, res) => {
 // Get a bare signed url for the object. The frontend will fetch it as a Blob
 // and convert to a Blob URL so the browser ignores OSS's force-download header
 // (added automatically on un-filed bucket domains for certain MIME types).
-router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => {
+router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, async (req, res) => {
   const file = getFileOr404(req, res);
   if (!file) return;
 
@@ -177,22 +176,55 @@ router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => 
     }
   }
 
-  // IMM doc/preview URL for eligible file types (not for download).
-  // Requires a custom domain bound to the bucket.
-  const immUrl =
-    !isDownload && HAS_CUSTOM_DOMAIN && PREVIEWABLE_EXTS.has(ext)
-      ? immPreviewUrl(file.oss_key, SHORT_SIGN_TTL)
-      : null;
-
   res.json({
     url,
-    imm_url: immUrl || undefined,
     name: file.name,
     ext: file.ext,
     mime_type: contentType,
     size: file.size,
     force_download: forceAttach,
   });
+});
+
+// WebOffice preview token via IMM GenerateWebofficeToken. Works for
+// browser-uploaded ("externally uploaded") objects too — the JS-SDK renders
+// the returned WebofficeURL in the browser, mobile WebViews included.
+router.get('/:id/weboffice-token', downloadLimiterShort, downloadLimiterLong, async (req, res, next) => {
+  const file = getFileOr404(req, res);
+  if (!file) return;
+  const ext = normalizeExt(file.ext);
+  if (!PREVIEWABLE_EXTS.has(ext)) {
+    return res.status(415).json({ error: '该文件类型不支持在线预览' });
+  }
+  try {
+    const info = await generateWebofficeToken(file);
+    res.json(info);
+  } catch (e) {
+    console.warn('[files] weboffice token failed:', e.message);
+    res.status(502).json({ error: '预览服务暂不可用，请稍后再试' });
+  }
+});
+
+// Refresh a WebOffice access token (30-min lifetime) with the refresh token
+// (1-day lifetime). The frontend JS-SDK calls this via its refreshToken
+// callback before the access token expires.
+router.post('/:id/weboffice-refresh', downloadLimiterShort, downloadLimiterLong, async (req, res) => {
+  const file = getFileOr404(req, res);
+  if (!file) return;
+  const { access_token, refresh_token } = req.body || {};
+  if (!access_token || !refresh_token) {
+    return res.status(400).json({ error: '缺少 access_token 或 refresh_token' });
+  }
+  try {
+    const info = await refreshWebofficeToken({ accessToken: access_token, refreshToken: refresh_token });
+    console.log(`[files] weboffice token refreshed for file ${file.id}`);
+    res.json(info);
+  } catch (e) {
+    console.warn('[files] weboffice refresh failed:', e.message);
+    // Refresh token may itself be expired (1-day lifetime) — the client can
+    // then regenerate a fresh session via weboffice-token.
+    res.status(502).json({ error: '预览凭证刷新失败，请关闭后重新打开' });
+  }
 });
 
 // Move a file to another folder (folder_id = null means root)
@@ -225,7 +257,9 @@ router.patch('/:id', requireAdmin, async (req, res) => {
       newKey,
       id
     );
-    if (file.oss_key !== newKey) await deleteOssObjectIfExists(file.oss_key);
+    if (file.oss_key !== newKey) {
+      await deleteOssObjectIfExists(file.oss_key);
+    }
     return res.json({ ok: true, name: newName, oss_key: newKey });
   }
 

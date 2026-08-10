@@ -120,6 +120,18 @@ const DEFAULT_IMM_STYLE = process.env.IMM_STYLE
   : 'doc/preview,export_0,print_0,ExternalUploaded=true';
 
 /**
+ * True for legacy `.preview/` shadow copies (from the earlier preview-copy
+ * workaround) — internal objects, never library content. Kept so sync/list
+ * still skip them until the leftovers are cleaned up from the bucket.
+ */
+export function isPreviewCopyKey(ossKey) {
+  const prefix = ossPrefix();
+  return prefix
+    ? String(ossKey).startsWith(`${prefix}/.preview/`)
+    : String(ossKey).startsWith('.preview/');
+}
+
+/**
  * Generate a signed GET URL for IMM (WebOffice) document preview.
  *
  * IMPORTANT: IMM preview requires a custom domain bound to the OSS bucket.
@@ -128,12 +140,17 @@ const DEFAULT_IMM_STYLE = process.env.IMM_STYLE
  * @param key        OSS object key
  * @param expiresSec URL validity in seconds
  * @param style      Override IMM processing style
+ * @param externalUploaded  true (default) for browser-uploaded objects (adds
+ *                          ExternalUploaded=true); false for internal objects
+ *                          like preview copies (strips the flag)
  */
-export function immPreviewUrl(key, expiresSec = 1800, style = null) {
+export function immPreviewUrl(key, expiresSec = 1800, style = null, { externalUploaded = true } = {}) {
   let processStyle = style || DEFAULT_IMM_STYLE;
-  // Externally uploaded (direct-to-OSS) files always need the flag.
-  if (!/ExternalUploaded/i.test(processStyle)) {
+  const hasFlag = /,\s*ExternalUploaded\s*=\s*true/gi.test(processStyle);
+  if (externalUploaded && !hasFlag) {
     processStyle = `${processStyle},ExternalUploaded=true`;
+  } else if (!externalUploaded && hasFlag) {
+    processStyle = processStyle.replace(/,\s*ExternalUploaded\s*=\s*true/gi, '');
   }
   const client = immClient();
   const url = client.signatureUrl(key, { expires: expiresSec, process: processStyle });
@@ -157,7 +174,11 @@ export async function listOssObjects() {
   let marker;
   do {
     const res = await client.list({ prefix, marker, 'max-keys': 1000 });
-    for (const o of res.objects || []) out.push({ key: o.name, size: o.size });
+    // Skip internal `.preview/` shadow copies — they exist only for IMM
+    // rendering and must never appear as library content (e.g. via sync).
+    for (const o of res.objects || []) {
+      if (!isPreviewCopyKey(o.name)) out.push({ key: o.name, size: o.size });
+    }
     marker = res.nextMarker;
     if (!res.isTruncated) break;
   } while (marker);
