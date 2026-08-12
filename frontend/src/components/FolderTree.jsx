@@ -86,7 +86,7 @@ export default function FolderTree({ currentId = 0, className = '' }) {
       <div className="px-2 pb-2 text-[12px] font-medium text-slate-500">目录</div>
       <nav
         aria-label="文件夹目录"
-        className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1"
+        className="rb-side-scroll -mx-1 min-h-0 flex-1 overflow-y-auto px-1"
       >
         <TreeNode
           node={{ id: 0, name: '首页', children: tree || [], files: rootFiles }}

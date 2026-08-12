@@ -353,9 +353,7 @@ export default function BrowsePage() {
     <div className="space-y-4">
       {/* Toolbar — sits above the file list */}
       <div className="flex w-full flex-wrap items-center justify-end gap-2">
-        <div>
-          <SortControl sort={sort} order={order} onChange={toggleSort} />
-        </div>
+        <SortControl sort={sort} order={order} onChange={toggleSort} />
         <button
           onClick={onSyncRefresh}
           className="p-0"
@@ -425,35 +423,33 @@ export default function BrowsePage() {
 
       {/* Body: file list takes the full middle column width (the graph lives
           in the App right column on xl+, inline below the list otherwise). */}
-      <div>
-        <div className="bg-white rb-card rounded-lg overflow-hidden">
-          {loading ? (
-            <div className="py-16 flex items-center justify-center text-slate-400">
-              <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-400" /> 加载中…
-            </div>
-          ) : err ? (
-            <div className="py-16 text-center text-red-500">{err}</div>
-          ) : (
-            <ItemListWithRename
-              data={data}
-              isAdmin={isAdmin}
-              dragging={dragging}
-              dropZone={dropZone}
-              onEnterFolder={(f) => navigate(`/folder/${f.id}`)}
-              onPreviewFile={setPreviewing}
-              onDeleteFolder={onDeleteFolder}
-              onDeleteFile={onDeleteFile}
-              onRenameFolder={(f) => openRenameDialog({ ...f, type: 'folder' })}
-              onRenameFile={(f) => openRenameDialog({ ...f, type: 'file' })}
-              onDownloadFile={onDownloadFile}
-              onDragStart={onDragStart}
-              onDragEnd={onDragEnd}
-              onRowDragOver={onRowDragOver}
-              onRowDragLeave={onRowDragLeave}
-              onRowDrop={onRowDrop}
-            />
-          )}
-        </div>
+        <div className="bg-white rb-card rounded-[14px] overflow-hidden">
+        {loading ? (
+          <div className="py-16 flex items-center justify-center text-slate-400">
+            <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-400" /> 加载中…
+          </div>
+        ) : err ? (
+          <div className="py-16 text-center text-red-500">{err}</div>
+        ) : (
+          <ItemListWithRename
+            data={data}
+            isAdmin={isAdmin}
+            dragging={dragging}
+            dropZone={dropZone}
+            onEnterFolder={(f) => navigate(`/folder/${f.id}`)}
+            onPreviewFile={setPreviewing}
+            onDeleteFolder={onDeleteFolder}
+            onDeleteFile={onDeleteFile}
+            onRenameFolder={(f) => openRenameDialog({ ...f, type: 'folder' })}
+            onRenameFile={(f) => openRenameDialog({ ...f, type: 'file' })}
+            onDownloadFile={onDownloadFile}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onRowDragOver={onRowDragOver}
+            onRowDragLeave={onRowDragLeave}
+            onRowDrop={onRowDrop}
+          />
+        )}
       </div>
 
       {renameTarget && (
@@ -514,7 +510,7 @@ function SortControl({ sort, order, onChange }) {
     <div className="rb-toolbar-btn max-w-full !px-0">
       <div ref={listRef} className="sort-scroll relative flex max-w-full items-center overflow-x-auto text-xs">
         <span
-          className="pointer-events-none absolute inset-y-0 rounded-[6px] bg-white shadow-[inset_0_0_0_1px_rgba(23,23,23,0.1)]"
+          className="pointer-events-none absolute inset-y-0 rounded-[14px] bg-white shadow-[inset_0_0_0_1px_rgba(23,23,23,0.1)]"
           style={{
             width: indicator.width,
             transform: `translateX(${indicator.left}px)`,
@@ -579,8 +575,12 @@ function ItemListWithRename({
   const actionWidthClass = isAdmin ? 'w-28' : 'w-16';
   return (
     <ul className="divide-y divide-white/10">
-      <li className="rb-table-heading hidden sm:flex items-center px-4 py-2 text-xs text-slate-500 bg-slate-50">
-        <span className="flex-1">名称</span>
+      <li className="rb-table-heading hidden sm:flex items-center gap-2 px-4 py-2 text-xs text-slate-500 bg-[#EFEFEF]">
+        {isAdmin && <span className="w-4 h-4 -ml-1 sm:mr-1 sm:-ml-2 shrink-0" />}
+        <span className="flex-1 flex items-center gap-2 min-w-0">
+          <span className="w-5 h-5 shrink-0" />
+          <span>名称</span>
+        </span>
         <span className="w-24 text-right">大小</span>
         <span className="w-40 text-right">修改时间</span>
         <span className={`${actionWidthClass} text-right`}>操作</span>
@@ -723,7 +723,7 @@ function Row({
         <span className="min-w-0 truncate">{item.name}</span>
       </span>
       <span className="hidden sm:inline w-24 text-right text-xs text-slate-400">
-        {item.type === 'file' ? formatSize(item.size) : '-'}
+        {formatSize(item.size)}
       </span>
       <span className="hidden sm:inline w-40 text-right text-xs text-slate-400">
         {formatDate(item.created_at)}

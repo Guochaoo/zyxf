@@ -51,13 +51,13 @@ router.get('/', (req, res) => {
   const seriesStart = todayStart - (range - 1) * DAY;
   const dlByDay = db
     .prepare(
-      `SELECT (downloaded_at - ?) / ? AS i, COUNT(*) AS c FROM download_logs
+      `SELECT CAST((downloaded_at - ?) / ? AS INTEGER) AS i, COUNT(*) AS c FROM download_logs
        WHERE downloaded_at >= ? GROUP BY i`
     )
     .all(todayStart, DAY, seriesStart);
   const upByDay = db
     .prepare(
-      `SELECT (created_at - ?) / ? AS i, COUNT(*) AS c FROM files
+      `SELECT CAST((created_at - ?) / ? AS INTEGER) AS i, COUNT(*) AS c FROM files
        WHERE created_at >= ? GROUP BY i`
     )
     .all(todayStart, DAY, seriesStart);
@@ -65,8 +65,17 @@ router.get('/', (req, res) => {
     const start = todayStart - (range - 1 - k) * DAY;
     return { date: dayLabel(start), ts: start, downloads: 0, uploads: 0 };
   });
-  for (const r of dlByDay) if (series[r.i]) series[r.i].downloads = r.c;
-  for (const r of upByDay) if (series[r.i]) series[r.i].uploads = r.c;
+  // i = days since today start (0 = today); series is oldest → newest, so the
+  // index must be flipped. better-sqlite3 binds numbers as REAL, so floor() is
+  // required to land on integer array indices.
+  for (const r of dlByDay) {
+    const idx = range - 1 - Math.floor(r.i);
+    if (series[idx]) series[idx].downloads = r.c;
+  }
+  for (const r of upByDay) {
+    const idx = range - 1 - Math.floor(r.i);
+    if (series[idx]) series[idx].uploads = r.c;
+  }
 
   // ---- File type breakdown ----
   const typeRows = db

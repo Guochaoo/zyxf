@@ -19,6 +19,28 @@ function getFolder(id) {
   return db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
 }
 
+// Recursive total size of each given folder (sum of all descendant files).
+function computeFolderSizes(folderIds) {
+  if (!folderIds.length) return {};
+  const placeholders = folderIds.map(() => '?').join(',');
+  const rows = db
+    .prepare(
+      `WITH RECURSIVE sub(root_id, id) AS (
+         SELECT id AS root_id, id FROM folders WHERE id IN (${placeholders})
+         UNION ALL
+         SELECT s.root_id, f.id FROM folders f JOIN sub s ON f.parent_id = s.id
+       )
+       SELECT s.root_id AS id, COALESCE(SUM(fl.size), 0) AS size
+       FROM sub s
+       LEFT JOIN files fl ON fl.folder_id = s.id
+       GROUP BY s.root_id`
+    )
+    .all(...folderIds);
+  const map = {};
+  for (const r of rows) map[r.id] = r.size;
+  return map;
+}
+
 // Every descendant folder id and its files (one query per node).
 function collectFolderTree(folderId) {
   const folderIds = [];
@@ -165,6 +187,10 @@ router.get('/:id/contents', (req, res) => {
     )
     .all(...args)
     .map((f) => ({ ...f, type: 'folder' }));
+
+  // Attach recursive total size (sum of all descendant files) to each folder.
+  const sizeMap = computeFolderSizes(folders.map((f) => f.id));
+  for (const f of folders) f.size = sizeMap[f.id] || 0;
 
   // oss_key is internal storage layout — not exposed to (anonymous) clients.
   const files = db
