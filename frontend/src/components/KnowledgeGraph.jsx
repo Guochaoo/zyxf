@@ -130,7 +130,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '' }) {
   return (
     <div
       ref={cardRef}
-      className={`kg-card relative bg-white rounded-lg border border-black/10 overflow-hidden ${className}`.trim()}
+      className={`kg-card relative bg-white rounded-[14px] border border-black/10 overflow-hidden ${className}`.trim()}
     >
       {/* Floating actions, overlaid on the graph */}
       {!empty && (
@@ -139,7 +139,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '' }) {
             type="button"
             onClick={() => setFull(true)}
             title="查看全库图谱"
-            className="flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-500 shadow-[rgba(23,23,23,0.12)_0_0_0_1px,rgba(23,23,23,0.06)_0_1px_2px] transition-colors hover:bg-black/5 hover:text-black"
+            className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-white text-slate-500 shadow-[rgba(23,23,23,0.12)_0_0_0_1px,rgba(23,23,23,0.06)_0_1px_2px] transition-colors hover:bg-black/5 hover:text-black"
           >
             <Globe className="h-4 w-4" />
           </button>
@@ -147,32 +147,30 @@ export default function KnowledgeGraph({ currentId = 0, className = '' }) {
             type="button"
             onClick={toggleFullscreen}
             title="全屏"
-            className="flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-500 shadow-[rgba(23,23,23,0.12)_0_0_0_1px,rgba(23,23,23,0.06)_0_1px_2px] transition-colors hover:bg-black/5 hover:text-black"
+            className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-white text-slate-500 shadow-[rgba(23,23,23,0.12)_0_0_0_1px,rgba(23,23,23,0.06)_0_1px_2px] transition-colors hover:bg-black/5 hover:text-black"
           >
             <Maximize className="h-4 w-4" />
           </button>
         </div>
       )}
-      {/* Square graph card */}
-      <div className="h-[295px] w-[295px] p-3">
-        {loading ? (
-          <div className="flex h-full items-center justify-center text-[12px] text-slate-500">
-            加载中…
-          </div>
-        ) : empty ? (
-          <div className="flex h-full items-center justify-center text-[12px] text-slate-500">
-            暂无内容
-          </div>
-        ) : (
-          <GraphCanvas
-            nodes={localNodes}
-            links={localLinks}
-            currentId={currentId}
-            onNavigate={onNavigate}
-            height="100%"
-          />
-        )}
-      </div>
+      {/* Square graph content — rendered directly in the card, no wrapper */}
+      {loading ? (
+        <div className="flex h-[295px] items-center justify-center text-[12px] text-slate-500">
+          加载中…
+        </div>
+      ) : empty ? (
+        <div className="flex h-[295px] items-center justify-center text-[12px] text-slate-500">
+          暂无内容
+        </div>
+      ) : (
+        <GraphCanvas
+          nodes={localNodes}
+          links={localLinks}
+          currentId={currentId}
+          onNavigate={onNavigate}
+          height="295px"
+        />
+      )}
 
       {full && !empty && (
         <div
@@ -238,7 +236,15 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
     simRef.current?.stop();
     setView({ x: 0, y: 0, k: 1 });
     setHovered(null);
-    if (nodes.length <= 1) return undefined;
+    if (nodes.length <= 1) {
+      // A lone node never gets a simulation to place it; park it dead-center
+      // so the positioned render gate below stays satisfied.
+      if (nodes[0]) {
+        nodes[0].x = VIEW_W / 2;
+        nodes[0].y = VIEW_H / 2;
+      }
+      return undefined;
+    }
 
     const sim = forceSimulation(nodes)
       .force(
@@ -272,8 +278,8 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
       maxY = Math.max(maxY, n.y);
     }
     if (minX !== Infinity) {
-      const pad = 70;
-      const k = Math.min(1.4, Math.max(0.35, (VIEW_W - pad * 2) / (maxX - minX + pad), (VIEW_H - pad * 2) / (maxY - minY + pad)));
+      const pad = 40;
+      const k = Math.min(2.0, Math.max(0.35, (VIEW_W - pad * 2) / (maxX - minX + pad), (VIEW_H - pad * 2) / (maxY - minY + pad)));
       setView({
         k,
         x: VIEW_W / 2 - ((minX + maxX) / 2) * k,
@@ -295,29 +301,43 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
       if (!id) return;
       const set = new Set([id]);
       for (const l of links) {
-        if (l.source === id) set.add(l.target);
-        if (l.target === id) set.add(l.source);
+        // d3-force rewrites l.source/l.target from string ids to node objects
+        // after the simulation runs, so normalize before comparing.
+        const s = typeof l.source === 'object' ? l.source.id : l.source;
+        const t = typeof l.target === 'object' ? l.target.id : l.target;
+        if (s === id) set.add(t);
+        if (t === id) set.add(s);
       }
       neighborsRef.current = set;
     },
     [links]
   );
 
-  const onWheel = useCallback((e) => {
-    e.preventDefault();
-    setView((v) => {
-      const rect = svgRef.current?.getBoundingClientRect();
-      if (!rect) return v;
-      const factor = Math.exp(-e.deltaY * 0.0014);
-      const k = Math.min(2.5, Math.max(0.25, v.k * factor));
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
-      return {
-        k,
-        x: cx - ((cx - v.x) / v.k) * k,
-        y: cy - ((cy - v.y) / v.k) * k,
-      };
-    });
+  // Bind wheel natively with passive:false — React's synthetic onWheel is a
+  // passive listener in this environment, so its preventDefault is ignored and
+  // the page still scrolls. A native non-passive listener reliably stops the
+  // page/scroll container and zooms the graph only.
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return undefined;
+    const onWheel = (e) => {
+      e.preventDefault();
+      setView((v) => {
+        const rect = el.getBoundingClientRect();
+        if (!rect.width || !rect.height) return v;
+        const factor = Math.exp(-e.deltaY * 0.0014);
+        const k = Math.min(2.5, Math.max(0.25, v.k * factor));
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+        return {
+          k,
+          x: cx - ((cx - v.x) / v.k) * k,
+          y: cy - ((cy - v.y) / v.k) * k,
+        };
+      });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
   const onBackgroundDown = useCallback(
@@ -399,81 +419,89 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
 
   const showLabels = view.k > 1.2;
   const svgH = typeof height === 'number' ? `${height}px` : height;
+  // d3-force assigns node.x/node.y inside the effect above, which runs after
+  // the first commit — so freshly built node objects have no positions on
+  // that first render. Gating here avoids `translate(undefined,undefined)`
+  // (React logs "Expected number" per such <g>). Once ticked, positions are
+  // always numbers, so this is only ever false for one commit.
+  const positioned =
+    nodes.length === 0 || nodes.every((n) => Number.isFinite(n.x) && Number.isFinite(n.y));
 
   return (
     <svg
       ref={svgRef}
       viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-      className="w-full cursor-grab select-none touch-none active:cursor-grabbing"
+      className="kg-graph w-full cursor-grab select-none touch-none active:cursor-grabbing"
       style={{ height: svgH }}
-      onWheel={onWheel}
       onPointerDown={onBackgroundDown}
       onPointerMove={onBackgroundMove}
       onPointerUp={onBackgroundUp}
       onPointerLeave={onBackgroundUp}
     >
-      <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
-        {links.map((l, i) => {
-          const s = typeof l.source === 'object' ? l.source.id : l.source;
-          const t = typeof l.target === 'object' ? l.target.id : l.target;
-          const active = hovered && (neighborsRef.current.has(s) || neighborsRef.current.has(t));
-          const dim = hovered && !active;
-          return (
-            <line
-              key={`l-${i}`}
-              x1={l.source.x}
-              y1={l.source.y}
-              x2={l.target.x}
-              y2={l.target.y}
-              stroke={hovered ? '#171717' : 'rgba(23,23,23,0.25)'}
-              strokeWidth={1}
-              opacity={dim ? 0.05 : hovered ? 0.7 : 0.5}
-            />
-          );
-        })}
-        {nodes.map((n) => {
-          const r = radiusOf(n);
-          const dim = hovered && !neighborsRef.current.has(n.id);
-          const isFolder = n.type === 'folder';
-          const isCurrent = n.id === current;
-          return (
-            <g
-              key={n.id}
-              transform={`translate(${n.x},${n.y})`}
-              style={{ cursor: 'pointer', opacity: dim ? 0.12 : 1, transition: 'opacity 150ms' }}
-              onPointerDown={(e) => onNodeDown(e, n)}
-              onPointerMove={onNodeMove}
-              onPointerUp={(e) => onNodeUp(e, n)}
-              onMouseEnter={() => onHover(n.id)}
-              onMouseLeave={() => onHover(null)}
-            >
-              {isCurrent && (
-                <circle r={r + 3} fill="none" stroke="#171717" strokeWidth={1.2} opacity={0.5} />
-              )}
-              <circle
-                r={r}
-                fill={isFolder ? '#171717' : '#ffffff'}
-                stroke={isFolder ? '#171717' : 'rgba(23,23,23,0.45)'}
+      {positioned && (
+        <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
+          {links.map((l, i) => {
+            const s = typeof l.source === 'object' ? l.source.id : l.source;
+            const t = typeof l.target === 'object' ? l.target.id : l.target;
+            const active = hovered && (neighborsRef.current.has(s) || neighborsRef.current.has(t));
+            const dim = hovered && !active;
+            return (
+              <line
+                key={`l-${i}`}
+                x1={l.source.x}
+                y1={l.source.y}
+                x2={l.target.x}
+                y2={l.target.y}
+                stroke={hovered ? '#171717' : 'rgba(23,23,23,0.25)'}
                 strokeWidth={1}
+                opacity={dim ? 0.05 : hovered ? 0.7 : 0.5}
               />
-              {(hovered === n.id || showLabels) && (
-                <text
-                  y={-r - 6}
-                  textAnchor="middle"
-                  fontSize={10}
-                  fill="#171717"
-                  stroke="#ffffff"
-                  strokeWidth={3}
-                  paintOrder="stroke"
-                  style={{ pointerEvents: 'none' }}
-                >
-                  {displayName(n.name)}
-                </text>
-              )}
-            </g>
-          );
-        })}
-      </g>
+            );
+          })}
+          {nodes.map((n) => {
+            const r = radiusOf(n);
+            const dim = hovered && !neighborsRef.current.has(n.id);
+            const isFolder = n.type === 'folder';
+            const isCurrent = n.id === current;
+            return (
+              <g
+                key={n.id}
+                transform={`translate(${n.x},${n.y})`}
+                style={{ cursor: 'pointer', opacity: dim ? 0.12 : 1, transition: 'opacity 150ms' }}
+                onPointerDown={(e) => onNodeDown(e, n)}
+                onPointerMove={onNodeMove}
+                onPointerUp={(e) => onNodeUp(e, n)}
+                onMouseEnter={() => onHover(n.id)}
+                onMouseLeave={() => onHover(null)}
+              >
+                {isCurrent && (
+                  <circle r={r + 3} fill="none" stroke="#171717" strokeWidth={1.2} opacity={0.5} />
+                )}
+                <circle
+                  r={r}
+                  fill={isFolder ? '#171717' : '#ffffff'}
+                  stroke={isFolder ? '#171717' : 'rgba(23,23,23,0.45)'}
+                  strokeWidth={1}
+                />
+                {(hovered === n.id || showLabels) && (
+                  <text
+                    y={-r - 6}
+                    textAnchor="middle"
+                    fontSize={10}
+                    fill="#171717"
+                    stroke="#ffffff"
+                    strokeWidth={3}
+                    paintOrder="stroke"
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    {displayName(n.name)}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </g>
+      )}
     </svg>
   );
 }

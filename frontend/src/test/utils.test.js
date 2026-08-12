@@ -30,14 +30,14 @@ describe('formatDate', () => {
     expect(formatDate(0)).toBe('-');
   });
 
-  test('formats a timestamp as YYYY-MM-DD HH:mm', () => {
+  test('formats a timestamp as YYYY-MM-DD', () => {
     const d = new Date(2026, 0, 5, 9, 7); // local time
-    expect(formatDate(d.getTime())).toBe('2026-01-05 09:07');
+    expect(formatDate(d.getTime())).toBe('2026-01-05');
   });
 
-  test('zero-pads month/day/hour/minute', () => {
+  test('zero-pads month/day', () => {
     const d = new Date(2026, 10, 2, 3, 4);
-    expect(formatDate(d.getTime())).toBe('2026-11-02 03:04');
+    expect(formatDate(d.getTime())).toBe('2026-11-02');
   });
 });
 

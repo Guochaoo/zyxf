@@ -9,6 +9,7 @@ import StaggeredMenu from './components/StaggeredMenu.jsx';
 import SearchBar from './components/SearchBar.jsx';
 import FolderTree from './components/FolderTree.jsx';
 import KnowledgeGraph from './components/KnowledgeGraph.jsx';
+import ChatComposer from './components/ChatComposer.jsx';
 import useMediaQuery from './hooks/useMediaQuery.js';
 
 export default function App() {
@@ -52,7 +53,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-theme min-h-full flex flex-col relative bg-white">
+    <div className="app-theme min-h-full flex flex-col relative bg-page">
       {/* Mobile-only brand row on browse pages (no topbar on any layout) */}
       {isBrowse && (
         <div className="flex h-14 items-center px-4 lg:hidden">
@@ -70,20 +71,20 @@ export default function App() {
           position:fixed to the viewport edges so they never move while the
           page scrolls (sticky rails drift at scroll extremes). */}
       {isBrowse && (
-        <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-10 lg:flex lg:w-[250px] lg:flex-col lg:gap-4 lg:overflow-hidden lg:bg-[#FAFAFA] lg:px-4 lg:pt-6">
+        <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-10 lg:flex lg:w-[250px] lg:flex-col lg:gap-4 lg:overflow-hidden lg:border-r lg:border-line lg:bg-[#ECECEE] lg:px-4 lg:pt-[11px]">
           {/* 34px-high row keeps the brand aligned with the middle toolbar (41px center). */}
           <div className="flex h-[34px] items-center">
             {brand}
           </div>
           <SearchBar />
           <FolderTree currentId={folderId} />
-          <footer className="shrink-0 pb-5 text-center text-[11px] leading-relaxed text-slate-400">
+          <footer className="shrink-0 -mt-2 pb-2 text-center text-[11px] leading-relaxed text-slate-400">
             陕ICP备2026017448号
           </footer>
         </div>
       )}
       <main
-        className={`min-w-0 overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6 ${
+        className={`min-w-0 overflow-x-hidden px-3 py-4 sm:px-4 sm:pt-[10.5px] sm:pb-6 ${
           isBrowse
             ? 'w-full lg:pl-[calc(250px+1rem)] lg:pr-[calc(300px+1rem)]'
             : 'mx-auto w-full max-w-7xl'
@@ -99,11 +100,17 @@ export default function App() {
         </Routes>
       </main>
       {/* Right column — the original StaggeredMenu toggle button stays
-          fixed at the top-right; the knowledge graph sits below it. */}
+          fixed at the top-right; the knowledge graph sits below it.
+          pt matches the file list card top in the middle column:
+          main sm:py-6 (24px) + toolbar (35px) + space-y-4 gap (16px),
+          so the graph's top border lines up with the list card. */}
       {isBrowse && isLg && (
-        <div className="fixed inset-y-0 right-0 z-10 hidden flex-col gap-4 overflow-hidden px-4 pt-16 lg:flex lg:w-[300px]">
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <KnowledgeGraph currentId={folderId} />
+        <div className="fixed inset-y-0 right-0 z-10 hidden flex-col gap-4 overflow-hidden pr-2 pt-[61.5px] lg:flex lg:w-[300px]">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
+            <div className="flex flex-1 flex-col gap-[15px]">
+              <KnowledgeGraph currentId={folderId} />
+              <ChatComposer />
+            </div>
           </div>
         </div>
       )}

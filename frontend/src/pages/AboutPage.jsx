@@ -22,20 +22,18 @@ export default function AboutPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <section className="rb-card rounded-lg bg-white p-6 sm:p-8">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-          <div className="max-w-3xl space-y-4">
-            <div className="inline-flex w-11 h-11 items-center justify-center rounded-lg bg-brand-600/10">
-              <GraduationCap className="w-6 h-6 text-brand-600" />
-            </div>
-            <div>
-              <h1 className="text-[28px] sm:text-[32px] font-semibold tracking-[-0.02em]">
-                仲英书院学业辅导中心
-              </h1>
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                仲英书院学业辅导中心面向书院同学开展学业支持工作，致力于把课程学习、同伴互助和资料共建连接起来，
-                为同学们提供更清晰、更可持续的学习帮助。
-              </p>
-            </div>
+        <div className="max-w-3xl space-y-4">
+          <div className="inline-flex w-11 h-11 items-center justify-center rounded-lg bg-brand-600/10">
+            <GraduationCap className="w-6 h-6 text-brand-600" />
+          </div>
+          <div>
+            <h1 className="text-[28px] sm:text-[32px] font-semibold tracking-[-0.02em]">
+              仲英书院学业辅导中心
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              仲英书院学业辅导中心面向书院同学开展学业支持工作，致力于把课程学习、同伴互助和资料共建连接起来，
+              为同学们提供更清晰、更可持续的学习帮助。
+            </p>
           </div>
         </div>
       </section>
