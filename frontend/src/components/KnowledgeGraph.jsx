@@ -61,10 +61,11 @@ function displayName(name) {
  * style: circular nodes sized by degree, hover highlights neighbors,
  * zoom reveals labels; pan/zoom/drag; full-library view in a modal.
  */
-export default function KnowledgeGraph({ currentId = 0, className = '' }) {
+export default function KnowledgeGraph({ currentId = 0, className = '', onFullChange }) {
   const navigate = useNavigate();
-  const cardRef = useRef(null);
-  const [full, setFull] = useState(false);
+  // Enlarged dialog mode: 'full' = whole library (globe), 'local' = current
+  // folder neighborhood zoomed (maximize). null = dialog closed.
+  const [dialog, setDialog] = useState(null);
   const [tree, setTree] = useState(null);
   const [rootFiles, setRootFiles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -117,19 +118,14 @@ export default function KnowledgeGraph({ currentId = 0, className = '' }) {
 
   const empty = !loading && fullNodes.length <= 1;
 
-  const toggleFullscreen = () => {
-    const el = cardRef.current;
-    if (!el) return;
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-    } else if (el.requestFullscreen) {
-      el.requestFullscreen();
-    }
-  };
+  // Let the parent (App) know when the enlarged dialog opens/closes so it can
+  // hide the floating menu button while the dialog is up.
+  useEffect(() => {
+    onFullChange?.(dialog !== null);
+  }, [dialog, onFullChange]);
 
   return (
     <div
-      ref={cardRef}
       className={`kg-card relative bg-white rounded-[14px] border border-black/10 overflow-hidden ${className}`.trim()}
     >
       {/* Floating actions, overlaid on the graph */}
@@ -137,7 +133,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '' }) {
         <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
           <button
             type="button"
-            onClick={() => setFull(true)}
+            onClick={() => setDialog('full')}
             title="查看全库图谱"
             className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-white text-slate-500 shadow-[rgba(23,23,23,0.12)_0_0_0_1px,rgba(23,23,23,0.06)_0_1px_2px] transition-colors hover:bg-black/5 hover:text-black"
           >
@@ -145,8 +141,8 @@ export default function KnowledgeGraph({ currentId = 0, className = '' }) {
           </button>
           <button
             type="button"
-            onClick={toggleFullscreen}
-            title="全屏"
+            onClick={() => setDialog('local')}
+            title="放大当前图谱"
             className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-white text-slate-500 shadow-[rgba(23,23,23,0.12)_0_0_0_1px,rgba(23,23,23,0.06)_0_1px_2px] transition-colors hover:bg-black/5 hover:text-black"
           >
             <Maximize className="h-4 w-4" />
@@ -172,29 +168,26 @@ export default function KnowledgeGraph({ currentId = 0, className = '' }) {
         />
       )}
 
-      {full && !empty && (
+      {dialog && !empty && (
         <div
-          className="fixed inset-0 z-[150] flex flex-col bg-white"
-          onClick={() => setFull(false)}
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 p-6 sm:p-10"
+          onClick={() => setDialog(null)}
         >
-          <div className="flex h-14 shrink-0 items-center justify-between px-5">
-            <div>
-              <h2 className="text-[15px] font-medium text-slate-900">知识库 · 全库图谱</h2>
-              <p className="mt-0.5 text-[12px] text-slate-500">拖拽节点 · 滚轮缩放 · 点击进入</p>
-            </div>
+          <div
+            className="relative h-full max-h-[85vh] w-full max-w-[1200px] overflow-hidden rounded-[14px] border border-black/10 bg-white shadow-[rgba(0,0,0,0.12)_0_16px_48px]"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               type="button"
-              onClick={() => setFull(false)}
+              onClick={() => setDialog(null)}
               aria-label="关闭"
-              className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-black/5 hover:text-black"
+              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-md bg-white text-slate-500 shadow-[rgba(23,23,23,0.12)_0_0_0_1px,rgba(23,23,23,0.06)_0_1px_2px] transition-colors hover:bg-black/5 hover:text-black"
             >
               <X className="h-5 w-5" />
             </button>
-          </div>
-          <div className="min-h-0 flex-1 p-4" onClick={(e) => e.stopPropagation()}>
             <GraphCanvas
-              nodes={fullNodes}
-              links={fullLinks}
+              nodes={dialog === 'local' ? localNodes : fullNodes}
+              links={dialog === 'local' ? localLinks : fullLinks}
               currentId={currentId}
               onNavigate={onNavigate}
               height="100%"

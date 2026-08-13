@@ -420,19 +420,6 @@ input:-webkit-autofill:active {
   transition: background-color 9999s ease-in-out 0s !important;
 }
 
-/* Knowledge graph card in fullscreen (DESIGN.md §4) — fills the viewport */
-.kg-card:fullscreen {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #ffffff;
-  border-radius: 0;
-}
-
-.kg-card:fullscreen svg {
-  height: 100% !important;
-}
-
 /* Fade the graph edges into the card background on all four sides so nodes
    dissolve softly instead of clipping hard at the border. Two crossing
    linear gradients + intersect composite = fade on every edge. */

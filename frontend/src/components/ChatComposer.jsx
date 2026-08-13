@@ -31,7 +31,7 @@ function Section({ label, sub, time, body, resolving }) {
 export default function ChatComposer() {
   const [phase, setPhase] = useState('done');
   const [draft, setDraft] = useState('');
-  const [submitted, setSubmitted] = useState('Compare mint chip to last summer');
+  const [submitted, setSubmitted] = useState('有哪些学习资料？');
   const [tab, setTab] = useState('Flavors');
   const inputRef = useRef(null);
 
@@ -111,18 +111,18 @@ export default function ChatComposer() {
 
         {phase === 'reply1' || phase === 'reply2' || phase === 'done' ? (
           <Section
-            label="Sales History"
-            sub="Flavor Data"
-            time="4s"
-            body="Pulled 3 summers of mint chip sales for comparison."
+            label="资料查询"
+            sub="开发中"
+            time="—"
+            body="聊天查询功能正在开发中"
           />
         ) : null}
         {phase === 'reply2' || phase === 'done' ? (
           <Section
-            label="Comparison"
-            sub="Trend Detection"
-            time="2s"
-            body="Mint chip is up 12% with stronger weekend peaks."
+            label="敬请期待"
+            sub="开发中"
+            time="—"
+            body="聊天查询功能正在开发中"
             resolving={phase === 'reply2'}
           />
         ) : null}
@@ -133,7 +133,7 @@ export default function ChatComposer() {
         <div
           role="presentation"
           onClick={() => inputRef.current?.focus()}
-          className="flex cursor-text flex-col gap-2 rounded-control border border-line bg-field p-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.035)] transition-[border-color,box-shadow] duration-150 focus-within:border-line-strong focus-within:shadow-[0_1px_2px_rgba(0,0,0,0.025)]"
+          className="flex cursor-text flex-col gap-2 rounded-[10px] border border-line bg-field p-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.035)] transition-[border-color,box-shadow] duration-150 focus-within:border-line-strong focus-within:shadow-[0_1px_2px_rgba(0,0,0,0.025)]"
         >
           <input
             ref={inputRef}
@@ -142,7 +142,7 @@ export default function ChatComposer() {
             onKeyDown={(event) => {
               if (event.key === 'Enter') send();
             }}
-            placeholder="Prompt or tag a flavor with @"
+            placeholder="输入问题…"
             aria-label="Chat prompt"
             className="chat-prompt min-h-4.5 bg-transparent text-[13px] leading-[1.4] text-ink outline-none placeholder:text-ink-3"
           />

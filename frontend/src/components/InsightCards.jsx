@@ -334,7 +334,7 @@ export function AllocationCard({ title, segments, extra }) {
           </button>
         ))}
       </div>
-      <div className="mt-2 flex items-center gap-1.5">
+      <div className="mt-2 grid grid-cols-4 items-center gap-1.5">
         {segments.map((s) => (
           <button
             key={s.name}
