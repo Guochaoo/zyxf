@@ -14,6 +14,24 @@ const SORT_FIELDS = {
   manual: 'sort_order',
 };
 
+// SQLite has no pinyin collation, so name sorting falls back to raw Unicode
+// code points (上>传>体…). Re-sort by pinyin in JS when the user picks 名称,
+// matching how Chinese apps order contacts. Tiebreak by id asc (like the SQL
+// fallback) regardless of direction.
+const nameCollator = new Intl.Collator('zh', { sensitivity: 'base' });
+const startsWithCjk = (s) => /^[\u3400-\u9fff]/.test(s || '');
+const sortByName = (rows, desc) =>
+  rows.sort((a, b) => {
+    // Non-CJK names (English / digits / symbols) come before any pinyin name,
+    // independent of direction.
+    const cjkA = startsWithCjk(a.name);
+    const cjkB = startsWithCjk(b.name);
+    if (cjkA !== cjkB) return cjkA ? 1 : -1;
+    const c = nameCollator.compare(a.name, b.name);
+    if (c !== 0) return desc ? -c : c;
+    return a.id - b.id;
+  });
+
 function getFolder(id) {
   if (id === 0 || id === '0' || id == null) return { id: 0, name: '首页', parent_id: null };
   return db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
@@ -177,7 +195,11 @@ router.get('/:id/contents', (req, res) => {
   const folderClause = id === 0 ? 'folder_id IS NULL' : 'folder_id = ?';
   const args = id === 0 ? [] : [id];
 
-  const folderSortKey = sort === SORT_FIELDS.size ? SORT_FIELDS.name : sort; // size doesn't apply to folders
+  const isNameSort = sort === SORT_FIELDS.name;
+  const isSizeSort = sort === SORT_FIELDS.size;
+  // Folders have no size column in SQL; fetch them by name, then re-sort by the
+  // recursive size computed below.
+  const folderSortKey = isSizeSort ? SORT_FIELDS.name : sort;
   // Manual mode: also include id as tiebreaker; non-manual: secondary by name then id
   const tieBreak =
     sort === SORT_FIELDS.manual ? `, id ${order}` : `, name COLLATE NOCASE ASC, id ASC`;
@@ -187,10 +209,20 @@ router.get('/:id/contents', (req, res) => {
     )
     .all(...args)
     .map((f) => ({ ...f, type: 'folder' }));
+  if (isNameSort) sortByName(folders, order === 'DESC');
 
   // Attach recursive total size (sum of all descendant files) to each folder.
   const sizeMap = computeFolderSizes(folders.map((f) => f.id));
   for (const f of folders) f.size = sizeMap[f.id] || 0;
+
+  // Re-sort by the computed recursive size so folders interleave correctly.
+  if (isSizeSort) {
+    folders.sort((a, b) => {
+      const c = a.size - b.size;
+      if (c !== 0) return order === 'DESC' ? -c : c;
+      return a.name.localeCompare(b.name, 'zh');
+    });
+  }
 
   // oss_key is internal storage layout — not exposed to (anonymous) clients.
   const files = db
@@ -199,6 +231,7 @@ router.get('/:id/contents', (req, res) => {
     )
     .all(...args)
     .map((f) => ({ ...f, type: 'file' }));
+  if (isNameSort) sortByName(files, order === 'DESC');
 
   res.json({
     folder: { id: folder.id, name: folder.name, parent_id: folder.parent_id ?? null },

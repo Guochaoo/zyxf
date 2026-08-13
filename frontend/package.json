@@ -13,6 +13,7 @@
     "@react-three/fiber": "^8.18.0",
     "axios": "^1.19.0",
     "d3-force": "^3.0.0",
+    "framer-motion": "^13.1.0",
     "gsap": "^3.15.0",
     "liveline": "^0.0.7",
     "lucide-react": "^0.453.0",

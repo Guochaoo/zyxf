@@ -1,4 +1,4 @@
-﻿import { useEffect } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Route, Routes, Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import BrowsePage from './pages/BrowsePage.jsx';
@@ -16,6 +16,8 @@ export default function App() {
   const { user, logout, ready } = useAuth();
   const location = useLocation();
   const isLg = useMediaQuery('(min-width: 1024px)');
+  // Hide the floating menu button while the knowledge-graph dialog is open.
+  const [graphFull, setGraphFull] = useState(false);
 
   // Docs layout: brand + search + folder tree live in the left rail, which
   // appears on browse routes only. Other pages are standalone.
@@ -87,7 +89,9 @@ export default function App() {
         className={`min-w-0 overflow-x-hidden px-3 py-4 sm:px-4 sm:pt-[10.5px] sm:pb-6 ${
           isBrowse
             ? 'w-full lg:pl-[calc(250px+1rem)] lg:pr-[calc(300px+1rem)]'
-            : 'mx-auto w-full max-w-7xl'
+            : location.pathname === '/dashboard' || location.pathname === '/about'
+              ? 'mx-auto w-full' // dashboard & about fill the viewport width
+              : 'mx-auto w-full max-w-7xl'
         }`}
       >
         <Routes>
@@ -108,30 +112,32 @@ export default function App() {
         <div className="fixed inset-y-0 right-0 z-10 hidden flex-col gap-4 overflow-hidden pr-2 pt-[61.5px] lg:flex lg:w-[300px]">
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
             <div className="flex flex-1 flex-col gap-[15px]">
-              <KnowledgeGraph currentId={folderId} />
+              <KnowledgeGraph currentId={folderId} onFullChange={setGraphFull} />
               <ChatComposer />
             </div>
           </div>
         </div>
       )}
 
-      <StaggeredMenu
-        position="right"
-        items={menuItems}
-        socialItems={[
-          { label: 'Bilibili', link: 'https://space.bilibili.com/549612395' },
-          { label: 'Email', link: 'mailto:xjtuzyxf@163.com' },
-          { label: 'Wechat', link: 'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU4NTQ4NTg0Mg==&scene=110#wechat_redirect' },
-        ]}
-        displaySocials
-        displayItemNumbering={false}
-        menuButtonColor="#171717"
-        openMenuButtonColor="#171717"
-        changeMenuColorOnOpen
-        accentColor="#171717"
-        colors={['#171717', '#404040', '#666666']}
-        isFixed
-      />
+      {!graphFull && (
+        <StaggeredMenu
+          position="right"
+          items={menuItems}
+          socialItems={[
+            { label: 'Bilibili', link: 'https://space.bilibili.com/549612395' },
+            { label: 'Email', link: 'mailto:xjtuzyxf@163.com' },
+            { label: 'Wechat', link: 'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU4NTQ4NTg0Mg==&scene=110#wechat_redirect' },
+          ]}
+          displaySocials
+          displayItemNumbering={false}
+          menuButtonColor="#171717"
+          openMenuButtonColor="#171717"
+          changeMenuColorOnOpen
+          accentColor="#5227FF"
+          colors={['#B497CF', '#5227FF']}
+          isFixed
+        />
+      )}
     </div>
   );
 }

@@ -5,10 +5,8 @@ import {
   BsCloudArrowUp,
   BsFolderPlus,
   BsGripVertical,
-  BsSortAlphaDown,
-  BsSortAlphaDownAlt,
 } from 'react-icons/bs';
-import { DownloadIcon, PenLineIcon, RotateCwIcon, TrashIcon, ArrowLeftIcon } from '../components/icons';
+import { DownloadIcon, PenLineIcon, RotateCwIcon, TrashIcon, ArrowLeftIcon, SortAZIcon, SortZAIcon, CalendarArrowDownIcon, CalendarArrowUpIcon, ArrowDown01Icon, ArrowDown10Icon } from '../components/icons';
 import {
   createFolder,
   deleteFile,
@@ -536,11 +534,17 @@ function SortControl({ sort, order, onChange }) {
               <span className="leading-none">{opt.label}</span>
               <span className="absolute right-2 top-1/2 flex w-3 -translate-y-1/2 items-center justify-center">
                 {opt.key !== 'manual' &&
-                  (order === 'asc' ? (
-                    <BsSortAlphaDown className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
-                  ) : (
-                    <BsSortAlphaDownAlt className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
-                  ))}
+                  (order === 'asc'
+                    ? opt.key === 'created_at'
+                      ? <CalendarArrowDownIcon className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
+                      : opt.key === 'size'
+                        ? <ArrowDown01Icon className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
+                        : <SortAZIcon className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
+                    : opt.key === 'created_at'
+                      ? <CalendarArrowUpIcon className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
+                      : opt.key === 'size'
+                        ? <ArrowDown10Icon className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
+                        : <SortZAIcon className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />)}
               </span>
             </button>
           );
@@ -582,7 +586,7 @@ function ItemListWithRename({
           <span>名称</span>
         </span>
         <span className="w-24 text-right">大小</span>
-        <span className="w-40 text-right">修改时间</span>
+        <span className="w-28 text-right">修改时间</span>
         <span className={`${actionWidthClass} text-right`}>操作</span>
       </li>
       {data.folders.map((f) => (
@@ -725,7 +729,7 @@ function Row({
       <span className="hidden sm:inline w-24 text-right text-xs text-slate-400">
         {formatSize(item.size)}
       </span>
-      <span className="hidden sm:inline w-40 text-right text-xs text-slate-400">
+      <span className="hidden sm:inline w-28 text-right text-xs text-slate-400">
         {formatDate(item.created_at)}
       </span>
       <span
