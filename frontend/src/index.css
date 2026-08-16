@@ -95,14 +95,6 @@ textarea:focus-visible {
 }
 
 /* ---- DESIGN.md §2: shadow-as-border helpers ---- */
-.rb-shadow-border {
-  box-shadow: rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;
-}
-
-.rb-ringlight {
-  box-shadow: rgb(235, 235, 235) 0px 0px 0px 1px;
-}
-
 .rb-card {
   box-shadow:
     rgba(0, 0, 0, 0.08) 0px 0px 0px 1px,
@@ -292,8 +284,7 @@ textarea:focus-visible {
   color: inherit;
 }
 
-.app-theme .hover\:bg-brand-700:hover,
-.app-theme .hover\:bg-brand-600:hover {
+.app-theme .hover\:bg-brand-700:hover {
   background: #000000 !important;
   color: #ffffff !important;
 }
@@ -349,24 +340,8 @@ textarea:focus-visible {
 }
 
 /* ---- Misc neutral helpers ---- */
-.app-theme .bg-white\/10,
-.app-theme .bg-white\/5 {
-  background: rgba(23, 23, 23, 0.03) !important;
-}
-
-.app-theme .border-white\/10,
-.app-theme .border-white\/15,
-.app-theme .border-white\/20 {
-  border-color: rgba(23, 23, 23, 0.08) !important;
-}
-
 .app-theme .divide-white\/10 > :not([hidden]) ~ :not([hidden]) {
   border-color: rgba(23, 23, 23, 0.08) !important;
-}
-
-.app-theme .hover\:bg-white\/10:hover,
-.app-theme .hover\:bg-white\/15:hover {
-  background: rgba(23, 23, 23, 0.05) !important;
 }
 
 .app-theme .rb-table-heading,

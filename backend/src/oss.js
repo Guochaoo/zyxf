@@ -26,17 +26,6 @@ export function ossClient() {
   return _client;
 }
 
-let _immClient = null;
-/**
- * Get an OSS client configured for IMM (WebOffice) preview.
- * Requires V4 signature and custom domain (cname) support.
- */
-function immClient() {
-  if (_immClient) return _immClient;
-  _immClient = new OSS({ ...baseOssConfig(), endpoint: envOrThrow('OSS_ENDPOINT'), cname: true });
-  return _immClient;
-}
-
 // ---- cached module-level constants (env vars are static at runtime) ----
 
 const _ossPublicHost = (() => {
@@ -106,52 +95,18 @@ export function signedGetUrl(key, expiresSec = 3600, opts = {}) {
   return url.replace(/^http:/, 'https:');
 }
 
-// ---- IMM preview constants ----
-
-// Files are uploaded directly to OSS (browser PostObject), so from IMM's
-// perspective they are *externally uploaded* and MUST be previewed with
-// ExternalUploaded=true, otherwise IMM rejects them with StatusConflict
-// (error code 0056-00000001).
-const DEFAULT_IMM_STYLE = process.env.IMM_STYLE
-  ? `style/${process.env.IMM_STYLE}`
-  : 'doc/preview,export_0,print_0,ExternalUploaded=true';
+// ---- IMM preview leftovers ----
 
 /**
  * True for legacy `.preview/` shadow copies (from the earlier preview-copy
  * workaround) — internal objects, never library content. Kept so sync/list
  * still skip them until the leftovers are cleaned up from the bucket.
  */
-export function isPreviewCopyKey(ossKey) {
+function isPreviewCopyKey(ossKey) {
   const prefix = ossPrefix();
   return prefix
     ? String(ossKey).startsWith(`${prefix}/.preview/`)
     : String(ossKey).startsWith('.preview/');
-}
-
-/**
- * Generate a signed GET URL for IMM (WebOffice) document preview.
- *
- * IMPORTANT: IMM preview requires a custom domain bound to the OSS bucket.
- * Set OSS_ENDPOINT in .env to your custom domain, e.g. https://zyxf.top.
- *
- * @param key        OSS object key
- * @param expiresSec URL validity in seconds
- * @param style      Override IMM processing style
- * @param externalUploaded  true (default) for browser-uploaded objects (adds
- *                          ExternalUploaded=true); false for internal objects
- *                          like preview copies (strips the flag)
- */
-export function immPreviewUrl(key, expiresSec = 1800, style = null, { externalUploaded = true } = {}) {
-  let processStyle = style || DEFAULT_IMM_STYLE;
-  const hasFlag = /,\s*ExternalUploaded\s*=\s*true/gi.test(processStyle);
-  if (externalUploaded && !hasFlag) {
-    processStyle = `${processStyle},ExternalUploaded=true`;
-  } else if (!externalUploaded && hasFlag) {
-    processStyle = processStyle.replace(/,\s*ExternalUploaded\s*=\s*true/gi, '');
-  }
-  const client = immClient();
-  const url = client.signatureUrl(key, { expires: expiresSec, process: processStyle });
-  return url.replace(/^http:/, 'https:');
 }
 
 export async function deleteOssObject(key) {

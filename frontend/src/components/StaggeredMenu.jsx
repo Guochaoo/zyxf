@@ -62,7 +62,6 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   const plusVRef = useRef(null);
   const iconRef = useRef(null);
   const textInnerRef = useRef(null);
-  const textWrapRef = useRef(null);
   const [textLines, setTextLines] = useState(['Menu', 'Close']);
 
   const openTlRef = useRef(null);
@@ -401,7 +400,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
             onClick={toggleMenu}
             type="button"
           >
-            <span ref={textWrapRef} className="sm-toggle-textWrap" aria-hidden="true">
+            <span className="sm-toggle-textWrap" aria-hidden="true">
               <span ref={textInnerRef} className="sm-toggle-textInner">
                 {textLines.map((l, i) => (
                   <span className="sm-toggle-line" key={i}>

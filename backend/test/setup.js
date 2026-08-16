@@ -10,7 +10,7 @@ import * as realOss from '../src/oss.js';
 export const ossObjectStore = { keys: [] };
 
 // Stub the network calls to Aliyun OSS while keeping the pure signature
-// helpers (buildPostPolicy, signedGetUrl, immPreviewUrl) intact.
+// helpers (buildPostPolicy, signedGetUrl) intact.
 mock.module('../src/oss.js', {
   exports: {
     ...realOss,

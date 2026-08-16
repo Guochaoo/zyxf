@@ -1,5 +1,5 @@
 import { Liveline } from 'liveline';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 /* ─────────────────────────────────────────────────────────
  * INSIGHT CARDS
@@ -13,7 +13,7 @@ const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
 
 // v ?? 0: the tooltip rows evaluate eagerly even when not hovering, so the
 // formatter must tolerate undefined points.
-export const formatPercent = (v) => `${v > 0 ? '+' : ''}${(v ?? 0).toFixed(2)}%`;
+const formatPercent = (v) => `${v > 0 ? '+' : ''}${(v ?? 0).toFixed(2)}%`;
 
 /* solid circle + centered white content (icon or letter) */
 export function IconBadge({ className = '', color, children }) {
@@ -28,25 +28,10 @@ export function IconBadge({ className = '', color, children }) {
 }
 
 /* daily-series x-axis labels: local M/D instead of liveline's HH:MM:SS */
-export const formatDay = (t) => {
+const formatDay = (t) => {
   const d = new Date(t * 1e3);
   return `${d.getMonth() + 1}/${d.getDate()}`;
 };
-
-function useDarkMode() {
-  const [dark, setDark] = useState(false);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const update = () => setDark(root.classList.contains('dark'));
-    update();
-    const observer = new MutationObserver(update);
-    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
-
-  return dark;
-}
 
 function SubLabel({ children, tone }) {
   return (
@@ -59,7 +44,7 @@ function SubLabel({ children, tone }) {
 /* liveline lays points out by time on a now-anchored axis (not uniformly by
    index), so hover sync uses its onHover callback; only the nearest point by
    time is needed for the tooltip content. */
-export function nearestIndexByTime(points, time) {
+function nearestIndexByTime(points, time) {
   let idx = 0;
   let best = Infinity;
   for (let i = 0; i < points.length; i++) {
@@ -74,7 +59,7 @@ export function nearestIndexByTime(points, time) {
 
 /* liveline reports hover every animation frame; keep state identity stable
    when the pointer barely moved so React can bail out of re-renders. */
-export function onLivelineHover(setHover) {
+function onLivelineHover(setHover) {
   return (p) => {
     if (!p) {
       setHover(null);
@@ -163,7 +148,7 @@ export function ChartTooltip({ time, rows }) {
 /* cursor line + tooltip anchor pinned to a liveline-reported pixel x. The
    cursor stays on the exact x; the anchor clamps inward so the ~132px-wide
    tooltip never overflows the stage at the edges. */
-export function HoverMarker({ x, children }) {
+function HoverMarker({ x, children }) {
   if (x == null) return null;
   return (
     <>
@@ -184,7 +169,6 @@ export function HoverMarker({ x, children }) {
    The chart shows only the selected metric; keying Liveline by the metric
    remounts it on toggle so the entrance reveal animation replays. */
 export function AnomalyCard({ title, metrics, className = '' }) {
-  const dark = useDarkMode();
   const [activeIdx, setActiveIdx] = useState(0);
   const [hover, setHover] = useState(null);
   const m = metrics[activeIdx];
@@ -243,7 +227,7 @@ export function AnomalyCard({ title, metrics, className = '' }) {
             key={m.key}
             data={data}
             value={value}
-            theme={dark ? 'dark' : 'light'}
+            theme="light"
             color="#ee5c61"
             grid={false}
             scrub

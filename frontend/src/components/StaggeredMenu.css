@@ -312,14 +312,6 @@
   color: var(--sm-accent, #5227ff) !important;
 }
 
-.sm-panel-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #fff;
-  text-transform: uppercase;
-}
-
 .sm-panel-list {
   list-style: none;
   margin: 0;
