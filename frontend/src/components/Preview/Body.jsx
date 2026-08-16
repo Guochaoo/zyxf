@@ -1,5 +1,5 @@
-import { DownloadIcon } from '../icons';
 import OfficeViewer from './OfficeViewer.jsx';
+import PreviewUnavailable from './PreviewUnavailable.jsx';
 import UnknownViewer from './UnknownViewer.jsx';
 
 /**
@@ -16,20 +16,7 @@ export default function PreviewBody({ kind, signedUrl, wbToken, fileId, name, ex
 
   // Layer 2 — preview service unavailable: tell the user, offer download.
   if (kind === 'office') {
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-3 p-8">
-        <div className="text-3xl">⚠️</div>
-        <div className="text-sm text-center text-slate-600">预览服务出错，暂时无法在线预览</div>
-        <div className="text-xs text-slate-400 text-center">请点击下方按钮直接下载文件查看</div>
-        <button
-          onClick={onDownload}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors"
-        >
-          <DownloadIcon className="w-4 h-4" />
-          下载文件
-        </button>
-      </div>
-    );
+    return <PreviewUnavailable onDownload={onDownload} />;
   }
 
   // Never-previewable types (archives etc.) — plain download prompt.

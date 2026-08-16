@@ -5,10 +5,8 @@ import {
   BsCloudArrowUp,
   BsFolderPlus,
   BsGripVertical,
-  BsSortAlphaDown,
-  BsSortAlphaDownAlt,
 } from 'react-icons/bs';
-import { DownloadIcon, PenLineIcon, RotateCwIcon, TrashIcon, ArrowLeftIcon } from '../components/icons';
+import { DownloadIcon, PenLineIcon, RotateCwIcon, TrashIcon, ArrowLeftIcon, SortAZIcon, SortZAIcon, CalendarArrowDownIcon, CalendarArrowUpIcon, ArrowDown01Icon, ArrowDown10Icon } from '../components/icons';
 import {
   createFolder,
   deleteFile,
@@ -36,6 +34,13 @@ const SORT_OPTIONS = [
   { key: 'created_at', label: '时间' },
   { key: 'size', label: '大小' },
 ];
+
+// Direction arrow per sort key ('manual' has none).
+const SORT_ARROWS = {
+  name: { asc: SortAZIcon, desc: SortZAIcon },
+  created_at: { asc: CalendarArrowDownIcon, desc: CalendarArrowUpIcon },
+  size: { asc: ArrowDown01Icon, desc: ArrowDown10Icon },
+};
 
 // Tell the sidebar FolderTree that folder structure changed (create/rename/
 // move/delete/reorder) so it refetches.
@@ -353,9 +358,7 @@ export default function BrowsePage() {
     <div className="space-y-4">
       {/* Toolbar — sits above the file list */}
       <div className="flex w-full flex-wrap items-center justify-end gap-2">
-        <div>
-          <SortControl sort={sort} order={order} onChange={toggleSort} />
-        </div>
+        <SortControl sort={sort} order={order} onChange={toggleSort} />
         <button
           onClick={onSyncRefresh}
           className="p-0"
@@ -425,35 +428,33 @@ export default function BrowsePage() {
 
       {/* Body: file list takes the full middle column width (the graph lives
           in the App right column on xl+, inline below the list otherwise). */}
-      <div>
-        <div className="bg-white rb-card rounded-lg overflow-hidden">
-          {loading ? (
-            <div className="py-16 flex items-center justify-center text-slate-400">
-              <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-400" /> 加载中…
-            </div>
-          ) : err ? (
-            <div className="py-16 text-center text-red-500">{err}</div>
-          ) : (
-            <ItemListWithRename
-              data={data}
-              isAdmin={isAdmin}
-              dragging={dragging}
-              dropZone={dropZone}
-              onEnterFolder={(f) => navigate(`/folder/${f.id}`)}
-              onPreviewFile={setPreviewing}
-              onDeleteFolder={onDeleteFolder}
-              onDeleteFile={onDeleteFile}
-              onRenameFolder={(f) => openRenameDialog({ ...f, type: 'folder' })}
-              onRenameFile={(f) => openRenameDialog({ ...f, type: 'file' })}
-              onDownloadFile={onDownloadFile}
-              onDragStart={onDragStart}
-              onDragEnd={onDragEnd}
-              onRowDragOver={onRowDragOver}
-              onRowDragLeave={onRowDragLeave}
-              onRowDrop={onRowDrop}
-            />
-          )}
-        </div>
+      <div className="bg-white rb-card rounded-[14px] overflow-hidden">
+        {loading ? (
+          <div className="py-16 flex items-center justify-center text-slate-400">
+            <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-400" /> 加载中…
+          </div>
+        ) : err ? (
+          <div className="py-16 text-center text-red-500">{err}</div>
+        ) : (
+          <ItemListWithRename
+            data={data}
+            isAdmin={isAdmin}
+            dragging={dragging}
+            dropZone={dropZone}
+            onEnterFolder={(f) => navigate(`/folder/${f.id}`)}
+            onPreviewFile={setPreviewing}
+            onDeleteFolder={onDeleteFolder}
+            onDeleteFile={onDeleteFile}
+            onRenameFolder={(f) => openRenameDialog({ ...f, type: 'folder' })}
+            onRenameFile={(f) => openRenameDialog({ ...f, type: 'file' })}
+            onDownloadFile={onDownloadFile}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onRowDragOver={onRowDragOver}
+            onRowDragLeave={onRowDragLeave}
+            onRowDrop={onRowDrop}
+          />
+        )}
       </div>
 
       {renameTarget && (
@@ -514,7 +515,7 @@ function SortControl({ sort, order, onChange }) {
     <div className="rb-toolbar-btn max-w-full !px-0">
       <div ref={listRef} className="sort-scroll relative flex max-w-full items-center overflow-x-auto text-xs">
         <span
-          className="pointer-events-none absolute inset-y-0 rounded-[6px] bg-white shadow-[inset_0_0_0_1px_rgba(23,23,23,0.1)]"
+          className="pointer-events-none absolute inset-y-0 rounded-[14px] bg-white shadow-[inset_0_0_0_1px_rgba(23,23,23,0.1)]"
           style={{
             width: indicator.width,
             transform: `translateX(${indicator.left}px)`,
@@ -525,7 +526,7 @@ function SortControl({ sort, order, onChange }) {
         />
         {SORT_OPTIONS.map((opt) => {
           const active = sort === opt.key;
-          const showArrow = active && opt.key !== 'manual';
+          const ArrowIcon = SORT_ARROWS[opt.key]?.[order];
           return (
             <button
               ref={(node) => {
@@ -539,12 +540,13 @@ function SortControl({ sort, order, onChange }) {
             >
               <span className="leading-none">{opt.label}</span>
               <span className="absolute right-2 top-1/2 flex w-3 -translate-y-1/2 items-center justify-center">
-                {opt.key !== 'manual' &&
-                  (order === 'asc' ? (
-                    <BsSortAlphaDown className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
-                  ) : (
-                    <BsSortAlphaDownAlt className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
-                  ))}
+                {ArrowIcon && (
+                  <ArrowIcon
+                    className={`w-3.5 h-3.5 transition-opacity ${
+                      active && opt.key !== 'manual' ? 'opacity-100' : 'opacity-0'
+                    }`}
+                  />
+                )}
               </span>
             </button>
           );
@@ -579,10 +581,14 @@ function ItemListWithRename({
   const actionWidthClass = isAdmin ? 'w-28' : 'w-16';
   return (
     <ul className="divide-y divide-white/10">
-      <li className="rb-table-heading hidden sm:flex items-center px-4 py-2 text-xs text-slate-500 bg-slate-50">
-        <span className="flex-1">名称</span>
+      <li className="rb-table-heading hidden sm:flex items-center gap-2 px-4 py-2 text-xs text-slate-500 bg-[#EFEFEF]">
+        {isAdmin && <span className="w-4 h-4 -ml-1 sm:mr-1 sm:-ml-2 shrink-0" />}
+        <span className="flex-1 flex items-center gap-2 min-w-0">
+          <span className="w-5 h-5 shrink-0" />
+          <span>名称</span>
+        </span>
         <span className="w-24 text-right">大小</span>
-        <span className="w-40 text-right">修改时间</span>
+        <span className="w-28 text-right">修改时间</span>
         <span className={`${actionWidthClass} text-right`}>操作</span>
       </li>
       {data.folders.map((f) => (
@@ -602,22 +608,12 @@ function ItemListWithRename({
           actions={
             isAdmin && (
               <>
-                <button
-                  type="button"
-                  onClick={() => onRenameFolder(f)}
-                  className="p-1 rounded hover:bg-black/5"
-                  title="重命名"
-                >
+                <RowAction title="重命名" onClick={() => onRenameFolder(f)}>
                   <PenLineIcon className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onDeleteFolder(f)}
-                  className="p-1 rounded hover:bg-black/5"
-                  title="删除"
-                >
+                </RowAction>
+                <RowAction title="删除" onClick={() => onDeleteFolder(f)}>
                   <TrashIcon className="w-4 h-4" />
-                </button>
+                </RowAction>
               </>
             )
           }
@@ -639,32 +635,17 @@ function ItemListWithRename({
           onClick={() => onPreviewFile(f)}
           actions={
             <>
-              <button
-                type="button"
-                onClick={() => onDownloadFile(f)}
-                className="p-1 rounded hover:bg-black/5"
-                title="下载"
-              >
+              <RowAction title="下载" onClick={() => onDownloadFile(f)}>
                 <DownloadIcon className="w-4 h-4" />
-              </button>
+              </RowAction>
               {isAdmin && (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => onRenameFile(f)}
-                    className="p-1 rounded hover:bg-black/5"
-                    title="重命名"
-                  >
+                  <RowAction title="重命名" onClick={() => onRenameFile(f)}>
                     <PenLineIcon className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteFile(f)}
-                    className="p-1 rounded hover:bg-black/5"
-                    title="删除"
-                  >
+                  </RowAction>
+                  <RowAction title="删除" onClick={() => onDeleteFile(f)}>
                     <TrashIcon className="w-4 h-4" />
-                  </button>
+                  </RowAction>
                 </>
               )}
             </>
@@ -672,6 +653,14 @@ function ItemListWithRename({
         />
       ))}
     </ul>
+  );
+}
+
+function RowAction({ title, onClick, children }) {
+  return (
+    <button type="button" onClick={onClick} title={title} className="p-1 rounded hover:bg-black/5">
+      {children}
+    </button>
   );
 }
 
@@ -723,9 +712,9 @@ function Row({
         <span className="min-w-0 truncate">{item.name}</span>
       </span>
       <span className="hidden sm:inline w-24 text-right text-xs text-slate-400">
-        {item.type === 'file' ? formatSize(item.size) : '-'}
+        {formatSize(item.size)}
       </span>
-      <span className="hidden sm:inline w-40 text-right text-xs text-slate-400">
+      <span className="hidden sm:inline w-28 text-right text-xs text-slate-400">
         {formatDate(item.created_at)}
       </span>
       <span

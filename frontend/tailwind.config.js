@@ -15,28 +15,50 @@ export default {
           400: '#808080', // gray-400 placeholder, disabled
           500: '#666666', // gray-500 tertiary text
           600: '#4D4D4D', // gray-600 secondary text
-          700: '#404040',
           800: '#262626',
           900: '#171717', // gray-900 primary text (Vercel Black)
         },
         brand: {
           // DESIGN.md §2 interaction palette (replaces legacy brand blue)
-          50: '#EBF5FF', // Badge Blue Bg (tinted blue surface)
-          100: '#EBF5FF', // tinted blue surface
-          200: '#B8D6F6', // light ring / hover fill
-          300: '#85B8EF',
-          400: '#4C9CE8',
           500: '#0A72EF', // Develop Blue
           600: '#0072F5', // Link Blue (primary interactive)
           700: '#0068D6', // Badge Blue Text
         },
+        // Insight card design system (liveline-style tokens, light theme)
+        page: 'var(--page)',
+        ink: 'var(--ink)',
+        'ink-2': 'var(--ink-2)',
+        'ink-3': 'var(--ink-3)',
+        surface: 'var(--surface)',
+        inset: 'var(--inset)',
+        field: 'var(--field)',
+        hover: 'var(--hover)',
+        line: 'var(--line)',
+        'line-strong': 'var(--line-strong)',
+        accent: 'var(--accent)',
+        orange: 'var(--orange)',
+        red: 'var(--red)',
+        green: 'var(--green)',
       },
       boxShadow: {
         // DESIGN.md §2 shadow system (shadow-as-border)
-        ring: 'rgba(0, 0, 0, 0.08) 0px 0px 0px 1px',
-        ringlight: 'rgb(235, 235, 235) 0px 0px 0px 1px',
         card: 'rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px',
-        'card-subtle': 'rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, #fafafa 0px 0px 0px 1px',
+        // Insight card design system — raised button
+        btn: 'rgba(23, 23, 23, 0.12) 0px 1px 2px, rgba(23, 23, 23, 0.06) 0px 0px 0px 1px',
+      },
+      borderRadius: {
+        card: '12px',
+        control: '10px',
+      },
+      transitionDuration: {
+        250: '250ms',
+        400: '400ms',
+      },
+      maxWidth: {
+        95: '23.75rem',
+      },
+      minHeight: {
+        4.5: '1.125rem',
       },
     },
   },

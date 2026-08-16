@@ -62,13 +62,20 @@ setInterval(() => {
 
 const router = Router();
 
+// 415 message shared by upload validation and rename validation.
+const rejectedExtMessage = (ext) => `不允许的文件类型: ${ext ? '.' + ext : '(无扩展名)'}`;
+
+// Strip control chars (esp. NUL): path.extname('a.exe NUL .txt')
+// yields '.txt', which would let a crafted name bypass the extension whitelist.
+// Used by BOTH upload validation and rename validation — keep them in sync.
+function sanitizeName(name) {
+  return String(name || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
+}
+
 // Shared validation for both upload steps: filename, parent folder, duplicate
 // name and extension whitelist. Returns { trimmed, pid, ext } or { error, status }.
 function validateUploadInput(name, folderId) {
-  // Strip control chars (esp. NUL) up front: path.extname('a.exe NUL .txt')
-  // yields '.txt', which would let a crafted name bypass the extension whitelist.
-  const sanitized = String(name || '').replace(/[\u0000-\u001f\u007f]/g, '');
-  const trimmed = sanitized.trim();
+  const trimmed = sanitizeName(name);
   if (!trimmed) return { error: '文件名不能为空' };
   const pid = parseOptionalFolderId(folderId);
   if (Number.isNaN(pid)) return { error: '无效的文件夹 ID' };
@@ -81,7 +88,7 @@ function validateUploadInput(name, folderId) {
   }
   const ext = normalizeExt(path.extname(trimmed));
   if (!isExtAllowed(ext)) {
-    return { error: `不允许的文件类型: ${ext ? '.' + ext : '(无扩展名)'}`, status: 415 };
+    return { error: rejectedExtMessage(ext), status: 415 };
   }
   return { trimmed, pid, ext };
 }
@@ -112,7 +119,7 @@ router.post('/upload-url', requireAdmin, (req, res) => {
 // Step 2: after the browser uploads to OSS, register metadata
 router.post('/', requireAdmin, (req, res) => {
   const { name, oss_key, size, mime_type, folder_id } = req.body || {};
-  if (!oss_key || !Number.isFinite(size)) {
+  if (!oss_key || !Number.isFinite(size) || size < 0) {
     return res.status(400).json({ error: '缺少必要参数（name/oss_key/size）' });
   }
   const v = validateUploadInput(name, folder_id);
@@ -234,12 +241,12 @@ router.patch('/:id', requireAdmin, async (req, res) => {
   const id = file.id;
 
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
-    const newName = String(req.body?.name || '').trim();
+    const newName = sanitizeName(req.body?.name);
     if (!newName) return res.status(400).json({ error: '名称不能为空' });
     if (newName === file.name) return res.json({ ok: true, unchanged: true });
     const ext = normalizeExt(path.extname(newName));
     if (!isExtAllowed(ext)) {
-      return res.status(415).json({ error: `不允许的文件类型: ${ext ? '.' + ext : '(无扩展名)'}` });
+      return res.status(415).json({ error: rejectedExtMessage(ext) });
     }
     if (findFileByNameInFolder(db, newName, file.folder_id, file.id)) {
       return res.status(409).json({ error: '此文件夹中已存在同名文件' });
@@ -250,16 +257,15 @@ router.patch('/:id', requireAdmin, async (req, res) => {
       return res.status(409).json({ error: '目标存储路径已存在同名文件' });
     }
 
-    if (file.oss_key !== newKey) await copyOssObject(file.oss_key, newKey);
+    const keyChanged = file.oss_key !== newKey;
+    if (keyChanged) await copyOssObject(file.oss_key, newKey);
     db.prepare('UPDATE files SET name = ?, ext = ?, oss_key = ? WHERE id = ?').run(
       newName,
       ext || null,
       newKey,
       id
     );
-    if (file.oss_key !== newKey) {
-      await deleteOssObjectIfExists(file.oss_key);
-    }
+    if (keyChanged) await deleteOssObjectIfExists(file.oss_key);
     return res.json({ ok: true, name: newName, oss_key: newKey });
   }
 
@@ -302,17 +308,21 @@ router.delete('/:id', requireAdmin, async (req, res) => {
 
 // Clean up an orphaned OSS object when metadata registration fails after upload.
 // Only keys matching the configured prefix are accepted.
-router.post('/cleanup-upload', requireAdmin, (req, res) => {
+router.post('/cleanup-upload', requireAdmin, async (req, res) => {
   const { oss_key } = req.body || {};
   if (!oss_key) return res.status(400).json({ error: 'oss_key 不能为空' });
   const prefix = ossPrefix();
   if (prefix && !oss_key.startsWith(prefix + '/') && oss_key !== prefix) {
     return res.status(400).json({ error: 'OSS key 与配置的前缀不匹配' });
   }
-  deleteOssObjectIfExists(oss_key).then(
-    () => res.json({ ok: true }),
-    (e) => { console.warn('cleanup-upload failed:', e.message); res.json({ ok: true, warn: 'OSS 删除失败' }); }
-  );
+  try {
+    await deleteOssObjectIfExists(oss_key);
+  } catch (e) {
+    // Best-effort cleanup: report success with a warning rather than failing.
+    console.warn('cleanup-upload failed:', e.message);
+    return res.json({ ok: true, warn: 'OSS 删除失败' });
+  }
+  res.json({ ok: true });
 });
 
 export default router;

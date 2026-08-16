@@ -14,9 +14,49 @@ const SORT_FIELDS = {
   manual: 'sort_order',
 };
 
+// SQLite has no pinyin collation, so name sorting falls back to raw Unicode
+// code points (上>传>体…). Re-sort by pinyin in JS when the user picks 名称,
+// matching how Chinese apps order contacts. Tiebreak by id asc (like the SQL
+// fallback) regardless of direction.
+const nameCollator = new Intl.Collator('zh', { sensitivity: 'base' });
+const startsWithCjk = (s) => /^[\u3400-\u9fff]/.test(s || '');
+const sortByName = (rows, desc) =>
+  rows.sort((a, b) => {
+    // Non-CJK names (English / digits / symbols) come before any pinyin name,
+    // independent of direction.
+    const cjkA = startsWithCjk(a.name);
+    const cjkB = startsWithCjk(b.name);
+    if (cjkA !== cjkB) return cjkA ? 1 : -1;
+    const c = nameCollator.compare(a.name, b.name);
+    if (c !== 0) return desc ? -c : c;
+    return a.id - b.id;
+  });
+
 function getFolder(id) {
   if (id === 0 || id === '0' || id == null) return { id: 0, name: '首页', parent_id: null };
   return db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
+}
+
+// Recursive total size of each given folder (sum of all descendant files).
+function computeFolderSizes(folderIds) {
+  if (!folderIds.length) return {};
+  const placeholders = folderIds.map(() => '?').join(',');
+  const rows = db
+    .prepare(
+      `WITH RECURSIVE sub(root_id, id) AS (
+         SELECT id AS root_id, id FROM folders WHERE id IN (${placeholders})
+         UNION ALL
+         SELECT s.root_id, f.id FROM folders f JOIN sub s ON f.parent_id = s.id
+       )
+       SELECT s.root_id AS id, COALESCE(SUM(fl.size), 0) AS size
+       FROM sub s
+       LEFT JOIN files fl ON fl.folder_id = s.id
+       GROUP BY s.root_id`
+    )
+    .all(...folderIds);
+  const map = {};
+  for (const r of rows) map[r.id] = r.size;
+  return map;
 }
 
 // Every descendant folder id and its files (one query per node).
@@ -65,15 +105,13 @@ async function relocateFolderSubtree(folderId, { parentOverrides, nameOverrides,
     }))
     .filter((move) => move.oldKey && move.newKey);
 
+  // Only objects whose key actually changes need copying / deleting.
+  const filesToMove = fileMoves.filter((m) => m.oss_key !== m.newKey);
+  const placeholdersToMove = placeholderMoves.filter((m) => m.oldKey !== m.newKey);
+
   // Copy first (both stores in sync), then update DB, then delete old objects.
-  await batchOss(
-    fileMoves.filter((m) => m.oss_key !== m.newKey),
-    (m) => copyOssObject(m.oss_key, m.newKey)
-  );
-  await batchOss(
-    placeholderMoves.filter((m) => m.oldKey !== m.newKey),
-    (m) => putEmptyOssObject(m.newKey)
-  );
+  await batchOss(filesToMove, (m) => copyOssObject(m.oss_key, m.newKey));
+  await batchOss(placeholdersToMove, (m) => putEmptyOssObject(m.newKey));
 
   const updateFile = db.prepare('UPDATE files SET oss_key = ? WHERE id = ?');
   const tx = db.transaction(() => {
@@ -82,14 +120,8 @@ async function relocateFolderSubtree(folderId, { parentOverrides, nameOverrides,
   });
   tx();
 
-  await batchOss(
-    fileMoves.filter((m) => m.oss_key !== m.newKey),
-    (m) => deleteOssObjectIfExists(m.oss_key)
-  );
-  await batchOss(
-    placeholderMoves.filter((m) => m.oldKey !== m.newKey),
-    (m) => deleteOssObjectIfExists(m.oldKey)
-  );
+  await batchOss(filesToMove, (m) => deleteOssObjectIfExists(m.oss_key));
+  await batchOss(placeholdersToMove, (m) => deleteOssObjectIfExists(m.oldKey));
   return { ok: true };
 }
 
@@ -155,7 +187,11 @@ router.get('/:id/contents', (req, res) => {
   const folderClause = id === 0 ? 'folder_id IS NULL' : 'folder_id = ?';
   const args = id === 0 ? [] : [id];
 
-  const folderSortKey = sort === SORT_FIELDS.size ? SORT_FIELDS.name : sort; // size doesn't apply to folders
+  const isNameSort = sort === SORT_FIELDS.name;
+  const isSizeSort = sort === SORT_FIELDS.size;
+  // Folders have no size column in SQL; fetch them by name, then re-sort by the
+  // recursive size computed below.
+  const folderSortKey = isSizeSort ? SORT_FIELDS.name : sort;
   // Manual mode: also include id as tiebreaker; non-manual: secondary by name then id
   const tieBreak =
     sort === SORT_FIELDS.manual ? `, id ${order}` : `, name COLLATE NOCASE ASC, id ASC`;
@@ -165,6 +201,20 @@ router.get('/:id/contents', (req, res) => {
     )
     .all(...args)
     .map((f) => ({ ...f, type: 'folder' }));
+  if (isNameSort) sortByName(folders, order === 'DESC');
+
+  // Attach recursive total size (sum of all descendant files) to each folder.
+  const sizeMap = computeFolderSizes(folders.map((f) => f.id));
+  for (const f of folders) f.size = sizeMap[f.id] || 0;
+
+  // Re-sort by the computed recursive size so folders interleave correctly.
+  if (isSizeSort) {
+    folders.sort((a, b) => {
+      const c = a.size - b.size;
+      if (c !== 0) return order === 'DESC' ? -c : c;
+      return a.name.localeCompare(b.name, 'zh');
+    });
+  }
 
   // oss_key is internal storage layout — not exposed to (anonymous) clients.
   const files = db
@@ -173,6 +223,7 @@ router.get('/:id/contents', (req, res) => {
     )
     .all(...args)
     .map((f) => ({ ...f, type: 'file' }));
+  if (isNameSort) sortByName(files, order === 'DESC');
 
   res.json({
     folder: { id: folder.id, name: folder.name, parent_id: folder.parent_id ?? null },
@@ -302,9 +353,11 @@ router.post('/reorder', requireAdmin, (req, res) => {
   const pid = parseOptionalFolderId(parent_folder_id);
   if (Number.isNaN(pid)) return res.status(400).json({ error: '无效的父文件夹 ID' });
 
+  // Entries without a known type and id are ignored by validation and update alike.
+  const isReorderItem = (it) => !!it && (it.type === 'file' || it.type === 'folder') && !!it.id;
+
   // Validate every entry belongs to the claimed parent folder.
-  for (const it of order) {
-    if (!it || (it.type !== 'file' && it.type !== 'folder') || !it.id) continue;
+  for (const it of order.filter(isReorderItem)) {
     if (it.type === 'file') {
       const f = db.prepare('SELECT folder_id FROM files WHERE id = ?').get(Number(it.id));
       if (!f) return res.status(400).json({ error: `file ${it.id} not found` });
@@ -328,7 +381,7 @@ router.post('/reorder', requireAdmin, (req, res) => {
   const tx = db.transaction(() => {
     for (let i = 0; i < order.length; i++) {
       const it = order[i];
-      if (!it || (it.type !== 'file' && it.type !== 'folder') || !it.id) continue;
+      if (!isReorderItem(it)) continue;
       if (it.type === 'file') updateFile.run(i, Number(it.id));
       else updateFolder.run(i, Number(it.id));
     }
@@ -342,18 +395,12 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ error: '无效的 ID' });
   // Gather all descendant keys to clean up OSS objects.
-  const keys = [];
-  const collectKeys = (folderId) => {
-    const placeholder = placeholderKeyForFolder(db, folderId);
+  const { folderIds, files } = collectFolderTree(id);
+  const keys = files.map((f) => f.oss_key);
+  for (const fid of folderIds) {
+    const placeholder = placeholderKeyForFolder(db, fid);
     if (placeholder) keys.push(placeholder);
-    for (const f of db.prepare('SELECT oss_key FROM files WHERE folder_id = ?').all(folderId)) {
-      keys.push(f.oss_key);
-    }
-    for (const s of db.prepare('SELECT id FROM folders WHERE parent_id = ?').all(folderId)) {
-      collectKeys(s.id);
-    }
-  };
-  collectKeys(id);
+  }
 
   // Delete OSS objects before removing database rows so the two stores stay in sync.
   try {
