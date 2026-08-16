@@ -283,41 +283,6 @@ function ActivityHeatmap({ rows }) {
   );
 }
 
-/* ---- Type breakdown: simple list with bars ---- */
-
-function TypeBreakdown({ rows, totalFiles }) {
-  if (!rows?.length) return <Empty>暂无文件</Empty>;
-  const max = rows[0].count || 1;
-  return (
-    <ul className="mt-3 space-y-2.5">
-      {rows.map((r) => {
-        const pct = totalFiles ? (r.count / totalFiles) * 100 : 0;
-        return (
-          <li key={r.ext}>
-            <div className="flex items-center justify-between text-[12px]">
-              <span className="inline-flex items-center gap-2 text-ink">
-                <FileIcon type="file" ext={r.ext === 'other' ? '' : r.ext} className="h-3.5 w-3.5" />
-                <span className="uppercase tracking-wider">{r.ext}</span>
-              </span>
-              <span className="tabular-nums text-ink-2">
-                {r.count.toLocaleString()}
-                <span className="ml-2 text-ink-3">{pct.toFixed(1)}%</span>
-              </span>
-            </div>
-            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-field">
-              <div
-                className="h-full rounded-full bg-accent"
-                style={{ width: `${(r.count / max) * 100}%` }}
-              />
-            </div>
-            <div className="mt-1 text-right text-[10px] text-ink-3">{formatSize(r.size)}</div>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
 /* ---- List cards (top downloads / recent uploads / top folders) ---- */
 
 function TopDownloads({ items }) {

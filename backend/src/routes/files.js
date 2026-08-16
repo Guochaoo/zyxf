@@ -65,13 +65,17 @@ const router = Router();
 // 415 message shared by upload validation and rename validation.
 const rejectedExtMessage = (ext) => `不允许的文件类型: ${ext ? '.' + ext : '(无扩展名)'}`;
 
+// Strip control chars (esp. NUL): path.extname('a.exe NUL .txt')
+// yields '.txt', which would let a crafted name bypass the extension whitelist.
+// Used by BOTH upload validation and rename validation — keep them in sync.
+function sanitizeName(name) {
+  return String(name || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
+}
+
 // Shared validation for both upload steps: filename, parent folder, duplicate
 // name and extension whitelist. Returns { trimmed, pid, ext } or { error, status }.
 function validateUploadInput(name, folderId) {
-  // Strip control chars (esp. NUL) up front: path.extname('a.exe NUL .txt')
-  // yields '.txt', which would let a crafted name bypass the extension whitelist.
-  const sanitized = String(name || '').replace(/[\u0000-\u001f\u007f]/g, '');
-  const trimmed = sanitized.trim();
+  const trimmed = sanitizeName(name);
   if (!trimmed) return { error: '文件名不能为空' };
   const pid = parseOptionalFolderId(folderId);
   if (Number.isNaN(pid)) return { error: '无效的文件夹 ID' };
@@ -115,7 +119,7 @@ router.post('/upload-url', requireAdmin, (req, res) => {
 // Step 2: after the browser uploads to OSS, register metadata
 router.post('/', requireAdmin, (req, res) => {
   const { name, oss_key, size, mime_type, folder_id } = req.body || {};
-  if (!oss_key || !Number.isFinite(size)) {
+  if (!oss_key || !Number.isFinite(size) || size < 0) {
     return res.status(400).json({ error: '缺少必要参数（name/oss_key/size）' });
   }
   const v = validateUploadInput(name, folder_id);
@@ -237,7 +241,7 @@ router.patch('/:id', requireAdmin, async (req, res) => {
   const id = file.id;
 
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
-    const newName = String(req.body?.name || '').trim();
+    const newName = sanitizeName(req.body?.name);
     if (!newName) return res.status(400).json({ error: '名称不能为空' });
     if (newName === file.name) return res.json({ ok: true, unchanged: true });
     const ext = normalizeExt(path.extname(newName));

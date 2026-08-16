@@ -48,6 +48,11 @@ export const PREVIEWABLE_EXTS = new Set(
   [...ALLOWED_EXTS].filter((e) => !ARCHIVE_EXTS.has(e))
 );
 
+// Raster images are not on the upload allow-list but may exist as legacy
+// objects imported by sync; they are inert (no script execution), so they
+// may still be served inline.
+const INLINE_IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']);
+
 export function normalizeExt(ext) {
   return String(ext || '').toLowerCase().replace(/^\./, '');
 }
@@ -59,10 +64,14 @@ export function isExtAllowed(ext) {
   return ALLOWED_EXTS.has(e);
 }
 
+// Default-deny inline: only known-previewable document types and inert
+// raster images are served inline; everything else (svg, html-ish, unknown
+// extensions imported from OSS) is forced to download. The OSS bucket is
+// bound to the site's own domain (custom domain), so an inline SVG/HTML
+// object would run scripts on the site origin — never allow that.
 export function shouldForceDownload(ext) {
   const e = normalizeExt(ext);
   if (!e) return true;
   if (BLOCKED_EXTS.has(e)) return true;
-  // Archives are download-only; everything else can be previewed
-  return ARCHIVE_EXTS.has(e);
+  return !(PREVIEWABLE_EXTS.has(e) || INLINE_IMAGE_EXTS.has(e));
 }

@@ -61,7 +61,7 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
 
   return (
     <div
-      className="upload-dialog fixed inset-0 bg-black/60 z-[80] flex items-center justify-center p-3 sm:p-4"
+      className="fixed inset-0 bg-black/60 z-[80] flex items-center justify-center p-3 sm:p-4"
       onClick={onClose}
     >
       <div
