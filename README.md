@@ -8,9 +8,9 @@
 - **后端**：Node.js + Express + SQLite (better-sqlite3) + JWT
 - **存储**：阿里云 OSS（前端直传，后端只签名）
 - **预览**：
+  - 文档（PDF / PPT / Word / Excel / TXT）：阿里云 IMM WebOffice（后端签发访问令牌，前端 JS-SDK 渲染）
   - 图片：原生 `<img>`
-  - PDF：浏览器内置 / `<iframe>`
-  - PPT / Word / Excel：Microsoft Office Online Viewer
+  - 归档（zip / rar / 7z 等）：仅下载
 
 ## 目录结构
 
@@ -18,14 +18,22 @@
 project/
 ├── backend/        # Express 后端
 │   ├── src/
-│   │   ├── index.js           # 入口
+│   │   ├── index.js           # 入口（helmet / 限流 / 生产安全校验）
 │   │   ├── db.js              # SQLite 初始化
-│   │   ├── auth.js            # JWT 中间件
-│   │   ├── oss.js             # OSS 直传签名
+│   │   ├── auth.js            # JWT 签发 / 校验 / 鉴权中间件
+│   │   ├── oss.js             # OSS 直传签名 / 对象操作
+│   │   ├── imm.js             # 阿里云 IMM WebOffice 预览令牌
+│   │   ├── extPolicy.js       # 扩展名白名单 / 预览与下载策略
+│   │   ├── storagePath.js     # OSS key 生成（防路径穿越）
+│   │   ├── dbHelpers.js       # 共享 DB 工具
+│   │   ├── mime.js            # 扩展名 → MIME
 │   │   └── routes/
-│   │       ├── auth.js
-│   │       ├── folders.js
-│   │       └── files.js
+│   │       ├── auth.js        # 登录 / 当前用户（登录限流）
+│   │       ├── folders.js     # 目录树 / 增删改 / 排序
+│   │       ├── files.js       # 上传签名 / 下载签名 / 预览令牌 / 改名移动删除
+│   │       ├── search.js      # 名称搜索
+│   │       ├── stats.js       # 数据概览统计 + /heatmap 年热力图数据
+│   │       └── sync.js        # 与共享 OSS bucket 同步
 │   ├── package.json
 │   └── .env.example
 └── frontend/       # React 前端
@@ -34,8 +42,8 @@ project/
     │   ├── App.jsx
     │   ├── api.js
     │   ├── auth.jsx
-    │   ├── components/
-    │   └── pages/
+    │   ├── components/       # FileIcon / Preview / 菜单 / 知识图谱等
+    │   └── pages/            # BrowsePage / DashboardPage / LoginPage / AboutPage
     ├── index.html
     ├── package.json
     ├── vite.config.js
@@ -87,5 +95,7 @@ npm run dev
 - 文件夹任意嵌套，面包屑导航
 - 列表 / 网格视图切换，按名称 / 大小 / 时间排序，升降序切换
 - 拖拽 / 点击上传文件（直传 OSS，不占后端带宽）
-- 在线预览：图片、PDF、PPT、Word、Excel
-- 管理员可新建文件夹、上传、删除；游客只读
+- 在线预览：PDF、PPT、Word、Excel（阿里云 IMM WebOffice）、图片
+- 知识图谱：按目录连接关系力导向展示，点击可跳转 / 预览
+- 数据概览（`/dashboard`）：近一年 GitHub 式下载热力图、文件类型分布、下载 / 占用排行、今日动态（下载 / 上传）
+- 管理员可新建文件夹、上传、删除、改名、移动、排序；游客只读

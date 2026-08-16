@@ -7,7 +7,7 @@
 > - **Brand identity:** The brand logo (`favicon.png` / `brand-logo.png`) and brand names (仲英学辅资料库, 仲英书院学业辅导中心, 仲英学辅) are always preserved verbatim.
 > - **Language:** All user-facing copy is Chinese (zh-CN); uppercase mono technical labels (TODAY, DOWNLOADS…) remain in English as decorative metadata, per the Geist Mono tradition.
 > - **Accent colors:** The old brand blue (#276DAB) is replaced by the Vercel interaction palette (§2) — Link Blue #0072f5, Develop Blue #0a72ef, Focus Blue hsla(212, 100%, 48%, 1). Primary CTAs are Vercel Black (#171717).
-> - **Workflow pipeline colors** (Ship Red / Preview Pink / Develop Blue) are used as functional data-viz accents in the stats dashboard (downloads = Develop Blue, uploads = Preview Pink), the only permitted decorative-ish use.
+> - **Workflow pipeline colors** (Ship Red / Preview Pink / Develop Blue) are used as functional data-viz accents. The stats dashboard defines its own data-viz tokens — 下载 = 蓝 `--accent` (#3d9aff), 上传 = 橙 `--orange` (#f68f3c) — the only permitted decorative-ish use (see the heatmap spec in §4).
 > - **无界 (Borderless) philosophy:** This site deliberately moves *away* from Vercel's line-dominated separation (shadow-as-border everywhere). Separation comes from whitespace and soft surface tints (#FAFAFA) first; lines/borders are used only where function requires them (e.g., table rows, dashed dropzone). There is **no topbar** — navigation is a StaggeredMenu hamburger on every layout; the brand, search and folder tree live in the left rail (see §4).
 
 ## 1. Visual Theme & Atmosphere
@@ -230,6 +230,14 @@ Metric Cards
 - Geist 48px weight 600 for the metric
 - Description below in gray body text
 - Shadow-bordered card container
+
+Download Heatmap（下载热力图，`/dashboard` 首行左卡）
+- GitHub 风格年度网格：周一开头的周列 × 7 行（一 三 五 日 标签，偶数行留空），顶部月份轴（1月…12月，`whitespace-nowrap` 单行，允许向右溢出到空格位）
+- 颜色 = 5 档蓝色 ramp：`var(--field)` → `rgba(61,154,255,.35/.55/.78)` → `var(--accent)`；档位按 **sqrt(当日下载数/峰值)×4** 取整，避免单日尖峰压平其余活跃日
+- 格子自适应：12–22px（内边距 `px-3 pb-3`、单元格间隙 5px），优先按高度撑满并与同行卡片等高（`h-full flex-col`），宽度不足时从**最左侧（最旧周）裁剪**而非滚动——无滚动条；网格在剩余空间内居中
+- 白色无边框面板（bg-surface，无 shadow），标题行 = 蓝色圆底徽章 + 白色下载箭头（lucide ArrowDown，与其他卡片图标徽章同款）+ 「下载热力图」+ 右侧「少□□□□□多」图例
+- 悬停 tooltip：日期 + 当日下载数（ChartTooltip 风格），优先显示在格子上方、顶部行翻转到下方，绝不遮挡被悬停格子
+- 数据源：`GET /api/stats/heatmap`（近 365 天，独立于页面右上 7/30/90 范围切换）
 
 ## 5. Layout Principles
 
