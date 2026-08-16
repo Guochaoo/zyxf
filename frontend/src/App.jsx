@@ -45,6 +45,17 @@ export default function App() {
     </Link>
   );
 
+  // Middle-column layout: browse routes flank the fixed rails; dashboard &
+  // about fill the viewport width; everything else is a centered column.
+  let mainLayout;
+  if (isBrowse) {
+    mainLayout = 'w-full lg:pl-[calc(250px+1rem)] lg:pr-[calc(300px+1rem)]';
+  } else if (location.pathname === '/dashboard' || location.pathname === '/about') {
+    mainLayout = 'mx-auto w-full';
+  } else {
+    mainLayout = 'mx-auto w-full max-w-7xl';
+  }
+
   // ---- Document title ----
   useEffect(() => {
     document.title = '仲英学辅';
@@ -86,13 +97,7 @@ export default function App() {
         </div>
       )}
       <main
-        className={`min-w-0 overflow-x-hidden px-3 py-4 sm:px-4 sm:pt-[10.5px] sm:pb-6 ${
-          isBrowse
-            ? 'w-full lg:pl-[calc(250px+1rem)] lg:pr-[calc(300px+1rem)]'
-            : location.pathname === '/dashboard' || location.pathname === '/about'
-              ? 'mx-auto w-full' // dashboard & about fill the viewport width
-              : 'mx-auto w-full max-w-7xl'
-        }`}
+        className={`min-w-0 overflow-x-hidden px-3 py-4 sm:px-4 sm:pt-[10.5px] sm:pb-6 ${mainLayout}`}
       >
         <Routes>
           <Route path="/" element={<BrowsePage />} />

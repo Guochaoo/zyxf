@@ -1,15 +1,11 @@
 import { useRef, useState } from 'react';
-import {
-  motion,
-  useInView,
-} from 'framer-motion';
+import { motion, useInView } from 'framer-motion';
 import { useAuth } from '../auth.jsx';
 
 /* ─────────────────────────────────────────────────────────
  * Projects / Case Studies — About page rebuilt in this style.
  * Page background stays as the app theme (#F8F8F8); cards carry
- * their own surfaces. Images are placeholder URLs — swap in real
- * uploads later.
+ * their own surfaces. Images live in public/images/.
  * ───────────────────────────────────────────────────────── */
 
 const EASE = [0.22, 1, 0.36, 1];
@@ -20,25 +16,25 @@ const CASE_STUDIES = [
     id: 'fina',
     title: '期末讲座',
     category: '学业支持 · 期末辅导',
-    image: 'https://images.pexels.com/photos/7691249/pexels-photo-7691249.jpeg?auto=compress&cs=tinysrgb&w=800',
+    image: '/images/final-lecture.jpeg',
   },
   {
     id: 'fresh',
     title: '新生导航',
     category: '入学指导 · 校园适应',
-    image: 'https://images.pexels.com/photos/2559941/pexels-photo-2559941.jpeg?auto=compress&cs=tinysrgb&w=800',
+    image: '/images/freshman-guide.jpeg',
   },
   {
     id: 'peer',
     title: '朋辈互助',
     category: '学习互助 · 经验分享',
-    image: 'https://images.pexels.com/photos/5428003/pexels-photo-5428003.jpeg?auto=compress&cs=tinysrgb&w=800',
+    image: '/images/peer-support.jpeg',
   },
   {
     id: 'lib',
     title: '资料共建',
     category: '资料库建设 · 知识沉淀',
-    image: 'https://images.pexels.com/photos/2800832/pexels-photo-2800832.jpeg?auto=compress&cs=tinysrgb&w=800',
+    image: '/images/resource-sharing.png',
   },
 ];
 

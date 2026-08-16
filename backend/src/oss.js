@@ -8,16 +8,21 @@ function envOrThrow(name) {
   return v;
 }
 
-let _client = null;
-export function ossClient() {
-  if (_client) return _client;
-  _client = new OSS({
+// Shared credentials for both OSS clients (env vars are static at runtime).
+function baseOssConfig() {
+  return {
     region: envOrThrow('OSS_REGION'),
     accessKeyId: envOrThrow('OSS_ACCESS_KEY_ID'),
     accessKeySecret: envOrThrow('OSS_ACCESS_KEY_SECRET'),
     bucket: envOrThrow('OSS_BUCKET'),
     secure: true,
-  });
+  };
+}
+
+let _client = null;
+export function ossClient() {
+  if (_client) return _client;
+  _client = new OSS(baseOssConfig());
   return _client;
 }
 
@@ -28,15 +33,7 @@ let _immClient = null;
  */
 function immClient() {
   if (_immClient) return _immClient;
-  _immClient = new OSS({
-    region: envOrThrow('OSS_REGION'),
-    accessKeyId: envOrThrow('OSS_ACCESS_KEY_ID'),
-    accessKeySecret: envOrThrow('OSS_ACCESS_KEY_SECRET'),
-    bucket: envOrThrow('OSS_BUCKET'),
-    endpoint: envOrThrow('OSS_ENDPOINT'),
-    cname: true,
-    secure: true,
-  });
+  _immClient = new OSS({ ...baseOssConfig(), endpoint: envOrThrow('OSS_ENDPOINT'), cname: true });
   return _immClient;
 }
 

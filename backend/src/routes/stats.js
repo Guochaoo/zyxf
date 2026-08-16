@@ -16,8 +16,50 @@ function dayLabel(ts) {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+/* Daily series (downloads + uploads): one GROUP BY per table. Returns `days`
+   rows, oldest → newest, ending today. */
+function dailySeries(days, todayStart) {
+  const seriesStart = todayStart - (days - 1) * DAY;
+  // i = whole days relative to today's local midnight (0 = today, -1 =
+  // yesterday …). FLOOR is required — CAST truncates toward zero, which would
+  // split a calendar day across two buckets just after midnight.
+  const dlByDay = db
+    .prepare(
+      `SELECT FLOOR((downloaded_at - ?) / ?) AS i, COUNT(*) AS c FROM download_logs
+       WHERE downloaded_at >= ? GROUP BY i`
+    )
+    .all(todayStart, DAY, seriesStart);
+  const upByDay = db
+    .prepare(
+      `SELECT FLOOR((created_at - ?) / ?) AS i, COUNT(*) AS c FROM files
+       WHERE created_at >= ? GROUP BY i`
+    )
+    .all(todayStart, DAY, seriesStart);
+  const series = Array.from({ length: days }, (_, k) => {
+    const start = todayStart - (days - 1 - k) * DAY;
+    return { date: dayLabel(start), ts: start, downloads: 0, uploads: 0 };
+  });
+  // series is oldest → newest with today last, so a negative i maps to
+  // index days-1+i; out-of-range i (future timestamps) is dropped.
+  for (const r of dlByDay) {
+    const idx = days - 1 + r.i;
+    if (series[idx]) series[idx].downloads = r.c;
+  }
+  for (const r of upByDay) {
+    const idx = days - 1 + r.i;
+    if (series[idx]) series[idx].uploads = r.c;
+  }
+  return series;
+}
+
+/* Fixed trailing year of daily activity for the dashboard's GitHub-style
+   heatmap — deliberately independent of the ?range= switch on GET /. */
+router.get('/heatmap', (req, res) => {
+  const days = Math.min(Math.max(parseInt(req.query.days, 10) || 365, 31), 731);
+  res.json({ days, series: dailySeries(days, startOfToday()) });
+});
+
 router.get('/', (req, res) => {
-  const isAdmin = req.user?.role === 'admin';
   const range = Math.min(Math.max(parseInt(req.query.range, 10) || 30, 7), 90);
   const todayStart = startOfToday();
   const yesterdayStart = todayStart - DAY;
@@ -47,35 +89,8 @@ router.get('/', (req, res) => {
   const files_added_7d = cnt('SELECT COUNT(*) c FROM files WHERE created_at >= ?', sevenAgo);
   const size_added_7d = sum('SELECT COALESCE(SUM(size),0) s FROM files WHERE created_at >= ?', sevenAgo);
 
-  // ---- Daily series (downloads + uploads): one GROUP BY per table ----
-  const seriesStart = todayStart - (range - 1) * DAY;
-  const dlByDay = db
-    .prepare(
-      `SELECT CAST((downloaded_at - ?) / ? AS INTEGER) AS i, COUNT(*) AS c FROM download_logs
-       WHERE downloaded_at >= ? GROUP BY i`
-    )
-    .all(todayStart, DAY, seriesStart);
-  const upByDay = db
-    .prepare(
-      `SELECT CAST((created_at - ?) / ? AS INTEGER) AS i, COUNT(*) AS c FROM files
-       WHERE created_at >= ? GROUP BY i`
-    )
-    .all(todayStart, DAY, seriesStart);
-  const series = Array.from({ length: range }, (_, k) => {
-    const start = todayStart - (range - 1 - k) * DAY;
-    return { date: dayLabel(start), ts: start, downloads: 0, uploads: 0 };
-  });
-  // i = days since today start (0 = today); series is oldest → newest, so the
-  // index must be flipped. better-sqlite3 binds numbers as REAL, so floor() is
-  // required to land on integer array indices.
-  for (const r of dlByDay) {
-    const idx = range - 1 - Math.floor(r.i);
-    if (series[idx]) series[idx].downloads = r.c;
-  }
-  for (const r of upByDay) {
-    const idx = range - 1 - Math.floor(r.i);
-    if (series[idx]) series[idx].uploads = r.c;
-  }
+  // ---- Daily series (downloads + uploads) ----
+  const series = dailySeries(range, todayStart);
 
   // ---- File type breakdown ----
   const typeRows = db
@@ -147,10 +162,11 @@ router.get('/', (req, res) => {
     )
     .all();
 
-  // Aggregate-only fields are safe for guests. Filename-containing lists
-  // (top_downloads / recent_uploads / top_folders names) are admin-only to
-  // avoid leaking the internal file inventory.
-  const payload = {
+  // The library itself (folder tree, file names, sizes) is already publicly
+  // browsable via GET /folders/tree and GET /folders/:id/contents, so these
+  // name-containing lists reveal nothing guests can't already see; the /api
+  // rate limiter covers anonymous scraping.
+  res.json({
     range,
     today_downloads,
     yesterday_downloads,
@@ -163,13 +179,10 @@ router.get('/', (req, res) => {
     size_added_7d,
     series,
     type_breakdown: typeRows,
-  };
-  if (isAdmin) {
-    payload.top_downloads = top_downloads;
-    payload.recent_uploads = recent_uploads;
-    payload.top_folders = top_folders;
-  }
-  res.json(payload);
+    top_downloads,
+    recent_uploads,
+    top_folders,
+  });
 });
 
 export default router;

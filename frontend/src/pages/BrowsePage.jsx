@@ -35,6 +35,13 @@ const SORT_OPTIONS = [
   { key: 'size', label: '大小' },
 ];
 
+// Direction arrow per sort key ('manual' has none).
+const SORT_ARROWS = {
+  name: { asc: SortAZIcon, desc: SortZAIcon },
+  created_at: { asc: CalendarArrowDownIcon, desc: CalendarArrowUpIcon },
+  size: { asc: ArrowDown01Icon, desc: ArrowDown10Icon },
+};
+
 // Tell the sidebar FolderTree that folder structure changed (create/rename/
 // move/delete/reorder) so it refetches.
 function notifyFoldersChanged() {
@@ -421,7 +428,7 @@ export default function BrowsePage() {
 
       {/* Body: file list takes the full middle column width (the graph lives
           in the App right column on xl+, inline below the list otherwise). */}
-        <div className="bg-white rb-card rounded-[14px] overflow-hidden">
+      <div className="bg-white rb-card rounded-[14px] overflow-hidden">
         {loading ? (
           <div className="py-16 flex items-center justify-center text-slate-400">
             <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-400" /> 加载中…
@@ -519,7 +526,7 @@ function SortControl({ sort, order, onChange }) {
         />
         {SORT_OPTIONS.map((opt) => {
           const active = sort === opt.key;
-          const showArrow = active && opt.key !== 'manual';
+          const ArrowIcon = SORT_ARROWS[opt.key]?.[order];
           return (
             <button
               ref={(node) => {
@@ -533,18 +540,13 @@ function SortControl({ sort, order, onChange }) {
             >
               <span className="leading-none">{opt.label}</span>
               <span className="absolute right-2 top-1/2 flex w-3 -translate-y-1/2 items-center justify-center">
-                {opt.key !== 'manual' &&
-                  (order === 'asc'
-                    ? opt.key === 'created_at'
-                      ? <CalendarArrowDownIcon className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
-                      : opt.key === 'size'
-                        ? <ArrowDown01Icon className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
-                        : <SortAZIcon className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
-                    : opt.key === 'created_at'
-                      ? <CalendarArrowUpIcon className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
-                      : opt.key === 'size'
-                        ? <ArrowDown10Icon className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />
-                        : <SortZAIcon className={`w-3.5 h-3.5 transition-opacity ${showArrow ? 'opacity-100' : 'opacity-0'}`} />)}
+                {ArrowIcon && (
+                  <ArrowIcon
+                    className={`w-3.5 h-3.5 transition-opacity ${
+                      active && opt.key !== 'manual' ? 'opacity-100' : 'opacity-0'
+                    }`}
+                  />
+                )}
               </span>
             </button>
           );
@@ -606,22 +608,12 @@ function ItemListWithRename({
           actions={
             isAdmin && (
               <>
-                <button
-                  type="button"
-                  onClick={() => onRenameFolder(f)}
-                  className="p-1 rounded hover:bg-black/5"
-                  title="重命名"
-                >
+                <RowAction title="重命名" onClick={() => onRenameFolder(f)}>
                   <PenLineIcon className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onDeleteFolder(f)}
-                  className="p-1 rounded hover:bg-black/5"
-                  title="删除"
-                >
+                </RowAction>
+                <RowAction title="删除" onClick={() => onDeleteFolder(f)}>
                   <TrashIcon className="w-4 h-4" />
-                </button>
+                </RowAction>
               </>
             )
           }
@@ -643,32 +635,17 @@ function ItemListWithRename({
           onClick={() => onPreviewFile(f)}
           actions={
             <>
-              <button
-                type="button"
-                onClick={() => onDownloadFile(f)}
-                className="p-1 rounded hover:bg-black/5"
-                title="下载"
-              >
+              <RowAction title="下载" onClick={() => onDownloadFile(f)}>
                 <DownloadIcon className="w-4 h-4" />
-              </button>
+              </RowAction>
               {isAdmin && (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => onRenameFile(f)}
-                    className="p-1 rounded hover:bg-black/5"
-                    title="重命名"
-                  >
+                  <RowAction title="重命名" onClick={() => onRenameFile(f)}>
                     <PenLineIcon className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteFile(f)}
-                    className="p-1 rounded hover:bg-black/5"
-                    title="删除"
-                  >
+                  </RowAction>
+                  <RowAction title="删除" onClick={() => onDeleteFile(f)}>
                     <TrashIcon className="w-4 h-4" />
-                  </button>
+                  </RowAction>
                 </>
               )}
             </>
@@ -676,6 +653,14 @@ function ItemListWithRename({
         />
       ))}
     </ul>
+  );
+}
+
+function RowAction({ title, onClick, children }) {
+  return (
+    <button type="button" onClick={onClick} title={title} className="p-1 rounded hover:bg-black/5">
+      {children}
+    </button>
   );
 }
 

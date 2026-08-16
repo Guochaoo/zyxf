@@ -11,10 +11,24 @@ import { useEffect, useMemo, useState } from 'react';
 
 const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
 
-const formatPercent = (v) => `${v > 0 ? '+' : ''}${v.toFixed(2)}%`;
+// v ?? 0: the tooltip rows evaluate eagerly even when not hovering, so the
+// formatter must tolerate undefined points.
+export const formatPercent = (v) => `${v > 0 ? '+' : ''}${(v ?? 0).toFixed(2)}%`;
+
+/* solid circle + centered white content (icon or letter) */
+export function IconBadge({ className = '', color, children }) {
+  return (
+    <span
+      className={`flex size-3.5 shrink-0 items-center justify-center rounded-full text-white ${className}`}
+      style={color ? { background: color } : undefined}
+    >
+      {children}
+    </span>
+  );
+}
 
 /* daily-series x-axis labels: local M/D instead of liveline's HH:MM:SS */
-const formatDay = (t) => {
+export const formatDay = (t) => {
   const d = new Date(t * 1e3);
   return `${d.getMonth() + 1}/${d.getDate()}`;
 };
@@ -34,21 +48,105 @@ function useDarkMode() {
   return dark;
 }
 
-function Mono({ children, tone }) {
+function SubLabel({ children, tone }) {
   return (
-    <code className={`font-mono text-[11.5px] ${tone === 'red' ? 'text-red' : 'text-green'}`}>
+    <span className={`text-[11.5px] ${tone === 'red' ? 'text-red' : 'text-green'}`}>
       {children}
-    </code>
+    </span>
   );
 }
 
-function chartIndexFromPointer(event, pointCount) {
-  const rect = event.currentTarget.getBoundingClientRect();
-  const progress = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-  return Math.round(progress * (pointCount - 1));
+/* liveline lays points out by time on a now-anchored axis (not uniformly by
+   index), so hover sync uses its onHover callback; only the nearest point by
+   time is needed for the tooltip content. */
+export function nearestIndexByTime(points, time) {
+  let idx = 0;
+  let best = Infinity;
+  for (let i = 0; i < points.length; i++) {
+    const d = Math.abs(points[i].time - time);
+    if (d < best) {
+      best = d;
+      idx = i;
+    }
+  }
+  return idx;
 }
 
-function ChartTooltip({ time, rows }) {
+/* liveline reports hover every animation frame; keep state identity stable
+   when the pointer barely moved so React can bail out of re-renders. */
+export function onLivelineHover(setHover) {
+  return (p) => {
+    if (!p) {
+      setHover(null);
+      return;
+    }
+    setHover((prev) =>
+      prev && Math.abs(prev.x - p.x) < 0.5 ? prev : { x: p.x, time: p.time }
+    );
+  };
+}
+
+/* liveline draws the line as a monotone cubic spline but positions its hover
+   ball by LINEAR interpolation between points — with sparse daily points the
+   ball drifts off the curve between dates. Sampling the exact same spline
+   densely (hourly) makes the two agree to sub-pixel accuracy while the
+   visible curve stays identical. Tangents ported from liveline's drawSpline
+   (Fritsch–Carlson monotone cubic); each sample keeps its day's date. */
+export function densifyBySpline(points, samplesPerSegment = 24) {
+  const n = points.length;
+  if (n < 2 || samplesPerSegment < 2) return points;
+
+  const h = new Array(n - 1);
+  const delta = new Array(n - 1);
+  for (let i = 0; i < n - 1; i++) {
+    h[i] = points[i + 1].time - points[i].time;
+    delta[i] = h[i] === 0 ? 0 : (points[i + 1].value - points[i].value) / h[i];
+  }
+  const m = new Array(n);
+  m[0] = delta[0];
+  m[n - 1] = delta[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    m[i] = delta[i - 1] * delta[i] <= 0 ? 0 : (delta[i - 1] + delta[i]) / 2;
+  }
+  for (let i = 0; i < n - 1; i++) {
+    if (delta[i] === 0) {
+      m[i] = 0;
+      m[i + 1] = 0;
+    } else {
+      const alpha = m[i] / delta[i];
+      const beta = m[i + 1] / delta[i];
+      const s2 = alpha * alpha + beta * beta;
+      if (s2 > 9) {
+        const s = 3 / Math.sqrt(s2);
+        m[i] = s * alpha * delta[i];
+        m[i + 1] = s * beta * delta[i];
+      }
+    }
+  }
+
+  const out = [];
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = points[i];
+    const p1 = points[i + 1];
+    for (let k = 0; k < samplesPerSegment; k++) {
+      const u = k / samplesPerSegment;
+      const u2 = u * u;
+      const u3 = u2 * u;
+      const value =
+        (2 * u3 - 3 * u2 + 1) * p0.value +
+        (u3 - 2 * u2 + u) * h[i] * m[i] +
+        (-2 * u3 + 3 * u2) * p1.value +
+        (u3 - u2) * h[i] * m[i + 1];
+      // dayValue: the segment's anchor value — tooltips show real daily
+      // counts, not spline-interpolated ones.
+      out.push({ time: p0.time + u * h[i], value, date: p0.date, dayValue: p0.value });
+    }
+  }
+  out.push({ ...points[n - 1], dayValue: points[n - 1].value });
+  return out;
+}
+
+export function ChartTooltip({ time, rows }) {
   return (
     <div className="insight-chart-tooltip">
       <span className="insight-chart-tooltip-time">{time}</span>
@@ -62,15 +160,17 @@ function ChartTooltip({ time, rows }) {
   );
 }
 
-function HoverMarker({ index, count, children }) {
-  if (index == null) return null;
-  const frac = count > 1 ? (index / (count - 1)) * 100 : 0;
+/* cursor line + tooltip anchor pinned to a liveline-reported pixel x. The
+   cursor stays on the exact x; the anchor clamps inward so the ~132px-wide
+   tooltip never overflows the stage at the edges. */
+export function HoverMarker({ x, children }) {
+  if (x == null) return null;
   return (
     <>
-      <span className="insight-chart-cursor" style={{ left: `${frac}%` }} />
+      <span className="insight-chart-cursor" style={{ left: `${x}px` }} />
       <span
         className="insight-chart-tooltip-anchor"
-        style={{ left: `${Math.min(Math.max(frac, 28), 72)}%` }}
+        style={{ left: `clamp(76px, ${x}px, calc(100% - 76px))` }}
       >
         {children}
       </span>
@@ -78,128 +178,18 @@ function HoverMarker({ index, count, children }) {
   );
 }
 
-/* 1 — compare: 2 series, legend + big deltas + line chart
-   props: seriesA / seriesB = { name, delta, sub, color, points },
-          windowSecs (time-axis window), formatValue */
-export function CompareCard({ seriesA, seriesB, formatValue }) {
-  const dark = useDarkMode();
-  const [hoverIndex, setHoverIndex] = useState(null);
-  const n = seriesA.points.length;
-  const windowSecs = Math.max(
-    (n - 1) * (seriesA.points[1]?.time - seriesA.points[0]?.time || 7),
-    7
-  );
-
-  const series = useMemo(
-    () => [
-      {
-        id: seriesA.name,
-        label: '',
-        data: seriesA.points,
-        value: seriesA.points.at(-1)?.value ?? 0,
-        color: seriesA.color,
-      },
-      {
-        id: seriesB.name,
-        label: '',
-        data: seriesB.points,
-        value: seriesB.points.at(-1)?.value ?? 0,
-        color: seriesB.color,
-      },
-    ],
-    [seriesA, seriesB],
-  );
-
-  const legend = [
-    {
-      name: seriesA.name,
-      delta: seriesA.delta,
-      sub: seriesA.sub,
-      color: seriesA.color,
-      tone: seriesA.delta >= 0 ? 'green' : 'red',
-    },
-    {
-      name: seriesB.name,
-      delta: seriesB.delta,
-      sub: seriesB.sub,
-      color: seriesB.color,
-      tone: seriesB.delta >= 0 ? 'green' : 'red',
-    },
-  ];
-
-  return (
-    <div className="min-h-[278px] rounded-card bg-surface p-3 shadow-hairline">
-      <div className="flex items-center gap-4">
-        {legend.map((s) => (
-          <div key={s.name} className="flex-1">
-            <span className="flex items-center gap-1.5 text-[11.5px] text-ink-2">
-              <span className="size-2 rounded-full" style={{ background: s.color }} />
-              {s.name}
-            </span>
-            <span className={`block text-[17px] font-semibold tracking-[-0.01em] tabular-nums ${s.tone === 'red' ? 'text-red' : 'text-green'}`}>
-              {formatPercent(s.delta)}
-            </span>
-            <Mono tone={s.tone}>{s.sub}</Mono>
-          </div>
-        ))}
-      </div>
-      <div className="mt-2 overflow-hidden rounded-control bg-inset shadow-hairline">
-        <div className="flex items-center justify-between border-b border-line px-2.5 py-1.5">
-          <span className="text-[11px] text-ink-3 tabular-nums">
-            Trend snapshot
-          </span>
-          <span className="rounded-full bg-field px-2 py-0.5 text-[10.5px] font-medium text-ink-2">
-            Snapshot
-          </span>
-        </div>
-        <div
-          className="insight-chart-stage relative h-[166px]"
-          onPointerDown={(event) => setHoverIndex(chartIndexFromPointer(event, n))}
-          onPointerMove={(event) => setHoverIndex(chartIndexFromPointer(event, n))}
-          onPointerLeave={() => setHoverIndex(null)}
-          onPointerCancel={() => setHoverIndex(null)}
-          onPointerUp={() => setHoverIndex(null)}
-        >
-          <Liveline
-            data={[]}
-            value={0}
-            series={series}
-            theme={dark ? 'dark' : 'light'}
-            grid={false}
-            pulse={false}
-            window={windowSecs}
-            paused
-            scrub={false}
-            cursor="default"
-            lineWidth={2.25}
-            padding={{ top: 24, right: 0, bottom: 22, left: 0 }}
-            formatValue={formatValue}
-            formatTime={formatDay}
-          />
-          <HoverMarker index={hoverIndex} count={n}>
-            <ChartTooltip
-              time={seriesA.points[hoverIndex]?.date ?? ''}
-              rows={[
-                { label: seriesA.name, value: formatValue(seriesA.points[hoverIndex]?.value), color: seriesA.color },
-                { label: seriesB.name, value: formatValue(seriesB.points[hoverIndex]?.value), color: seriesB.color },
-              ]}
-            />
-          </HoverMarker>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* 2 — anomaly: threshold + big value, metric toggle, line chart
    props: title, metrics = [{ key, label, points, value, thresholdText,
-          footer, delta, vsText, formatValue }] (exactly two) */
-export function AnomalyCard({ title, metrics }) {
+          footer, delta, vsText, formatValue, icon }] (exactly two).
+   The chart shows only the selected metric; keying Liveline by the metric
+   remounts it on toggle so the entrance reveal animation replays. */
+export function AnomalyCard({ title, metrics, className = '' }) {
   const dark = useDarkMode();
   const [activeIdx, setActiveIdx] = useState(0);
-  const [hoverIndex, setHoverIndex] = useState(null);
+  const [hover, setHover] = useState(null);
   const m = metrics[activeIdx];
   const data = m.points;
+  const hoverIdx = hover ? nearestIndexByTime(data, hover.time) : null;
   const value = m.value ?? data.at(-1)?.value ?? 0;
   const formatM = m.formatValue ?? ((v) => String(Math.round(v)));
   const windowSecs = Math.max(
@@ -208,27 +198,25 @@ export function AnomalyCard({ title, metrics }) {
   );
 
   return (
-    <div className="min-h-[278px] rounded-card bg-surface p-3 shadow-hairline">
+    <div className={`min-h-[278px] rounded-card bg-surface p-3 ${className}`.trim()}>
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-1.5 text-[12px] font-medium text-ink">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+          <IconBadge className="bg-red">{m.icon}</IconBadge>
           {title}
-        </span>
-        <span className="rounded-full bg-field px-2 py-0.5 text-[10.5px] font-medium text-ink-2">
-          Snapshot
+          {m.label}
         </span>
       </div>
       <div className="mt-1.5 flex items-baseline gap-2">
         <span className="text-[17px] font-semibold tracking-[-0.01em] text-ink tabular-nums">
           {m.footer}
         </span>
-        <Mono tone={m.delta >= 0 ? 'green' : 'red'}>{formatPercent(m.delta)}</Mono>
+        <SubLabel tone={m.delta >= 0 ? 'green' : 'red'}>{formatPercent(m.delta)}</SubLabel>
         <span className="text-[11px] text-ink-3">{m.vsText}</span>
       </div>
-      <div className="mt-2 overflow-hidden rounded-control bg-inset shadow-hairline">
-        <div className="flex items-center justify-between border-b border-line px-2.5 py-1.5">
+      <div className="mt-2 overflow-hidden rounded-control bg-inset">
+        <div className="flex items-center justify-between px-2.5 py-1.5">
           <span className="text-[11px] text-ink-3 tabular-nums">
-            {hoverIndex !== null ? formatM(data[hoverIndex].value) : m.thresholdText}
+            {hoverIdx !== null ? formatM(data[hoverIdx].dayValue ?? data[hoverIdx].value) : m.thresholdText}
           </span>
           <span className="flex rounded-full bg-field p-0.5">
             {metrics.map((item, i) => (
@@ -236,7 +224,10 @@ export function AnomalyCard({ title, metrics }) {
                 key={item.key}
                 type="button"
                 aria-pressed={activeIdx === i}
-                onClick={() => setActiveIdx(i)}
+                onClick={() => {
+                  setActiveIdx(i);
+                  setHover(null);
+                }}
                 className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium transition-[background-color,color,box-shadow,transform] duration-150 active:scale-[0.96] ${
                   activeIdx === i ? 'bg-surface text-ink shadow-btn' : 'text-ink-3 hover:text-ink-2'
                 }`}
@@ -246,21 +237,16 @@ export function AnomalyCard({ title, metrics }) {
             ))}
           </span>
         </div>
-        <div
-          className="insight-chart-stage relative h-[166px]"
-          onPointerDown={(event) => setHoverIndex(chartIndexFromPointer(event, data.length))}
-          onPointerMove={(event) => setHoverIndex(chartIndexFromPointer(event, data.length))}
-          onPointerLeave={() => setHoverIndex(null)}
-          onPointerCancel={() => setHoverIndex(null)}
-          onPointerUp={() => setHoverIndex(null)}
-        >
+        <div className="insight-chart-stage relative h-[166px]">
+          {/* key by metric: remount on toggle replays the entrance reveal */}
           <Liveline
+            key={m.key}
             data={data}
             value={value}
             theme={dark ? 'dark' : 'light'}
             color="#ee5c61"
-            grid
-            scrub={false}
+            grid={false}
+            scrub
             fill={false}
             pulse={false}
             momentum={false}
@@ -268,14 +254,17 @@ export function AnomalyCard({ title, metrics }) {
             window={windowSecs}
             lineWidth={2.25}
             cursor="crosshair"
-            padding={{ top: 18, right: 0, bottom: 22, left: 0 }}
+            padding={{ top: 18, right: 8, bottom: 22, left: 8 }}
             formatValue={formatM}
             formatTime={formatDay}
+            onHover={onLivelineHover(setHover)}
           />
-          <HoverMarker index={hoverIndex} count={data.length}>
+          <HoverMarker x={hover?.x ?? null}>
             <ChartTooltip
-              time={data[hoverIndex]?.date ?? ''}
-              rows={[{ label: m.label, value: formatM(data[hoverIndex]?.value), color: 'var(--red)' }]}
+              time={hoverIdx !== null ? data[hoverIdx].date : ''}
+              rows={[
+                { label: m.label, value: hoverIdx !== null ? formatM(data[hoverIdx].dayValue ?? data[hoverIdx].value) : '', color: 'var(--red)' },
+              ]}
             />
           </HoverMarker>
         </div>
@@ -293,7 +282,7 @@ export function AllocationCard({ title, segments, extra }) {
   if (!active) return null;
 
   return (
-    <div className="min-h-[278px] rounded-card bg-surface p-3 shadow-hairline">
+    <div className="rounded-card bg-surface p-3">
       <span className="flex items-center gap-1.5 text-[12px] font-medium text-ink">
         <span className={`flex size-3.5 items-center justify-center rounded-full text-[8px] font-bold text-white ${active.cls}`}>
           {active.badge}
@@ -351,9 +340,9 @@ export function AllocationCard({ title, segments, extra }) {
         ))}
         {extra}
       </div>
-      <div className="mt-3 min-h-16 rounded-control bg-inset px-2.5 py-2 shadow-hairline">
-        <span className={`block text-[11.5px] font-medium ${active.tone}`}>{active.label}</span>
-        <span className="mt-1 block text-[11px] leading-relaxed text-ink-3">
+      <div className="mt-3 flex items-baseline gap-2 rounded-control bg-inset px-2.5 py-2">
+        <span className={`shrink-0 text-[11.5px] font-medium ${active.tone}`}>{active.name}</span>
+        <span className="truncate text-[11px] text-ink-3">
           {active.desc}
         </span>
       </div>

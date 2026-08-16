@@ -13,6 +13,10 @@ import { getFolderTree } from '../api.js';
 const VIEW_W = 600;
 const VIEW_H = 420;
 
+// Floating graph action buttons (globe / maximize) share this shell.
+const ACTION_BTN_CLASS =
+  'flex h-8 w-8 items-center justify-center rounded-[8px] bg-white text-slate-500 shadow-[rgba(23,23,23,0.12)_0_0_0_1px,rgba(23,23,23,0.06)_0_1px_2px] transition-colors hover:bg-black/5 hover:text-black';
+
 // Node ids: folders are `f<id>` (root is f0), files are `file<id>`.
 const nodeIdOf = (currentId) => (currentId ? `f${currentId}` : 'f0');
 
@@ -79,17 +83,15 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
           if (!alive) return;
           setTree(d.tree || []);
           setRootFiles(d.files || []);
-          setLoading(false);
         })
         .catch(() => {})
         .finally(() => alive && setLoading(false));
     };
     load();
-    const onChange = () => load();
-    window.addEventListener('folders-changed', onChange);
+    window.addEventListener('folders-changed', load);
     return () => {
       alive = false;
-      window.removeEventListener('folders-changed', onChange);
+      window.removeEventListener('folders-changed', load);
     };
   }, []);
 
@@ -135,7 +137,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
             type="button"
             onClick={() => setDialog('full')}
             title="查看全库图谱"
-            className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-white text-slate-500 shadow-[rgba(23,23,23,0.12)_0_0_0_1px,rgba(23,23,23,0.06)_0_1px_2px] transition-colors hover:bg-black/5 hover:text-black"
+            className={ACTION_BTN_CLASS}
           >
             <Globe className="h-4 w-4" />
           </button>
@@ -143,20 +145,16 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
             type="button"
             onClick={() => setDialog('local')}
             title="放大当前图谱"
-            className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-white text-slate-500 shadow-[rgba(23,23,23,0.12)_0_0_0_1px,rgba(23,23,23,0.06)_0_1px_2px] transition-colors hover:bg-black/5 hover:text-black"
+            className={ACTION_BTN_CLASS}
           >
             <Maximize className="h-4 w-4" />
           </button>
         </div>
       )}
       {/* Square graph content — rendered directly in the card, no wrapper */}
-      {loading ? (
+      {loading || empty ? (
         <div className="flex h-[295px] items-center justify-center text-[12px] text-slate-500">
-          加载中…
-        </div>
-      ) : empty ? (
-        <div className="flex h-[295px] items-center justify-center text-[12px] text-slate-500">
-          暂无内容
+          {loading ? '加载中…' : '暂无内容'}
         </div>
       ) : (
         <GraphCanvas

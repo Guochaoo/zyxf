@@ -44,7 +44,6 @@ export default function ChatComposer() {
     return () => clearTimeout(t);
   }, [phase]);
 
-  const sent = phase !== 'idle';
   const canSend = draft.trim().length > 0;
 
   const send = () => {
@@ -96,15 +95,7 @@ export default function ChatComposer() {
       <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3 pt-2.5 pb-1">
         {/* user bubble — right aligned, soft block */}
         <div className="flex justify-end pl-14">
-          <div
-            className="rounded-xl bg-field px-3 py-1.5 text-[13px] leading-[1.4] text-ink
-              transition-[opacity,transform] duration-300"
-            style={{
-              opacity: sent ? 1 : 0,
-              transform: sent ? 'translateY(0)' : 'translateY(10px)',
-              transitionTimingFunction: 'cubic-bezier(0.23, 1, 0.32, 1)',
-            }}
-          >
+          <div className="rounded-xl bg-field px-3 py-1.5 text-[13px] leading-[1.4] text-ink">
             {submitted}
           </div>
         </div>

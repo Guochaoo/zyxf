@@ -105,15 +105,13 @@ async function relocateFolderSubtree(folderId, { parentOverrides, nameOverrides,
     }))
     .filter((move) => move.oldKey && move.newKey);
 
+  // Only objects whose key actually changes need copying / deleting.
+  const filesToMove = fileMoves.filter((m) => m.oss_key !== m.newKey);
+  const placeholdersToMove = placeholderMoves.filter((m) => m.oldKey !== m.newKey);
+
   // Copy first (both stores in sync), then update DB, then delete old objects.
-  await batchOss(
-    fileMoves.filter((m) => m.oss_key !== m.newKey),
-    (m) => copyOssObject(m.oss_key, m.newKey)
-  );
-  await batchOss(
-    placeholderMoves.filter((m) => m.oldKey !== m.newKey),
-    (m) => putEmptyOssObject(m.newKey)
-  );
+  await batchOss(filesToMove, (m) => copyOssObject(m.oss_key, m.newKey));
+  await batchOss(placeholdersToMove, (m) => putEmptyOssObject(m.newKey));
 
   const updateFile = db.prepare('UPDATE files SET oss_key = ? WHERE id = ?');
   const tx = db.transaction(() => {
@@ -122,14 +120,8 @@ async function relocateFolderSubtree(folderId, { parentOverrides, nameOverrides,
   });
   tx();
 
-  await batchOss(
-    fileMoves.filter((m) => m.oss_key !== m.newKey),
-    (m) => deleteOssObjectIfExists(m.oss_key)
-  );
-  await batchOss(
-    placeholderMoves.filter((m) => m.oldKey !== m.newKey),
-    (m) => deleteOssObjectIfExists(m.oldKey)
-  );
+  await batchOss(filesToMove, (m) => deleteOssObjectIfExists(m.oss_key));
+  await batchOss(placeholdersToMove, (m) => deleteOssObjectIfExists(m.oldKey));
   return { ok: true };
 }
 
@@ -361,9 +353,11 @@ router.post('/reorder', requireAdmin, (req, res) => {
   const pid = parseOptionalFolderId(parent_folder_id);
   if (Number.isNaN(pid)) return res.status(400).json({ error: '无效的父文件夹 ID' });
 
+  // Entries without a known type and id are ignored by validation and update alike.
+  const isReorderItem = (it) => !!it && (it.type === 'file' || it.type === 'folder') && !!it.id;
+
   // Validate every entry belongs to the claimed parent folder.
-  for (const it of order) {
-    if (!it || (it.type !== 'file' && it.type !== 'folder') || !it.id) continue;
+  for (const it of order.filter(isReorderItem)) {
     if (it.type === 'file') {
       const f = db.prepare('SELECT folder_id FROM files WHERE id = ?').get(Number(it.id));
       if (!f) return res.status(400).json({ error: `file ${it.id} not found` });
@@ -387,7 +381,7 @@ router.post('/reorder', requireAdmin, (req, res) => {
   const tx = db.transaction(() => {
     for (let i = 0; i < order.length; i++) {
       const it = order[i];
-      if (!it || (it.type !== 'file' && it.type !== 'folder') || !it.id) continue;
+      if (!isReorderItem(it)) continue;
       if (it.type === 'file') updateFile.run(i, Number(it.id));
       else updateFolder.run(i, Number(it.id));
     }
@@ -401,18 +395,12 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ error: '无效的 ID' });
   // Gather all descendant keys to clean up OSS objects.
-  const keys = [];
-  const collectKeys = (folderId) => {
-    const placeholder = placeholderKeyForFolder(db, folderId);
+  const { folderIds, files } = collectFolderTree(id);
+  const keys = files.map((f) => f.oss_key);
+  for (const fid of folderIds) {
+    const placeholder = placeholderKeyForFolder(db, fid);
     if (placeholder) keys.push(placeholder);
-    for (const f of db.prepare('SELECT oss_key FROM files WHERE folder_id = ?').all(folderId)) {
-      keys.push(f.oss_key);
-    }
-    for (const s of db.prepare('SELECT id FROM folders WHERE parent_id = ?').all(folderId)) {
-      collectKeys(s.id);
-    }
-  };
-  collectKeys(id);
+  }
 
   // Delete OSS objects before removing database rows so the two stores stay in sync.
   try {

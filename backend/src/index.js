@@ -87,10 +87,8 @@ app.use('/api/sync', syncRoutes);
 // Sanitize errors in production — never leak internals to clients.
 app.use((err, _req, res, _next) => {
   console.error(err);
-  if (isProd) {
-    return res.status(err.status || 500).json({ error: 'internal error' });
-  }
-  res.status(err.status || 500).json({ error: err.message || 'internal error' });
+  const message = isProd ? 'internal error' : err.message || 'internal error';
+  res.status(err.status || 500).json({ error: message });
 });
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
