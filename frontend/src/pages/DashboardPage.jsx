@@ -1,169 +1,284 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Liveline } from 'liveline';
-import { getStats } from '../api.js';
+import { getStats, getHeatmap } from '../api.js';
 import { errMsg, formatSize } from '../utils.js';
 import FileIcon from '../components/FileIcon.jsx';
-import { CompareCard, AnomalyCard, AllocationCard } from '../components/InsightCards.jsx';
+import { AnomalyCard, AllocationCard, ChartTooltip, IconBadge, densifyBySpline } from '../components/InsightCards.jsx';
 import { BsArrowClockwise, BsFolder2Open } from 'react-icons/bs';
+import { ArrowDown, ArrowUp, BarChart3, HardDrive } from 'lucide-react';
 
 /* ============================================================
  * Insight card design system — liveline-style cards
  * ============================================================ */
 
-const DAY_S = 86400; // liveline time axis is in seconds
+const DAY_MS = 86400000;
 
 const ACCENT = '#3d9aff';
-const ORANGE = '#f68f3c';
 
-/* daily series rows { date, ts, downloads, uploads } → Liveline points */
+/* daily series rows { date, ts, downloads, uploads } → Liveline points.
+   Densified to hourly spline samples so liveline's linear hover interpolation
+   lands on the drawn curve (see densifyBySpline). */
 const toPoints = (rows, key) =>
-  rows.map((d) => ({ time: d.ts / 1000, value: d[key], date: d.date }));
-
-/* daily-series x-axis labels: local M/D instead of liveline's HH:MM:SS */
-const formatDay = (t) => {
-  const d = new Date(t * 1e3);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
-};
+  densifyBySpline(rows.map((d) => ({ time: d.ts / 1000, value: d[key], date: d.date })));
 
 /* week-over-week percent change */
 const pctChange = (cur, prev) =>
   prev > 0 ? ((cur - prev) / prev) * 100 : cur > 0 ? 100 : 0;
 
-/* allocation segment palette (orange → accent → green → muted) */
+/* allocation segment palette — all solid so the white icon badges stay
+   readable on every segment (orange → accent → green → red → violet → teal) */
 const PALETTE = [
   { cls: 'bg-orange', tone: 'text-orange', color: 'var(--orange)' },
   { cls: 'bg-accent', tone: 'text-accent', color: 'var(--accent)' },
   { cls: 'bg-green', tone: 'text-green', color: 'var(--green)' },
-  { cls: 'bg-line-strong', tone: 'text-ink-2', color: 'rgba(23,23,23,0.14)' },
   { cls: 'bg-red', tone: 'text-red', color: 'var(--red)' },
-  { cls: 'bg-line', tone: 'text-ink-3', color: 'rgba(23,23,23,0.08)' },
+  { cls: 'bg-[#8b5cf6]', tone: 'text-[#8b5cf6]', color: '#8b5cf6' },
+  { cls: 'bg-[#14b8a6]', tone: 'text-[#14b8a6]', color: '#14b8a6' },
 ];
 
 function Card({ className = '', children }) {
   return (
-    <div className={`rounded-card bg-surface p-3 shadow-hairline ${className}`.trim()}>
+    <div className={`rounded-card bg-surface p-3 ${className}`.trim()}>
       {children}
     </div>
   );
 }
 
-function CardHeader({ title, sub, pill }) {
+function CardHeader({ title, sub, icon, badgeClass }) {
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <h2 className="text-[13px] font-semibold tracking-[-0.01em] text-ink">{title}</h2>
-        {sub && <p className="mt-0.5 text-[11px] text-ink-3">{sub}</p>}
-      </div>
-      {pill && (
-        <span className="shrink-0 rounded-full bg-field px-2 py-0.5 text-[10.5px] font-medium text-ink-2">
-          {pill}
-        </span>
-      )}
+    <div>
+      <h2 className="flex items-center gap-1.5 text-[13px] font-semibold tracking-[-0.01em] text-ink">
+        {icon && <IconBadge className={badgeClass}>{icon}</IconBadge>}
+        {title}
+      </h2>
+      {sub && <p className="mt-0.5 text-[11px] text-ink-3">{sub}</p>}
     </div>
   );
 }
 
-/* ---- pointer-driven chart hover (cursor line + floating tooltip) ---- */
+/* ---- Activity heatmap: GitHub-style year grid ---- */
 
-function chartIndexFromPointer(event, pointCount) {
-  const rect = event.currentTarget.getBoundingClientRect();
-  const progress = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-  return Math.round(progress * (pointCount - 1));
+/* accent ramp over the field token; level 0 is an empty day */
+const HEAT_LEVELS = [
+  'var(--field)',
+  'rgba(61, 154, 255, 0.35)',
+  'rgba(61, 154, 255, 0.55)',
+  'rgba(61, 154, 255, 0.78)',
+  'var(--accent)',
+];
+
+const HEAT_GAP = 5; // px between cells and label rows
+
+/* sqrt-of-max instead of linear so one huge spike (a bulk upload) doesn't
+   flatten every other active day into the lightest shade */
+const heatLevel = (v, max) =>
+  v <= 0 || max <= 0 ? 0 : Math.min(4, Math.ceil(Math.sqrt(v / max) * 4));
+
+const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
+
+const fmtFullDate = (ts) => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+};
+
+/* daily rows → week columns (Monday-first), padded with invisible cells to
+   full weeks on both ends so the grid always starts on a Monday */
+function buildWeeks(rows) {
+  const byTs = new Map(rows.map((r) => [r.ts, r]));
+  const first = rows[0].ts;
+  const last = rows.at(-1).ts;
+  const gridStart = first - ((new Date(first).getDay() + 6) % 7) * DAY_MS;
+  const total = Math.ceil((last - gridStart) / DAY_MS) + 1;
+  const padded = total + ((7 - (total % 7)) % 7);
+  const cells = Array.from({ length: padded }, (_, i) => {
+    const ts = gridStart + i * DAY_MS;
+    const r = byTs.get(ts);
+    return { ts, inRange: !!r, downloads: r?.downloads ?? 0, uploads: r?.uploads ?? 0 };
+  });
+  const weeks = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  // label the week each month's 1st falls in (GitHub-style top axis)
+  const months = weeks.map((week) => {
+    const firstOfMonth = week.find((c) => new Date(c.ts).getDate() === 1);
+    return firstOfMonth ? new Date(firstOfMonth.ts).getMonth() : null;
+  });
+  const max = cells.reduce((m, c) => Math.max(m, c.downloads), 0);
+  return { weeks, months, max };
 }
 
-function ChartTooltip({ time, rows }) {
+function ActivityHeatmap({ rows }) {
+  const scrollRef = useRef(null);
+  const [hover, setHover] = useState(null);
+  const [box, setBox] = useState(null); // measured grid viewport { w, h }
+
+  const { weeks, months, max } = useMemo(
+    () => (rows?.length ? buildWeeks(rows) : { weeks: [], months: [], max: 0 }),
+    [rows]
+  );
+
+  /* the panel stretches to the grid row height (set by the neighbouring
+     allocation card), so the scroll area's own size tells us how big the
+     cells can get; re-measure on resize */
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !weeks.length || typeof ResizeObserver === 'undefined') return undefined;
+    const measure = () => setBox({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [weeks.length]);
+
+  const PADX = 24; // px-3 on both sides — matches the p-3 of the other cards
+  const PADY = 12; // pb-3 below; the header row provides the top spacing
+  const MONTH_H = 14; // month axis row + its mb-1
+  const WEEK_LBL = 18; // weekday label column + mr-1
+
+  /* cell size fits the available height first (enlarging beyond GitHub's
+     10px to fill the taller panel) but is capped by the width so 53 week
+     columns stop just short of overflowing */
+  const cell = useMemo(() => {
+    if (!box) return 12;
+    const byH = (box.h - PADY - MONTH_H - 6 * HEAT_GAP) / 7;
+    const byW = (box.w - PADX - WEEK_LBL - (weeks.length - 1) * HEAT_GAP) / weeks.length;
+    return Math.max(12, Math.min(22, Math.floor(Math.min(byH, byW))));
+  }, [box, weeks.length]);
+
+  /* when even 10px cells overflow the width, drop the oldest weeks from the
+     left instead of scrolling — the grid always fits, no scrollbar */
+  const { visWeeks, visMonths } = useMemo(() => {
+    if (!box || !weeks.length) {
+      return { visWeeks: weeks, visMonths: months };
+    }
+    const avail = box.w - PADX - WEEK_LBL;
+    const nFit = Math.min(
+      weeks.length,
+      Math.max(1, Math.floor((avail + HEAT_GAP) / (cell + HEAT_GAP)))
+    );
+    if (nFit >= weeks.length) {
+      return { visWeeks: weeks, visMonths: months };
+    }
+    const cutWeeks = weeks.slice(weeks.length - nFit);
+    const cutMonths = months.slice(months.length - nFit);
+    // the week holding a month's label may have been cut; relabel the first
+    // visible column so the axis never starts unannotated
+    if (cutMonths[0] == null) {
+      const d = cutWeeks[0].find((c) => c.inRange) ?? cutWeeks[0][0];
+      cutMonths[0] = new Date(d.ts).getMonth();
+    }
+    return { visWeeks: cutWeeks, visMonths: cutMonths };
+  }, [box, cell, weeks, months]);
+
+  /* tooltip x is clamped into the grid viewport so the ~150px tooltip never
+     spills past the panel edges; it sits above the hovered cell (6px gap)
+     and flips below it for the top rows, so the hovered cell itself is
+     never covered */
+  const onCellEnter = (e, day) => {
+    const el = e.currentTarget;
+    const scroll = scrollRef.current;
+    if (!scroll) return;
+    const left = Math.min(
+      Math.max(el.offsetLeft + cell / 2, 74),
+      scroll.clientWidth - 74
+    );
+    const above = el.offsetTop - 58;
+    setHover({
+      left,
+      top: above >= 0 ? above : el.offsetTop + cell + 6,
+      cell: day,
+    });
+  };
+
   return (
-    <div className="insight-chart-tooltip">
-      <span className="insight-chart-tooltip-time">{time}</span>
-      {rows.map((row) => (
-        <div key={row.label} className="insight-chart-tooltip-row">
-          <span className="insight-chart-tooltip-label">
-            <span className="insight-chart-tooltip-dot" style={{ background: row.color }} />
-            {row.label}
-          </span>
-          <strong>{row.value}</strong>
+    <div className="flex h-full flex-col overflow-hidden rounded-control bg-surface">
+      <div className="flex items-center justify-between gap-3 px-3 pb-1.5 pt-3">
+        <span className="flex min-w-0 items-center gap-1.5 text-[12px] font-medium text-ink">
+          <IconBadge className="bg-accent">
+            <ArrowDown className="size-2" strokeWidth={3} />
+          </IconBadge>
+          下载热力图
+        </span>
+        <span className="flex shrink-0 items-center gap-1 text-[10px] text-ink-3">
+          少
+          {HEAT_LEVELS.map((c) => (
+            <span key={c} className="size-[9px] rounded-[2px]" style={{ background: c }} />
+          ))}
+          多
+        </span>
+      </div>
+      {weeks.length ? (
+        <div
+          ref={scrollRef}
+          className="flex min-h-0 flex-1 px-3 pb-3"
+          onMouseLeave={() => setHover(null)}
+        >
+          {/* the weeks already fit the viewport (overflow is dropped from the
+              left), so the grid just centers in whatever space is left */}
+          <div className="relative mx-auto my-auto w-max">
+            <div className="mb-1 flex" style={{ gap: HEAT_GAP }}>
+              {visMonths.map((m, w) => (
+                <span
+                  key={w}
+                  style={{ width: cell }}
+                  className="whitespace-nowrap text-[10px] leading-none text-ink-3"
+                >
+                  {m != null ? `${m + 1}月` : ''}
+                </span>
+              ))}
+            </div>
+            <div className="flex" style={{ gap: HEAT_GAP }}>
+              <div className="mr-1 flex flex-col" style={{ gap: HEAT_GAP }}>
+                {WEEKDAYS.map((name, i) => (
+                  <span
+                    key={name}
+                    style={{ height: cell, lineHeight: `${cell}px` }}
+                    className="text-[10px] text-ink-3"
+                  >
+                    {i % 2 === 0 ? name : ''}
+                  </span>
+                ))}
+              </div>
+              {visWeeks.map((week, w) => (
+                <div key={w} className="flex flex-col" style={{ gap: HEAT_GAP }}>
+                  {week.map((day) =>
+                    day.inRange ? (
+                      <span
+                        key={day.ts}
+                        style={{
+                          width: cell,
+                          height: cell,
+                          background: HEAT_LEVELS[heatLevel(day.downloads, max)],
+                        }}
+                        className="rounded-[2px] transition-shadow hover:ring-1 hover:ring-line-strong"
+                        onMouseEnter={(e) => onCellEnter(e, day)}
+                      />
+                    ) : (
+                      <span key={day.ts} style={{ width: cell, height: cell }} />
+                    )
+                  )}
+                </div>
+              ))}
+            </div>
+            {hover && (
+              <div
+                className="pointer-events-none absolute z-10 -translate-x-1/2"
+                style={{ left: `${hover.left}px`, top: `${hover.top}px` }}
+              >
+                <ChartTooltip
+                  time={fmtFullDate(hover.cell.ts)}
+                  rows={[
+                    { label: '下载', value: String(hover.cell.downloads), color: ACCENT },
+                  ]}
+                />
+              </div>
+            )}
+          </div>
         </div>
-      ))}
-    </div>
-  );
-}
-
-function HoverMarker({ index, count, children }) {
-  if (index == null) return null;
-  const frac = count > 1 ? (index / (count - 1)) * 100 : 0;
-  return (
-    <>
-      <span className="insight-chart-cursor" style={{ left: `${frac}%` }} />
-      <span
-        className="insight-chart-tooltip-anchor"
-        style={{ left: `${Math.min(Math.max(frac, 28), 72)}%` }}
-      >
-        {children}
-      </span>
-    </>
-  );
-}
-
-/* ---- Activity chart: two-series Liveline in an inset panel ---- */
-
-function ActivityChart({ series }) {
-  const [hoverIdx, setHoverIdx] = useState(null);
-  const dl = toPoints(series, 'downloads');
-  const up = toPoints(series, 'uploads');
-  const hover = hoverIdx != null ? series[hoverIdx] : null;
-  const setHover = (e) => setHoverIdx(chartIndexFromPointer(e, series.length));
-  const clearHover = () => setHoverIdx(null);
-
-  return (
-    <div className="overflow-hidden rounded-control bg-inset shadow-hairline">
-      <div className="flex items-center justify-between border-b border-line px-2.5 py-1.5">
-        <span className="text-[11px] text-ink-3 tabular-nums">Trend snapshot</span>
-        <span className="rounded-full bg-field px-2 py-0.5 text-[10.5px] font-medium text-ink-2">
-          Snapshot
-        </span>
-      </div>
-      <div
-        className="insight-chart-stage relative h-[240px]"
-        onPointerDown={setHover}
-        onPointerMove={setHover}
-        onPointerLeave={clearHover}
-        onPointerCancel={clearHover}
-        onPointerUp={clearHover}
-      >
-        <Liveline
-          data={[]}
-          value={0}
-          series={[
-            { id: 'downloads', label: '', data: dl, value: dl.at(-1)?.value ?? 0, color: ACCENT },
-            { id: 'uploads', label: '', data: up, value: up.at(-1)?.value ?? 0, color: ORANGE },
-          ]}
-          theme="light"
-          grid
-          badge={false}
-          momentum={false}
-          pulse={false}
-          paused
-          window={Math.max((series.length - 1) * DAY_S, DAY_S)}
-          scrub={false}
-          cursor="default"
-          lineWidth={2.25}
-          padding={{ top: 18, right: 8, bottom: 18, left: 8 }}
-          formatValue={(v) => String(Math.round(v))}
-          formatTime={formatDay}
-        />
-        <HoverMarker index={hoverIdx} count={series.length}>
-          {hover && (
-            <ChartTooltip
-              time={hover.date}
-              rows={[
-                { label: '下载', value: String(hover.downloads), color: ACCENT },
-                { label: '上传', value: String(hover.uploads), color: ORANGE },
-              ]}
-            />
-          )}
-        </HoverMarker>
-      </div>
+      ) : (
+        <div className="py-16 text-center text-[12px] text-ink-3">
+          {rows ? '近一年暂无活动' : '加载中…'}
+        </div>
+      )}
     </div>
   );
 }
@@ -296,16 +411,6 @@ function TopFolders({ items }) {
   );
 }
 
-function MiniStat({ label, value, hint }) {
-  return (
-    <div className="text-right">
-      <div className="text-[10px] uppercase tracking-[0.22em] text-ink-3">{label}</div>
-      <div className="mt-1 text-[16px] font-medium leading-none text-ink tabular-nums">{value}</div>
-      {hint && <div className="mt-1 text-[10px] text-ink-3">{hint}</div>}
-    </div>
-  );
-}
-
 function RangeSwitch({ value, onChange }) {
   const opts = [
     { v: 7, label: '7日' },
@@ -358,6 +463,9 @@ export default function DashboardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState('');
   const [range, setRange] = useState(30);
+  // trailing-year activity for the heatmap — intentionally NOT refetched when
+  // `range` changes, so the year grid stays put while other cards re-range
+  const [heat, setHeat] = useState(null);
 
   const load = (silent = false, r = range) => {
     if (silent) setRefreshing(true);
@@ -374,10 +482,20 @@ export default function DashboardPage() {
       });
   };
 
+  const loadHeat = () =>
+    getHeatmap()
+      .then(setHeat)
+      .catch(() => {}); // the heatmap panel renders its own empty state
+
   useEffect(() => {
     load(false, range);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
+
+  useEffect(() => {
+    loadHeat();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ---- derived stats for the three insight cards ---- */
   const insights = useMemo(() => {
@@ -390,18 +508,9 @@ export default function DashboardPage() {
       series[0] || { downloads: 0, date: '-' }
     );
 
-    // last 8 days for the card charts
-    const tail = series.slice(-8);
-    const dl8 = toPoints(tail, 'downloads');
-    const up8 = toPoints(tail, 'uploads');
-
-    // 7-day uploads vs previous 7-day uploads (from the daily series)
-    const up7 = series.slice(-7).reduce((s, d) => s + d.uploads, 0);
-    const upPrev7 = series.slice(-14, -7).reduce((s, d) => s + d.uploads, 0);
-    const upWOW = pctChange(up7, upPrev7);
-
-    // 7-day downloads vs previous 7-day downloads
-    const wow = pctChange(stats.downloads_7d, stats.downloads_prev_7d);
+    // full selected range for the card charts — follows the 7/30/90 switch
+    const dlPts = toPoints(series, 'downloads');
+    const upPts = toPoints(series, 'uploads');
 
     // today vs yesterday, both metrics
     const todayUp = series.at(-1)?.uploads ?? 0;
@@ -415,13 +524,11 @@ export default function DashboardPage() {
       totalDl,
       totalUp,
       peakDl,
-      wow,
-      upWOW,
       dodUp,
       todayUp,
       peakUp,
-      dl8,
-      up8,
+      dlPts,
+      upPts,
     };
   }, [stats]);
 
@@ -455,7 +562,6 @@ export default function DashboardPage() {
 
   if (!stats || !insights) return null;
 
-  const fmt = (v) => String(Math.round(v));
   const dlDod = pctChange(stats.today_downloads, stats.yesterday_downloads);
   const typeExtra =
     (stats.type_breakdown?.length ?? 0) > 6 ? (
@@ -463,9 +569,14 @@ export default function DashboardPage() {
     ) : null;
 
   return (
-    <div className="space-y-8">
+    // pt-12 reserves space for the fixed StaggeredMenu toggle pinned at the
+    // top-right (top:5px, ~48px tall) so the range switch / refresh buttons
+    // don't sit underneath it on this full-width page.
+    // uniform card rhythm: sections are spaced like the cards inside them
+    // (gap-3); the header keeps its original 32px clearance via mb-5.
+    <div className="space-y-3 pt-12">
       {/* Header */}
-      <header className="flex flex-wrap items-end justify-between gap-4">
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2">
             <img
@@ -481,7 +592,10 @@ export default function DashboardPage() {
           <RangeSwitch value={range} onChange={setRange} />
           <button
             type="button"
-            onClick={() => load(true)}
+            onClick={() => {
+              load(true);
+              loadHeat();
+            }}
             disabled={refreshing}
             className="inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-[12px] text-ink shadow-btn transition-colors duration-100 hover:bg-hover disabled:opacity-50"
           >
@@ -491,82 +605,56 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Insight cards — the three styles, real data */}
-      <section className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        <CompareCard
-          seriesA={{
-            name: '下载',
-            delta: insights.wow,
-            sub: `7日 ${stats.downloads_7d.toLocaleString()} 次`,
-            color: ACCENT,
-            points: insights.dl8,
-          }}
-          seriesB={{
-            name: '上传',
-            delta: insights.upWOW,
-            sub: `7日 ${stats.files_added_7d.toLocaleString()} 个`,
-            color: ORANGE,
-            points: insights.up8,
-          }}
-          formatValue={fmt}
-        />
+      {/* Activity heatmap + file type breakdown */}
+      <section className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+        <div className="lg:col-span-8">
+          <ActivityHeatmap rows={heat?.series} />
+        </div>
 
+        <div className="lg:col-span-4">
+          <AllocationCard title="文件类型分布" segments={typeSegments} extra={typeExtra} />
+        </div>
+      </section>
+
+      {/* Today snapshot + Top downloads */}
+      <section className="grid grid-cols-1 gap-3 lg:grid-cols-12">
         <AnomalyCard
-          title="今日下载"
+          className="lg:col-span-7"
+          title="今日"
           metrics={[
             {
               key: 'downloads',
               label: '下载',
-              points: insights.dl8,
+              points: insights.dlPts,
               value: stats.today_downloads,
               thresholdText: `峰值 ${insights.peakDl.downloads} 次`,
               footer: `${stats.today_downloads.toLocaleString()} 次下载`,
               delta: dlDod,
               vsText: 'vs 昨日',
               formatValue: (v) => `${Math.round(v)} 次`,
+              icon: <ArrowDown className="size-2" strokeWidth={3} />,
             },
             {
               key: 'uploads',
               label: '上传',
-              points: insights.up8,
+              points: insights.upPts,
               value: insights.todayUp,
-              thresholdText: `峰值 ${insights.peakUp} 个`,
-              footer: `${insights.todayUp.toLocaleString()} 个文件`,
+              thresholdText: `峰值 ${insights.peakUp} 次`,
+              footer: `${insights.todayUp.toLocaleString()} 次上传`,
               delta: insights.dodUp,
               vsText: 'vs 昨日',
-              formatValue: (v) => `${Math.round(v)} 个`,
+              formatValue: (v) => `${Math.round(v)} 次`,
+              icon: <ArrowUp className="size-2" strokeWidth={3} />,
             },
           ]}
         />
 
-        <AllocationCard title="文件类型分布" segments={typeSegments} extra={typeExtra} />
-      </section>
-
-      {/* Activity chart + Top downloads */}
-      <section className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-        <Card className="lg:col-span-7">
-          <div className="mb-3 flex items-end justify-between gap-4">
-            <div>
-              <h2 className="text-[13px] font-semibold tracking-[-0.01em] text-ink">
-                近 {range} 日活动
-              </h2>
-              <p className="mt-0.5 text-[11px] text-ink-3">下载(蓝) · 上传(橙)</p>
-            </div>
-            <div className="flex gap-6">
-              <MiniStat label="DOWNLOADS" value={insights.totalDl.toLocaleString()} />
-              <MiniStat label="UPLOADS" value={insights.totalUp.toLocaleString()} />
-              <MiniStat
-                label="PEAK"
-                value={`${insights.peakDl.downloads}`}
-                hint={insights.peakDl.date}
-              />
-            </div>
-          </div>
-          <ActivityChart series={stats.series} />
-        </Card>
-
         <Card className="lg:col-span-5">
-          <CardHeader title="热门下载 TOP 10" sub="近 30 日下载次数最多" pill="TOP 10" />
+          <CardHeader
+            title="下载排行"
+            icon={<BarChart3 className="size-2" strokeWidth={3} />}
+            badgeClass="bg-accent"
+          />
           <TopDownloads items={stats.top_downloads} />
         </Card>
       </section>
@@ -574,15 +662,19 @@ export default function DashboardPage() {
       {/* Recent uploads + Top folders */}
       <section className="grid grid-cols-1 gap-3 lg:grid-cols-12">
         <Card className="lg:col-span-6">
-          <CardHeader title="最近上传" sub="最新 8 个文件" pill="LATEST" />
+          <CardHeader
+            title="最近上传"
+            icon={<ArrowUp className="size-2" strokeWidth={3} />}
+            badgeClass="bg-orange"
+          />
           <RecentUploads items={stats.recent_uploads} />
         </Card>
 
         <Card className="lg:col-span-6">
           <CardHeader
-            title="占用最大的目录 TOP 5"
-            sub="按存储体积排序"
-            pill={`${stats.total_files.toLocaleString()} 文件 · ${formatSize(stats.total_size)}`}
+            title="占用排行"
+            icon={<HardDrive className="size-2" strokeWidth={3} />}
+            badgeClass="bg-green"
           />
           <TopFolders items={stats.top_folders} />
         </Card>

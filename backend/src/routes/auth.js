@@ -23,8 +23,7 @@ router.post('/login', loginLimiter, (req, res) => {
     return res.status(400).json({ error: '用户名和密码不能为空' });
   }
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
-  if (!user) return res.status(401).json({ error: '用户名或密码错误' });
-  if (!bcrypt.compareSync(password, user.password_hash)) {
+  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: '用户名或密码错误' });
   }
   const token = signToken({ id: user.id, username: user.username, role: user.role });

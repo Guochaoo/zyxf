@@ -10,6 +10,18 @@
   font-display: swap;
 }
 
+/* liveline hardcodes '"SF Mono", Menlo, monospace' for its chart text (canvas
+   axis labels and the DOM value badge), and that family doesn't exist on
+   Windows. Alias the name to the same OPPOSans file so charts match the app;
+   canvas text resolves fonts through CSS, so the alias applies there too. */
+@font-face {
+  font-family: 'SF Mono';
+  src: url('/fonts/OPPO%20Sans%204.0.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 html {
   /* Reserve space for the vertical scrollbar so its appear/disappear
      between routes doesn't shift centered layouts (top bar, etc.) */
@@ -469,6 +481,20 @@ input:-webkit-autofill:active {
 
 .insight-chart-stage {
   position: relative;
+}
+
+/* liveline's built-in hover bubble (the div right after the canvas inside
+   its chart container) duplicates the custom tooltip; keep the custom one.
+   Scoped via :has(> canvas) so the series-toggle button groups (also divs
+   inside the stage) are untouched. Inline display requires !important. */
+.insight-chart-stage > div:has(> canvas) > div:last-of-type {
+  display: none !important;
+}
+
+/* liveline's in-chart series-toggle buttons carry an inline system-ui
+   font-family; re-assert OPPOSans so no chart control text diverges. */
+.insight-chart-stage button {
+  font-family: 'OPPOSans', sans-serif !important;
 }
 
 .insight-chart-cursor {

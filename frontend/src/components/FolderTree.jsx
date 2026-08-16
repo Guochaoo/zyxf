@@ -32,11 +32,10 @@ export default function FolderTree({ currentId = 0, className = '' }) {
         .catch(() => {});
     };
     load();
-    const onChange = () => load();
-    window.addEventListener('folders-changed', onChange);
+    window.addEventListener('folders-changed', load);
     return () => {
       alive = false;
-      window.removeEventListener('folders-changed', onChange);
+      window.removeEventListener('folders-changed', load);
     };
   }, []);
 

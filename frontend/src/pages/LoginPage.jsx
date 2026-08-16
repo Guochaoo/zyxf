@@ -22,8 +22,8 @@ export default function LoginPage() {
     try {
       await login(username, password);
       nav('/');
-    } catch (e) {
-      setErr(errMsg(e, '登录失败'));
+    } catch (error) {
+      setErr(errMsg(error, '登录失败'));
     } finally {
       setLoading(false);
     }

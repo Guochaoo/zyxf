@@ -4,6 +4,7 @@ import { X, Loader2 } from 'lucide-react';
 import { DownloadIcon } from '../icons';
 import { getFileUrl, getWebofficeToken } from '../../api.js';
 import { downloadFileById, errMsg, getPreviewKind, isLargeFile, LARGE_FILE_HINT } from '../../utils.js';
+import useMediaQuery from '../../hooks/useMediaQuery.js';
 import PreviewBody from './Body.jsx';
 
 /**
@@ -18,15 +19,7 @@ export default function Preview({ file, onClose }) {
   const [downloadErr, setDownloadErr] = useState('');
   const [downloading, setDownloading] = useState(false);
   const kind = useMemo(() => getPreviewKind(file.ext), [file.ext]);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const query = window.matchMedia('(max-width: 640px)');
-    const update = () => setIsMobile(query.matches);
-    update();
-    query.addEventListener?.('change', update);
-    return () => query.removeEventListener?.('change', update);
-  }, []);
+  const isMobile = useMediaQuery('(max-width: 640px)');
 
   // Fetch the signed URL (downloads / fallbacks) and WebOffice token
   // (interactive preview) in parallel; shared by the retry button.

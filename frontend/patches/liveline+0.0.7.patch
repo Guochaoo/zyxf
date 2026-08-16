@@ -1,0 +1,21 @@
+diff --git a/node_modules/liveline/dist/index.js b/node_modules/liveline/dist/index.js
+index fd05062..e004355 100644
+--- a/node_modules/liveline/dist/index.js
++++ b/node_modules/liveline/dist/index.js
+@@ -447,10 +447,13 @@ function drawLine(ctx, layout, palette, visible, smoothValue, now, showFill, scr
+   }
+   ctx.restore();
+   if (!skipDashLine) {
+-    const realCurrentY = Math.max(pad.top, Math.min(h - pad.bottom, toY(smoothValue)));
++    /* zyxf patch: guide line pinned to value 0 (zero baseline), drawn as a
++       solid theme-aware gray line (was: dashed at current value in
++       40%-series-color) */
++    const realCurrentY = Math.max(pad.top, Math.min(h - pad.bottom, toY(0)));
+     const currentY = chartReveal < 1 ? centerY + (realCurrentY - centerY) * chartReveal : realCurrentY;
+-    ctx.setLineDash([4, 4]);
+-    ctx.strokeStyle = palette.dashLine;
++    ctx.setLineDash([]);
++    ctx.strokeStyle = palette.refLine;
+     ctx.lineWidth = 1;
+     const dashBase = isScrubbing ? 1 - scrubAmount * 0.2 : 1;
+     ctx.globalAlpha = incomingAlpha * (chartReveal < 1 ? dashBase * chartReveal : dashBase);
