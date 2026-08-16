@@ -515,7 +515,7 @@ describe('search', () => {
 });
 
 describe('stats', () => {
-  test('anonymous sees aggregates only; admin sees lists too', async () => {
+  test('anonymous sees aggregates and name lists', async () => {
     const token = await adminLogin();
     await registerFile(token, { name: 's.pdf', size: 1000 });
 
@@ -525,13 +525,10 @@ describe('stats', () => {
     assert.equal(anon.body.total_size, 1000);
     assert.ok(anon.body.series.length >= 7);
     assert.ok(Array.isArray(anon.body.type_breakdown));
-    assert.equal(anon.body.top_downloads, undefined);
-    assert.equal(anon.body.recent_uploads, undefined);
-
-    const admin = await request('GET', '/api/stats', { token });
-    assert.equal(admin.body.top_downloads.length, 0);
-    assert.equal(admin.body.recent_uploads.length, 1);
-    assert.deepEqual(admin.body.recent_uploads[0].name, 's.pdf');
+    assert.equal(anon.body.top_downloads.length, 0);
+    assert.equal(anon.body.recent_uploads.length, 1);
+    assert.deepEqual(anon.body.recent_uploads[0].name, 's.pdf');
+    assert.ok(Array.isArray(anon.body.top_folders));
   });
 
   test('range is clamped to [7, 90]', async () => {
@@ -547,6 +544,30 @@ describe('stats', () => {
     await request('GET', `/api/files/${f.body.id}/url?download=1`);
     const { body } = await request('GET', '/api/stats');
     assert.equal(body.today_downloads, 1);
+  });
+
+  test('series buckets historical events on their calendar day', async () => {
+    const DAY = 86400000;
+    const token = await adminLogin();
+    const f = await registerFile(token, { name: 'old.txt' });
+    await request('GET', `/api/files/${f.body.id}/url?download=1`);
+
+    const d0 = new Date();
+    d0.setHours(0, 0, 0, 0);
+    const todayStart = d0.getTime();
+    const threeDaysAgoMorning = todayStart - 3 * DAY + 10 * 3600000;
+    const twoDaysAgoLateNight = todayStart - 2 * DAY + 23.5 * 3600000;
+    db.prepare('UPDATE download_logs SET downloaded_at = ?').run(threeDaysAgoMorning);
+    db.prepare('UPDATE files SET created_at = ?').run(twoDaysAgoLateNight);
+
+    const { body } = await request('GET', '/api/stats?range=7');
+    const todayIdx = body.series.length - 1;
+    // 下载落在 3 天前的日历日；深夜上传落在 2 天前（而非次日/被丢弃）
+    assert.equal(body.series[todayIdx - 3].downloads, 1);
+    assert.equal(body.series[todayIdx - 2].uploads, 1);
+    assert.equal(body.series[todayIdx].downloads, 0);
+    assert.equal(body.downloads_7d, 1);
+    assert.equal(body.files_added_7d, 1);
   });
 });
 

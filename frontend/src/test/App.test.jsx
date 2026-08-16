@@ -66,6 +66,7 @@ vi.mock('../api.js', () => ({
   reorderItems: vi.fn(),
   getFileUrl: vi.fn(),
   getStats: vi.fn(() => Promise.resolve(emptyStats)),
+  getHeatmap: vi.fn(() => Promise.resolve({ days: 365, series: [] })),
   search: vi.fn(() => Promise.resolve({ folders: [], files: [] })),
   uploadFile: vi.fn(),
 }));

@@ -11,5 +11,19 @@ class ResizeObserverStub {
 }
 globalThis.ResizeObserver = globalThis.ResizeObserver || ResizeObserverStub;
 
+// jsdom has no matchMedia; liveline reads it during mount effects.
+if (!window.matchMedia) {
+  window.matchMedia = (query) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  });
+}
+
 // Unmount renders between tests (RTL only auto-registers this with globals).
 afterEach(() => cleanup());

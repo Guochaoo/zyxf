@@ -76,17 +76,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.3rem;
-  min-height: 30px;
+  gap: 0.4rem;
+  min-height: 34px;
   background: #ffffff;
   border: 0;
-  border-radius: 6px;
+  border-radius: 14px;
   box-shadow: rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;
-  padding: 0.3rem 0.68rem;
+  padding: 0.5rem 1rem;
   cursor: pointer;
   color: #171717;
   font-weight: 500;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   line-height: 1;
   overflow: visible;
   transition: background 0.2s, box-shadow 0.2s, color 0.2s;
@@ -180,7 +180,7 @@
   position: absolute;
   top: 0;
   right: 0;
-  width: clamp(260px, 38vw, 420px);
+  width: clamp(240px, 30vw, 340px);
   height: 100%;
   background: white;
   backdrop-filter: blur(12px);
@@ -209,7 +209,7 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: clamp(260px, 38vw, 420px);
+  width: clamp(240px, 30vw, 340px);
   pointer-events: none;
   z-index: 5;
   opacity: 0;
@@ -250,6 +250,10 @@
   font-size: 1rem;
   font-weight: 500;
   color: var(--sm-accent, #ff0000);
+}
+
+#root .staggered-menu-panel .sm-socials-title {
+  color: var(--sm-accent, #5227ff) !important;
 }
 
 .sm-socials-list {
@@ -304,12 +308,8 @@
   color: var(--sm-accent, #ff0000);
 }
 
-.sm-panel-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #fff;
-  text-transform: uppercase;
+#root .staggered-menu-panel .sm-socials-link:hover {
+  color: var(--sm-accent, #5227ff) !important;
 }
 
 .sm-panel-list {
@@ -373,8 +373,9 @@
   transform-origin: 50% 100%;
 }
 
-.sm-panel-item:hover {
-  color: #000 !important;
+#root .staggered-menu-panel .sm-panel-item:hover,
+#root .staggered-menu-panel .sm-panel-item:hover .sm-panel-itemLabel {
+  color: var(--sm-accent, #5227ff) !important;
 }
 
 .sm-panel-list[data-numbering] {
@@ -385,9 +386,8 @@
   counter-increment: smItem;
   content: counter(smItem, decimal-leading-zero);
   position: absolute;
-  top: 50%;
+  top: 0.1em;
   right: 0.5em;
-  transform: translateY(-50%);
   font-size: 14px;
   font-weight: 400;
   color: var(--sm-accent, #5227ff);
@@ -400,7 +400,7 @@
 @media (max-width: 1024px) {
   .staggered-menu-panel,
   .sm-prelayers {
-    width: clamp(280px, 48vw, 420px);
+    width: clamp(280px, 48vw, 340px);
     left: auto;
     right: 0;
   }

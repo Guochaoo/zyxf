@@ -113,6 +113,13 @@ export async function getStats(range = 30) {
   return data;
 }
 
+// Trailing-year daily activity for the dashboard heatmap — independent of
+// getStats' range switch.
+export async function getHeatmap() {
+  const { data } = await api.get('/stats/heatmap');
+  return data;
+}
+
 // Sync the local library with the shared OSS bucket (multi-deployment support).
 // Rate-limited server-side to 5/min per IP.
 export async function syncOss() {

@@ -10,6 +10,18 @@
   font-display: swap;
 }
 
+/* liveline hardcodes '"SF Mono", Menlo, monospace' for its chart text (canvas
+   axis labels and the DOM value badge), and that family doesn't exist on
+   Windows. Alias the name to the same OPPOSans file so charts match the app;
+   canvas text resolves fonts through CSS, so the alias applies there too. */
+@font-face {
+  font-family: 'SF Mono';
+  src: url('/fonts/OPPO%20Sans%204.0.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 html {
   /* Reserve space for the vertical scrollbar so its appear/disappear
      between routes doesn't shift centered layouts (top bar, etc.) */
@@ -21,7 +33,7 @@ html,
 body,
 #root {
   height: 100%;
-  background: #ffffff;
+  background: var(--page) !important;
   color: #171717;
 }
 
@@ -83,14 +95,6 @@ textarea:focus-visible {
 }
 
 /* ---- DESIGN.md §2: shadow-as-border helpers ---- */
-.rb-shadow-border {
-  box-shadow: rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;
-}
-
-.rb-ringlight {
-  box-shadow: rgb(235, 235, 235) 0px 0px 0px 1px;
-}
-
 .rb-card {
   box-shadow:
     rgba(0, 0, 0, 0.08) 0px 0px 0px 1px,
@@ -110,7 +114,7 @@ textarea:focus-visible {
   background: #171717;
   color: #ffffff !important;
   border: 0;
-  border-radius: 6px;
+  border-radius: 14px;
   padding: 8px 16px;
   font-size: 14px;
   font-weight: 500;
@@ -171,7 +175,7 @@ textarea:focus-visible {
   background: #ffffff;
   color: rgba(23, 23, 23, 0.75);
   border: 0;
-  border-radius: 6px;
+  border-radius: 14px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -214,7 +218,7 @@ textarea:focus-visible {
 .app-theme .rb-search-pill {
   width: 100%;
   background: #ffffff;
-  border-radius: 8px;
+  border-radius: 14px;
   box-shadow: rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;
   transition: box-shadow 160ms ease;
 }
@@ -230,7 +234,7 @@ textarea:focus-visible {
   border-color: transparent !important;
   box-shadow: none !important;
   outline: none !important;
-  border-radius: 8px !important;
+  border-radius: 14px !important;
   font-size: 14px;
 }
 
@@ -280,8 +284,7 @@ textarea:focus-visible {
   color: inherit;
 }
 
-.app-theme .hover\:bg-brand-700:hover,
-.app-theme .hover\:bg-brand-600:hover {
+.app-theme .hover\:bg-brand-700:hover {
   background: #000000 !important;
   color: #ffffff !important;
 }
@@ -316,25 +319,29 @@ textarea:focus-visible {
   outline: none;
 }
 
+/* ChatComposer prompt — transparent and borderless inside its bg-field
+   composer. The global .app-theme input styles above force white bg + shadow
+   border on every input, so re-assert the design here (also on :focus and
+   autofill, which the global rules paint white). */
+.app-theme .chat-prompt,
+.app-theme .chat-prompt:focus {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+.app-theme .chat-prompt:-webkit-autofill,
+.app-theme .chat-prompt:-webkit-autofill:hover,
+.app-theme .chat-prompt:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--field) inset !important;
+  -webkit-text-fill-color: var(--ink) !important;
+  caret-color: var(--ink) !important;
+}
+
 /* ---- Misc neutral helpers ---- */
-.app-theme .bg-white\/10,
-.app-theme .bg-white\/5 {
-  background: rgba(23, 23, 23, 0.03) !important;
-}
-
-.app-theme .border-white\/10,
-.app-theme .border-white\/15,
-.app-theme .border-white\/20 {
-  border-color: rgba(23, 23, 23, 0.08) !important;
-}
-
 .app-theme .divide-white\/10 > :not([hidden]) ~ :not([hidden]) {
   border-color: rgba(23, 23, 23, 0.08) !important;
-}
-
-.app-theme .hover\:bg-white\/10:hover,
-.app-theme .hover\:bg-white\/15:hover {
-  background: rgba(23, 23, 23, 0.05) !important;
 }
 
 .app-theme .rb-table-heading,
@@ -351,6 +358,43 @@ textarea:focus-visible {
   display: none;
 }
 
+/* Left rail (folder tree) scrollbar — dark thumb on the #ECECEE rail so it
+   doesn't stay white against the tinted background. */
+.rb-side-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(23, 23, 23, 0.28) transparent;
+  /* Fade the top and bottom 16px of the folder tree into the rail background
+     so it dissolves toward the search bar and footer instead of ending abruptly. */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
+}
+.rb-side-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.rb-side-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.rb-side-scroll::-webkit-scrollbar-thumb {
+  background: rgba(23, 23, 23, 0.22);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.rb-side-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(23, 23, 23, 0.38);
+  background-clip: padding-box;
+}
+
 /* Kill Chrome's blue/yellow autofill background */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
@@ -363,21 +407,130 @@ input:-webkit-autofill:active {
   transition: background-color 9999s ease-in-out 0s !important;
 }
 
-/* Knowledge graph card in fullscreen (DESIGN.md §4) — fills the viewport */
-.kg-card:fullscreen {
+/* Fade the graph edges into the card background on all four sides so nodes
+   dissolve softly instead of clipping hard at the border. Two crossing
+   linear gradients + intersect composite = fade on every edge. */
+.kg-graph {
+  -webkit-mask-image:
+    linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%),
+    linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%),
+    linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+  mask-composite: intersect;
+}
+
+/* ---- Insight card design system (liveline-style cards) ----
+   Light-theme tokens consumed by tailwind.config.js colors, plus the
+   chart hover cursor / tooltip helpers used on dashboard cards. */
+:root {
+  --ink: #171717;
+  --ink-2: rgba(23, 23, 23, 0.65);
+  --ink-3: rgba(23, 23, 23, 0.45);
+  --page: #f8f8f8;
+  --surface: #ffffff;
+  --inset: #f7f8f9;
+  --field: #efefef;
+  --hover: rgba(23, 23, 23, 0.05);
+  --line: rgba(23, 23, 23, 0.08);
+  --line-strong: rgba(23, 23, 23, 0.14);
+  --accent: #3d9aff;
+  --orange: #f68f3c;
+  --red: #ee5c61;
+  --green: #3fae6b;
+}
+
+/* Chart stage + pointer-driven hover affordances (mirrors the InsightCards
+   design: a positioned stage, a 1px cursor line and a floating tooltip). */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.insight-chart-stage {
+  position: relative;
+}
+
+/* liveline's built-in hover bubble (the div right after the canvas inside
+   its chart container) duplicates the custom tooltip; keep the custom one.
+   Scoped via :has(> canvas) so the series-toggle button groups (also divs
+   inside the stage) are untouched. Inline display requires !important. */
+.insight-chart-stage > div:has(> canvas) > div:last-of-type {
+  display: none !important;
+}
+
+/* liveline's in-chart series-toggle buttons carry an inline system-ui
+   font-family; re-assert OPPOSans so no chart control text diverges. */
+.insight-chart-stage button {
+  font-family: 'OPPOSans', sans-serif !important;
+}
+
+.insight-chart-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(23, 23, 23, 0.14);
+  pointer-events: none;
+}
+
+.insight-chart-tooltip-anchor {
+  position: absolute;
+  top: 6px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.insight-chart-tooltip {
+  min-width: 132px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 11px;
+  white-space: nowrap;
+  box-shadow:
+    rgba(23, 23, 23, 0.08) 0px 0px 0px 1px,
+    rgba(23, 23, 23, 0.12) 0px 8px 24px;
+}
+
+.insight-chart-tooltip-time {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.insight-chart-tooltip-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: #ffffff;
-  border-radius: 0;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.kg-card:fullscreen > div {
-  width: 100vw;
-  height: 100vh;
-  padding: 2rem;
+.insight-chart-tooltip-row strong {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
-.kg-card:fullscreen svg {
-  height: 100% !important;
+.insight-chart-tooltip-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+}
+
+.insight-chart-tooltip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
 }

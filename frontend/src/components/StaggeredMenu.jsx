@@ -3,6 +3,34 @@ import { gsap } from 'gsap';
 import { Link } from 'react-router-dom';
 import './StaggeredMenu.css';
 
+// Query the animated panel content and reset it to its pre-open state
+// (labels pushed down/rotated, numbers and socials hidden). Returns the
+// elements so the open timeline can tween them back in; also used after the
+// close tween finishes to leave the panel ready for the next open.
+function resetPanelContent(panel) {
+  const itemEls = Array.from(panel.querySelectorAll('.sm-panel-itemLabel'));
+  if (itemEls.length) {
+    gsap.set(itemEls, { yPercent: 140, rotate: 10 });
+  }
+  const numberEls = Array.from(panel.querySelectorAll('.sm-panel-list[data-numbering] .sm-panel-item'));
+  if (numberEls.length) {
+    gsap.set(numberEls, { '--sm-num-opacity': 0 });
+  }
+  const socialTitle = panel.querySelector('.sm-socials-title');
+  if (socialTitle) gsap.set(socialTitle, { opacity: 0 });
+  const socialLinks = Array.from(panel.querySelectorAll('.sm-socials-link'));
+  if (socialLinks.length) gsap.set(socialLinks, { y: 25, opacity: 0 });
+  return { itemEls, numberEls, socialTitle, socialLinks };
+}
+
+// Pre-layer band colors: up to 4 accent colors (fallback pair); with 3+ the
+// middle one is dropped so the stack reads as two flanking bands.
+function prelayerColors(colors) {
+  const raw = colors && colors.length ? colors.slice(0, 4) : ['#1e1e22', '#35353c'];
+  if (raw.length >= 3) raw.splice(Math.floor(raw.length / 2), 1);
+  return raw;
+}
+
 const StaggeredMenu = forwardRef(function StaggeredMenu(
   {
     position = 'right',
@@ -34,7 +62,6 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   const plusVRef = useRef(null);
   const iconRef = useRef(null);
   const textInnerRef = useRef(null);
-  const textWrapRef = useRef(null);
   const [textLines, setTextLines] = useState(['Menu', 'Close']);
 
   const openTlRef = useRef(null);
@@ -86,27 +113,11 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
       closeTweenRef.current = null;
     }
 
-    const itemEls = Array.from(panel.querySelectorAll('.sm-panel-itemLabel'));
-    const numberEls = Array.from(panel.querySelectorAll('.sm-panel-list[data-numbering] .sm-panel-item'));
-    const socialTitle = panel.querySelector('.sm-socials-title');
-    const socialLinks = Array.from(panel.querySelectorAll('.sm-socials-link'));
+    const { itemEls, numberEls, socialTitle, socialLinks } = resetPanelContent(panel);
 
     const offscreen = position === 'left' ? -100 : 100;
     const layerStates = layers.map(el => ({ el, start: offscreen }));
     const panelStart = offscreen;
-
-    if (itemEls.length) {
-      gsap.set(itemEls, { yPercent: 140, rotate: 10 });
-    }
-    if (numberEls.length) {
-      gsap.set(numberEls, { '--sm-num-opacity': 0 });
-    }
-    if (socialTitle) {
-      gsap.set(socialTitle, { opacity: 0 });
-    }
-    if (socialLinks.length) {
-      gsap.set(socialLinks, { y: 25, opacity: 0 });
-    }
 
     const tl = gsap.timeline({ paused: true });
 
@@ -217,18 +228,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
       ease: 'power3.in',
       overwrite: 'auto',
       onComplete: () => {
-        const itemEls = Array.from(panel.querySelectorAll('.sm-panel-itemLabel'));
-        if (itemEls.length) {
-          gsap.set(itemEls, { yPercent: 140, rotate: 10 });
-        }
-        const numberEls = Array.from(panel.querySelectorAll('.sm-panel-list[data-numbering] .sm-panel-item'));
-        if (numberEls.length) {
-          gsap.set(numberEls, { '--sm-num-opacity': 0 });
-        }
-        const socialTitle = panel.querySelector('.sm-socials-title');
-        const socialLinks = Array.from(panel.querySelectorAll('.sm-socials-link'));
-        if (socialTitle) gsap.set(socialTitle, { opacity: 0 });
-        if (socialLinks.length) gsap.set(socialLinks, { y: 25, opacity: 0 });
+        resetPanelContent(panel);
         busyRef.current = false;
       }
     });
@@ -372,15 +372,9 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     >
       <div className="sm-backdrop" aria-hidden="true" onClick={closeMenu} />
       <div ref={preLayersRef} className="sm-prelayers" aria-hidden="true">
-        {(() => {
-          const raw = colors && colors.length ? colors.slice(0, 4) : ['#1e1e22', '#35353c'];
-          let arr = [...raw];
-          if (arr.length >= 3) {
-            const mid = Math.floor(arr.length / 2);
-            arr.splice(mid, 1);
-          }
-          return arr.map((c, i) => <div key={i} className="sm-prelayer" style={{ background: c }} />);
-        })()}
+        {prelayerColors(colors).map((c, i) => (
+          <div key={i} className="sm-prelayer" style={{ background: c }} />
+        ))}
       </div>
       <header className="staggered-menu-header" aria-label="Main navigation header">
         {logoUrl && (
@@ -406,7 +400,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
             onClick={toggleMenu}
             type="button"
           >
-            <span ref={textWrapRef} className="sm-toggle-textWrap" aria-hidden="true">
+            <span className="sm-toggle-textWrap" aria-hidden="true">
               <span ref={textInnerRef} className="sm-toggle-textInner">
                 {textLines.map((l, i) => (
                   <span className="sm-toggle-line" key={i}>
