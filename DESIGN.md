@@ -7,7 +7,7 @@
 > - **Brand identity:** The brand logo (`favicon.png` / `brand-logo.png`) and brand names (仲英学辅资料库, 仲英书院学业辅导中心, 仲英学辅) are always preserved verbatim.
 > - **Language:** All user-facing copy is Chinese (zh-CN); uppercase mono technical labels (TODAY, DOWNLOADS…) remain in English as decorative metadata, per the Geist Mono tradition.
 > - **Accent colors:** The old brand blue (#276DAB) is replaced by the Vercel interaction palette (§2) — Link Blue #0072f5, Develop Blue #0a72ef, Focus Blue hsla(212, 100%, 48%, 1). Primary CTAs are Vercel Black (#171717).
-> - **Workflow pipeline colors** (Ship Red / Preview Pink / Develop Blue) are used as functional data-viz accents. The stats dashboard defines its own data-viz tokens — 下载 = 蓝 `--accent` (#3d9aff), 上传 = 橙 `--orange` (#f68f3c) — the only permitted decorative-ish use (see the heatmap spec in §4).
+> - **Data-viz accent tokens** for the stats dashboard — 下载蓝 `--accent` (#3d9aff), 上传橙 `--orange` (#f68f3c), 今日红 `--red` (#ee5c61), 占用绿 `--green` (#3fae6b) — the only permitted accent use (see the heatmap spec in §4).
 > - **无界 (Borderless) philosophy:** This site deliberately moves *away* from Vercel's line-dominated separation (shadow-as-border everywhere). Separation comes from whitespace and soft surface tints (#FAFAFA) first; lines/borders are used only where function requires them (e.g., table rows, dashed dropzone). There is **no topbar** — navigation is a StaggeredMenu hamburger on every layout; the brand, search and folder tree live in the left rail (see §4).
 
 ## 1. Visual Theme & Atmosphere
@@ -26,7 +26,7 @@ Key Characteristics:
 - **无界 (Borderless) separation:** whitespace and #FAFAFA surface tints, not lines, divide the page. Shadow-as-border remains available as a *technique* (never a CSS `border`), but is used sparingly — cards are separated by whitespace and elevation, not by outlining everything
 - Multi-layer shadow stacks for nuanced depth (border + elevation + ambient in single declarations)
 - Near-pure white canvas with #171717 text — not quite black, creating micro-contrast softness
-- Workflow-specific accent colors: Ship Red (#ff5b4f), Preview Pink (#de1d8d), Develop Blue (#0a72ef)
+- Data-viz accent tokens for the stats dashboard: 下载蓝 `--accent` (#3d9aff), 上传橙 `--orange` (#f68f3c), 动态红 `--red` (#ee5c61), 占用绿 `--green` (#3fae6b) — the only accent colors in the system, reserved for the dashboard cards (see §2 / §4)
 - Focus ring system using hsla(212, 100%, 48%, 1) — a saturated blue for accessibility
 - Pill badges (9999px) with tinted backgrounds for status indicators
 
@@ -35,43 +35,46 @@ Key Characteristics:
 ### Primary
 - Vercel Black (#171717): Primary text, headings, dark surface backgrounds. Not pure black — the slight warmth prevents harshness.
 - Pure White (#ffffff): Page background, card surfaces, button text on dark.
-- True Black (#000000): Secondary use, --geist-console-text-color-default, used in specific console/code contexts.
+- True Black (#000000): Secondary use, used in dark hover states (`hover:bg-brand-700` on the dark CTA) and `.rb-btn-dark:hover`.
 
-### Workflow Accent Colors
-- Ship Red (#ff5b4f): --ship-text, the "ship to production" workflow step — warm, urgent coral-red.
-- Preview Pink (#de1d8d): --preview-text, the preview deployment workflow — vivid magenta-pink.
-- Develop Blue (#0a72ef): --develop-text, the development workflow — bright, focused blue.
+### Brand / Interactive (via Tailwind `brand` tokens)
+- Link Blue (#0072f5, `brand-600`): Primary links, primary CTA backgrounds.
+- Develop Blue (#0a72ef, `brand-500`): Brand mark hover, progress-bar default fill.
+- Badge Blue Text (#0068d6, `brand-700`): CTA hover state (darkens the blue).
+- Focus Blue (hsla(212, 100%, 48%, 1)): keyboard focus outline on all interactive elements.
+- **Icons are monochrome `slate-600` (#4d4d4d) on light surfaces** — `FileIcon` renders every file/folder icon via `currentColor`; white icons appear on dark CTA buttons and colored icon badges (see §4).
 
-### Console / Code Colors
-- Console Blue (#0070f3): --geist-console-text-color-blue, syntax highlighting blue.
-- Console Purple (#7928ca): --geist-console-text-color-purple, syntax highlighting purple.
-- Console Pink (#eb367f): --geist-console-text-color-pink, syntax highlighting pink.
+### Data-viz tokens (stats dashboard only — the one permitted accent use)
+Defined as CSS variables in `index.css :root` and consumed through Tailwind tokens (`bg-accent`, `text-orange`, …):
+- `--accent` #3d9aff — 下载 (downloads): heatmap ramp, 下载排行 badge, 下载热力图 badge
+- `--orange` #f68f3c — 上传 (uploads): 最近上传 badge
+- `--red` #ee5c61 — 今日动态 (today's anomaly card badge)
+- `--green` #3fae6b — 存储 (storage): 占用排行 badge
+- These four are the *only* accent colors in the system; nothing else (buttons, links, rows, icons) uses them.
 
-### Interactive
-- Link Blue (#0072f5): Primary link color with underline decoration.
-- Focus Blue (hsla(212, 100%, 48%, 1)): --ds-focus-color, focus ring on interactive elements.
-- Ring Blue (rgba(147, 197, 253, 0.5)): --tw-ring-color, Tailwind ring utility.
-- **Icons are pure black (#000000) on light surfaces** — all icons render via `currentColor`, and a global rule forces `#000` on white. Dark surfaces (dark CTA buttons, the login hero panel `.rb-dark`, any `text-white` context) keep the inherited light icon color.
+### Neutral Scale (via Tailwind `slate` tokens)
+- Gray 900 (#171717, `slate-900` / `--ink`): Primary text, headings, nav text.
+- Gray 700 (#404040, `slate-700`): removed — the scale is 50/100/200/300/400/500/600/800/900.
+- Gray 600 (#4d4d4d, `slate-600`): Secondary text, file icons.
+- Gray 500 (#666666, `slate-500`): Tertiary text, muted links.
+- Gray 400 (#808080, `slate-400`): Placeholder text, disabled states.
+- Gray 200 (#ebebeb, `slate-200`): Borders, card outlines, dividers.
+- Gray 100 (#f5f5f5, `slate-100`): Soft fill.
+- Gray 50 (#fafafa, `slate-50`): Subtle surface tint, inner shadow highlight.
 
-### Neutral Scale
-- Gray 900 (#171717): Primary text, headings, nav text.
-- Gray 600 (#4d4d4d): Secondary text, description copy.
-- Gray 500 (#666666): Tertiary text, muted links.
-- Gray 400 (#808080): Placeholder text, disabled states.
-- Gray 100 (#ebebeb): Borders, card outlines, dividers.
-- Gray 50 (#fafafa): Subtle surface tint, inner shadow highlight.
+### Insight-card tokens (light theme; consumed by `bg-surface`, `text-ink`, …)
+- `--ink` #171717 · `--ink-2` rgba(23,23,23,.65) · `--ink-3` rgba(23,23,23,.45) — text hierarchy
+- `--page` #f8f8f8 (page background) · `--surface` #ffffff (card/panel background) · `--inset` #f7f8f9 (chart/inset panels) · `--field` #efefef (empty heatmap cells, toggle groups) · `--hover` rgba(23,23,23,.05) · `--line` rgba(23,23,23,.08) · `--line-strong` rgba(23,23,23,.14)
 
 ### Surface & Overlay
-- Overlay Backdrop (hsla(0, 0%, 98%, 1)): --ds-overlay-backdrop-color, modal/dialog backdrop.
-- Selection Text (hsla(0, 0%, 95%, 1)): --geist-selection-text-color, text selection highlight.
-- Badge Blue Bg (#ebf5ff): Pill badge background, tinted blue surface.
-- Badge Blue Text (#0068d6): Pill badge text, darker blue for readability.
+- Overlay Backdrop (hsla(0, 0%, 98%, 1)): modal/dialog backdrop — *kept from the original spec.*
+- Selection Text (hsla(0, 0%, 95%, 1)): text selection highlight — *kept from the original spec.*
+- Badge Blue Bg (#ebf5ff) / Badge Blue Text (#0068d6): *not in use — superseded by the dashboard's colored icon badges (solid accents, white glyph).*
 
-### Shadows & Depth
-- Border Shadow (rgba(0, 0, 0, 0.08) 0px 0px 0px 1px): The signature — replaces traditional borders.
-- Subtle Elevation (rgba(0, 0, 0, 0.04) 0px 2px 2px): Minimal lift for cards.
-- Card Stack (rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px): Full multi-layer card shadow.
-- Ring Border (rgb(235, 235, 235) 0px 0px 0px 1px): Light gray ring-border for tabs and images.
+### Shadows & Depth (Tailwind `shadow-card` is the only full card stack)
+- Card Stack (`shadow-card`): rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px — used by dashboard cards and the chat panel.
+- Button (`shadow-btn`): rgba(23,23,23,.12) 0px 1px 2px, rgba(23,23,23,.06) 0px 0px 0px 1px — raised toggle pills / refresh button.
+- Border Shadow (rgba(0,0,0,0.08) 0px 0px 0px 1px) and Ring Border (rgb(235,235,235) 0px 0px 0px 1px) — *removed from the config; nothing references `shadow-ring` / `shadow-ringlight`.* Inputs still use the border-shadow inline in CSS.
 
 ## 3. Typography Rules
 
@@ -113,43 +116,37 @@ Key Characteristics:
 
 ### Buttons
 
-Primary White (Shadow-bordered)
+Primary Dark (`rb-btn-dark`)
+- Background: #171717, hover #000000
+- Text: #ffffff
+- Padding: 8px 16px, Radius: 6px
+- Use: Primary CTA — 上传、新建文件夹、重命名保存、刷新
+
+Ghost (`rb-btn-ghost`)
 - Background: #ffffff
 - Text: #171717
-- Padding: 0px 6px (minimal — content-driven width)
-- Radius: 6px (subtly rounded)
-- Shadow: rgb(235, 235, 235) 0px 0px 0px 1px (ring-border)
-- Hover: background shifts to var(--ds-gray-1000) (dark)
-- Focus: 2px solid var(--ds-focus-color) outline + var(--ds-focus-ring) shadow
-- Use: Standard secondary button
+- Border: shadow-as-border — rgba(0,0,0,0.08) 0px 0px 0px 1px (inline in CSS), Radius: 6px
+- Hover: background shifts toward dark / #fafafa
+- Use: Secondary button — 取消、取消重命名
 
-Primary Dark (Inferred from Geist system)
-- Background: #171717
-- Text: #ffffff
-- Padding: 8px 16px
-- Radius: 6px
-- Use: Primary CTA ("Start Deploying", "Get Started")
+Dashboard Pill Toggle / Refresh (`shadow-btn`)
+- Background: `bg-surface` (#fff), Radius: 9999px (rounded-full)
+- Shadow: rgba(23,23,23,.12) 0px 1px 2px, rgba(23,23,23,.06) 0px 0px 0px 1px
+- Active state: raised `bg-surface shadow-btn`; inactive: plain `text-ink-3 hover:text-ink-2`
+- Use: 数据概览的时间范围切换（7日/30日/90日）、今日下载的 下载/上传 指标切换
 
-Pill Button / Badge
-- Background: #ebf5ff (tinted blue)
-- Text: #0068d6
-- Padding: 0px 10px
-- Radius: 9999px (full pill)
-- Font: 12px weight 500
-- Use: Status badges, tags, feature labels
-
-Large Pill (Navigation)
-- Background: transparent or #171717
-- Radius: 64px–100px
-- Use: Tab navigation, section selectors
+Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视觉锚点）
+- 14px 圆形（`size-3.5 rounded-full`）、纯色实底、白色 8px 图标（lucide，strokeWidth 3）
+- 颜色遵循数据语义：下载蓝 `bg-accent`、上传橙 `bg-orange`、今日红 `bg-red`、存储绿 `bg-green`、类型分布随选中类型色
+- 用于：下载热力图、今日下载/上传、下载排行、最近上传、占用排行、文件类型分布 的全部卡片标题
+- 取代了原 spec 的 tinted pill badge（#ebf5ff 底 + 深蓝字）
 
 ### Cards & Containers
-- Background: #ffffff
-- Border: via shadow — rgba(0, 0, 0, 0.08) 0px 0px 0px 1px
-- Radius: 8px (standard), 12px (featured/image cards)
-- Shadow stack: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, #fafafa 0px 0px 0px 1px
-- Image cards: 1px solid #ebebeb with 12px top radius
-- Hover: subtle shadow intensification
+- Dashboard 卡片（`rounded-card bg-surface p-3`）: 白色、12px 圆角、`shadow-card` 多层阴影、12px 内边距；同栏卡片间距 12px，区块间也是 12px（无界，不画分割线）
+- 图表/内嵌面板（`rounded-control bg-inset`）: 10px 圆角、`#f7f8f9` 底，用于今日下载曲线、AnomalyCard 图表区
+- 热力图面板: `bg-surface` **无边框无阴影**，直接融入页面
+- 列表行 hover: `#fafafa` 表面微 tint（`hover:bg-hover`），无描边（无界）
+- 卡片阴影（`shadow-card`）: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px
 
 ### Knowledge Graph (知识库卡片)
 - forestry.md "Connected Pages" style, sits to the **right of the file list** (360px card, `xl:` two columns, stacks below on smaller screens)
@@ -219,6 +216,7 @@ Workflow Pipeline
 - Each step has its own accent color: Blue → Pink → Red
 - Connected with lines/arrows
 - The visual metaphor for Vercel's core value proposition
+- *Not implemented in this app* — kept as the inspiration's reference concept; the project's accent use lives entirely in the dashboard data-viz tokens (§2).
 
 Trust Bar / Logo Grid
 - Company logos (Perplexity, ChatGPT, Cursor, etc.) in grayscale
@@ -276,12 +274,14 @@ Download Heatmap（下载热力图，`/dashboard` 首行左卡）
 
 | Level | Treatment | Use |
 |-------|-----------|-----|
-| Flat (Level 0) | No shadow | Page background, text blocks |
-| Ring (Level 1) | rgba(0,0,0,0.08) 0px 0px 0px 1px | Shadow-as-border for most elements |
-| Light Ring (Level 1b) | rgb(235,235,235) 0px 0px 0px 1px | Lighter ring for tabs, images |
-| Subtle Card (Level 2) | Ring + rgba(0,0,0,0.04) 0px 2px 2px | Standard cards with minimal lift |
-| Full Card (Level 3) | Ring + Subtle + rgba(0,0,0,0.04) 0px 8px 8px -8px + inner #fafafa ring | Featured cards, highlighted panels |
+| Flat (Level 0) | No shadow | Page background, text blocks, **heatmap panel** (deliberately borderless) |
+| Inset Panel (Level 1) | `#f7f8f9` tint, no shadow (`bg-inset`) | Chart stages, anomaly-card plot area |
+| Card (Level 2) | `shadow-card`: rgba(0,0,0,0.08) 0 0 0 1px, rgba(0,0,0,0.04) 0 2px 2px, rgba(0,0,0,0.04) 0 8px 8px -8px, inner #fafafa ring | Dashboard cards, chat panel |
+| Raised Toggle (Level 2b) | `shadow-btn`: rgba(23,23,23,.12) 0 1px 2px, rgba(23,23,23,.06) 0 0 0 1px | Active pill toggles, refresh button |
+| Input Border (inline) | rgba(0,0,0,0.08) 0 0 0 1px; focus adds hsla(212,100%,48%,.25) 0 0 0 3px | All form inputs/selects (CSS, not a token) |
 | Focus (Accessibility) | 2px solid hsla(212, 100%, 48%, 1) outline | Keyboard focus on all interactive elements |
+
+> Removed from the config: `shadow-ring`, `shadow-ringlight`, `shadow-card-subtle`, `shadow-hairline` — nothing references them.
 
 Shadow Philosophy: Vercel has arguably the most sophisticated shadow system in modern web design. Rather than using shadows for elevation in the traditional Material Design sense, Vercel uses multi-value shadow stacks where each layer has a distinct architectural purpose: one creates the "border" (0px spread, 1px), another adds ambient softness (2px blur), another handles depth at distance (8px blur with negative spread), and an inner ring (#fafafa) creates the subtle highlight that makes the card "glow" from within. This layered approach means cards feel built, not floating.
 
@@ -296,8 +296,8 @@ Shadow Philosophy: Vercel has arguably the most sophisticated shadow system in m
 - Use OPPO Sans with negative letter-spacing at display sizes (−0.03em at 48px, CJK-adjusted)
 - Separate content with whitespace and #FAFAFA surface tints first — lines only where function requires
 - Use the three-weight system: 400 (body), 500 (UI), 600 (headings)
-- Apply workflow accent colors (Red/Pink/Blue) only in their workflow context (dashboard data-viz)
-- Use multi-layer shadow stacks for cards (border + elevation + ambient + inner highlight)
+- Apply the four dashboard accent tokens (下载蓝/上传橙/今日红/占用绿) only inside dashboard cards — icon badges and data series
+- Use multi-layer shadow stacks for cards (`shadow-card`)
 - Keep the color palette achromatic — grays from #171717 to #ffffff are the system
 - Use #171717 instead of #000000 for primary text — the micro-warmth matters
 
@@ -306,8 +306,8 @@ Shadow Philosophy: Vercel has arguably the most sophisticated shadow system in m
 - Don't use weight 700 (bold) on body text — 600 is the maximum, used only for headings
 - Don't rely on lines/borders as the primary separation mechanism — that is the 只用线 (line-only) style, avoided by design (无界)
 - Don't add divider lines under the topbar or between sections — surfaces and spacing divide the page
-- Don't introduce warm colors (oranges, yellows, greens) into the UI chrome
-- Don't apply the workflow accent colors (Ship Red, Preview Pink, Develop Blue) decoratively
+- Don't introduce accent colors (blues, oranges, greens) into the UI chrome outside the dashboard — rows, buttons, links and icons stay monochrome
+- Don't use the old Vercel workflow colors (Ship Red #ff5b4f, Preview Pink #de1d8d, Develop Blue #0a72ef) — they were replaced by the four dashboard tokens
 - Don't use heavy shadows (> 0.1 opacity) — the shadow system is whisper-level
 - Don't increase body text letter-spacing — OPPO Sans is designed to run tight
 - Don't use pill radius (9999px) on primary action buttons — pills are for badges/tags only
@@ -355,9 +355,11 @@ Shadow Philosophy: Vercel has arguably the most sophisticated shadow system in m
 - Background: Pure White (#ffffff)
 - Heading text: Vercel Black (#171717)
 - Body text: Gray 600 (#4d4d4d)
-- Border (shadow): rgba(0, 0, 0, 0.08) 0px 0px 0px 1px
-- Link: Link Blue (#0072f5)
+- File icons: Gray 600 (#4d4d4d, monochrome)
+- Card shadow: `shadow-card` (see §6)
+- Link: Link Blue (#0072f5, brand-600)
 - Focus ring: Focus Blue (hsla(212, 100%, 48%, 1))
+- Dashboard accents (cards only): 下载 `--accent` #3d9aff · 上传 `--orange` #f68f3c · 今日 `--red` #ee5c61 · 存储 `--green` #3fae6b
 
 ### Example Component Prompts
 - "Create a hero section on white background. Headline at 48px OPPO Sans weight 600, line-height 1.00, letter-spacing -0.03em, color 
@@ -367,16 +369,10 @@ Shadow Philosophy: Vercel has arguably the most sophisticated shadow system in m
 - "Design a card: white background, no CSS border. Use shadow stack: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, 
 #fafafa 0px 0px 0px 1px. Radius 8px. Title at 24px OPPO Sans weight 600, letter-spacing -0.02em. Body at 16px weight 400, 
 #4d4d4d."
-- "Build a pill badge: 
-#ebf5ff background, 
-#0068d6 text, 9999px radius, 0px 10px padding, 12px OPPO Sans weight 500."
+- "Build a dashboard icon badge: 14px circle, solid accent background (下载 `--accent` #3d9aff / 上传 `--orange` #f68f3c / 今日 `--red` #ee5c61 / 存储 `--green` #3fae6b), white 8px lucide icon, strokeWidth 3, next to a 12px weight 500 OPPO Sans card title."
 - "Create navigation: #FAFAFA sticky header with no divider line (无界). OPPO Sans 14px weight 500 for links, 
 #171717 text. Dark pill CTA 'Start Deploying' right-aligned."
-- "Design a workflow section showing three steps: Develop (text color 
-#0a72ef), Preview (
-#de1d8d), Ship (
-#ff5b4f). Each step: 14px mono uppercase label + 24px OPPO Sans weight 600 title + 16px weight 400 description in 
-#4d4d4d."
+- "Build the download heatmap card: GitHub-style year grid (week columns × 7 day rows), 5-level blue ramp from `var(--field)` to `var(--accent)`, cells 12–22px with 5px gaps, borderless white panel, title row = accent icon badge + 12px title + 少□□□□□多 legend, hover tooltip above the cell (flip below on top rows)."
 
 ### Iteration Guide
 1. Separate with whitespace and surface tints first; use shadow-as-border (0px 0px 0px 1px rgba(0,0,0,0.08)) only where a line is functionally required — never outline everything (无界)
