@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Route, Routes, Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import BrowsePage from './pages/BrowsePage.jsx';
@@ -99,11 +99,9 @@ export default function App() {
       )}
       <main
         className={`min-w-0 overflow-x-hidden ${
-          // Dashboard aligns its header to the fixed menu toggle (top:12px),
-          // so it uses a fixed pt-[12px] with no sm breakpoint — no layout jump
-          // when crossing 640px. Browse/about keep the responsive padding.
+          // Dashboard uses a fixed pt-[11px] to match the browse page logo top offset (14px).
           isDashboard
-            ? 'px-4 pt-[12px] pb-6'
+            ? 'px-4 pt-[11px] pb-6'
             : 'px-3 py-4 sm:px-4 sm:pt-[10.5px] sm:pb-6'
         } ${mainLayout}`}
       >

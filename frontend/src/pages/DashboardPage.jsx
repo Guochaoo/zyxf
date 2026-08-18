@@ -535,15 +535,12 @@ export default function DashboardPage() {
 
   return (
     // Card rhythm: sections are spaced like the cards inside them (gap-3).
-    // The header row is vertically centered on the fixed StaggeredMenu toggle
-    // (button renders at top:12px, height 34px → center 29px): min-h-34 matches
-    // the toggle height and items-center centers title + controls inside it.
-    // App.jsx gives the dashboard main a fixed pt-[12px] (no sm breakpoint), so
-    // no extra top offset is needed here and the alignment never jumps.
+    // App.jsx gives the dashboard main a fixed pt-[11px] (no sm breakpoint), so
+    // the top offset matches the browse page logo (14px) and never jumps.
     <div className="space-y-3">
       {/* Header */}
       <header className="mb-5 flex min-h-[34px] flex-wrap items-center gap-4 pr-[110px] max-[480px]:pr-0">
-        <div>
+        <div className="flex h-[34px] items-center">
           <h1 className="flex items-center gap-2">
             <img
               src="/favicon.png"
