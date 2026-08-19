@@ -534,15 +534,13 @@ export default function DashboardPage() {
     ) : null;
 
   return (
-    // pt-12 reserves space for the fixed StaggeredMenu toggle pinned at the
-    // top-right (top:5px, ~48px tall) so the range switch / refresh buttons
-    // don't sit underneath it on this full-width page.
-    // uniform card rhythm: sections are spaced like the cards inside them
-    // (gap-3); the header keeps its original 32px clearance via mb-5.
-    <div className="space-y-3 pt-12">
+    // Card rhythm: sections are spaced like the cards inside them (gap-3).
+    // App.jsx gives the dashboard main a fixed pt-[11px] (no sm breakpoint), so
+    // the top offset matches the browse page logo (14px) and never jumps.
+    <div className="space-y-3">
       {/* Header */}
-      <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
-        <div>
+      <header className="mb-5 flex min-h-[34px] flex-wrap items-center gap-4 pr-[110px] max-[480px]:pr-0">
+        <div className="flex h-[34px] items-center">
           <h1 className="flex items-center gap-2">
             <img
               src="/favicon.png"
@@ -553,7 +551,7 @@ export default function DashboardPage() {
             <span className="rb-brand-title whitespace-nowrap">数据概览</span>
           </h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-3 max-[480px]:basis-full max-[480px]:justify-end">
           <RangeSwitch value={range} onChange={setRange} />
           <button
             type="button"
