@@ -1,6 +1,10 @@
 // Test bootstrap — loaded via --import before any test file, so the OSS mock
 // registration happens before routes import oss.js (mock.module only applies
 // to imports that happen after registration in this process).
+//
+// mock.module is experimental on Node 24 and requires the
+// --experimental-test-module-mocks flag in package.json's `test` script.
+// Do not drop that flag (tests fail without it); re-verify when bumping Node.
 import './env.js';
 import { mock } from 'node:test';
 import * as realOss from '../src/oss.js';
