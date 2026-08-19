@@ -30,7 +30,7 @@ docker compose version
 # 上传整个 project 目录到 /var/www/zyxf（scp 或 git clone）
 cd /var/www/zyxf
 cp .env.example .env
-nano .env   # 至少改 JWT_SECRET、ADMIN_PASSWORD、OSS_* 这几项
+nano .env   # 至少改 JWT_SECRET、ADMIN_PASSWORD、OSS_* 这几项；IMM_PROJECT 仅在项目名不是 zyxf 时需要
 ```
 
 生成强随机 `JWT_SECRET`：
@@ -116,6 +116,15 @@ OSS 控制台 → `xjtu-zyxf` Bucket → **数据安全 → 跨域设置** → �
 - 允许 Headers：`*`
 - 暴露 Headers：`ETag, x-oss-request-id, Content-Length, Content-Range`
 
+### 0.3 文档预览：开通并绑定 IMM 项目（推荐）
+
+在线预览（PDF / PPT / Word / Excel / TXT）走阿里云**智能媒体管理 IMM** 的
+`GenerateWebofficeToken` 接口（后端 RPC 签名，不占用前端带宽）：
+
+1. 阿里云控制台开通 IMM，并在 OSS 控制台的 bucket → **智能媒体管理** 里绑定一个 IMM 项目（默认项目名 `zyxf`）
+2. 若项目名不同，在 `.env` 中设置 `IMM_PROJECT=<项目名>`
+3. 不配置时预览接口返回 502（其余功能不受影响，预览失败前端的报错提示是「预览服务暂不可用」）
+
 ---
 
 ## 1. ECS 系统准备（Ubuntu 22.04）
@@ -127,8 +136,8 @@ SSH 登录 ECS，执行：
 sudo apt update && sudo apt -y upgrade
 sudo apt -y install curl git build-essential nginx
 
-# Node.js 20 (LTS)
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# Node.js 20+（推荐 24 LTS，与项目 CI 一致）
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt -y install nodejs
 node -v && npm -v
 
@@ -213,6 +222,8 @@ CORS_ORIGIN=http://<你的公网IP>
 ```
 
 > 生成随机密钥：`openssl rand -hex 32`
+
+> ⚠️ **生产启动校验**：后端在 `NODE_ENV=production` 下会**拒绝启动**——`JWT_SECRET` 必须 ≥32 位随机且不含弱口令词、`ADMIN_PASSWORD` 必须 ≥12 位，否则进程直接退出（防止用默认值/示例值上线）。另外 CORS_ORIGIN 为 `*` 时只告警不拦截。
 
 启动：
 
@@ -312,7 +323,7 @@ sudo systemctl reload nginx
 - [ ] `http://<IP>` 打开能看到首页
 - [ ] 右上角「管理员登录」→ 用 `.env` 里的账号密码能登录
 - [ ] 上传一个 PDF → 不报 CORS 错（如报错，回 0.2 节加来源）
-- [ ] 点击 PDF → 弹框内能预览
+- [ ] 点击 PDF → 弹框内能预览（走阿里云 IMM/WebOffice，需先完成 0.3 节；失败提示「预览服务暂不可用」多半是 IMM 未绑定）
 - [ ] 点「下载」→ 文件名是原中文文件名
 - [ ] 拖拽排序 / 移入文件夹工作正常
 
@@ -371,4 +382,6 @@ mkdir -p /root/backups
 | 上传报 CORS | OSS 跨域规则没加新来源 | 回 0.2 节加 `http://<IP>` |
 | 上传报 SignatureDoesNotMatch | 服务器时间不对 | `sudo timedatectl set-ntp true` |
 | 预览 PDF 空白 | 浏览器 fetch OSS 跨域失败 | 同 CORS，确认暴露 `Content-Length` |
+| 预览报「预览服务暂不可用」 | IMM 未开通 / 项目未绑定 bucket / `IMM_PROJECT` 不对 | 完成 0.3 节；`docker compose logs backend` 看具体报错 |
+| 生产启动直接退出 | `JWT_SECRET` / `ADMIN_PASSWORD` 未达到强度要求 | 按 3 节用 `openssl rand -hex 32` + 12 位以上强密码 |
 | pm2 重启不生效 | 用了旧的进程 | `pm2 delete zyxf-backend && pm2 start ...` 重来 |

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Route, Routes, Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import BrowsePage from './pages/BrowsePage.jsx';
@@ -22,6 +22,7 @@ export default function App() {
   // Docs layout: brand + search + folder tree live in the left rail, which
   // appears on browse routes only. Other pages are standalone.
   const isBrowse = location.pathname === '/' || location.pathname.startsWith('/folder/');
+  const isDashboard = location.pathname === '/dashboard';
   const folderId = Number(location.pathname.match(/^\/folder\/(\d+)/)?.[1]) || 0;
 
   const menuItems = [
@@ -97,7 +98,12 @@ export default function App() {
         </div>
       )}
       <main
-        className={`min-w-0 overflow-x-hidden px-3 py-4 sm:px-4 sm:pt-[10.5px] sm:pb-6 ${mainLayout}`}
+        className={`min-w-0 overflow-x-hidden ${
+          // Dashboard uses a fixed pt-[11px] to match the browse page logo top offset (14px).
+          isDashboard
+            ? 'px-4 pt-[11px] pb-6'
+            : 'px-3 py-4 sm:px-4 sm:pt-[10.5px] sm:pb-6'
+        } ${mainLayout}`}
       >
         <Routes>
           <Route path="/" element={<BrowsePage />} />
