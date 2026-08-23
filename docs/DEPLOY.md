@@ -6,6 +6,25 @@
 
 ---
 
+## ⚙️ 自动化：CI 测试与自动部署（GitHub Actions）
+
+当前生产站由这条流水线维护，日常更新只需合并代码到 `main`，无需手动登录服务器：
+
+- **PR → `main`**：`ci.yml` 自动运行后端 `node --test` 与前端 `vitest` 测试（Node 24）
+- **push → `main`**：`deploy.yml` 通过 SSH 登录生产服务器（`/opt/zyxf`）执行：
+
+  ```bash
+  git pull origin main
+  docker compose up -d --build --remove-orphans
+  docker image prune -f
+  ```
+
+  等价于下文方案 A 的 Docker 部署，由 CI 代劳。
+
+需要的 GitHub 仓库 Secrets：`SERVER_HOST`、`SERVER_USER`、`SERVER_SSH_KEY`（可选 `SERVER_PORT`，默认 22）。首次部署仍需按方案 A / B 手动初始化一次服务器环境。
+
+---
+
 ## A. Docker Compose 部署（一键启动）
 
 ### A.1 服务器只需装 Docker
@@ -125,6 +144,21 @@ OSS 控制台 → `xjtu-zyxf` Bucket → **数据安全 → 跨域设置** → �
 2. 若项目名不同，在 `.env` 中设置 `IMM_PROJECT=<项目名>`
 3. 不配置时预览接口返回 502（其余功能不受影响，预览失败前端的报错提示是「预览服务暂不可用」）
 
+### 0.4 AI 资料助手：接入 OpenAI 兼容 LLM（可选）
+
+资料库右栏的 AI 对话（按需检索并推荐文件）走任意 **OpenAI 兼容**
+`/chat/completions` 接口（SSE 流式 + 工具调用）。在 `.env` 中三个变量**同时**配置即可启用：
+
+```bash
+LLM_API_KEY=<你的 API Key>
+LLM_BASE_URL=<API 根地址，如 https://open.bigmodel.cn/api/paas/v4>
+LLM_MODEL=<模型名，如 glm-4.6 / deepseek-chat / qwen-plus>
+```
+
+- 不配置时聊天接口返回 503，前端显示「AI 功能未配置」，其余功能不受影响
+- 成本控制：游客每 IP 每分钟 6 次、每小时 20 次（管理员豁免）；每次对话最多 2 轮检索
+- nginx 已为 `/api/` 关闭缓冲（`proxy_buffering off`），SSE 流式无需额外配置
+
 ---
 
 ## 1. ECS 系统准备（Ubuntu 22.04）
@@ -160,7 +194,7 @@ npm config set registry https://registry.npmmirror.com
 cd d:\Code
 # 打包（排除 node_modules、.env、data.db）
 $exclude = @('node_modules', '.env', 'data.db', 'data.db-journal', 'dist', '.git')
-Compress-Archive -Path project\backend, project\frontend, project\README.md, project\DEPLOY.md -DestinationPath project.zip -Force
+Compress-Archive -Path project\backend, project\frontend, project\README.md, project\docs -DestinationPath project.zip -Force
 # 上传
 scp project.zip root@<你的公网IP>:/root/
 ```
@@ -189,13 +223,15 @@ cd zyxf
 
 ## 3. 后端：装依赖 + 配置 .env + pm2 启动
 
-```bash
-cd /var/www/zyxf/backend
-npm install
+> ⚠️ 自环境变量重构起，`.env` 位于**仓库根目录**（本地开发与 Docker 共用同一份，`backend/src/env.js` 读取 `../../.env`），不在 `backend/` 里。
 
-# 创建并编辑 .env
+```bash
+cd /var/www/zyxf
 cp .env.example .env
 nano .env
+
+cd backend
+npm install
 ```
 
 `.env` 修改这几项（**生产环境必须改**）：
@@ -295,7 +331,9 @@ server {
         # (trust proxy), so a client-supplied X-Forwarded-For must not pass through.
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 60s;
+        # AI 聊天走 SSE 流式响应：禁用缓冲，放宽读超时（与 frontend/nginx.conf 一致）
+        proxy_buffering off;
+        proxy_read_timeout 120s;
     }
 
     # SPA fallback：所有未匹配路径都返回 index.html

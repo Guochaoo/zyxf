@@ -41,7 +41,6 @@
   position: absolute;
   inset: 0;
   z-index: 4;
-  background: rgba(255, 255, 255, 0.46);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.24s ease;
@@ -78,24 +77,26 @@
   justify-content: center;
   gap: 0.4rem;
   min-height: 34px;
-  background: #ffffff;
+  background: #000000;
   border: 0;
   border-radius: 14px;
-  box-shadow: rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;
   padding: 0.5rem 1rem;
   cursor: pointer;
-  color: #171717;
-  font-weight: 500;
+  color: #ffffff;
+  font-weight: 600;
   font-size: 0.875rem;
   line-height: 1;
   overflow: visible;
   transition: background 0.2s, box-shadow 0.2s, color 0.2s;
 }
 
-#root .staggered-menu-wrapper[data-open] .sm-toggle,
+#root .staggered-menu-wrapper[data-open] .sm-toggle {
+  background: #000000;
+  color: #ffffff !important;
+}
+
 #root .staggered-menu-wrapper[data-open] .sm-toggle * {
-  background: #ffffff;
-  color: #171717 !important;
+  background: transparent !important;
 }
 
 #root .staggered-menu-wrapper[data-open] .sm-toggle .sm-icon,
@@ -104,21 +105,21 @@
 }
 
 #root .staggered-menu-wrapper[data-open] .sm-toggle .sm-icon-line {
-  background: #171717 !important;
+  background: #ffffff !important;
 }
 
 .sm-toggle:hover {
-  background: #ffffff;
+  background: #1a1a1a;
   box-shadow:
-    rgba(0, 0, 0, 0.08) 0px 0px 0px 1px,
-    rgba(0, 0, 0, 0.04) 0px 2px 2px;
+    rgba(0, 0, 0, 0.25) 0px 0px 0px 1px,
+    rgba(0, 0, 0, 0.2) 0px 2px 4px;
 }
 
 #root .staggered-menu-wrapper[data-open] .sm-toggle:hover {
-  background: #ffffff;
+  background: #1a1a1a;
   box-shadow:
-    rgba(0, 0, 0, 0.08) 0px 0px 0px 1px,
-    rgba(0, 0, 0, 0.04) 0px 2px 2px;
+    rgba(0, 0, 0, 0.25) 0px 0px 0px 1px,
+    rgba(0, 0, 0, 0.2) 0px 2px 4px;
 }
 
 .sm-toggle:focus-visible {

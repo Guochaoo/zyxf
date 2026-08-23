@@ -4,7 +4,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Vercel neutral scale (DESIGN.md §2). slate is remapped to neutral
+        // Vercel neutral scale (docs/DESIGN.md §2). slate is remapped to neutral
         // grays so existing `text-slate-*`/`border-slate-*` classes render in
         // the achromatic system.
         slate: {
@@ -19,7 +19,7 @@ export default {
           900: '#171717', // gray-900 primary text (Vercel Black)
         },
         brand: {
-          // DESIGN.md §2 interaction palette (replaces legacy brand blue)
+          // docs/DESIGN.md §2 interaction palette (replaces legacy brand blue)
           500: '#0A72EF', // Develop Blue
           600: '#0072F5', // Link Blue (primary interactive)
           700: '#0068D6', // Badge Blue Text
@@ -41,7 +41,7 @@ export default {
         green: 'var(--green)',
       },
       boxShadow: {
-        // DESIGN.md §2 shadow system (shadow-as-border)
+        // docs/DESIGN.md §2 shadow system (shadow-as-border)
         card: 'rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px',
         // Insight card design system — raised button
         btn: 'rgba(23, 23, 23, 0.12) 0px 1px 2px, rgba(23, 23, 23, 0.06) 0px 0px 0px 1px',

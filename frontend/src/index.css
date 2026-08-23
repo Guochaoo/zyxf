@@ -179,7 +179,6 @@ textarea:focus-visible {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  box-shadow: rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;
   transition:
     box-shadow 180ms ease,
     background 180ms ease,
@@ -208,19 +207,16 @@ textarea:focus-visible {
   letter-spacing: -0.01em;
 }
 
-/* ---- DESIGN.md §4: Search input (shadow-border, 8px radius) ---- */
+/* ---- DESIGN.md §4: Search input（无界：白底胶囊，无描边，聚焦仅轻投影） ---- */
 .app-theme .rb-search-pill {
   width: 100%;
   background: #ffffff;
   border-radius: 14px;
-  box-shadow: rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;
   transition: box-shadow 160ms ease;
 }
 
 .app-theme .rb-search-pill:focus-within {
-  box-shadow:
-    rgba(0, 0, 0, 0.1) 0px 0px 0px 1px,
-    rgba(0, 0, 0, 0.04) 0px 2px 2px;
+  box-shadow: rgba(0, 0, 0, 0.05) 0px 2px 4px;
 }
 
 .app-theme .rb-search-pill input {
@@ -292,6 +288,130 @@ textarea:focus-visible {
   color: #171717 !important;
 }
 
+/* ---- AI 生成中 loading（像素网格 + 微光文字） ---- */
+@keyframes pixel-on {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer-text {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.shimmer-label {
+  background-image: linear-gradient(90deg, #6b6b6b 35%, #000000 50%, #6b6b6b 65%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-text 1.4s linear infinite;
+}
+
+/* AI 回复 markdown 正文排版 */
+.chat-md > :first-child {
+  margin-top: 0;
+}
+.chat-md > :last-child {
+  margin-bottom: 0;
+}
+.chat-md p {
+  margin: 0 0 0.5em;
+}
+.chat-md ul,
+.chat-md ol {
+  margin: 0 0 0.5em;
+  padding-left: 1.25em;
+}
+.chat-md li {
+  margin: 0.1em 0;
+}
+.chat-md li > ul,
+.chat-md li > ol {
+  margin: 0.1em 0 0;
+}
+.chat-md strong {
+  font-weight: 600;
+}
+.chat-md em {
+  font-style: italic;
+}
+.chat-md a {
+  color: #0a72ef;
+  text-decoration: none;
+}
+.chat-md a:hover {
+  text-decoration: underline;
+}
+.chat-md code {
+  background: var(--field);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 12px;
+}
+.chat-md pre {
+  background: var(--field);
+  border-radius: 8px;
+  padding: 0.6em 0.8em;
+  overflow-x: auto;
+  margin: 0 0 0.5em;
+}
+.chat-md pre code {
+  background: transparent;
+  padding: 0;
+}
+.chat-md blockquote {
+  margin: 0 0 0.5em;
+  padding-left: 0.75em;
+  border-left: 2px solid var(--line);
+  color: var(--ink-2);
+}
+.chat-md h1,
+.chat-md h2,
+.chat-md h3,
+.chat-md h4 {
+  margin: 0.6em 0 0.3em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.chat-md h1 {
+  font-size: 16px;
+}
+.chat-md h2 {
+  font-size: 15px;
+}
+.chat-md h3 {
+  font-size: 14px;
+}
+.chat-md h4 {
+  font-size: 13px;
+}
+
+/* 文件大小胶囊——完全参照 records-tag：由 --tag-base 经 color-mix 派生出
+ * 底色 / 文字 / 描边（对 --surface / --ink 主题自适应，同 FilterTable 思路） */
+.records-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+  border: 1px solid color-mix(in oklab, var(--tag-base) 32%, transparent);
+  background: color-mix(in oklab, var(--tag-base) 16%, var(--surface));
+  color: color-mix(in oklab, var(--tag-base) 82%, var(--ink));
+}
+
 /* ---- Forms (DESIGN.md §4): shadow-border inputs ---- */
 .app-theme input,
 .app-theme textarea,
@@ -353,10 +473,14 @@ textarea:focus-visible {
 }
 
 /* Left rail (folder tree) scrollbar — dark thumb on the #ECECEE rail so it
-   doesn't stay white against the tinted background. */
+   doesn't stay white against the tinted background.
+   静止时隐藏、滚动期间（.is-scrolling，由 FolderTree 切换）显示：
+   滚动条伪元素不支持 opacity，Chromium 用 background 透明切换，
+   Firefox 用 scrollbar-color 切换（均可过渡）。 */
 .rb-side-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(23, 23, 23, 0.28) transparent;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.45s ease 0.8s;
   /* Fade the top and bottom 16px of the folder tree into the rail background
      so it dissolves toward the search bar and footer instead of ending abruptly. */
   -webkit-mask-image: linear-gradient(
@@ -372,6 +496,11 @@ textarea:focus-visible {
     transparent 100%
   );
 }
+.rb-side-scroll.is-scrolling,
+.rb-side-scroll:hover {
+  scrollbar-color: rgba(23, 23, 23, 0.28) transparent;
+  transition-delay: 0s;
+}
 .rb-side-scroll::-webkit-scrollbar {
   width: 8px;
 }
@@ -379,10 +508,16 @@ textarea:focus-visible {
   background: transparent;
 }
 .rb-side-scroll::-webkit-scrollbar-thumb {
-  background: rgba(23, 23, 23, 0.22);
+  background: transparent;
   border-radius: 9999px;
   border: 2px solid transparent;
   background-clip: padding-box;
+  transition: background-color 0.45s ease 0.8s;
+}
+.rb-side-scroll.is-scrolling::-webkit-scrollbar-thumb,
+.rb-side-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(23, 23, 23, 0.22);
+  transition-delay: 0s;
 }
 .rb-side-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(23, 23, 23, 0.38);
@@ -527,4 +662,18 @@ input:-webkit-autofill:active {
   width: 6px;
   height: 6px;
   border-radius: 9999px;
+}
+
+/* ---- Password fields: hide the browser-native reveal/clear buttons
+   (Edge/WebView2 ::-ms-reveal) — the app renders its own eye toggle. ---- */
+input[type='password']::-ms-reveal,
+input[type='password']::-ms-clear {
+  display: none;
+}
+
+/* ---- 白色毛玻璃遮罩视觉：菜单 (sm-backdrop) 与知识图谱全屏弹窗共用 ---- */
+.rb-frost-backdrop {
+  background: rgba(255, 255, 255, 0.46);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
 }

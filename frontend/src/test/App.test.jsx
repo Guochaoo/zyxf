@@ -119,7 +119,7 @@ describe('App', () => {
 
   test('active nav item matches the route', async () => {
     renderApp('/dashboard');
-    expect(await screen.findByText('数据概览')).toBeInTheDocument();
+    expect(await screen.findByText('统计面板')).toBeInTheDocument();
   });
 
   test('unknown routes redirect home', async () => {

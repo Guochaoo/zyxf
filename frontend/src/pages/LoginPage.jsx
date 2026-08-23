@@ -30,7 +30,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative mt-3 sm:mt-6 mx-auto w-full max-w-[1100px] grid items-stretch overflow-hidden rounded-lg shadow-[rgba(0,0,0,0.08)_0px_0px_0px_1px,rgba(0,0,0,0.04)_0px_2px_2px,rgba(0,0,0,0.04)_0px_8px_8px_-8px,#fafafa_0px_0px_0px_1px] sm:min-h-[640px] sm:grid-cols-[1.15fr_1fr]">
+    <div className="relative mt-3 sm:mt-6 mx-auto w-full max-w-[1100px] grid items-stretch overflow-hidden rounded-[14px] shadow-[rgba(0,0,0,0.04)_0px_2px_2px,rgba(0,0,0,0.04)_0px_8px_8px_-8px,#fafafa_0px_0px_0px_1px] sm:min-h-[640px] sm:grid-cols-[1.15fr_1fr]">
       {/* Left — silky brand panel with animated Silk background */}
       <div className="rb-dark relative z-0 hidden sm:flex sm:flex-col sm:justify-between p-12 overflow-hidden">
         <div className="absolute inset-0 -z-10">
@@ -92,8 +92,7 @@ export default function LoginPage() {
               </label>
               <input
                 id="login-username"
-                className="w-full rounded-lg border-0 bg-neutral-100 px-3.5 py-2.5 sm:py-3 text-sm text-neutral-900 placeholder:text-neutral-400 transition-colors focus:bg-neutral-200/70 focus:outline-none"
-                placeholder="admin"
+                className="w-full rounded-lg border-0 bg-neutral-100 px-3.5 py-2.5 sm:py-3 text-sm text-neutral-900 transition-colors focus:bg-neutral-200/70 focus:outline-none"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoFocus
@@ -109,8 +108,7 @@ export default function LoginPage() {
                 <input
                   id="login-password"
                   type={showPwd ? 'text' : 'password'}
-                  className="w-full rounded-lg border-0 bg-neutral-100 px-3.5 py-2.5 sm:py-3 pr-11 text-sm text-neutral-900 placeholder:text-neutral-400 transition-colors focus:bg-neutral-200/70 focus:outline-none"
-                  placeholder="••••••••"
+                  className="w-full rounded-lg border-0 bg-neutral-100 px-3.5 py-2.5 sm:py-3 pr-11 text-sm text-neutral-900 transition-colors focus:bg-neutral-200/70 focus:outline-none"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
