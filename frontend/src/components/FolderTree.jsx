@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import { FolderIcon } from './icons';
 import FileIcon from './FileIcon.jsx';
 import { getFolderTree } from '../api.js';
+import GlideList from './GlideList.jsx';
 
 /**
  * Sidebar folder tree, Vercel-docs style:
@@ -99,13 +100,15 @@ export default function FolderTree({ currentId = 0, className = '' }) {
         className="rb-side-scroll -mx-1 min-h-0 flex-1 overflow-y-auto px-1"
         onScroll={handleTreeScroll}
       >
-        <TreeNode
-          node={{ id: 0, name: '首页', children: tree || [], files: rootFiles }}
-          depth={0}
-          currentId={rootId}
-          expanded={expanded}
-          onToggle={toggle}
-        />
+        <GlideList className="-mx-1 px-1">
+          <TreeNode
+            node={{ id: 0, name: '首页', children: tree || [], files: rootFiles }}
+            depth={0}
+            currentId={rootId}
+            expanded={expanded}
+            onToggle={toggle}
+          />
+        </GlideList>
       </nav>
     </aside>
   );
@@ -120,10 +123,11 @@ function TreeNode({ node, depth, currentId, expanded, onToggle }) {
 
   const row = (
     <span
-      className={`flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-[14px] leading-none transition-colors ${
+      data-glide-row
+      className={`flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-[14px] leading-none transition-[color,transform] duration-150 active:scale-[0.98] ${
         isCurrent
           ? 'bg-[#F5F5F5] font-medium text-[#171717]'
-          : 'text-[#4D4D4D] hover:bg-[#FAFAFA] hover:text-[#171717]'
+          : 'text-[#4D4D4D] hover:text-[#171717]'
       }`}
       style={{ paddingLeft: `${8 + depth * 16}px` }}
     >
@@ -198,7 +202,8 @@ function FileRow({ file, depth }) {
       state={{ previewFile: file }}
     >
       <span
-        className="flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-[14px] leading-none text-[#4D4D4D] transition-colors hover:bg-[#FAFAFA] hover:text-[#171717]"
+        data-glide-row
+        className="flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-[14px] leading-none text-[#4D4D4D] transition-[color,transform] duration-150 active:scale-[0.98] hover:text-[#171717]"
         style={{ paddingLeft: `${8 + depth * 16}px` }}
       >
         <span className="w-5 shrink-0" />

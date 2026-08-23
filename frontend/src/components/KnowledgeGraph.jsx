@@ -135,7 +135,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
 
   return (
     <div
-      className={`kg-card relative flex flex-col bg-white rounded-[14px] overflow-hidden ${className}`.trim()}
+      className={`kg-card relative flex shrink-0 flex-col bg-white rounded-[14px] overflow-hidden ${className}`.trim()}
     >
       {/* 头部栏 — 灰底标签行；收起后仅剩本栏（14px 圆角胶囊） */}
       <div className="flex shrink-0 items-center justify-between gap-1 bg-[#EFEFEF] p-1.5">

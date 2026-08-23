@@ -62,7 +62,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   const plusVRef = useRef(null);
   const iconRef = useRef(null);
   const textInnerRef = useRef(null);
-  const [textLines, setTextLines] = useState(['Menu', 'Close']);
+  const [textLines, setTextLines] = useState(['菜单', '关闭']);
 
   const openTlRef = useRef(null);
   const closeTweenRef = useRef(null);
@@ -281,13 +281,13 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     if (!inner) return;
     textCycleAnimRef.current?.kill();
 
-    const currentLabel = opening ? 'Menu' : 'Close';
-    const targetLabel = opening ? 'Close' : 'Menu';
+    const currentLabel = opening ? '菜单' : '关闭';
+    const targetLabel = opening ? '关闭' : '菜单';
     const cycles = 3;
     const seq = [currentLabel];
     let last = currentLabel;
     for (let i = 0; i < cycles; i++) {
-      last = last === 'Menu' ? 'Close' : 'Menu';
+      last = last === '菜单' ? '关闭' : '菜单';
       seq.push(last);
     }
     seq.push(targetLabel);
@@ -394,7 +394,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
           <button
             ref={toggleBtnRef}
             className="sm-toggle"
-            aria-label={open ? 'Close menu' : 'Open menu'}
+            aria-label={open ? '关闭菜单' : '打开菜单'}
             aria-expanded={open}
             aria-controls="staggered-menu-panel"
             onClick={toggleMenu}

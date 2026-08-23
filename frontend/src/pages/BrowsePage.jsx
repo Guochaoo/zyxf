@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import {
@@ -24,6 +24,7 @@ import { useAuth } from '../auth.jsx';
 import FileIcon from '../components/FileIcon.jsx';
 import Preview from '../components/Preview/index.jsx';
 import UploadDialog from '../components/UploadDialog.jsx';
+import GlideList from '../components/GlideList.jsx';
 import { downloadFileById, errMsg, formatDate, formatSize } from '../utils.js';
 import { useSlidingIndicator } from '../hooks/useSlidingIndicator.js';
 
@@ -457,10 +458,12 @@ export default function BrowsePage() {
         )}
       </div>
 
-      {/* ICP 备案号：跟随中间列内容滚动，左右栏保持固定 */}
-      <footer className="-mt-3.5 text-center text-xs leading-normal text-slate-400">
-        陕ICP备2026017448号
-      </footer>
+      {/* ICP 备案号：仅首页显示，文件夹页不展示 */}
+      {folderId === 0 && (
+        <footer className="-mt-3.5 text-center text-xs leading-normal text-slate-400">
+          陕ICP备2026017448号
+        </footer>
+      )}
 
       {renameTarget && (
         <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/35 px-4">
@@ -584,8 +587,18 @@ function ItemListWithRename({
     return <div className="py-16 text-center text-slate-500 text-sm">此文件夹为空</div>;
   }
   const actionWidthClass = isAdmin ? 'w-28' : 'w-16';
+  // 按当前列表实际大小数量等分成 6 段，得到 5 个分位阈值
+  const thresholds = useMemo(
+    () =>
+      sizeThresholds(
+        [...(data?.folders || []), ...(data?.files || [])]
+          .map((x) => x.size)
+          .filter((n) => Number.isFinite(n))
+      ),
+    [data]
+  );
   return (
-    <ul className="divide-y divide-white/10">
+    <GlideList as="ul" highlightClassName="bg-slate-50">
       <li className="rb-table-heading hidden sm:flex items-center gap-2 px-4 py-2 text-xs text-slate-500 bg-[#EFEFEF]">
         {isAdmin && <span className="w-4 h-4 -ml-1 sm:mr-1 sm:-ml-2 shrink-0" />}
         <span className="flex-1 flex items-center gap-2 min-w-0">
@@ -600,6 +613,7 @@ function ItemListWithRename({
         <Row
           key={`d-${f.id}`}
           item={{ ...f, type: 'folder' }}
+          tone={toneFor(f.size, thresholds)}
           isAdmin={isAdmin}
           dragging={dragging}
           dropZone={dropZone}
@@ -628,6 +642,7 @@ function ItemListWithRename({
         <Row
           key={`f-${f.id}`}
           item={{ ...f, type: 'file' }}
+          tone={toneFor(f.size, thresholds)}
           isAdmin={isAdmin}
           dragging={dragging}
           dropZone={dropZone}
@@ -657,7 +672,7 @@ function ItemListWithRename({
           }
         />
       ))}
-    </ul>
+    </GlideList>
   );
 }
 
@@ -666,6 +681,44 @@ function RowAction({ title, onClick, children }) {
     <button type="button" onClick={onClick} title={title} className="p-1 rounded hover:bg-black/5">
       {children}
     </button>
+  );
+}
+
+// 大小配色：6 档（小→大）的 背景/字体 色对
+const SIZE_TONES = [
+  { bg: '#DCF2E9', fg: '#3DAB7D' }, // 1 绿
+  { bg: '#E0F1F7', fg: '#50A8C4' }, // 2 蓝
+  { bg: '#EAE4FB', fg: '#896BD9' }, // 3 紫
+  { bg: '#F6E1F8', fg: '#CF81DA' }, // 4 粉紫
+  { bg: '#FCE1EA', fg: '#D982AB' }, // 5 粉（字体调深，浅粉底上更清晰）
+  { bg: '#FBE0DE', fg: '#D2615A' }, // 6 红（字体调深，浅粉底上更清晰）
+];
+
+// 按当前列表实际大小数量等分成 6 段，返回 5 个分位阈值（单位：字节）
+function sizeThresholds(sizes) {
+  const sorted = [...sizes].sort((a, b) => a - b);
+  if (sorted.length === 0) return [];
+  const n = SIZE_TONES.length;
+  const t = [];
+  for (let i = 1; i < n; i += 1) {
+    t.push(sorted[Math.min(sorted.length - 1, Math.floor((sorted.length * i) / n))]);
+  }
+  return t;
+}
+
+// 大小落在哪一档（0..5）；越过所有阈值则落在最大档
+function toneFor(size, thresholds) {
+  let i = 0;
+  while (i < thresholds.length && size >= thresholds[i]) i += 1;
+  return i;
+}
+
+function sizeChip(size, tone) {
+  const c = SIZE_TONES[tone] ?? SIZE_TONES[0];
+  return (
+    <span className="records-tag" style={{ background: c.bg, color: c.fg, '--tag-base': c.fg }}>
+      {formatSize(size)}
+    </span>
   );
 }
 
@@ -682,6 +735,7 @@ function Row({
   onRowDrop,
   onClick,
   actions,
+  tone,
 }) {
   const isSelf = dragging?.type === item.type && dragging.id === item.id;
   const targetMatch =
@@ -692,21 +746,20 @@ function Row({
 
   return (
     <li
+      data-glide-row
       draggable={isAdmin}
       onDragStart={(e) => onDragStart(e, { type: item.type, id: item.id, name: item.name })}
       onDragEnd={onDragEnd}
       onDragOver={(e) => onRowDragOver(e, { type: item.type, id: item.id })}
       onDragLeave={() => onRowDragLeave({ type: item.type, id: item.id })}
       onDrop={(e) => onRowDrop(e, { type: item.type, id: item.id })}
-      className={`relative flex items-center gap-2 px-3 sm:px-4 py-3 sm:py-2.5 cursor-pointer transition-colors ${
+      className={`relative flex items-center gap-2 px-3 sm:px-4 py-3 sm:py-2.5 cursor-pointer transition-[background-color,transform] duration-150 active:scale-[0.98] ${
         isInto ? 'bg-black/5 ring-1 ring-inset ring-black/10' : ''
       } ${
         isBefore ? 'shadow-[inset_0_2px_0_0_rgba(0,0,0,0.6)]' : ''
       } ${
         isAfter ? 'shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.6)]' : ''
-      } ${!targetMatch && isSelf ? 'opacity-40' : ''} ${
-        !targetMatch && !isSelf ? 'hover:bg-slate-50' : ''
-      }`}
+      } ${!targetMatch && isSelf ? 'opacity-40' : ''}`}
       onClick={onClick}
     >
       {isAdmin && (
@@ -716,8 +769,8 @@ function Row({
         <FileIcon type={item.type} ext={item.ext} />
         <span className="min-w-0 truncate">{item.name}</span>
       </span>
-      <span className="hidden sm:inline w-24 text-right text-xs text-slate-400">
-        {formatSize(item.size)}
+      <span className="hidden sm:flex w-24 justify-end">
+        {sizeChip(item.size, tone)}
       </span>
       <span className="hidden sm:inline w-28 text-right text-xs text-slate-400">
         {formatDate(item.created_at)}
