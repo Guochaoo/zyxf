@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Globe, Maximize, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Globe, Maximize, X } from 'lucide-react';
 import {
   forceCenter,
   forceCollide,
@@ -13,9 +13,15 @@ import { getFolderTree } from '../api.js';
 const VIEW_W = 600;
 const VIEW_H = 420;
 
-// Floating graph action buttons (globe / maximize) share this shell.
+// 头部图标按钮（globe / maximize）与 AI 助手卡片头部的按钮同样式。
 const ACTION_BTN_CLASS =
-  'flex h-8 w-8 items-center justify-center rounded-[8px] bg-white text-slate-500 shadow-[rgba(23,23,23,0.12)_0_0_0_1px,rgba(23,23,23,0.06)_0_1px_2px] transition-colors hover:bg-black/5 hover:text-black';
+  'flex size-6 items-center justify-center rounded-[6px] text-ink-3 transition-colors duration-100 hover:bg-hover hover:text-ink-2 disabled:opacity-40';
+
+// 图谱区高度：原卡片高 295px，头部栏占 37px（p-1.5×2 + size-6 + 1px 分割线）。
+const GRAPH_H = '258px';
+
+// 收起状态跨页面导航保留（右栏组件会随路由卸载重建）。
+let collapsedPersistent = false;
 
 // Node ids: folders are `f<id>` (root is f0), files are `file<id>`.
 const nodeIdOf = (currentId) => (currentId ? `f${currentId}` : 'f0');
@@ -70,6 +76,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
   // Enlarged dialog mode: 'full' = whole library (globe), 'local' = current
   // folder neighborhood zoomed (maximize). null = dialog closed.
   const [dialog, setDialog] = useState(null);
+  const [collapsed, setCollapsed] = useState(collapsedPersistent);
   const [tree, setTree] = useState(null);
   const [rootFiles, setRootFiles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -128,51 +135,85 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
 
   return (
     <div
-      className={`kg-card relative bg-white rounded-[14px] border border-black/10 overflow-hidden ${className}`.trim()}
+      className={`kg-card relative flex shrink-0 flex-col bg-white rounded-[14px] overflow-hidden ${className}`.trim()}
     >
-      {/* Floating actions, overlaid on the graph */}
-      {!empty && (
-        <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
+      {/* 头部栏 — 灰底标签行；收起后仅剩本栏（14px 圆角胶囊） */}
+      <div className="flex shrink-0 items-center justify-between gap-1 bg-[#EFEFEF] p-1.5">
+        <span className="shrink-0 px-2 py-[3px] text-[13px] font-medium text-ink">知识图谱</span>
+        <div className="flex shrink-0 items-center gap-1">
+          {!empty && !collapsed && (
+            <>
+              <button
+                type="button"
+                onClick={() => setDialog('full')}
+                title="查看全库图谱"
+                aria-label="查看全库图谱"
+                className={ACTION_BTN_CLASS}
+              >
+                <Globe className="h-[15px] w-[15px]" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setDialog('local')}
+                title="放大当前图谱"
+                aria-label="放大当前图谱"
+                className={ACTION_BTN_CLASS}
+              >
+                <Maximize className="h-[15px] w-[15px]" />
+              </button>
+            </>
+          )}
           <button
             type="button"
-            onClick={() => setDialog('full')}
-            title="查看全库图谱"
+            onClick={() =>
+              setCollapsed((v) => {
+                collapsedPersistent = !v;
+                return !v;
+              })
+            }
+            title={collapsed ? '展开图谱' : '收起图谱'}
+            aria-label={collapsed ? '展开图谱' : '收起图谱'}
+            aria-expanded={!collapsed}
             className={ACTION_BTN_CLASS}
           >
-            <Globe className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setDialog('local')}
-            title="放大当前图谱"
-            className={ACTION_BTN_CLASS}
-          >
-            <Maximize className="h-4 w-4" />
+            {collapsed ? (
+              <ChevronDown className="h-[15px] w-[15px]" />
+            ) : (
+              <ChevronUp className="h-[15px] w-[15px]" />
+            )}
           </button>
         </div>
-      )}
-      {/* Square graph content — rendered directly in the card, no wrapper */}
-      {loading || empty ? (
-        <div className="flex h-[295px] items-center justify-center text-[12px] text-slate-500">
-          {loading ? '加载中…' : '暂无内容'}
-        </div>
-      ) : (
-        <GraphCanvas
-          nodes={localNodes}
-          links={localLinks}
-          currentId={currentId}
-          onNavigate={onNavigate}
-          height="295px"
-        />
-      )}
+      </div>
+      {/* 图谱内容区：高度动画收起/展开，下方对话卡片（flex-1）自然补位 */}
+      <div
+        className="overflow-hidden transition-[height] duration-[360ms]"
+        style={{
+          height: collapsed ? 0 : GRAPH_H,
+          transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        }}
+      >
+        {loading || empty ? (
+          <div className="flex h-full items-center justify-center text-[12px] text-slate-500">
+            {loading ? '加载中…' : '暂无内容'}
+          </div>
+        ) : (
+          <GraphCanvas
+            nodes={localNodes}
+            links={localLinks}
+            currentId={currentId}
+            onNavigate={onNavigate}
+            height={GRAPH_H}
+          />
+        )}
+      </div>
 
       {dialog && !empty && (
         <div
-          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 p-6 sm:p-10"
+          className="rb-frost-backdrop fixed inset-0 z-[150] flex items-center justify-center p-6 sm:p-10"
           onClick={() => setDialog(null)}
         >
           <div
-            className="relative h-full max-h-[85vh] w-full max-w-[1200px] overflow-hidden rounded-[14px] border border-black/10 bg-white shadow-[rgba(0,0,0,0.12)_0_16px_48px]"
+            className="relative h-full max-h-[85vh] w-full max-w-[1200px] overflow-hidden rounded-[14px] bg-white shadow-[rgba(0,0,0,0.12)_0_16px_48px]"
             onClick={(e) => e.stopPropagation()}
           >
             <button

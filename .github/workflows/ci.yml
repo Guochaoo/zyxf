@@ -20,6 +20,10 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci --no-audit --no-fund
+      # `npm test` relies on node:test's mock.module, which requires the
+      # --experimental-test-module-mocks flag on Node 24. Do not remove the
+      # flag from backend/package.json without re-verifying tests still pass,
+      # and re-check when bumping the Node major version.
       - run: npm test
 
   frontend-test:
