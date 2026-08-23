@@ -133,7 +133,7 @@ Dashboard Pill Toggle / Refresh (`shadow-btn`)
 - Background: `bg-surface` (#fff), Radius: 9999px (rounded-full)
 - Shadow: rgba(23,23,23,.12) 0px 1px 2px, rgba(23,23,23,.06) 0px 0px 0px 1px
 - Active state: raised `bg-surface shadow-btn`; inactive: plain `text-ink-3 hover:text-ink-2`
-- Use: 数据概览的时间范围切换（7日/30日/90日）、今日下载的 下载/上传 指标切换
+- Use: 统计面板的时间范围切换（7日/30日/90日）、今日下载的 下载/上传 指标切换
 
 Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视觉锚点）
 - 14px 圆形（`size-3.5 rounded-full`）、纯色实底、白色 8px 图标（lucide，strokeWidth 3）
@@ -187,7 +187,7 @@ Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视�
     2. **Search field** (Vercel-docs pattern)
     3. **Folder tree** (fills the remaining rail height, scrolls internally) — folders **and files**: file leaves show the file-type icon, indented under their folder; clicking a file jumps to its folder and opens the preview. Root-level files sit under the 首页 node, which is **expanded by default**. Chevron toggles any folder that contains folders or files.
   - **Middle column** (`flex-1`, scrolls internally): sticky breadcrumb/toolbar row (white background) — sort segments (默认 / 名称 / 时间 / 大小), refresh, 新建文件夹, 上传 — above the file list
-  - **Right rail** (fixed full-height): **打开菜单栏 button** on top (opens StaggeredMenu; replaces its floating toggle at ≥1280px), **knowledge-graph card** below — the graph's local view is `sticky` to the rail; the full-library modal is unaffected
+  - **Right rail** (fixed full-height): **打开菜单栏 button** on top (opens StaggeredMenu; replaces its floating toggle at ≥1280px), **knowledge-graph card** below — the graph's local view is `sticky` to the rail; the full-library modal is unaffected — then the **AI 资料助手 card** (`lg`+ only): streaming chat panel (SSE) that answers file-finding questions with smart-search tool calls; replies render typewriter-style with 【文件N】 citations resolved into clickable file rows (jump/preview/download); welcome state shows three suggestion chips; composer doubles as a stop button while streaming. Requires `LLM_*` env (otherwise 503 → 「AI 功能未配置」); the rail scrolls when both cards overflow.
   - Below 1280px the knowledge graph falls back to an inline card under the file list; the left rail hides below `lg` (1024px) — browse pages get a slim mobile brand row + search below it, navigation via StaggeredMenu
 - Content column: centered, max `1200px` (browse) / `1280px` (standalone `max-w-7xl`)
 - Standalone pages (统计 / 关于我们): single centered `max-w-7xl` column

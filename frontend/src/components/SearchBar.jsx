@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, X } from 'lucide-react';
 import { DownloadIcon, FolderIcon, SearchIcon } from './icons';
 import { getFileUrl, search as searchApi } from '../api.js';
-import { downloadFileById, formatSize } from '../utils.js';
+import { downloadFileById } from '../utils.js';
 import FileIcon from './FileIcon.jsx';
 
 export default function SearchBar({ className = '' }) {
@@ -136,8 +136,8 @@ export default function SearchBar({ className = '' }) {
           value={q}
           onChange={onChange}
           onFocus={() => results && setOpen(true)}
-          placeholder="搜索文件"
-          className="w-full rounded-full border-0 bg-transparent py-[10px] pl-11 pr-10 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:outline-none focus:ring-0"
+          placeholder="搜索文字"
+          className="w-full rounded-full border-0 bg-transparent py-[8px] pl-11 pr-10 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:outline-none focus:ring-0"
         />
         {q && (
           <button
@@ -188,16 +188,20 @@ export default function SearchBar({ className = '' }) {
                   {results.files.map((f) => (
                     <div
                       key={`f-${f.id}`}
-                      className="flex w-full items-center gap-2 hover:bg-slate-50 transition-colors"
+                      className="flex w-full items-center gap-1 hover:bg-slate-50 transition-colors"
                     >
                       <button
                         type="button"
                         onClick={() => handleResult(f)}
-                        className="min-w-0 flex flex-1 items-center gap-3 px-4 py-2.5 text-left"
+                        className="min-w-0 flex flex-1 items-center gap-3 py-2.5 pl-4 pr-1 text-left"
                       >
                         <FileIcon type="file" ext={f.ext} className="w-4 h-4 shrink-0" />
-                        <span className="text-sm text-slate-900 truncate flex-1">{f.name}</span>
-                        <span className="text-xs text-slate-500 shrink-0">{formatSize(f.size)}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm text-slate-900 truncate">{f.name}</span>
+                          {f.folder_path && (
+                            <span className="block text-xs text-slate-400 truncate">{f.folder_path}</span>
+                          )}
+                        </span>
                       </button>
                       <button
                         type="button"
@@ -215,7 +219,7 @@ export default function SearchBar({ className = '' }) {
             </div>
           )}
           <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-400">
-            {total} 个结果 · Esc 关闭
+            {total} 个结果
           </div>
         </div>,
         document.body

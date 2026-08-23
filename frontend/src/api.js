@@ -27,6 +27,60 @@ export default api;
 
 // ---- helpers ----
 
+/**
+ * AI 聊天（SSE 流式）。axios 不支持流式响应，用原生 fetch 逐行解析。
+ * 事件回调：onDelta（文本增量）、onFiles（引用的文件列表）。
+ * llm 为可选的客户端配置 { apiKey, baseUrl, model }（前端设置面板，自带 Key）。
+ * 用 AbortSignal 中止；非 2xx 抛 Error（message 为后端中文提示）。
+ */
+export async function chatStream(messages, { onDelta, onFiles, signal, llm } = {}) {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ messages, ...(llm ? { llm } : {}) }),
+    signal,
+  });
+
+  if (!res.ok) {
+    let message = `请求失败（${res.status}）`;
+    try {
+      const data = await res.json();
+      if (data?.error) message = data.error;
+    } catch {
+      /* keep default */
+    }
+    throw new Error(message);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (!line.startsWith('data:')) continue;
+      let event;
+      try {
+        event = JSON.parse(line.slice(5).trim());
+      } catch {
+        continue;
+      }
+      if (event.type === 'delta') onDelta?.(event.text);
+      else if (event.type === 'files') onFiles?.(event.files);
+      else if (event.type === 'error') throw new Error(event.message || 'AI 服务出错');
+    }
+  }
+}
+
 export async function login(username, password) {
   const { data } = await api.post('/auth/login', { username, password });
   return data;

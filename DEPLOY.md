@@ -125,6 +125,21 @@ OSS 控制台 → `xjtu-zyxf` Bucket → **数据安全 → 跨域设置** → �
 2. 若项目名不同，在 `.env` 中设置 `IMM_PROJECT=<项目名>`
 3. 不配置时预览接口返回 502（其余功能不受影响，预览失败前端的报错提示是「预览服务暂不可用」）
 
+### 0.4 AI 资料助手：接入 OpenAI 兼容 LLM（可选）
+
+资料库右栏的 AI 对话（按需检索并推荐文件）走任意 **OpenAI 兼容**
+`/chat/completions` 接口（SSE 流式 + 工具调用）。在 `.env` 中三个变量**同时**配置即可启用：
+
+```bash
+LLM_API_KEY=<你的 API Key>
+LLM_BASE_URL=<API 根地址，如 https://open.bigmodel.cn/api/paas/v4>
+LLM_MODEL=<模型名，如 glm-4.6 / deepseek-chat / qwen-plus>
+```
+
+- 不配置时聊天接口返回 503，前端显示「AI 功能未配置」，其余功能不受影响
+- 成本控制：游客每 IP 每分钟 6 次、每小时 20 次（管理员豁免）；每次对话最多 2 轮检索
+- nginx 已为 `/api/` 关闭缓冲（`proxy_buffering off`），SSE 流式无需额外配置
+
 ---
 
 ## 1. ECS 系统准备（Ubuntu 22.04）

@@ -27,7 +27,7 @@ export default function App() {
 
   const menuItems = [
     { label: '资料库', ariaLabel: '浏览资料库', link: '/' },
-    { label: '统计', ariaLabel: '查看统计仪表盘', link: '/dashboard' },
+    { label: '统计面板', ariaLabel: '查看统计仪表盘', link: '/dashboard' },
     { label: '关于我们', ariaLabel: '了解仲英书院学业辅导中心', link: '/about' },
     ...(user
       ? [{ label: '退出登录', ariaLabel: '退出登录', action: logout }]
@@ -92,17 +92,14 @@ export default function App() {
           </div>
           <SearchBar />
           <FolderTree currentId={folderId} />
-          <footer className="shrink-0 -mt-2 pb-2 text-center text-[11px] leading-relaxed text-slate-400">
-            陕ICP备2026017448号
-          </footer>
         </div>
       )}
       <main
         className={`min-w-0 overflow-x-hidden ${
           // Dashboard uses a fixed pt-[11px] to match the browse page logo top offset (14px).
-          isDashboard
-            ? 'px-4 pt-[11px] pb-6'
-            : 'px-3 py-4 sm:px-4 sm:pt-[10.5px] sm:pb-6'
+        isDashboard
+          ? 'px-4 pt-[11px] pb-6'
+          : 'px-3 pt-4 pb-2 sm:px-4 sm:pt-[10.5px] sm:pb-2'
         } ${mainLayout}`}
       >
         <Routes>

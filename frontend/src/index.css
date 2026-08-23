@@ -353,10 +353,14 @@ textarea:focus-visible {
 }
 
 /* Left rail (folder tree) scrollbar — dark thumb on the #ECECEE rail so it
-   doesn't stay white against the tinted background. */
+   doesn't stay white against the tinted background.
+   静止时隐藏、滚动期间（.is-scrolling，由 FolderTree 切换）显示：
+   滚动条伪元素不支持 opacity，Chromium 用 background 透明切换，
+   Firefox 用 scrollbar-color 切换（均可过渡）。 */
 .rb-side-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(23, 23, 23, 0.28) transparent;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.45s ease 0.8s;
   /* Fade the top and bottom 16px of the folder tree into the rail background
      so it dissolves toward the search bar and footer instead of ending abruptly. */
   -webkit-mask-image: linear-gradient(
@@ -372,6 +376,11 @@ textarea:focus-visible {
     transparent 100%
   );
 }
+.rb-side-scroll.is-scrolling,
+.rb-side-scroll:hover {
+  scrollbar-color: rgba(23, 23, 23, 0.28) transparent;
+  transition-delay: 0s;
+}
 .rb-side-scroll::-webkit-scrollbar {
   width: 8px;
 }
@@ -379,10 +388,16 @@ textarea:focus-visible {
   background: transparent;
 }
 .rb-side-scroll::-webkit-scrollbar-thumb {
-  background: rgba(23, 23, 23, 0.22);
+  background: transparent;
   border-radius: 9999px;
   border: 2px solid transparent;
   background-clip: padding-box;
+  transition: background-color 0.45s ease 0.8s;
+}
+.rb-side-scroll.is-scrolling::-webkit-scrollbar-thumb,
+.rb-side-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(23, 23, 23, 0.22);
+  transition-delay: 0s;
 }
 .rb-side-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(23, 23, 23, 0.38);
@@ -527,4 +542,18 @@ input:-webkit-autofill:active {
   width: 6px;
   height: 6px;
   border-radius: 9999px;
+}
+
+/* ---- Password fields: hide the browser-native reveal/clear buttons
+   (Edge/WebView2 ::-ms-reveal) — the app renders its own eye toggle. ---- */
+input[type='password']::-ms-reveal,
+input[type='password']::-ms-clear {
+  display: none;
+}
+
+/* ---- 白色毛玻璃遮罩视觉：菜单 (sm-backdrop) 与知识图谱全屏弹窗共用 ---- */
+.rb-frost-backdrop {
+  background: rgba(255, 255, 255, 0.46);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
 }

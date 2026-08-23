@@ -27,6 +27,10 @@ services:
       OSS_KEY_PREFIX: ${OSS_KEY_PREFIX:-zyxf/}
       OSS_ENDPOINT: ${OSS_ENDPOINT:-}
       IMM_STYLE: ${IMM_STYLE:-}
+      # AI 资料助手（可选）：三者齐全才启用，未配置时聊天接口返回 503
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
     volumes:
       - zyxf-data:/data
 
