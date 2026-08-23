@@ -370,7 +370,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
       data-position={position}
       data-open={open || undefined}
     >
-      <div className="sm-backdrop" aria-hidden="true" onClick={closeMenu} />
+      <div className="sm-backdrop rb-frost-backdrop" aria-hidden="true" onClick={closeMenu} />
       <div ref={preLayersRef} className="sm-prelayers" aria-hidden="true">
         {prelayerColors(colors).map((c, i) => (
           <div key={i} className="sm-prelayer" style={{ background: c }} />

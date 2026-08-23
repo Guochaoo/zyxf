@@ -512,6 +512,42 @@ describe('search', () => {
     assert.deepEqual(body.folders.map((f) => f.name), ['\u671f\u672b\u8d44\u6599']);
     assert.deepEqual(body.files.map((f) => f.name), ['\u671f\u672b\u8bd5\u5377.pdf']);
   });
+
+  test('hanzi abbreviation: 高数 finds 高等数学', async () => {
+    const token = await adminLogin();
+    await registerFile(token, { name: '高等数学.pdf' });
+    await registerFile(token, { name: '大学物理.pdf' });
+
+    const { body } = await request('GET', '/api/search?q=高数');
+    assert.deepEqual(body.files.map((f) => f.name), ['高等数学.pdf']);
+  });
+
+  test('pinyin full and initials queries match hanzi names', async () => {
+    const token = await adminLogin();
+    await registerFile(token, { name: '高等数学.pdf' });
+
+    const byInitials = await request('GET', '/api/search?q=gdsx');
+    assert.deepEqual(byInitials.body.files.map((f) => f.name), ['高等数学.pdf']);
+    const byFull = await request('GET', '/api/search?q=gaoshu');
+    assert.deepEqual(byFull.body.files.map((f) => f.name), ['高等数学.pdf']);
+  });
+
+  test('path matches rank below name matches and expose folder_path', async () => {
+    const token = await adminLogin();
+    const folder = await createFolder(token, '高等数学');
+    await registerFile(token, {
+      name: '第1章.pptx',
+      folder_id: folder.body.id,
+      oss_key: 'zyxf-test/高等数学/第1章.pptx',
+    });
+    await registerFile(token, { name: '高等数学复习.pdf' });
+
+    const { body } = await request('GET', '/api/search?q=高数');
+    assert.deepEqual(body.folders.map((f) => f.name), ['高等数学']);
+    assert.deepEqual(body.files.map((f) => f.name), ['高等数学复习.pdf', '第1章.pptx']);
+    assert.equal(body.files[0].folder_path, undefined);
+    assert.equal(body.files[1].folder_path, '高等数学');
+  });
 });
 
 describe('stats', () => {

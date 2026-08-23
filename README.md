@@ -27,12 +27,15 @@ project/
 │   │   ├── storagePath.js     # OSS key 生成（防路径穿越）
 │   │   ├── dbHelpers.js       # 共享 DB 工具
 │   │   ├── mime.js            # 扩展名 → MIME
+│   │   ├── searchService.js   # 全库检索服务（搜索路由与 AI 工具共用）
+│   │   ├── llm.js             # OpenAI 兼容 LLM 流式客户端（可选启用）
 │   │   └── routes/
 │   │       ├── auth.js        # 登录 / 当前用户（登录限流）
 │   │       ├── folders.js     # 目录树 / 增删改 / 排序
 │   │       ├── files.js       # 上传签名 / 下载签名 / 预览令牌 / 改名移动删除
-│   │       ├── search.js      # 名称搜索
-│   │       ├── stats.js       # 数据概览统计 + /heatmap 年热力图数据
+│   │       ├── search.js      # 智能搜索（名称 / 拼音 / 汉字缩写 / 文件夹路径）
+│   │       ├── chat.js        # AI 资料助手（SSE 流式 + 检索工具调用 + 限流）
+│   │       ├── stats.js       # 统计面板统计 + /heatmap 年热力图数据
 │   │       └── sync.js        # 与共享 OSS bucket 同步
 │   ├── package.json
 │   └── .env.example
@@ -92,10 +95,12 @@ npm run dev
 
 ## 主要功能
 
+- 智能搜索：名称子串 / 汉字缩写（搜「高数」找到「高等数学」）/ 拼音全拼与首字母（`gaoshu`、`gdsx`）/ 所在文件夹路径命中（结果标注所属文件夹，名称命中排在路径命中之前）
+- AI 资料助手（可选）：右栏流式对话，LLM 通过调用智能搜索按需检索并推荐文件，回答中【文件N】引用渲染为可点击卡片（跳转 / 预览 / 下载）；任意 OpenAI 兼容接口，`.env` 配置 `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` 启用，未配置返回 503
 - 文件夹任意嵌套，面包屑导航
 - 列表 / 网格视图切换，按名称 / 大小 / 时间排序，升降序切换
 - 拖拽 / 点击上传文件（直传 OSS，不占后端带宽）
 - 在线预览：PDF、PPT、Word、Excel（阿里云 IMM WebOffice）、图片
 - 知识图谱：按目录连接关系力导向展示，点击可跳转 / 预览
-- 数据概览（`/dashboard`）：近一年 GitHub 式下载热力图、文件类型分布、下载 / 占用排行、今日动态（下载 / 上传）
+- 统计面板（`/dashboard`）：近一年 GitHub 式下载热力图、文件类型分布、下载 / 占用排行、今日动态（下载 / 上传）
 - 管理员可新建文件夹、上传、删除、改名、移动、排序；游客只读

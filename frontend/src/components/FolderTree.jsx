@@ -76,6 +76,17 @@ export default function FolderTree({ currentId = 0, className = '' }) {
     });
   }, [activePath]);
 
+  // 滚动时显示滑块，停止 700ms 后渐隐（配合 .rb-side-scroll 的 CSS 过渡）。
+  // 直接操作 class 避免 setState 在滚动事件里触发重渲染。
+  const scrollHideTimer = useRef(null);
+  useEffect(() => () => clearTimeout(scrollHideTimer.current), []);
+  const handleTreeScroll = (e) => {
+    const el = e.currentTarget;
+    el.classList.add('is-scrolling');
+    clearTimeout(scrollHideTimer.current);
+    scrollHideTimer.current = setTimeout(() => el.classList.remove('is-scrolling'), 700);
+  };
+
   if ((!tree || tree.length === 0) && rootFiles.length === 0) return null;
 
   const rootId = currentId || 0;
@@ -86,6 +97,7 @@ export default function FolderTree({ currentId = 0, className = '' }) {
       <nav
         aria-label="文件夹目录"
         className="rb-side-scroll -mx-1 min-h-0 flex-1 overflow-y-auto px-1"
+        onScroll={handleTreeScroll}
       >
         <TreeNode
           node={{ id: 0, name: '首页', children: tree || [], files: rootFiles }}

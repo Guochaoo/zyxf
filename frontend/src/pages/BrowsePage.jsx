@@ -428,7 +428,7 @@ export default function BrowsePage() {
 
       {/* Body: file list takes the full middle column width (the graph lives
           in the App right column on xl+, inline below the list otherwise). */}
-      <div className="bg-white rb-card rounded-[14px] overflow-hidden">
+      <div className="bg-white rounded-[14px] overflow-hidden">
         {loading ? (
           <div className="py-16 flex items-center justify-center text-slate-400">
             <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-400" /> 加载中…
@@ -456,6 +456,11 @@ export default function BrowsePage() {
           />
         )}
       </div>
+
+      {/* ICP 备案号：跟随中间列内容滚动，左右栏保持固定 */}
+      <footer className="-mt-3.5 text-center text-xs leading-normal text-slate-400">
+        陕ICP备2026017448号
+      </footer>
 
       {renameTarget && (
         <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/35 px-4">

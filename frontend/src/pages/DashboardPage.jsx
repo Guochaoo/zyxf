@@ -548,7 +548,7 @@ export default function DashboardPage() {
               aria-hidden="true"
               className="h-7 w-7 rounded-full object-cover"
             />
-            <span className="rb-brand-title whitespace-nowrap">数据概览</span>
+            <span className="rb-brand-title whitespace-nowrap">统计面板</span>
           </h1>
         </div>
         <div className="ml-auto flex items-center gap-3 max-[480px]:basis-full max-[480px]:justify-end">

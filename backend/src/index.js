@@ -11,6 +11,7 @@ import authRoutes from './routes/auth.js';
 import folderRoutes from './routes/folders.js';
 import fileRoutes from './routes/files.js';
 import searchRoutes from './routes/search.js';
+import chatRoutes from './routes/chat.js';
 import statsRoutes from './routes/stats.js';
 import syncRoutes from './routes/sync.js';
 
@@ -81,6 +82,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/folders', folderRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/chat', chatRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/sync', syncRoutes);
 
