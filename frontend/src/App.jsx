@@ -85,7 +85,7 @@ export default function App() {
           position:fixed to the viewport edges so they never move while the
           page scrolls (sticky rails drift at scroll extremes). */}
       {isBrowse && (
-        <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-10 lg:flex lg:w-[250px] lg:flex-col lg:gap-4 lg:overflow-hidden lg:border-r lg:border-line lg:bg-[#ECECEE] lg:px-4 lg:pt-[11px]">
+        <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-10 lg:flex lg:w-[250px] lg:flex-col lg:gap-4 lg:overflow-hidden lg:bg-[#ECECEE] lg:px-4 lg:pt-[11px]">
           {/* 34px-high row keeps the brand aligned with the middle toolbar (41px center). */}
           <div className="flex h-[34px] items-center">
             {brand}
@@ -119,7 +119,7 @@ export default function App() {
       {isBrowse && isLg && (
         <div className="fixed inset-y-0 right-0 z-10 hidden flex-col gap-4 overflow-hidden pr-2 pt-[61.5px] lg:flex lg:w-[300px]">
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
-            <div className="flex flex-1 flex-col gap-[15px]">
+            <div className="flex min-h-0 flex-1 flex-col gap-[15px]">
               <KnowledgeGraph currentId={folderId} onFullChange={setGraphFull} />
               <ChatComposer />
             </div>
@@ -138,8 +138,8 @@ export default function App() {
           ]}
           displaySocials
           displayItemNumbering={false}
-          menuButtonColor="#171717"
-          openMenuButtonColor="#171717"
+          menuButtonColor="#ffffff"
+          openMenuButtonColor="#ffffff"
           changeMenuColorOnOpen
           accentColor="#5227FF"
           colors={['#B497CF', '#5227FF']}

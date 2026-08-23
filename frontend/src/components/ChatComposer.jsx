@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
 import { ChevronDown, ChevronUp, Settings, Trash2 } from 'lucide-react';
-import { chatStream, getFileUrl } from '../api.js';
-import { downloadFileById } from '../utils.js';
-import FileIcon from './FileIcon.jsx';
+import { chatStream } from '../api.js';
 
 /* ─────────────────────────────────────────────────────────
  * CHAT — interactive panel with a header, replies, and composer.
@@ -44,31 +43,73 @@ const loadLlmCfg = () => {
 const HEADER_BTN_CLASS =
   'flex size-6 items-center justify-center rounded-[6px] text-ink-3 transition-colors duration-100 hover:bg-hover hover:text-ink-2 disabled:opacity-40 disabled:hover:bg-transparent';
 
-function Section({ label, sub, time, body, resolving, children }) {
+// 像素网格波浪（Drive 变体）：3×3 格子按斜向相位依次点亮
+const CHEVRON = Array.from({ length: 9 }, (_, i) => {
+  const r = Math.floor(i / 3), c = i % 3;
+  return (c + Math.abs(r - 1)) * 90;
+});
+
+function PixelGrid({ active }) {
+  return (
+    <span aria-hidden className="grid shrink-0 grid-cols-[repeat(3,4px)] gap-[1.5px]">
+      {CHEVRON.map((delay, i) => (
+        <span
+          key={i}
+          className="size-[4px] rounded-[1px] bg-black"
+          style={
+            active
+              ? { opacity: 0.15, animation: `pixel-on 650ms ease-in-out ${delay}ms infinite` }
+              : { opacity: 1 }
+          }
+        />
+      ))}
+    </span>
+  );
+}
+
+// 从发送时刻起实时计时；resolving 结束（消息完成）时定格，不再消失
+function Elapsed({ start, resolving }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    setNow(Date.now());
+    if (!resolving) return;
+    const t = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(t);
+  }, [resolving, start]);
+  const sec = Math.max(0, now - (start || now)) / 1000;
+  const text = sec < 60 ? `${sec.toFixed(1)}s` : `${Math.floor(sec / 60)}m ${(sec % 60).toFixed(1)}s`;
+  return <span className="font-mono text-[12px] text-black tabular-nums">{text}</span>;
+}
+
+function Section({ sub, body, resolving, start, children }) {
   return (
     <div
-      className="flex w-full flex-col gap-1.5 transition-[opacity,filter,transform] duration-400"
-      style={{
-        opacity: resolving ? 0.55 : 1,
-        filter: resolving ? 'blur(0.5px)' : 'blur(0)',
-        transform: resolving ? 'scale(0.985)' : 'scale(1)',
-        transformOrigin: 'top left',
-        transitionTimingFunction: 'cubic-bezier(0.23, 1, 0.32, 1)',
-        animation: 'fade-up 400ms cubic-bezier(0.23,1,0.32,1) both',
-      }}
+      className="flex w-full flex-col gap-1.5"
+      style={{ animation: 'fade-up 400ms cubic-bezier(0.23,1,0.32,1) both' }}
     >
       <div className="flex items-center gap-1 text-[12px] leading-[1.3]">
-        <span className="font-medium text-ink">{label}</span>
-        <span className="text-ink-2">{sub}</span>
-        <span className="text-ink">for {time}</span>
+        <PixelGrid active={!!resolving} />
+        <span className={resolving ? 'shimmer-label' : 'text-black'}>{sub}</span>
+        <Elapsed start={start} resolving={!!resolving} />
       </div>
-      <p className="whitespace-pre-wrap text-[13px] leading-normal text-ink">{body}</p>
+      <div className="chat-md text-[13px] leading-normal text-ink">
+        <ReactMarkdown>{body}</ReactMarkdown>
+      </div>
       {children}
     </div>
   );
 }
 
-function FileRow({ item }) {
+// 检索/推荐文件 → 小胶囊：彩色类型徽章 + 文件名 + 外链图标，整颗可点击打开/预览
+const EXT_TONE = {
+  pdf: 'bg-red',
+  csv: 'bg-green', xls: 'bg-green', xlsx: 'bg-green',
+  doc: 'bg-orange', docx: 'bg-orange', ppt: 'bg-orange', pptx: 'bg-orange',
+  txt: 'bg-orange', md: 'bg-orange',
+};
+const DEFAULT_TONE = 'bg-brand-500';
+
+function FileChip({ item }) {
   const navigate = useNavigate();
 
   const open = () => {
@@ -80,51 +121,23 @@ function FileRow({ item }) {
     }
   };
 
-  const download = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    try {
-      await downloadFileById(item, getFileUrl);
-    } catch (err) {
-      alert(err.message || '下载失败');
-    }
-  };
+  const badge = item.type === 'folder' ? 'DIR' : (item.ext || '').toUpperCase().slice(0, 4);
+  const tone =
+    item.type === 'folder' ? 'bg-[#808080]' : EXT_TONE[(item.ext || '').toLowerCase()] || DEFAULT_TONE;
 
   return (
-    <div className="flex items-center gap-1 rounded-[8px] transition-colors duration-100 hover:bg-hover">
-      <button
-        type="button"
-        onClick={open}
-        className="flex min-w-0 flex-1 items-center gap-2 px-1.5 py-1.5 text-left"
-      >
-        {item.type === 'folder' ? (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-ink-3">
-            <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
-          </svg>
-        ) : (
-          <FileIcon type="file" ext={item.ext} className="h-3.5 w-3.5 shrink-0" />
-        )}
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[12.5px] text-ink">{item.name}</span>
-          {item.type === 'file' && item.folder_path && (
-            <span className="block truncate text-[11px] text-ink-3">{item.folder_path}</span>
-          )}
-        </span>
-      </button>
-      {item.type === 'file' && (
-        <button
-          type="button"
-          onClick={download}
-          aria-label={`下载 ${item.name}`}
-          title="下载"
-          className="mr-1 flex size-6 shrink-0 items-center justify-center rounded-full text-ink-3 transition-colors duration-100 hover:bg-field hover:text-ink"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-          </svg>
-        </button>
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={open}
+      title={item.name}
+      className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-full bg-inset px-2 text-[12px] font-medium text-ink-2 shadow-btn transition-colors duration-300 hover:bg-hover"
+    >
+      <span className={`flex size-3.5 shrink-0 items-center justify-center rounded-[4px] ${tone} text-[7px] font-bold text-white`}>
+        {badge}
+      </span>
+      <span className="min-w-0 truncate">{item.name}</span>
+      <svg className="shrink-0" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7M7 7h10v10" /></svg>
+    </button>
   );
 }
 
@@ -138,7 +151,8 @@ export default function ChatComposer() {
   const [cfgDraft, setCfgDraft] = useState(loadLlmCfg);
   // 折叠动画：snapH 以像素高度驱动过渡（fr/auto 高度无法从当前值平滑过渡），
   // innerH 把内层冻结在固定高度——内容不重排，由外层容器从下往上裁剪（同知识图谱）；
-  // snapping 期间临时把消息列表设为 overflow-y-hidden，避免滚动条闪现。
+  // 消息列表始终 overflow-y-auto + scrollbar-gutter: stable，滚动条槽位恒定，
+  // 动画前后宽度不变，文字不再重排，也没有无→有的滚动条翻转。
   const [snapH, setSnapH] = useState(null);
   const [innerH, setInnerH] = useState(null);
   const [snapping, setSnapping] = useState(false);
@@ -231,7 +245,7 @@ export default function ChatComposer() {
     setMessages((prev) => [
       ...prev,
       { id: nextId++, role: 'user', text: question, time: fmtTime() },
-      { id: aiId, role: 'ai', text: '', files: null, streaming: true, time: fmtTime() },
+      { id: aiId, role: 'ai', text: '', files: null, streaming: true, time: fmtTime(), start: Date.now() },
     ]);
     setDraft('');
     setBusy(true);
@@ -411,9 +425,8 @@ export default function ChatComposer() {
       {/* conversation — fixed region so the card never changes shape */}
       <div
         ref={listRef}
-        className={`flex min-h-0 flex-1 flex-col gap-2.5 px-3 pt-2.5 pb-1 ${
-          snapping ? 'overflow-y-hidden' : 'overflow-y-auto'
-        }`}
+        className="flex min-h-0 flex-1 flex-col gap-2.5 px-3 pt-2.5 pb-1 overflow-y-auto"
+        style={{ scrollbarGutter: 'stable' }}
       >
         {messages.length === 0 && (
           <div className="flex flex-1 flex-col items-start justify-center gap-2 py-4">
@@ -442,16 +455,15 @@ export default function ChatComposer() {
           ) : (
             <Section
               key={m.id}
-              label="资料查询"
               sub={m.error ? '出错' : m.streaming ? (m.text ? '生成中' : '检索中') : '完成'}
-              time={m.time}
               body={m.text || '正在检索资料库…'}
               resolving={m.streaming}
+              start={m.start}
             >
               {m.files?.length > 0 && (
-                <div className="flex flex-col gap-0.5">
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
                   {m.files.map((f) => (
-                    <FileRow key={`${f.type}-${f.id}`} item={f} />
+                    <FileChip key={`${f.type}-${f.id}`} item={f} />
                   ))}
                 </div>
               )}

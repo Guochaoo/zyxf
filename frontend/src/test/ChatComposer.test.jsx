@@ -50,10 +50,9 @@ describe('ChatComposer', () => {
     typeAndSend('高数往年题在哪');
 
     await waitFor(() => expect(screen.getByText('推荐【文件1】')).toBeInTheDocument());
-    expect(screen.getByText('资料查询')).toBeInTheDocument();
     expect(screen.getByText('完成')).toBeInTheDocument();
     expect(screen.getByText('高等数学期末版.pdf')).toBeInTheDocument();
-    expect(screen.getByText('高等数学')).toBeInTheDocument();
+    expect(screen.getByText('PDF')).toBeInTheDocument();
   });
 
   test('shows the error message when the API fails', async () => {
