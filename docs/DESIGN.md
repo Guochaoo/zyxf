@@ -146,20 +146,29 @@ Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视�
 - 图表/内嵌面板（`rounded-control bg-inset`）: 10px 圆角、`#f7f8f9` 底，用于今日下载曲线、AnomalyCard 图表区
 - 热力图面板: `bg-surface` **无边框无阴影**，直接融入页面
 - 列表行 hover: `#fafafa` 表面微 tint（`hover:bg-hover`），无描边（无界）
-- 卡片阴影（`shadow-card`）: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px
+- 浏览页三卡片（文件列表 / 知识图谱 / 智能对话）: 纯白 `bg-white rounded-[14px]`，**无边框无阴影**（无界）；头部条 `#EFEFEF` + `p-1.5`，标题 13px weight 500，操作图标按钮 24px / 圆角 6px
+- 卡片阴影（`shadow-card`）现存用途仅 Dashboard 卡片与弹窗（上传 / 重命名 `rb-card`）: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px
 
 ### Knowledge Graph (知识库卡片)
-- forestry.md "Connected Pages" style, sits to the **right of the file list** (360px card, `xl:` two columns, stacks below on smaller screens)
+- forestry.md "Connected Pages" style, sits in the fixed **right rail** (300px, `lg`+) with the 智能对话 card below it; below `lg` it stacks inline under the file list
+- 头部条可经 chevron 按钮收起为一条灰底胶囊（360ms 高度动画），收起时 globe / 放大按钮隐藏，收起状态跨路由保留
 - Force-directed layout (d3-force): circular nodes, **radius scaled by degree** (`2 + sqrt(degree)`), monochrome — folders solid `#171717`, files white with `rgba(23,23,23,0.45)` ring; current folder gets an outer ring
 - **Local view**: current folder + direct neighbors; globe button opens a full-library modal
 - Hover highlights the node + its neighbors (others dim to 0.12, links 0.7/0.05); labels appear on hover or when zoomed past 1.2×
 - Pan by dragging background, wheel zoom (0.25–2.5), drag nodes, click (no drag) navigates — folder enters, file previews; auto-fits the graph after settling
 - Refetches on the `folders-changed` event
 
-### File List (资料库右侧)
+### Chat Card (智能对话卡片)
+- 与知识图谱卡片同款外壳：纯白无边框无阴影、`#EFEFEF` 头部条 + 13px 标题 + 24px 图标按钮（清空 / 设置 / 收起）
+- 收起/展开同款交互；实现上以像素高度冻结内容（内容不重排，由外层容器从下往上裁剪），动画期间消息列表临时 `overflow-y-hidden` 防滚动条闪现，展开时卡片本体随容器一起平滑长高
+- 输入框：`bg-field` 圆角 10px、**无描边**、仅极浅投影（聚焦微调）；发送按钮深色圆角方块，流式生成中变为停止按钮
+- 消息区：用户消息右对齐灰底气泡；AI 回复带「资料查询 · 状态 · 时间」小节头，流式打字机渲染，【文件N】引用解析为可点击文件行（跳转 / 预览 / 下载）；空态显示三条建议 chip
+- AI 设置面板：头部下展开的行内表单，配置存 localStorage，请求时随 body 下发覆盖服务端 env
+
+### File List (资料库中列)
 - Monochrome throughout (no accent colors): rows on white, dividers rgba(23,23,23,0.08)
 - Row hover: `#FAFAFA` surface tint only — no ring/outline (无界)
-- Header row: 12px #666 on #FAFAFA
+- Header row: 12px #666 on `#EFEFEF`（与右栏卡片头部同款灰底）
 - Metadata (size/date): 12px #808080
 - Row action buttons (download/rename/delete): black icons, hover `rgba(0,0,0,0.05)` — no red/blue tints
 - Drag/drop indicators: neutral — drop-into `rgba(0,0,0,0.05)` + 1px `rgba(0,0,0,0.1)` inset ring, insert lines `inset 0 2px 0 rgba(0,0,0,0.6)`
@@ -172,7 +181,7 @@ Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视�
 - Border: via shadow technique, not traditional border
 
 ### Navigation
-- **No topbar on any layout** — the page is two columns (left rail + content)
+- **No topbar on any layout** — the page is three columns (left rail + content + right rail)
 - Navigation lives in the **StaggeredMenu** (hamburger) on **all** screen sizes: right-side slide-out panel with the main items (资料库 / 统计 / 关于我们 / 管理员登录或退出登录) + social channels
 - Brand logo + brand name (仲英学辅资料库) sit at the top of the **left rail** (desktop) / a slim mobile-only top row
 - Menu toggle: white shadow-border button, 6px radius, 14px weight 500, fixed at top-right
@@ -276,7 +285,7 @@ Download Heatmap（下载热力图，`/dashboard` 首行左卡）
 |-------|-----------|-----|
 | Flat (Level 0) | No shadow | Page background, text blocks, **heatmap panel** (deliberately borderless) |
 | Inset Panel (Level 1) | `#f7f8f9` tint, no shadow (`bg-inset`) | Chart stages, anomaly-card plot area |
-| Card (Level 2) | `shadow-card`: rgba(0,0,0,0.08) 0 0 0 1px, rgba(0,0,0,0.04) 0 2px 2px, rgba(0,0,0,0.04) 0 8px 8px -8px, inner #fafafa ring | Dashboard cards, chat panel |
+| Card (Level 2) | `shadow-card`: rgba(0,0,0,0.08) 0 0 0 1px, rgba(0,0,0,0.04) 0 2px 2px, rgba(0,0,0,0.04) 0 8px 8px -8px, inner #fafafa ring | Dashboard cards, upload/rename dialogs (`rb-card`) |
 | Raised Toggle (Level 2b) | `shadow-btn`: rgba(23,23,23,.12) 0 1px 2px, rgba(23,23,23,.06) 0 0 0 1px | Active pill toggles, refresh button |
 | Input Border (inline) | rgba(0,0,0,0.08) 0 0 0 1px; focus adds hsla(212,100%,48%,.25) 0 0 0 3px | All form inputs/selects (CSS, not a token) |
 | Focus (Accessibility) | 2px solid hsla(212, 100%, 48%, 1) outline | Keyboard focus on all interactive elements |

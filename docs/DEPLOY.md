@@ -6,6 +6,25 @@
 
 ---
 
+## ⚙️ 自动化：CI 测试与自动部署（GitHub Actions）
+
+当前生产站由这条流水线维护，日常更新只需合并代码到 `main`，无需手动登录服务器：
+
+- **PR → `main`**：`ci.yml` 自动运行后端 `node --test` 与前端 `vitest` 测试（Node 24）
+- **push → `main`**：`deploy.yml` 通过 SSH 登录生产服务器（`/opt/zyxf`）执行：
+
+  ```bash
+  git pull origin main
+  docker compose up -d --build --remove-orphans
+  docker image prune -f
+  ```
+
+  等价于下文方案 A 的 Docker 部署，由 CI 代劳。
+
+需要的 GitHub 仓库 Secrets：`SERVER_HOST`、`SERVER_USER`、`SERVER_SSH_KEY`（可选 `SERVER_PORT`，默认 22）。首次部署仍需按方案 A / B 手动初始化一次服务器环境。
+
+---
+
 ## A. Docker Compose 部署（一键启动）
 
 ### A.1 服务器只需装 Docker
@@ -175,7 +194,7 @@ npm config set registry https://registry.npmmirror.com
 cd d:\Code
 # 打包（排除 node_modules、.env、data.db）
 $exclude = @('node_modules', '.env', 'data.db', 'data.db-journal', 'dist', '.git')
-Compress-Archive -Path project\backend, project\frontend, project\README.md, project\DEPLOY.md -DestinationPath project.zip -Force
+Compress-Archive -Path project\backend, project\frontend, project\README.md, project\docs -DestinationPath project.zip -Force
 # 上传
 scp project.zip root@<你的公网IP>:/root/
 ```
@@ -204,13 +223,15 @@ cd zyxf
 
 ## 3. 后端：装依赖 + 配置 .env + pm2 启动
 
-```bash
-cd /var/www/zyxf/backend
-npm install
+> ⚠️ 自环境变量重构起，`.env` 位于**仓库根目录**（本地开发与 Docker 共用同一份，`backend/src/env.js` 读取 `../../.env`），不在 `backend/` 里。
 
-# 创建并编辑 .env
+```bash
+cd /var/www/zyxf
 cp .env.example .env
 nano .env
+
+cd backend
+npm install
 ```
 
 `.env` 修改这几项（**生产环境必须改**）：
@@ -310,7 +331,9 @@ server {
         # (trust proxy), so a client-supplied X-Forwarded-For must not pass through.
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 60s;
+        # AI 聊天走 SSE 流式响应：禁用缓冲，放宽读超时（与 frontend/nginx.conf 一致）
+        proxy_buffering off;
+        proxy_read_timeout 120s;
     }
 
     # SPA fallback：所有未匹配路径都返回 index.html
