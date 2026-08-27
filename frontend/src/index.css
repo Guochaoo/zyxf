@@ -463,10 +463,6 @@ textarea:focus-visible {
 }
 
 /* ---- Misc neutral helpers ---- */
-.app-theme .divide-white\/10 > :not([hidden]) ~ :not([hidden]) {
-  border-color: rgba(23, 23, 23, 0.08) !important;
-}
-
 .app-theme .rb-table-heading,
 .app-theme .rb-table-heading * {
   color: #171717 !important;

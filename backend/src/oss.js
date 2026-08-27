@@ -1,12 +1,7 @@
 import OSS from 'ali-oss';
 import crypto from 'node:crypto';
 import { ossPrefix } from './storagePath.js';
-
-function envOrThrow(name) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
+import { envOrThrow } from './env.js';
 
 // Shared credentials for both OSS clients (env vars are static at runtime).
 function baseOssConfig() {
