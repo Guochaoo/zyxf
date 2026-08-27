@@ -102,16 +102,18 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
     };
   }, []);
 
+  // Full graph only depends on the tree + root files: keep it stable across
+  // folder navigation so browsing doesn't re-walk/re-allocate the whole library.
+  const fullGraph = useMemo(() => buildGraph(tree, rootFiles), [tree, rootFiles]);
   const { localNodes, localLinks, fullNodes, fullLinks } = useMemo(() => {
-    const { nodes, links } = buildGraph(tree, rootFiles);
-    const local = localSubgraph(nodes, links, currentId);
+    const local = localSubgraph(fullGraph.nodes, fullGraph.links, currentId);
     return {
       localNodes: local.nodes,
       localLinks: local.links,
-      fullNodes: nodes,
-      fullLinks: links,
+      fullNodes: fullGraph.nodes,
+      fullLinks: fullGraph.links,
     };
-  }, [tree, rootFiles, currentId]);
+  }, [fullGraph, currentId]);
 
   const onNavigate = useCallback(
     (node) => {
@@ -135,7 +137,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
 
   return (
     <div
-      className={`kg-card relative flex shrink-0 flex-col bg-white rounded-[14px] overflow-hidden ${className}`.trim()}
+      className={`relative flex shrink-0 flex-col bg-white rounded-[14px] overflow-hidden ${className}`.trim()}
     >
       {/* 头部栏 — 灰底标签行；收起后仅剩本栏（14px 圆角胶囊） */}
       <div className="flex shrink-0 items-center justify-between gap-1 bg-[#EFEFEF] p-1.5">

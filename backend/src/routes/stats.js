@@ -100,7 +100,7 @@ router.get('/', (req, res) => {
          COUNT(*) AS count,
          COALESCE(SUM(size), 0) AS size
        FROM files
-       GROUP BY ext
+       GROUP BY COALESCE(NULLIF(LOWER(ext), ''), 'other')
        ORDER BY count DESC
        LIMIT 8`
     )

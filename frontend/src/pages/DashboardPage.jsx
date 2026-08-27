@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getStats, getHeatmap } from '../api.js';
 import { errMsg, formatSize } from '../utils.js';
@@ -432,20 +432,23 @@ export default function DashboardPage() {
   // `range` changes, so the year grid stays put while other cards re-range
   const [heat, setHeat] = useState(null);
 
-  const load = (silent = false, r = range) => {
-    if (silent) setRefreshing(true);
-    else setLoading(true);
-    return getStats(r)
-      .then((d) => {
-        setStats(d);
-        setErr('');
-      })
-      .catch((e) => setErr(errMsg(e, '加载失败')))
-      .finally(() => {
-        setLoading(false);
-        setRefreshing(false);
-      });
-  };
+  const load = useCallback(
+    (silent = false, r = range) => {
+      if (silent) setRefreshing(true);
+      else setLoading(true);
+      return getStats(r)
+        .then((d) => {
+          setStats(d);
+          setErr('');
+        })
+        .catch((e) => setErr(errMsg(e, '加载失败')))
+        .finally(() => {
+          setLoading(false);
+          setRefreshing(false);
+        });
+    },
+    [range]
+  );
 
   const loadHeat = () =>
     getHeatmap()
@@ -454,8 +457,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     load(false, range);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range]);
+  }, [load, range]);
 
   useEffect(() => {
     loadHeat();
@@ -500,6 +502,39 @@ export default function DashboardPage() {
     }));
   }, [stats]);
 
+  // memoized so AnomalyCard doesn't re-render on unrelated dashboard state
+  // (e.g. refreshing toggles) when stats/insights are unchanged.
+  const metrics = useMemo(() => {
+    if (!stats || !insights) return null;
+    const dlDod = pctChange(stats.today_downloads, stats.yesterday_downloads);
+    return [
+      {
+        key: 'downloads',
+        label: '下载',
+        points: insights.dlPts,
+        value: stats.today_downloads,
+        thresholdText: `峰值 ${insights.peakDl.downloads} 次`,
+        footer: `${stats.today_downloads.toLocaleString()} 次下载`,
+        delta: dlDod,
+        vsText: 'vs 昨日',
+        formatValue: (v) => `${Math.round(v)} 次`,
+        icon: <ArrowDown className="size-2" strokeWidth={3} />,
+      },
+      {
+        key: 'uploads',
+        label: '上传',
+        points: insights.upPts,
+        value: insights.todayUp,
+        thresholdText: `峰值 ${insights.peakUp} 次`,
+        footer: `${insights.todayUp.toLocaleString()} 次上传`,
+        delta: insights.dodUp,
+        vsText: 'vs 昨日',
+        formatValue: (v) => `${Math.round(v)} 次`,
+        icon: <ArrowUp className="size-2" strokeWidth={3} />,
+      },
+    ];
+  }, [insights, stats]);
+
   if (loading) {
     return (
       <div className="py-24 text-center">
@@ -515,7 +550,6 @@ export default function DashboardPage() {
 
   if (!stats || !insights) return null;
 
-  const dlDod = pctChange(stats.today_downloads, stats.yesterday_downloads);
   const typeExtra =
     (stats.type_breakdown?.length ?? 0) > 6 ? (
       <span className="pl-1 text-[10.5px] text-ink-3">+{(stats.type_breakdown?.length ?? 0) - 6} 类</span>
@@ -572,32 +606,7 @@ export default function DashboardPage() {
         <AnomalyCard
           className="lg:col-span-7"
           title="今日"
-          metrics={[
-            {
-              key: 'downloads',
-              label: '下载',
-              points: insights.dlPts,
-              value: stats.today_downloads,
-              thresholdText: `峰值 ${insights.peakDl.downloads} 次`,
-              footer: `${stats.today_downloads.toLocaleString()} 次下载`,
-              delta: dlDod,
-              vsText: 'vs 昨日',
-              formatValue: (v) => `${Math.round(v)} 次`,
-              icon: <ArrowDown className="size-2" strokeWidth={3} />,
-            },
-            {
-              key: 'uploads',
-              label: '上传',
-              points: insights.upPts,
-              value: insights.todayUp,
-              thresholdText: `峰值 ${insights.peakUp} 次`,
-              footer: `${insights.todayUp.toLocaleString()} 次上传`,
-              delta: insights.dodUp,
-              vsText: 'vs 昨日',
-              formatValue: (v) => `${Math.round(v)} 次`,
-              icon: <ArrowUp className="size-2" strokeWidth={3} />,
-            },
-          ]}
+          metrics={metrics}
         />
 
         <Card className="lg:col-span-5">
