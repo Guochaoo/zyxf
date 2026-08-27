@@ -1,5 +1,5 @@
 import { Liveline } from 'liveline';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 /* ─────────────────────────────────────────────────────────
  * INSIGHT CARDS
@@ -44,17 +44,24 @@ function SubLabel({ children, tone }) {
 /* liveline lays points out by time on a now-anchored axis (not uniformly by
    index), so hover sync uses its onHover callback; only the nearest point by
    time is needed for the tooltip content. */
+/* points are time-sorted (see densifyBySpline), so a binary search finds the
+   nearest point in O(log n) instead of a per-frame O(n) scan during hover. */
 function nearestIndexByTime(points, time) {
-  let idx = 0;
-  let best = Infinity;
-  for (let i = 0; i < points.length; i++) {
-    const d = Math.abs(points[i].time - time);
-    if (d < best) {
-      best = d;
-      idx = i;
-    }
+  const n = points.length;
+  if (n === 0) return -1;
+  let lo = 0;
+  let hi = n - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (points[mid].time < time) lo = mid + 1;
+    else hi = mid;
   }
-  return idx;
+  // points[lo] is the first point at-or-after `time`; pick whichever of the
+  // two neighbours is closer.
+  if (lo === 0) return 0;
+  const before = points[lo - 1];
+  const after = points[lo];
+  return Math.abs(before.time - time) <= Math.abs(after.time - time) ? lo - 1 : lo;
 }
 
 /* liveline reports hover every animation frame; keep state identity stable

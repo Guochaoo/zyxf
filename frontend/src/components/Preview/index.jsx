@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Download, X, Loader2 } from 'lucide-react';
 import { getFileUrl, getWebofficeToken } from '../../api.js';
@@ -17,12 +17,16 @@ export default function Preview({ file, onClose }) {
   const [err, setErr] = useState('');
   const [downloadErr, setDownloadErr] = useState('');
   const [downloading, setDownloading] = useState(false);
+  // Guards against a stale in-flight load writing state after a newer load
+  // or an unmount (e.g. rapid re-open of a different file).
+  const loadTokenRef = useRef(0);
   const kind = useMemo(() => getPreviewKind(file.ext), [file.ext]);
   const isMobile = useMediaQuery('(max-width: 640px)');
 
   // Fetch the signed URL (downloads / fallbacks) and WebOffice token
   // (interactive preview) in parallel; shared by the retry button.
   const loadUrl = useCallback(async () => {
+    const token = ++loadTokenRef.current;
     setLoading(true);
     setErr('');
     try {
@@ -30,16 +34,25 @@ export default function Preview({ file, onClose }) {
         getFileUrl(file.id),
         getWebofficeToken(file.id),
       ]);
+      if (token !== loadTokenRef.current) return; // stale load — drop it
       if (urlMeta.status === 'fulfilled') setSignedUrl(urlMeta.value.url);
       if (wb.status === 'fulfilled') setWbToken(wb.value);
       // A signed-URL failure is fatal; a WebOffice-token failure just falls
       // back to the native/iframe preview path.
       if (urlMeta.status === 'rejected') setErr(errMsg(urlMeta.reason, '加载失败'));
     } catch (e) {
+      if (token !== loadTokenRef.current) return;
       if (e.name !== 'AbortError') setErr(errMsg(e, '加载失败'));
     } finally {
-      setLoading(false);
+      if (token === loadTokenRef.current) setLoading(false);
     }
+  }, [file.id]);
+
+  useEffect(() => {
+    // Invalidate any in-flight load when the file (or unmount) changes.
+    return () => {
+      loadTokenRef.current += 1;
+    };
   }, [file.id]);
 
   useEffect(() => {

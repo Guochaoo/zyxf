@@ -5,7 +5,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { db, ensureAdmin } from './db.js';
+import { ensureAdmin } from './db.js';
 import { attachUser, DEV_JWT_SECRET } from './auth.js';
 import authRoutes from './routes/auth.js';
 import folderRoutes from './routes/folders.js';

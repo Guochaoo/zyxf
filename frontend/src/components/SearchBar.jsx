@@ -17,6 +17,7 @@ export default function SearchBar({ className = '' }) {
   const wrapRef = useRef(null);
   const dropdownRef = useRef(null);
   const timerRef = useRef(null);
+  const reqIdRef = useRef(0);
   const navigate = useNavigate();
 
   const doSearch = useCallback(async (query) => {
@@ -25,15 +26,18 @@ export default function SearchBar({ className = '' }) {
       setOpen(false);
       return;
     }
+    // Drop out-of-order responses: only the latest request may write state.
+    const reqId = ++reqIdRef.current;
     setLoading(true);
     try {
       const data = await searchApi(query);
+      if (reqId !== reqIdRef.current) return;
       setResults(data);
       setOpen(true);
     } catch {
       /* ignore */
     } finally {
-      setLoading(false);
+      if (reqId === reqIdRef.current) setLoading(false);
     }
   }, []);
 
@@ -50,6 +54,10 @@ export default function SearchBar({ className = '' }) {
     setOpen(false);
     inputRef.current?.focus();
   };
+
+  // Clear any pending debounce timer on unmount so a late fire can't setState
+  // after the component is gone (and to avoid a stray request from the old q).
+  useEffect(() => () => clearTimeout(timerRef.current), []);
 
   useEffect(() => {
     const onKey = (e) => {
