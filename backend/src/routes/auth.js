@@ -31,8 +31,7 @@ router.post('/login', loginLimiter, (req, res) => {
 });
 
 router.get('/me', (req, res) => {
-  if (!req.user) return res.json({ user: null });
-  res.json({ user: req.user });
+  res.json({ user: req.user || null });
 });
 
 export default router;

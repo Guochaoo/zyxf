@@ -462,12 +462,10 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ---- derived stats for the three insight cards ---- */
+  /* ---- derived stats for the insight cards ---- */
   const insights = useMemo(() => {
     if (!stats) return null;
     const series = stats.series || [];
-    const totalDl = series.reduce((s, d) => s + d.downloads, 0);
-    const totalUp = series.reduce((s, d) => s + d.uploads, 0);
     const peakDl = series.reduce(
       (a, b) => (b.downloads > a.downloads ? b : a),
       series[0] || { downloads: 0, date: '-' }
@@ -477,24 +475,14 @@ export default function DashboardPage() {
     const dlPts = toPoints(series, 'downloads');
     const upPts = toPoints(series, 'uploads');
 
-    // today vs yesterday, both metrics
+    // today vs yesterday for the upload metric
     const todayUp = series.at(-1)?.uploads ?? 0;
-    const yUp = series.at(-2)?.uploads ?? 0;
-    const dodUp = pctChange(todayUp, yUp);
+    const dodUp = pctChange(todayUp, series.at(-2)?.uploads ?? 0);
 
-    // peak day counts over the visible window
+    // peak upload count over the visible window
     const peakUp = series.reduce((m, d) => Math.max(m, d.uploads), 0);
 
-    return {
-      totalDl,
-      totalUp,
-      peakDl,
-      dodUp,
-      todayUp,
-      peakUp,
-      dlPts,
-      upPts,
-    };
+    return { peakDl, dodUp, todayUp, peakUp, dlPts, upPts };
   }, [stats]);
 
   const typeSegments = useMemo(() => {

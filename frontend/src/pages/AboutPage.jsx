@@ -95,7 +95,6 @@ function CaseCard({ study, index, isAdmin }) {
           +
         </div>
       )}
-
       {/* info plate */}
       <div className="absolute bottom-0 left-0 z-20 bg-white px-4 pb-3 pt-2.5" style={{ maxWidth: '70%' }}>
         <div className="text-[clamp(1.4rem,2.2vw,2rem)] font-normal leading-tight text-black">
