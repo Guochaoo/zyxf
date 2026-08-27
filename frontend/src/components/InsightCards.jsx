@@ -182,7 +182,7 @@ export function AnomalyCard({ title, metrics, className = '' }) {
   );
 
   return (
-    <div className={`min-h-[278px] rounded-card bg-surface p-3 ${className}`.trim()}>
+    <div className={`flex min-h-[278px] flex-col rounded-card bg-surface p-3 ${className}`.trim()}>
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-1.5 text-[12px] font-medium text-ink">
           <IconBadge className="bg-red">{m.icon}</IconBadge>
@@ -197,8 +197,8 @@ export function AnomalyCard({ title, metrics, className = '' }) {
         <SubLabel tone={m.delta >= 0 ? 'green' : 'red'}>{formatPercent(m.delta)}</SubLabel>
         <span className="text-[11px] text-ink-3">{m.vsText}</span>
       </div>
-      <div className="mt-2 overflow-hidden rounded-control bg-inset">
-        <div className="flex items-center justify-between px-2.5 py-1.5">
+      <div className="mt-2 flex flex-1 flex-col overflow-hidden rounded-control bg-inset">
+        <div className="flex shrink-0 items-center justify-between px-2.5 py-1.5">
           <span className="text-[11px] text-ink-3 tabular-nums">
             {hoverIdx !== null ? formatM(data[hoverIdx].dayValue ?? data[hoverIdx].value) : m.thresholdText}
           </span>
@@ -221,7 +221,7 @@ export function AnomalyCard({ title, metrics, className = '' }) {
             ))}
           </span>
         </div>
-        <div className="insight-chart-stage relative h-[166px]">
+        <div className="insight-chart-stage relative h-[166px] grow min-h-[166px]">
           {/* key by metric: remount on toggle replays the entrance reveal */}
           <Liveline
             key={m.key}
