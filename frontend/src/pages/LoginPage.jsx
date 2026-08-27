@@ -30,7 +30,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative mt-3 sm:mt-6 mx-auto w-full max-w-[1100px] grid items-stretch overflow-hidden rounded-[14px] shadow-[rgba(0,0,0,0.04)_0px_2px_2px,rgba(0,0,0,0.04)_0px_8px_8px_-8px,#fafafa_0px_0px_0px_1px] sm:min-h-[640px] sm:grid-cols-[1.15fr_1fr]">
+    <div className="flex min-h-[calc(100vh-24px)] items-center justify-center">
+      <div className="relative mx-auto w-full max-w-[1100px] grid items-stretch overflow-hidden rounded-[14px] sm:min-h-[655px] sm:grid-cols-[1.15fr_1fr]">
       {/* Left — silky brand panel with animated Silk background */}
       <div className="rb-dark relative z-0 hidden sm:flex sm:flex-col sm:justify-between p-12 overflow-hidden">
         <div className="absolute inset-0 -z-10">
@@ -53,20 +54,19 @@ export default function LoginPage() {
 
         <div className="text-white">
           <h2 className="text-[40px] font-semibold leading-[1.1] tracking-tight">
-            让知识
+            <span className="text-white/60">让</span>
+            <span className="text-white">知识</span>
             <br />
-            有序流动。
+            <span className="text-white/60">有序流动</span>
           </h2>
           <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/65">
-            仲英书院学业辅导中心资料库
-            <br />
-            管理员登录后可上传与整理资料,游客无需登录即可浏览和预览。
+            整理学习资料，检索所需内容，与同学共享优质资源
           </p>
         </div>
       </div>
 
       {/* Right — login form (pure white) */}
-      <div className="flex w-full items-center justify-center bg-white px-5 py-6 sm:px-14 sm:py-14">
+      <div className="relative flex w-full items-center justify-center bg-white px-5 py-6 sm:px-14 sm:pt-0 sm:pb-14">
         <div className="w-full max-w-[360px]">
           <Link
             to="/"
@@ -76,12 +76,19 @@ export default function LoginPage() {
             返回
           </Link>
 
+          <div className="mb-6 sm:mt-[5px] sm:mb-[71px] flex items-center justify-center gap-2.5">
+            <img src="/favicon.png" alt="仲英学辅" className="h-9 w-9 rounded-full object-cover" />
+            <span className="text-[22px] sm:text-[26px] font-bold tracking-tight text-neutral-900">
+              仲英学辅
+            </span>
+          </div>
+
           <div className="mb-5 sm:mb-9">
-            <h1 className="text-[22px] sm:text-[26px] font-semibold leading-tight tracking-tight text-neutral-900">
-              管理员登录
+            <h1 className="text-[20px] sm:text-[22px] font-semibold leading-tight tracking-tight text-neutral-900">
+              欢迎回来
             </h1>
             <p className="mt-1.5 sm:mt-2.5 text-[13px] sm:text-sm text-neutral-500">
-              输入账号与密码继续。
+              目前仅支持管理员登录
             </p>
           </div>
 
@@ -92,7 +99,7 @@ export default function LoginPage() {
               </label>
               <input
                 id="login-username"
-                className="w-full rounded-lg border-0 bg-neutral-100 px-3.5 py-2.5 sm:py-3 text-sm text-neutral-900 transition-colors focus:bg-neutral-200/70 focus:outline-none"
+                className="rb-auth-input w-full !rounded-[14px] border-0 bg-neutral-100 px-3.5 py-2.5 sm:py-3 text-sm text-neutral-900 transition-colors focus:outline-none"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoFocus
@@ -108,7 +115,7 @@ export default function LoginPage() {
                 <input
                   id="login-password"
                   type={showPwd ? 'text' : 'password'}
-                  className="w-full rounded-lg border-0 bg-neutral-100 px-3.5 py-2.5 sm:py-3 pr-11 text-sm text-neutral-900 transition-colors focus:bg-neutral-200/70 focus:outline-none"
+                  className="rb-auth-input w-full !rounded-[14px] border-0 bg-neutral-100 px-3.5 py-2.5 sm:py-3 pr-11 text-sm text-neutral-900 transition-colors focus:outline-none"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
@@ -132,14 +139,21 @@ export default function LoginPage() {
 
             <button
               disabled={loading}
-              className="mt-2 sm:mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-4 py-2.5 sm:py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-2 sm:mt-3 inline-flex w-full items-center justify-center gap-2 rounded-[14px] bg-brand-600 px-4 py-2.5 sm:py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               {loading ? '登录中…' : '登录'}
             </button>
           </form>
 
-          <p className="mt-6 sm:mt-10 text-xs text-neutral-400">由 仲英书院学业辅导中心 提供</p>
+          <p className="absolute bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs text-neutral-400 sm:bottom-6">
+            由{' '}
+            <Link to="/about" className="text-neutral-400 transition-colors hover:text-neutral-600">
+              仲英书院学业辅导中心
+            </Link>{' '}
+            提供
+          </p>
+        </div>
         </div>
       </div>
     </div>

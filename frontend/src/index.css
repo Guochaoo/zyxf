@@ -433,6 +433,15 @@ textarea:focus-visible {
   outline: none;
 }
 
+/* 登录页输入框：贯彻无边理念——灰底、无边框细线，聚焦同样不加任何效果 */
+.app-theme .rb-auth-input,
+.app-theme .rb-auth-input:focus {
+  background: #f5f5f5 !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  outline: none;
+}
+
 /* ChatComposer prompt — transparent and borderless inside its bg-field
    composer. The global .app-theme input styles above force white bg + shadow
    border on every input, so re-assert the design here (also on :focus and
