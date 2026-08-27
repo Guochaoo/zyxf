@@ -11,7 +11,7 @@ vi.mock('../components/SearchBar.jsx', () => ({
   default: () => <input aria-label="搜索" placeholder="搜索" />,
 }));
 vi.mock('../components/StaggeredMenu.jsx', () => ({
-  default: ({ items }) => (
+  default: ({ items, account }) => (
     <nav>
       {items.map((it) =>
         it.action ? (
@@ -23,6 +23,16 @@ vi.mock('../components/StaggeredMenu.jsx', () => ({
             {it.label}
           </a>
         )
+      )}
+      {account?.guest && (
+        <button type="button" aria-label="登录" onClick={account.onLogin}>
+          登录
+        </button>
+      )}
+      {account && !account.guest && (
+        <button type="button" aria-label="退出登录" onClick={account.onLogout}>
+          退出登录
+        </button>
       )}
     </nav>
   ),
@@ -105,7 +115,7 @@ describe('App', () => {
     expect(await screen.findByRole('link', { name: '浏览资料库' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '查看统计仪表盘' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '了解仲英书院学业辅导中心' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '管理员登录' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '退出登录' })).not.toBeInTheDocument();
   });
 
@@ -114,7 +124,7 @@ describe('App', () => {
     api.get.mockResolvedValue({ data: { user: { id: 1, username: 'admin', role: 'admin' } } });
     renderApp();
     expect(await screen.findByRole('button', { name: '退出登录' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '管理员登录' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '登录' })).not.toBeInTheDocument();
   });
 
   test('active nav item matches the route', async () => {
