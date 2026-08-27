@@ -1,0 +1,123 @@
+/* NoticeModal — 样式复刻站点「Insight card」设计语言：
+   令牌色（--ink/--surface/--line/--inset）+ 14px 圆角 + 光感软阴影。
+   遮罩复用菜单的 rb-frost-backdrop 磨砂玻璃，暗色模式下与 sm-backdrop 同规。 */
+
+.notice-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .notice-backdrop.rb-frost-backdrop {
+    background: rgba(0, 0, 0, 0.46);
+  }
+}
+
+/* ---- Card（无界：无描边、无分割线，仅靠柔光阴影浮起） ---- */
+.notice-card {
+  width: 100%;
+  max-width: 520px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 28px 64px -20px rgba(0, 0, 0, 0.28);
+  /* 卡片限高，超出部分由 .notice-list 内部滚动 */
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Header：仅大标题 ---- */
+.notice-head {
+  padding: 18px 20px 10px;
+}
+
+.notice-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+
+/* ---- List：内容超出时可内部滚动（允许翻页），底部 CTA 固定可见 ---- */
+.notice-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.notice-item {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+}
+
+/* 图标无灰底：盒高=首行行盒高(12.5×1.55≈19px)，margin-top 1px 让图标中心
+   与「标题：正文」首行的中心对齐，视觉上与右侧文字更平衡。 */
+.notice-chip {
+  display: flex;
+  height: 18px;
+  width: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2);
+}
+
+.notice-item-text {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+.notice-item-title {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ---- Footer / CTA ---- */
+.notice-agree {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 12px;
+  background: var(--ink);
+  padding: 11px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  transition:
+    background-color 0.2s ease,
+    transform 0.15s ease;
+}
+
+.notice-agree:hover {
+  background: rgba(23, 23, 23, 0.9);
+}
+
+.notice-agree:active {
+  transform: scale(0.985);
+}
+
+.notice-caption {
+  margin-top: 9px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--ink-3);
+}
