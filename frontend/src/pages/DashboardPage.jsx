@@ -322,7 +322,7 @@ function TopDownloads({ items }) {
 function RecentUploads({ items }) {
   if (!items?.length) return <Empty>暂无上传</Empty>;
   return (
-    <ul className="mt-3 space-y-0.5">
+    <ul className="mt-3 grow space-y-0.5">
       {items.map((f) => (
         <li key={f.id}>
           <Link
@@ -348,7 +348,7 @@ function TopFolders({ items }) {
   if (!items?.length) return <Empty>暂无目录</Empty>;
   const max = items[0].size || 1;
   return (
-    <ul className="mt-3 space-y-2.5">
+    <ul className="mt-3 grow space-y-2.5">
       {items.map((f) => (
         <li key={f.id}>
           <div className="flex items-center justify-between text-[12px]">
@@ -612,7 +612,7 @@ export default function DashboardPage() {
 
       {/* Recent uploads + Top folders */}
       <section className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-        <Card className="lg:col-span-6">
+        <Card className="flex flex-col lg:col-span-6">
           <CardHeader
             title="最近上传"
             icon={<ArrowUp className="size-2" strokeWidth={3} />}
@@ -621,7 +621,7 @@ export default function DashboardPage() {
           <RecentUploads items={stats.recent_uploads} />
         </Card>
 
-        <Card className="lg:col-span-6">
+        <Card className="flex flex-col lg:col-span-6">
           <CardHeader
             title="占用排行"
             icon={<HardDrive className="size-2" strokeWidth={3} />}

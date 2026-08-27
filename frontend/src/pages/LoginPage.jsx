@@ -66,7 +66,7 @@ export default function LoginPage() {
       </div>
 
       {/* Right — login form (pure white) */}
-      <div className="relative flex w-full items-center justify-center bg-white px-5 py-6 sm:px-14 sm:pt-0 sm:pb-14">
+      <div className="relative flex w-full items-center justify-center bg-white px-5 pt-6 pb-[76px] sm:px-14 sm:pt-0 sm:pb-14">
         <div className="w-full max-w-[360px]">
           <Link
             to="/"
