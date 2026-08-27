@@ -18,20 +18,16 @@ function envOrThrow(name) {
   return v;
 }
 
-function percentEncode(str) {
-  return encodeURIComponent(str)
+const percentEncode = (str) =>
+  encodeURIComponent(str)
     .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
     .replace(/%20/g, '+');
-}
 
-function hmacSha1(secret, str) {
-  return crypto.createHmac('sha1', secret).update(str).digest('base64');
-}
+const hmacSha1 = (secret, str) =>
+  crypto.createHmac('sha1', secret).update(str).digest('base64');
 
-function regionId() {
-  // OSS_REGION is like "oss-cn-beijing"; IMM uses "cn-beijing".
-  return (envOrThrow('OSS_REGION') || '').replace(/^oss-/, '');
-}
+// OSS_REGION is like "oss-cn-beijing"; IMM uses "cn-beijing".
+const regionId = () => (envOrThrow('OSS_REGION') || '').replace(/^oss-/, '');
 
 /** IMM project bound to the bucket (OSS console → IMM binding). */
 export function immProject() {

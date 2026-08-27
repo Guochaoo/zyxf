@@ -139,7 +139,6 @@ export default function Preview({ file, onClose }) {
               wbToken={wbToken}
               fileId={file.id}
               name={file.name}
-              ext={file.ext}
               onDownload={download}
             />
           )}
