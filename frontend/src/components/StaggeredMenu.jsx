@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { Link } from 'react-router-dom';
+import { CircleUserRound, LogIn, LogOut } from 'lucide-react';
 import './StaggeredMenu.css';
 
 // Query the animated panel content and reset it to its pre-open state
@@ -20,7 +21,9 @@ function resetPanelContent(panel) {
   if (socialTitle) gsap.set(socialTitle, { opacity: 0 });
   const socialLinks = Array.from(panel.querySelectorAll('.sm-socials-link'));
   if (socialLinks.length) gsap.set(socialLinks, { y: 25, opacity: 0 });
-  return { itemEls, numberEls, socialTitle, socialLinks };
+  const accountCard = panel.querySelector('.sm-account-card');
+  if (accountCard) gsap.set(accountCard, { y: 25, opacity: 0 });
+  return { itemEls, numberEls, socialTitle, socialLinks, accountCard };
 }
 
 // Pre-layer band colors: up to 4 accent colors (fallback pair); with 3+ the
@@ -39,8 +42,8 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     socialItems = [],
     displaySocials = true,
     displayItemNumbering = true,
+    account,
     className,
-    logoUrl,
     menuButtonColor = '#fff',
     openMenuButtonColor = '#fff',
     accentColor = '#5227FF',
@@ -113,7 +116,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
       closeTweenRef.current = null;
     }
 
-    const { itemEls, numberEls, socialTitle, socialLinks } = resetPanelContent(panel);
+    const { itemEls, numberEls, socialTitle, socialLinks, accountCard } = resetPanelContent(panel);
 
     const offscreen = position === 'left' ? -100 : 100;
     const layerStates = layers.map(el => ({ el, start: offscreen }));
@@ -162,35 +165,48 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
       }
     }
 
-    if (socialTitle || socialLinks.length) {
-      const socialsStart = panelInsertTime + panelDuration * 0.4;
-      if (socialTitle) {
-        tl.to(
-          socialTitle,
-          {
-            opacity: 1,
-            duration: 0.5,
-            ease: 'power2.out'
-          },
-          socialsStart
-        );
-      }
-      if (socialLinks.length) {
-        tl.to(
-          socialLinks,
-          {
-            y: 0,
-            opacity: 1,
-            duration: 0.55,
-            ease: 'power3.out',
-            stagger: { each: 0.08, from: 'start' },
-            onComplete: () => {
-              gsap.set(socialLinks, { clearProps: 'opacity' });
-            }
-          },
-          socialsStart + 0.04
-        );
-      }
+    const socialsStart = panelInsertTime + panelDuration * 0.4;
+    if (socialTitle) {
+      tl.to(
+        socialTitle,
+        {
+          opacity: 1,
+          duration: 0.5,
+          ease: 'power2.out'
+        },
+        socialsStart
+      );
+    }
+    if (socialLinks.length) {
+      tl.to(
+        socialLinks,
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.55,
+          ease: 'power3.out',
+          stagger: { each: 0.08, from: 'start' },
+          onComplete: () => {
+            gsap.set(socialLinks, { clearProps: 'opacity' });
+          }
+        },
+        socialsStart + 0.04
+      );
+    }
+    if (accountCard) {
+      tl.to(
+        accountCard,
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.55,
+          ease: 'power3.out',
+          onComplete: () => {
+            gsap.set(accountCard, { clearProps: 'all' });
+          }
+        },
+        socialsStart + 0.12
+      );
     }
 
     openTlRef.current = tl;
@@ -377,19 +393,6 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
         ))}
       </div>
       <header className="staggered-menu-header" aria-label="Main navigation header">
-        {logoUrl && (
-          <div className="sm-logo" aria-label="Logo">
-            <img
-              src={logoUrl}
-              alt="Logo"
-              className="sm-logo-img"
-              draggable={false}
-              width={110}
-              height={24}
-            />
-          </div>
-        )}
-        {!logoUrl && <div />}
         {!hideToggleButton && (
           <button
             ref={toggleBtnRef}
@@ -446,20 +449,69 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
               </li>
             )}
           </ul>
-          {displaySocials && socialItems && socialItems.length > 0 && (
-            <div className="sm-socials" aria-label="Official Channels">
-              <h3 className="sm-socials-title">Official Channels</h3>
-              <ul className="sm-socials-list" role="list">
-                {socialItems.map((s, i) => (
-                  <li key={s.label + i} className="sm-socials-item">
-                    <a href={s.link} target="_blank" rel="noopener noreferrer" className="sm-socials-link">
-                      {s.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <div className="sm-panel-bottom">
+            {displaySocials && socialItems && socialItems.length > 0 && (
+              <div className="sm-socials" aria-label="Official Channels">
+                <h3 className="sm-socials-title">Official Channels</h3>
+                <ul className="sm-socials-list" role="list">
+                  {socialItems.map((s, i) => (
+                    <li key={s.label + i} className="sm-socials-item">
+                      <a href={s.link} target="_blank" rel="noopener noreferrer" className="sm-socials-link">
+                        {s.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {account && (
+              <div className="sm-account-card" aria-label="当前账户">
+                <span
+                  className={`sm-account-avatar ${account.guest ? 'sm-account-avatar--guest' : ''}`}
+                  aria-hidden="true"
+                >
+                  {account.guest ? (
+                    <CircleUserRound className="h-5 w-5" strokeWidth={1.6} />
+                  ) : (
+                    account.avatarText
+                  )}
+                </span>
+                <span className="sm-account-meta">
+                  <span className="sm-account-name">{account.name}</span>
+                  {account.subtitle && (
+                    <span className="sm-account-sub">{account.subtitle}</span>
+                  )}
+                </span>
+                {account.guest ? (
+                  <button
+                    type="button"
+                    className="sm-account-gear"
+                    aria-label="登录"
+                    title="登录"
+                    onClick={() => {
+                      account.onLogin?.();
+                      closeMenu();
+                    }}
+                  >
+                    <LogIn size={18} strokeWidth={1.6} aria-hidden="true" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="sm-account-gear"
+                    aria-label="退出登录"
+                    title="退出登录"
+                    onClick={() => {
+                      account.onLogout?.();
+                      closeMenu();
+                    }}
+                  >
+                    <LogOut size={18} strokeWidth={1.6} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </aside>
     </div>

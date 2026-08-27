@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2 } from 'lucide-react';
-import { DownloadIcon } from '../icons';
+import { Download, X, Loader2 } from 'lucide-react';
 import { getFileUrl, getWebofficeToken } from '../../api.js';
 import { downloadFileById, errMsg, getPreviewKind, isLargeFile, LARGE_FILE_HINT } from '../../utils.js';
 import useMediaQuery from '../../hooks/useMediaQuery.js';
@@ -91,7 +90,7 @@ export default function Preview({ file, onClose }) {
               {downloading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <DownloadIcon className="w-4 h-4" />
+                <Download className="w-4 h-4" />
               )}
               <span className="hidden sm:inline">{downloading ? '下载中…' : '下载'}</span>
             </button>
@@ -139,7 +138,6 @@ export default function Preview({ file, onClose }) {
               wbToken={wbToken}
               fileId={file.id}
               name={file.name}
-              ext={file.ext}
               onDownload={download}
             />
           )}

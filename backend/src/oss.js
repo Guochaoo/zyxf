@@ -74,44 +74,10 @@ export function buildPostPolicy({ key, maxSizeBytes = 200 * 1024 * 1024, expires
   };
 }
 
-/**
- * Generate a signed GET url for previewing/downloading a file.
- * Optionally overrides the response Content-Type and Content-Disposition so that:
- *  - Files stored with wrong/empty content-type (e.g. application/octet-stream)
- *    are still served correctly (PDF previews inline instead of forced download).
- *  - The download filename matches the original (supports UTF-8 via RFC 5987).
- */
-export function signedGetUrl(key, expiresSec = 3600, opts = {}) {
-  const client = ossClient();
-  const response = {};
-  if (opts.contentType) response['content-type'] = opts.contentType;
-  if (opts.disposition) response['content-disposition'] = opts.disposition;
-
-  const signOpts = { expires: expiresSec };
-  if (opts.process) signOpts.process = opts.process;
-  if (Object.keys(response).length) signOpts.response = response;
-
-  const url = client.signatureUrl(key, signOpts);
+/** Generate a signed GET url for previewing/downloading a file. */
+export function signedGetUrl(key, expiresSec = 1800) {
+  const url = ossClient().signatureUrl(key, { expires: expiresSec });
   return url.replace(/^http:/, 'https:');
-}
-
-// ---- IMM preview leftovers ----
-
-/**
- * True for legacy `.preview/` shadow copies (from the earlier preview-copy
- * workaround) — internal objects, never library content. Kept so sync/list
- * still skip them until the leftovers are cleaned up from the bucket.
- */
-function isPreviewCopyKey(ossKey) {
-  const prefix = ossPrefix();
-  return prefix
-    ? String(ossKey).startsWith(`${prefix}/.preview/`)
-    : String(ossKey).startsWith('.preview/');
-}
-
-export async function deleteOssObject(key) {
-  const client = ossClient();
-  await client.delete(key);
 }
 
 /**
@@ -122,14 +88,15 @@ export async function deleteOssObject(key) {
 export async function listOssObjects() {
   const client = ossClient();
   const prefix = ossPrefix() ? `${ossPrefix()}/` : '';
+  // Internal `.preview/` shadow copies (legacy IMM workaround) are never
+  // library content, so sync must skip them until the bucket is cleaned.
+  const previewPrefix = `${prefix}.preview/`;
   const out = [];
   let marker;
   do {
     const res = await client.list({ prefix, marker, 'max-keys': 1000 });
-    // Skip internal `.preview/` shadow copies — they exist only for IMM
-    // rendering and must never appear as library content (e.g. via sync).
     for (const o of res.objects || []) {
-      if (!isPreviewCopyKey(o.name)) out.push({ key: o.name, size: o.size });
+      if (!o.name.startsWith(previewPrefix)) out.push({ key: o.name, size: o.size });
     }
     marker = res.nextMarker;
     if (!res.isTruncated) break;
@@ -139,7 +106,7 @@ export async function listOssObjects() {
 
 export async function deleteOssObjectIfExists(key) {
   try {
-    await deleteOssObject(key);
+    await ossClient().delete(key);
   } catch (e) {
     if (e?.code === 'NoSuchKey' || e?.status === 404 || e?.statusCode === 404) return;
     throw e;
@@ -148,12 +115,10 @@ export async function deleteOssObjectIfExists(key) {
 
 export async function putEmptyOssObject(key) {
   if (!key) return;
-  const client = ossClient();
-  await client.put(key, Buffer.alloc(0));
+  await ossClient().put(key, Buffer.alloc(0));
 }
 
 export async function copyOssObject(fromKey, toKey) {
   if (fromKey === toKey) return;
-  const client = ossClient();
-  await client.copy(toKey, fromKey);
+  await ossClient().copy(toKey, fromKey);
 }

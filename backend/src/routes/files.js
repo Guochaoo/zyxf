@@ -6,7 +6,7 @@ import { requireAdmin } from '../auth.js';
 import { buildPostPolicy, copyOssObject, deleteOssObjectIfExists, signedGetUrl } from '../oss.js';
 import { generateWebofficeToken, refreshWebofficeToken } from '../imm.js';
 import { mimeOf } from '../mime.js';
-import { findFileByNameInFolder, findOssKeyConflict, nextSortOrder } from '../dbHelpers.js';
+import { nextSortOrder } from '../dbHelpers.js';
 import { objectKeyForFile, ossPrefix, parseOptionalFolderId } from '../storagePath.js';
 import { isExtAllowed, normalizeExt, PREVIEWABLE_EXTS, shouldForceDownload } from '../extPolicy.js';
 
@@ -24,20 +24,6 @@ const downloadLimiter = (windowMs, max, message) =>
   });
 const downloadLimiterShort = downloadLimiter(60 * 1000, 60, '请求过于频繁,请稍后再试');
 const downloadLimiterLong = downloadLimiter(60 * 60 * 1000, 240, '本小时请求次数已达上限,请稍后再试');
-
-// RFC 5987 encode for Content-Disposition filename* parameter.
-function encodeRfc5987(value) {
-  return encodeURIComponent(value)
-    .replace(/['()]/g, escape) // legacy
-    .replace(/\*/g, '%2A')
-    .replace(/%(?:7C|60|5E)/g, (match) => match.toLowerCase());
-}
-
-function dispositionFor(name, asAttachment) {
-  const fallback = String(name || 'file').replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '');
-  const type = asAttachment ? 'attachment' : 'inline';
-  return `${type}; filename="${fallback}"; filename*=UTF-8''${encodeRfc5987(name)}`;
-}
 
 const SHORT_SIGN_TTL = 1800; // 30 min — enough for long preview sessions, short enough to limit link-sharing risk
 
@@ -79,11 +65,10 @@ function validateUploadInput(name, folderId) {
   if (!trimmed) return { error: '文件名不能为空' };
   const pid = parseOptionalFolderId(folderId);
   if (Number.isNaN(pid)) return { error: '无效的文件夹 ID' };
-  if (pid !== null) {
-    const f = db.prepare('SELECT id FROM folders WHERE id = ?').get(pid);
-    if (!f) return { error: '文件夹不存在' };
+  if (pid !== null && !db.prepare('SELECT id FROM folders WHERE id = ?').get(pid)) {
+    return { error: '文件夹不存在' };
   }
-  if (findFileByNameInFolder(db, trimmed, pid)) {
+  if (db.prepare('SELECT id FROM files WHERE name = ? AND folder_id IS ?').get(trimmed, pid)) {
     return { error: '此文件夹中已存在同名文件', status: 409 };
   }
   const ext = normalizeExt(path.extname(trimmed));
@@ -151,27 +136,12 @@ router.post('/', requireAdmin, (req, res) => {
 // Get a bare signed url for the object. The frontend will fetch it as a Blob
 // and convert to a Blob URL so the browser ignores OSS's force-download header
 // (added automatically on un-filed bucket domains for certain MIME types).
-router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, async (req, res) => {
+router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => {
   const file = getFileOr404(req, res);
   if (!file) return;
 
   const ext = normalizeExt(file.ext);
-  const contentType = mimeOf(ext) || 'application/octet-stream';
-  // Defence in depth: any type not on the inline whitelist (and anything risky)
-  // is served with Content-Disposition: attachment so it cannot execute in the OSS origin.
   const isDownload = req.query.download === '1';
-  const forceAttach = isDownload || shouldForceDownload(ext);
-  const urlOptions = {};
-  // NOTE: we never override response-content-type — this OSS bucket rejects
-  // that parameter with InvalidRequest (EC 0017-00000902, "Can not override
-  // response header on content-type") for every object. Browser uploads store
-  // a correct Content-Type already, so the raw object header is served as-is.
-  // Only Content-Disposition is overridden (allowed).
-  if (!isDownload) {
-    urlOptions.disposition = dispositionFor(file.name, forceAttach);
-  }
-
-  const url = signedGetUrl(file.oss_key, SHORT_SIGN_TTL, urlOptions);
 
   if (isDownload) {
     const ip = req.ip || req.socket?.remoteAddress || '';
@@ -184,19 +154,19 @@ router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, async (req, re
   }
 
   res.json({
-    url,
+    url: signedGetUrl(file.oss_key, SHORT_SIGN_TTL),
     name: file.name,
     ext: file.ext,
-    mime_type: contentType,
+    mime_type: mimeOf(ext) || 'application/octet-stream',
     size: file.size,
-    force_download: forceAttach,
+    force_download: isDownload || shouldForceDownload(ext),
   });
 });
 
 // WebOffice preview token via IMM GenerateWebofficeToken. Works for
 // browser-uploaded ("externally uploaded") objects too — the JS-SDK renders
 // the returned WebofficeURL in the browser, mobile WebViews included.
-router.get('/:id/weboffice-token', downloadLimiterShort, downloadLimiterLong, async (req, res, next) => {
+router.get('/:id/weboffice-token', downloadLimiterShort, downloadLimiterLong, async (req, res) => {
   const file = getFileOr404(req, res);
   if (!file) return;
   const ext = normalizeExt(file.ext);
@@ -204,8 +174,7 @@ router.get('/:id/weboffice-token', downloadLimiterShort, downloadLimiterLong, as
     return res.status(415).json({ error: '该文件类型不支持在线预览' });
   }
   try {
-    const info = await generateWebofficeToken(file);
-    res.json(info);
+    res.json(await generateWebofficeToken(file));
   } catch (e) {
     console.warn('[files] weboffice token failed:', e.message);
     res.status(502).json({ error: '预览服务暂不可用，请稍后再试' });
@@ -223,9 +192,7 @@ router.post('/:id/weboffice-refresh', downloadLimiterShort, downloadLimiterLong,
     return res.status(400).json({ error: '缺少 access_token 或 refresh_token' });
   }
   try {
-    const info = await refreshWebofficeToken({ accessToken: access_token, refreshToken: refresh_token });
-    console.log(`[files] weboffice token refreshed for file ${file.id}`);
-    res.json(info);
+    res.json(await refreshWebofficeToken({ accessToken: access_token, refreshToken: refresh_token }));
   } catch (e) {
     console.warn('[files] weboffice refresh failed:', e.message);
     // Refresh token may itself be expired (1-day lifetime) — the client can
@@ -234,7 +201,7 @@ router.post('/:id/weboffice-refresh', downloadLimiterShort, downloadLimiterLong,
   }
 });
 
-// Move a file to another folder (folder_id = null means root)
+// Move or rename a file
 router.patch('/:id', requireAdmin, async (req, res) => {
   const file = getFileOr404(req, res);
   if (!file) return;
@@ -248,12 +215,12 @@ router.patch('/:id', requireAdmin, async (req, res) => {
     if (!isExtAllowed(ext)) {
       return res.status(415).json({ error: rejectedExtMessage(ext) });
     }
-    if (findFileByNameInFolder(db, newName, file.folder_id, file.id)) {
+    if (db.prepare('SELECT id FROM files WHERE name = ? AND folder_id IS ? AND id != ?').get(newName, file.folder_id, id)) {
       return res.status(409).json({ error: '此文件夹中已存在同名文件' });
     }
 
     const newKey = objectKeyForFile(db, file.folder_id, newName);
-    if (findOssKeyConflict(db, newKey, id)) {
+    if (db.prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?').get(newKey, id)) {
       return res.status(409).json({ error: '目标存储路径已存在同名文件' });
     }
 
@@ -271,12 +238,11 @@ router.patch('/:id', requireAdmin, async (req, res) => {
 
   const target = parseOptionalFolderId(req.body?.folder_id);
   if (Number.isNaN(target)) return res.status(400).json({ error: '无效的文件夹 ID' });
-  if (target !== null) {
-    const exists = db.prepare('SELECT id FROM folders WHERE id = ?').get(target);
-    if (!exists) return res.status(400).json({ error: '目标文件夹不存在' });
+  if (target !== null && !db.prepare('SELECT id FROM folders WHERE id = ?').get(target)) {
+    return res.status(400).json({ error: '目标文件夹不存在' });
   }
   if (target === file.folder_id) return res.json({ ok: true, unchanged: true });
-  if (findFileByNameInFolder(db, file.name, target, file.id)) {
+  if (db.prepare('SELECT id FROM files WHERE name = ? AND folder_id IS ? AND id != ?').get(file.name, target, id)) {
     return res.status(409).json({ error: '目标文件夹中已存在同名文件' });
   }
   const newKey = objectKeyForFile(db, target, file.name);
