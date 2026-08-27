@@ -1,4 +1,4 @@
-import { DownloadIcon } from '../icons';
+import { Download } from 'lucide-react';
 
 /**
  * PreviewUnavailable — "预览服务出错" notice with a download button, shared by
@@ -18,7 +18,7 @@ export default function PreviewUnavailable({ onDownload }) {
             onClick={onDownload}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors"
           >
-            <DownloadIcon className="w-4 h-4" />
+            <Download className="w-4 h-4" />
             下载文件
           </button>
         </>
