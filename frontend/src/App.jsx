@@ -11,6 +11,7 @@ import FolderTree from './components/FolderTree.jsx';
 import KnowledgeGraph from './components/KnowledgeGraph.jsx';
 import ChatComposer from './components/ChatComposer.jsx';
 import useMediaQuery from './hooks/useMediaQuery.js';
+import NoticeModal from './components/NoticeModal.jsx';
 
 export default function App() {
   const { user, logout, ready } = useAuth();
@@ -157,6 +158,9 @@ export default function App() {
           isFixed
         />
       )}
+
+      {/* 首次访问的注意清单弹窗：同意后写入 localStorage 才放行站点操作 */}
+      <NoticeModal />
     </div>
   );
 }
