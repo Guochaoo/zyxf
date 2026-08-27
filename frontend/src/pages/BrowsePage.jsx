@@ -1,12 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import {
+  ArrowDown01,
+  ArrowDown10,
+  ArrowDownAZ,
+  ArrowDownZA,
+  ArrowLeft,
+  CalendarArrowDown,
+  CalendarArrowUp,
+  Download,
+  Loader2,
+  PenLine,
+  RotateCw,
+  Trash,
+} from 'lucide-react';
 import {
   BsCloudArrowUp,
   BsFolderPlus,
   BsGripVertical,
 } from 'react-icons/bs';
-import { DownloadIcon, PenLineIcon, RotateCwIcon, TrashIcon, ArrowLeftIcon, SortAZIcon, SortZAIcon, CalendarArrowDownIcon, CalendarArrowUpIcon, ArrowDown01Icon, ArrowDown10Icon } from '../components/icons';
 import {
   createFolder,
   deleteFile,
@@ -38,9 +50,9 @@ const SORT_OPTIONS = [
 
 // Direction arrow per sort key ('manual' has none).
 const SORT_ARROWS = {
-  name: { asc: SortAZIcon, desc: SortZAIcon },
-  created_at: { asc: CalendarArrowDownIcon, desc: CalendarArrowUpIcon },
-  size: { asc: ArrowDown01Icon, desc: ArrowDown10Icon },
+  name: { asc: ArrowDownAZ, desc: ArrowDownZA },
+  created_at: { asc: CalendarArrowDown, desc: CalendarArrowUp },
+  size: { asc: ArrowDown01, desc: ArrowDown10 },
 };
 
 // Tell the sidebar FolderTree that folder structure changed (create/rename/
@@ -366,7 +378,7 @@ export default function BrowsePage() {
           title="刷新（同步远端资料库）"
         >
           <span className="rb-toolbar-btn w-[38.5px] p-0">
-            <RotateCwIcon className={`w-6 h-6 ${syncing ? 'animate-spin' : ''}`} />
+            <RotateCw className={`w-6 h-6 ${syncing ? 'animate-spin' : ''}`} />
           </span>
         </button>
         {folderId !== 0 && (
@@ -376,7 +388,7 @@ export default function BrowsePage() {
             title="返回上一级"
           >
             <span className="rb-toolbar-btn w-[38.5px] p-0">
-              <ArrowLeftIcon className="w-6 h-6" />
+              <ArrowLeft className="w-6 h-6" />
             </span>
           </button>
         )}
@@ -628,10 +640,10 @@ function ItemListWithRename({
             isAdmin && (
               <>
                 <RowAction title="重命名" onClick={() => onRenameFolder(f)}>
-                  <PenLineIcon className="w-4 h-4" />
+                  <PenLine className="w-4 h-4" />
                 </RowAction>
                 <RowAction title="删除" onClick={() => onDeleteFolder(f)}>
-                  <TrashIcon className="w-4 h-4" />
+                  <Trash className="w-4 h-4" />
                 </RowAction>
               </>
             )
@@ -656,15 +668,15 @@ function ItemListWithRename({
           actions={
             <>
               <RowAction title="下载" onClick={() => onDownloadFile(f)}>
-                <DownloadIcon className="w-4 h-4" />
+                <Download className="w-4 h-4" />
               </RowAction>
               {isAdmin && (
                 <>
                   <RowAction title="重命名" onClick={() => onRenameFile(f)}>
-                    <PenLineIcon className="w-4 h-4" />
+                    <PenLine className="w-4 h-4" />
                   </RowAction>
                   <RowAction title="删除" onClick={() => onDeleteFile(f)}>
-                    <TrashIcon className="w-4 h-4" />
+                    <Trash className="w-4 h-4" />
                   </RowAction>
                 </>
               )}

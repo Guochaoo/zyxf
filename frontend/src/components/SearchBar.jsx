@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, X } from 'lucide-react';
-import { DownloadIcon, FolderIcon, SearchIcon } from './icons';
+import { Download, Loader2, Search, X } from 'lucide-react';
+import { BsFolder } from 'react-icons/bs';
 import { getFileUrl, search as searchApi } from '../api.js';
 import { downloadFileById } from '../utils.js';
 import FileIcon from './FileIcon.jsx';
@@ -129,7 +129,7 @@ export default function SearchBar({ className = '' }) {
   return (
     <div ref={wrapRef} className={`relative z-[70] w-full max-w-[520px] ${className}`.trim()}>
       <div className="rb-search-pill relative">
-        <SearchIcon className="absolute left-[15px] top-1/2 w-4 h-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        <Search className="absolute left-[15px] top-1/2 w-4 h-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
         <input
           ref={inputRef}
           type="text"
@@ -176,7 +176,7 @@ export default function SearchBar({ className = '' }) {
                       onClick={() => handleResult(f)}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50 transition-colors"
                     >
-                      <FolderIcon className="w-4 h-4 text-amber-400 shrink-0" />
+                      <BsFolder className="w-4 h-4 text-amber-400 shrink-0" />
                       <span className="text-sm text-slate-900 truncate">{f.name}</span>
                     </button>
                   ))}
@@ -210,7 +210,7 @@ export default function SearchBar({ className = '' }) {
                         title="下载"
                         aria-label={`下载 ${f.name}`}
                       >
-                        <DownloadIcon className="w-4 h-4" />
+                        <Download className="w-4 h-4" />
                       </button>
                     </div>
                   ))}

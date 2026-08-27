@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { useAuth } from '../auth.jsx';
+import { ArrowUpRight } from 'lucide-react';
+import { LogoIcon } from '../components/icons';
 
 /* ─────────────────────────────────────────────────────────
  * Projects / Case Studies — About page rebuilt in this style.
@@ -95,7 +97,6 @@ function CaseCard({ study, index, isAdmin }) {
           +
         </div>
       )}
-
       {/* info plate */}
       <div className="absolute bottom-0 left-0 z-20 bg-white px-4 pb-3 pt-2.5" style={{ maxWidth: '70%' }}>
         <div className="text-[clamp(1.4rem,2.2vw,2rem)] font-normal leading-tight text-black">
@@ -107,72 +108,6 @@ function CaseCard({ study, index, isAdmin }) {
       </div>
     </motion.div>
   );
-}
-
-/* Marquee logo SVG icons (all black stroke/fill) */
-function LogoIcon({ type }) {
-  const common = { stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', fill: 'none' };
-  switch (type) {
-    case 'code':
-      return (
-        <svg width="22" height="18" viewBox="0 0 22 18" {...common}>
-          <polyline points="6,4 1,9 6,14" />
-          <polyline points="16,4 21,9 16,14" />
-          <line x1="13" y1="2" x2="9" y2="16" />
-        </svg>
-      );
-    case 'dots':
-      return (
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-          {[3, 10, 17].map((y) =>
-            [3, 10, 17].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="2.2" />)
-          )}
-        </svg>
-      );
-    case 'circle-ring':
-      return (
-        <svg width="22" height="22" viewBox="0 0 22 22" {...common}>
-          <circle cx="11" cy="11" r="9" />
-          <circle cx="11" cy="11" r="4" />
-        </svg>
-      );
-    case 'arrow':
-      return (
-        <svg width="18" height="18" viewBox="0 0 18 18" {...common}>
-          <line x1="2" y1="16" x2="16" y2="2" />
-          <polyline points="7,2 16,2 16,11" />
-        </svg>
-      );
-    case 'wave-circle':
-      return (
-        <svg width="22" height="22" viewBox="0 0 22 22" {...common} strokeWidth="1.5">
-          <circle cx="11" cy="11" r="9" />
-          <path d="M5 11Q8 7 11 11Q14 15 17 11" />
-        </svg>
-      );
-    case 'lines':
-      return (
-        <svg width="24" height="18" viewBox="0 0 24 18" {...common} strokeWidth="2.2">
-          <line x1="0" y1="3" x2="24" y2="3" />
-          <line x1="6" y1="9" x2="24" y2="9" />
-          <line x1="0" y1="15" x2="18" y2="15" />
-        </svg>
-      );
-    case 'bolt':
-      return (
-        <svg width="14" height="20" viewBox="0 0 14 20" fill="currentColor">
-          <polygon points="8,0 0,11 6,11 6,20 14,9 8,9" />
-        </svg>
-      );
-    case 'plus':
-    default:
-      return (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
-          <rect x="7.5" y="0" width="3" height="18" />
-          <rect x="0" y="7.5" width="18" height="3" />
-        </svg>
-      );
-  }
 }
 
 export default function AboutPage() {
@@ -245,10 +180,8 @@ export default function AboutPage() {
               <span className="inline-flex items-center gap-[10px] border border-black/20 bg-black px-3 py-2 text-base font-medium text-white transition-colors duration-200 group-hover:bg-black/85">
                 加入我们
               </span>
-              <span className="flex h-6 w-6 items-center justify-center bg-black transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-y-[18px]">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18.75 6V15.75C18.75 15.949 18.671 16.14 18.53 16.28C18.39 16.421 18.199 16.5 18 16.5C17.801 16.5 17.61 16.421 17.47 16.28C17.329 16.14 17.25 15.949 17.25 15.75V7.81L6.53 18.53C6.39 18.671 6.199 18.75 6 18.75C5.801 18.75 5.61 18.671 5.47 18.53C5.329 18.39 5.25 18.199 5.25 18C5.25 17.801 5.329 17.61 5.47 17.47L16.19 6.75H8.25C8.051 6.75 7.86 6.671 7.72 6.53C7.579 6.39 7.5 6.199 7.5 6C7.5 5.801 7.579 5.61 7.72 5.47C7.86 5.329 8.051 5.25 8.25 5.25H18C18.199 5.25 18.39 5.329 18.53 5.47C18.671 5.61 18.75 5.801 18.75 6Z" />
-                </svg>
+              <span className="flex h-6 w-6 items-center justify-center bg-black text-white transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-y-[18px]">
+                <ArrowUpRight size={16} strokeWidth={2} />
               </span>
             </button>
           </div>

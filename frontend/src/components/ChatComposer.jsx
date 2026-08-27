@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { ChevronDown, ChevronUp, Settings, Trash2 } from 'lucide-react';
+import { ArrowUp, ArrowUpRight, ChevronDown, ChevronUp, Settings, Square, Trash2 } from 'lucide-react';
 import { chatStream } from '../api.js';
 
 /* ─────────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ function FileChip({ item }) {
         {badge}
       </span>
       <span className="min-w-0 truncate">{item.name}</span>
-      <svg className="shrink-0" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7M7 7h10v10" /></svg>
+      <ArrowUpRight className="shrink-0" size={9} strokeWidth={2.5} />
     </button>
   );
 }
@@ -499,9 +499,7 @@ export default function ChatComposer() {
                 onClick={stop}
                 className="flex size-7 items-center justify-center rounded-[8px] bg-field text-ink transition-[background-color,transform] duration-200 hover:bg-hover active:scale-[0.96]"
               >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="6" y="6" width="12" height="12" rx="2" />
-                </svg>
+                <Square size={11} fill="currentColor" strokeWidth={2} />
               </button>
             ) : (
               <button
@@ -516,9 +514,7 @@ export default function ChatComposer() {
                   color: canSend ? 'var(--surface)' : 'var(--ink-2)',
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 19V5M5 12l7-7 7 7" />
-                </svg>
+                <ArrowUp size={16} strokeWidth={2.4} />
               </button>
             )}
           </div>

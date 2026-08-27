@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
-import { FolderIcon } from './icons';
+import { BsFolder } from 'react-icons/bs';
 import FileIcon from './FileIcon.jsx';
 import { getFolderTree } from '../api.js';
 import GlideList from './GlideList.jsx';
@@ -158,7 +158,7 @@ function TreeNode({ node, depth, currentId, expanded, onToggle }) {
       ) : (
         <span className="w-5 shrink-0" />
       )}
-      <FolderIcon className="h-4 w-4 shrink-0 text-slate-500" />
+      <BsFolder className="h-4 w-4 shrink-0 text-slate-500" />
       <span className="min-w-0 flex-1 truncate">{node.name}</span>
     </span>
   );

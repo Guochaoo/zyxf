@@ -17,8 +17,8 @@ import {
   BsFiletypeTxt,
   BsFiletypeXls,
   BsFiletypeXlsx,
+  BsFolder,
 } from 'react-icons/bs';
-import { FolderIcon } from './icons';
 
 const EXT_MAP = {
   pdf: BsFiletypePdf,
@@ -48,7 +48,7 @@ export default function FileIcon({ type, ext, className = 'w-5 h-5' }) {
   if (type === 'folder') {
     return (
       <span className={`${className} inline-flex shrink-0 items-center justify-center`}>
-        <FolderIcon className={`h-full w-full ${ICON_COLOR}`} />
+        <BsFolder className={`h-full w-full ${ICON_COLOR}`} />
       </span>
     );
   }

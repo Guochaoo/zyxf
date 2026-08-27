@@ -42,7 +42,7 @@ function loadSdk() {
   return sdkPromise;
 }
 
-export default function OfficeViewer({ wbToken, fileId, name, onDownload }) {
+export default function OfficeViewer({ wbToken, fileId, name }) {
   const mountRef = useRef(null);
   const instanceRef = useRef(null);
   const tokenRef = useRef(null);
@@ -112,7 +112,7 @@ export default function OfficeViewer({ wbToken, fileId, name, onDownload }) {
   }, [wbToken, handleRefresh]);
 
   if (state === 'error') {
-    return <PreviewUnavailable onDownload={onDownload} />;
+    return <PreviewUnavailable />;
   }
 
   return (

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { copyOssObject, deleteOssObjectIfExists, putEmptyOssObject } from '../oss.js';
-import { findByNameInParent, findOssKeyConflict, nextSortOrder } from '../dbHelpers.js';
+import { nextSortOrder } from '../dbHelpers.js';
 import { objectKeyForFile, parseOptionalFolderId, placeholderKeyForFolder } from '../storagePath.js';
 
 const router = Router();
@@ -35,6 +35,17 @@ const sortByName = (rows, desc) =>
 function getFolder(id) {
   if (id === 0 || id === '0' || id == null) return { id: 0, name: '首页', parent_id: null };
   return db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
+}
+
+// A folder with the same name in the same parent, optionally excluding one id.
+function findFolderInParent(name, parentId, excludeId = null) {
+  const where = parentId === null ? 'parent_id IS NULL' : 'parent_id = ?';
+  const args = parentId === null ? [] : [parentId];
+  return db
+    .prepare(
+      `SELECT id FROM folders WHERE name = ? AND ${where}${excludeId ? ' AND id != ?' : ''}`
+    )
+    .get(name, ...args, ...(excludeId ? [excludeId] : []));
 }
 
 // Recursive total size of each given folder (sum of all descendant files).
@@ -95,7 +106,9 @@ async function relocateFolderSubtree(folderId, { parentOverrides, nameOverrides,
     newKey: objectKeyForFile(db, file.folder_id, file.name, parentOverrides, nameOverrides),
   }));
   for (const move of fileMoves) {
-    if (findOssKeyConflict(db, move.newKey, move.id)) return { conflict: true };
+    if (db.prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?').get(move.newKey, move.id)) {
+      return { conflict: true };
+    }
   }
 
   const placeholderMoves = folderIds
@@ -244,7 +257,7 @@ router.post('/', requireAdmin, async (req, res) => {
     const parent = db.prepare('SELECT id FROM folders WHERE id = ?').get(pid);
     if (!parent) return res.status(400).json({ error: '父文件夹不存在' });
   }
-  if (findByNameInParent(db, 'folders', 'parent_id', trimmed, pid)) {
+  if (findFolderInParent(trimmed, pid)) {
     return res.status(409).json({ error: '同名文件夹已存在' });
   }
   try {
@@ -269,7 +282,7 @@ router.post('/', requireAdmin, async (req, res) => {
   }
 });
 
-// Move folder to a new parent (parent_id = null means root)
+// Rename or move folder (parent_id = null means root)
 router.patch('/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: '无效的文件夹 ID' });
@@ -281,7 +294,7 @@ router.patch('/:id', requireAdmin, async (req, res) => {
     if (!newName) return res.status(400).json({ error: '名称不能为空' });
     if (newName === folder.name) return res.json({ ok: true, unchanged: true });
     const parentId = folder.parent_id ?? null;
-    if (findByNameInParent(db, 'folders', 'parent_id', newName, parentId, id)) {
+    if (findFolderInParent(newName, parentId, id)) {
       return res.status(409).json({ error: '同名文件夹已存在' });
     }
 
@@ -322,7 +335,7 @@ router.patch('/:id', requireAdmin, async (req, res) => {
   }
 
   if (newParent === (folder.parent_id ?? null)) return res.json({ ok: true, unchanged: true });
-  if (findByNameInParent(db, 'folders', 'parent_id', folder.name, newParent, id)) {
+  if (findFolderInParent(folder.name, newParent, id)) {
     return res.status(409).json({ error: '目标文件夹中已存在同名文件夹' });
   }
 
@@ -357,33 +370,27 @@ router.post('/reorder', requireAdmin, (req, res) => {
   const isReorderItem = (it) => !!it && (it.type === 'file' || it.type === 'folder') && !!it.id;
 
   // Validate every entry belongs to the claimed parent folder.
+  const parentCol = { file: 'folder_id', folder: 'parent_id' };
   for (const it of order.filter(isReorderItem)) {
-    if (it.type === 'file') {
-      const f = db.prepare('SELECT folder_id FROM files WHERE id = ?').get(Number(it.id));
-      if (!f) return res.status(400).json({ error: `file ${it.id} not found` });
-      if ((f.folder_id ?? null) !== pid) {
-        return res.status(400).json({ error: `file ${it.id} does not belong to this parent` });
-      }
-    } else {
-      const f = db.prepare('SELECT parent_id FROM folders WHERE id = ?').get(Number(it.id));
-      if (!f) return res.status(400).json({ error: `folder ${it.id} not found` });
-      if ((f.parent_id ?? null) !== pid) {
-        return res.status(400).json({ error: `folder ${it.id} does not belong to this parent` });
-      }
+    const f = db.prepare(`SELECT ${parentCol[it.type]} p FROM ${it.type}s WHERE id = ?`).get(Number(it.id));
+    if (!f) return res.status(400).json({ error: `${it.type} ${it.id} not found` });
+    if ((f.p ?? null) !== pid) {
+      return res.status(400).json({ error: `${it.type} ${it.id} does not belong to this parent` });
     }
   }
 
   // We separate sort_order between folders and files so the front-end can mix them in one list.
   // Backend uses interleaved indexes for both, which is fine because UI orders by sort_order globally
   // among each type, and we want the user-visible ordering to match the array.
-  const updateFile = db.prepare('UPDATE files SET sort_order = ? WHERE id = ?');
-  const updateFolder = db.prepare('UPDATE folders SET sort_order = ? WHERE id = ?');
+  const updateStmt = {
+    file: db.prepare('UPDATE files SET sort_order = ? WHERE id = ?'),
+    folder: db.prepare('UPDATE folders SET sort_order = ? WHERE id = ?'),
+  };
   const tx = db.transaction(() => {
     for (let i = 0; i < order.length; i++) {
       const it = order[i];
       if (!isReorderItem(it)) continue;
-      if (it.type === 'file') updateFile.run(i, Number(it.id));
-      else updateFolder.run(i, Number(it.id));
+      updateStmt[it.type].run(i, Number(it.id));
     }
   });
   tx();

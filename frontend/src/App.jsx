@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Route, Routes, Link, Navigate, useLocation } from 'react-router-dom';
+import { Route, Routes, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import BrowsePage from './pages/BrowsePage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
@@ -15,6 +15,7 @@ import useMediaQuery from './hooks/useMediaQuery.js';
 export default function App() {
   const { user, logout, ready } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const isLg = useMediaQuery('(min-width: 1024px)');
   // Hide the floating menu button while the knowledge-graph dialog is open.
   const [graphFull, setGraphFull] = useState(false);
@@ -29,10 +30,19 @@ export default function App() {
     { label: '资料库', ariaLabel: '浏览资料库', link: '/' },
     { label: '统计面板', ariaLabel: '查看统计仪表盘', link: '/dashboard' },
     { label: '关于我们', ariaLabel: '了解仲英书院学业辅导中心', link: '/about' },
-    ...(user
-      ? [{ label: '退出登录', ariaLabel: '退出登录', action: logout }]
-      : [{ label: '管理员登录', ariaLabel: '管理员登录', link: '/login' }]),
   ];
+
+  // Bottom account card on the menu panel. Logged-in shows username + role
+  // with a logout button; guests show a neutral "未登录" state whose icon
+  // is a login button.
+  const account = user
+    ? {
+        name: user.username || '用户',
+        subtitle: user.role === 'admin' ? '管理员' : '普通用户',
+        avatarText: (user.username || '友').slice(0, 1).toUpperCase(),
+        onLogout: logout,
+      }
+    : { name: '未登录', subtitle: '游客', guest: true, avatarText: '', onLogin: () => navigate('/login') };
 
   const brand = (
     <Link to="/" className="flex items-center gap-2 shrink-0 hover:text-brand-500">
@@ -136,6 +146,7 @@ export default function App() {
             { label: 'Email', link: 'mailto:xjtuzyxf@163.com' },
             { label: 'Wechat', link: 'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU4NTQ4NTg0Mg==&scene=110#wechat_redirect' },
           ]}
+          account={account}
           displaySocials
           displayItemNumbering={false}
           menuButtonColor="#ffffff"

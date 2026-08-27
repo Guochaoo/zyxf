@@ -57,19 +57,6 @@
   }
 }
 
-.sm-logo {
-  display: flex;
-  align-items: center;
-  user-select: none;
-}
-
-.sm-logo-img {
-  display: block;
-  height: 32px;
-  width: auto;
-  object-fit: contain;
-}
-
 .sm-toggle {
   position: relative;
   display: inline-flex;
@@ -238,9 +225,17 @@
   gap: 1.25rem;
 }
 
-.sm-socials {
+/* ---- bottom block (account card + socials), pinned to the panel bottom.
+   socials keep their original bottom-anchored position; the account card
+   sits directly above them at the same 12px rhythm as title→list. */
+.sm-panel-bottom {
   margin-top: auto;
-  padding-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem; /* equals .sm-socials internal gap */
+}
+
+.sm-socials {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -320,6 +315,90 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+/* ---- account card (bottom of the menu panel, above the socials) ----
+   Flat white capsule: no border/shadow; large pill radius. Spans the full
+   panel content width; slim vertical rhythm keeps the pill long & sleek. */
+.sm-account-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.3rem 0.9rem;
+  border: none;
+  border-radius: 999px;
+  background: #efefef;
+}
+
+.sm-account-avatar {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5f5f66;
+  background: #ebebee;
+  user-select: none;
+}
+
+/* Guest avatar: same grey circle (no gradient) */
+.sm-account-avatar--guest {
+  background: #ebebee;
+  color: #8a8a8f;
+}
+
+.sm-account-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sm-account-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #171717;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sm-account-sub {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #8a8a8f;
+}
+
+.sm-account-gear {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #9a9a9f;
+  transition: color 0.2s ease;
+  cursor: pointer;
+}
+
+/* Guest login button reuses the gear slot; strip native button chrome. */
+button.sm-account-gear {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+}
+
+.sm-account-gear:hover {
+  color: #171717;
+}
+
+.sm-account-gear:focus-visible {
+  outline: none;
+  color: #171717;
 }
 
 .sm-panel-item {
@@ -411,10 +490,6 @@
     left: 0;
     right: auto;
   }
-
-  .staggered-menu-wrapper[data-open] .sm-logo-img {
-    filter: invert(100%);
-  }
 }
 
 @media (max-width: 640px) {
@@ -435,9 +510,5 @@
   [data-position='left'] .sm-prelayers {
     left: 0;
     right: auto;
-  }
-
-  .staggered-menu-wrapper[data-open] .sm-logo-img {
-    filter: invert(100%);
   }
 }
