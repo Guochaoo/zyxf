@@ -1,13 +1,3 @@
-export { default as SearchIcon } from './SearchIcon.jsx';
-export { default as FolderIcon } from './FolderIcon.jsx';
-export { default as DownloadIcon } from './DownloadIcon.jsx';
-export { default as PenLineIcon } from './PenLineIcon.jsx';
-export { default as TrashIcon } from './TrashIcon.jsx';
-export { default as RotateCwIcon } from './RotateCwIcon.jsx';
-export { default as ArrowLeftIcon } from './ArrowLeftIcon.jsx';
-export { default as SortAZIcon } from './SortAZIcon.jsx';
-export { default as SortZAIcon } from './SortZAIcon.jsx';
-export { default as CalendarArrowDownIcon } from './CalendarArrowDownIcon.jsx';
-export { default as CalendarArrowUpIcon } from './CalendarArrowUpIcon.jsx';
-export { default as ArrowDown01Icon } from './ArrowDown01Icon.jsx';
-export { default as ArrowDown10Icon } from './ArrowDown10Icon.jsx';
+// 本地定制图标目录：包里没有对应图标、或装饰性专用图形放这里。
+export { default as LogoIcon } from './LogoIcon.jsx';
+
