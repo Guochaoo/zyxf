@@ -1,4 +1,5 @@
 import crypto, { randomUUID } from 'node:crypto';
+import { envOrThrow } from './env.js';
 
 // ---- IMM (Intelligent Media Management) WebOffice preview ----
 //
@@ -12,12 +13,6 @@ import crypto, { randomUUID } from 'node:crypto';
 // This module hand-rolls the Aliyun RPC signature (HMAC-SHA1) so we don't
 // need to pull in the full OpenAPI SDK dependency tree just for one call.
 
-function envOrThrow(name) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
-
 const percentEncode = (str) =>
   encodeURIComponent(str)
     .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
@@ -27,7 +22,7 @@ const hmacSha1 = (secret, str) =>
   crypto.createHmac('sha1', secret).update(str).digest('base64');
 
 // OSS_REGION is like "oss-cn-beijing"; IMM uses "cn-beijing".
-const regionId = () => (envOrThrow('OSS_REGION') || '').replace(/^oss-/, '');
+const regionId = () => envOrThrow('OSS_REGION').replace(/^oss-/, '');
 
 /** IMM project bound to the bucket (OSS console → IMM binding). */
 export function immProject() {
