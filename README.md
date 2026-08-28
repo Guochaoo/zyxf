@@ -51,14 +51,14 @@ cd frontend && npm install && npm run dev
 
 ## 环境变量
 
-仓库根目录的 `.env` 是唯一配置文件，本地开发与 Docker 部署共用（已被 gitignore）。
+仓库根目录的 `.env` 是唯一配置文件，本地开发与生产部署共用（已被 gitignore）。
 
 | 变量 | 必填 | 说明 |
 |---|---|---|
 | `OSS_REGION` / `OSS_BUCKET` / `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET` | ✅ | 阿里云 OSS 凭证（建议 RAM 子账号最小权限） |
 | `JWT_SECRET` | 生产必填 | ≥ 32 位随机串，生产环境强度不达标拒绝启动 |
 | `ADMIN_USER` / `ADMIN_PASSWORD` | 生产必填 | 初始管理员，仅首次启动写入数据库；密码 ≥ 12 位 |
-| `PORT` / `HTTP_PORT` |  | 后端端口（默认 4000）/ 对外 HTTP 端口（默认 80，Docker 用） |
+| `PORT` / `HTTP_PORT` |  | 后端端口（默认 4000）/ 对外 HTTP 端口（默认 80，nginx 用） |
 | `CORS_ORIGIN` |  | 跨域来源；同源反代部署可留空 |
 | `OSS_KEY_PREFIX` / `OSS_ENDPOINT` |  | 上传根前缀 / 自定义直传 endpoint |
 | `IMM_PROJECT` |  | IMM 项目名（默认 `zyxf`），与 OSS Bucket 绑定的 IMM 项目名不同才需设置 |
@@ -85,9 +85,8 @@ zyxf/
 │   │   └── components/    # 文件列表 / 预览 / 知识图谱 / 智能对话 / 菜单等
 │   └── test/
 ├── docs/
-│   ├── DEPLOY.md          # 部署指南（Docker Compose / nginx + pm2）
+│   ├── DEPLOY.md          # 部署指南（宝塔 Node + nginx + HTTPS）
 │   └── DESIGN.md          # 设计系统规范
-├── docker-compose.yml
 └── start.sh               # 本地一键启动
 ```
 
@@ -102,7 +101,7 @@ Pull Request 到 `main` 时 GitHub Actions 自动跑前后端测试；合并到 
 
 ## 部署
 
-生产部署（阿里云 ECS + Docker Compose 一键，或 nginx + pm2 传统方案）见 **[docs/DEPLOY.md](docs/DEPLOY.md)**，含安全组、OSS 跨域、IMM 绑定、HTTPS 升级与常见故障排查。
+生产部署（阿里云 ECS + **宝塔面板：Node 项目跑后端 + nginx 托管前端 + Let's Encrypt 配 HTTPS**）见 **[docs/DEPLOY.md](docs/DEPLOY.md)**，含安全组、OSS 跨域、IMM 绑定与常见故障排查。
 
 ## 设计规范
 
