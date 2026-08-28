@@ -1,6 +1,9 @@
 // OpenAI 兼容 LLM 客户端（流式）。零依赖：Node 24 全局 fetch + ReadableStream。
 // 参照 imm.js 的外部服务调用模式：envOrThrow、非 2xx 抛结构化错误。
 
+import net from 'node:net';
+import dns from 'node:dns';
+
 function env(name) {
   return (process.env[name] || '').trim();
 }
@@ -19,12 +22,101 @@ const MAX_KEY_LEN = 500;
 const MAX_URL_LEN = 300;
 const MAX_MODEL_LEN = 100;
 
+// BUG-20 SSRF 防护：客户端仅允许 https，且主机名/IP 不得落入回环/私网/链路本地/云元数据等网段。
+// 主机名（非 IP 字面量）通过 dns.lookup 解析后校验结果；解析失败/超时视为外部主机（不据此阻断）。
+const RESERVED_HOSTNAMES = new Set([
+  'localhost',
+  'localhost.localdomain',
+  'metadata',
+  'metadata.google.internal',
+  'metadata.googleinternal',
+]);
+
+// 判断 IP 是否属于被拦截的网段（回环/私网/链路本地/云元数据/CGNAT 等）。
+function isForbiddenIp(ip) {
+  const type = net.isIP(ip);
+  if (type === 4) {
+    const parts = ip.split('.').map(Number);
+    const [a, b] = parts;
+    if (a === 0 || a === 127) return true; // 0.0.0.0/8、127.0.0.0/8 回环
+    if (a === 10) return true; // 10.0.0.0/8 私网
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 私网
+    if (a === 192 && b === 168) return true; // 192.168.0.0/16 私网
+    if (a === 169 && b === 254) return true; // 169.254.0.0/16 链路本地（含云元数据 169.254.169.254）
+    if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
+    return false;
+  }
+  if (type === 6) {
+    const lower = ip.toLowerCase();
+    if (lower === '::' || lower === '::1' || lower === '::ffff:127.0.0.1') return true;
+    // IPv4 映射的 IPv6 地址：URL 会把 ::ffff:127.0.0.1 规范化为 ::ffff:7f00:1（十六进制）或保持点分（::ffff:a.b.c.d），
+    // 两者都按 IPv4 规则校验，避免回环/私网被绕行。
+    let mapped = null;
+    const dotted = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (dotted) {
+      mapped = dotted[1];
+    } else {
+      const hex = lower.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+      if (hex) {
+        const hi = parseInt(hex[1], 16);
+        const lo = parseInt(hex[2], 16);
+        mapped = `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+      }
+    }
+    if (mapped) return isForbiddenIp(mapped);
+    return false;
+  }
+  return false;
+}
+
+// 带超时的 DNS 解析（all:true），避免解析挂起拖慢请求。
+function lookupWithTimeout(host, timeoutMs = 1500) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('dns lookup timeout')), timeoutMs);
+    dns.promises.lookup(host, { all: true }).then(
+      (addrs) => {
+        clearTimeout(timer);
+        resolve(addrs);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
+// 校验客户端自定义 baseUrl 是否可安全使用（仅 https；拒绝回环/私网/链路本地/云元数据地址）。
+// 返回 true（可安全使用）或 false。解析失败/超时不在此处阻断（fetch 自身会失败，无法据此发起内网访问）。
+async function isSafeLlmBaseUrl(baseUrlRaw) {
+  let url;
+  try {
+    url = new URL(baseUrlRaw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'https:') return false; // 仅允许 https，杜绝明文/任意协议
+  const host = (url.hostname || '').replace(/^\[|\]$/g, '').toLowerCase(); // 去掉 IPv6 包裹括号
+  if (!host) return false;
+  if (RESERVED_HOSTNAMES.has(host)) return false;
+  if (net.isIP(host)) return !isForbiddenIp(host); // 字面 IP 直接校验
+
+  // 非 IP 字面量：解析后校验所有解析地址，任一命中即拒绝。
+  try {
+    const addrs = await lookupWithTimeout(host);
+    if (!Array.isArray(addrs) || addrs.length === 0) return true; // 无法解析 → 视为外部主机
+    return addrs.every((a) => !isForbiddenIp(a.address));
+  } catch {
+    return true; // 解析失败/超时：交由 fetch 自身失败，不在此处拦截
+  }
+}
+
 /**
  * 校验请求携带的客户端 LLM 配置（前端设置面板可让用户自带 Key）。
- * 三项齐全且合法才有效；baseUrl 限定 http(s) 协议并去掉尾部斜杠。
+ * 三项齐全且合法才有效；baseUrl 仅允许 https（SSRF 防护）并去掉尾部斜杠。
  * 返回归一化后的 { apiKey, baseUrl, model } 或 null。
  */
-export function resolveClientLlmConfig(raw) {
+export async function resolveClientLlmConfig(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const apiKey = typeof raw.apiKey === 'string' ? raw.apiKey.trim() : '';
   const baseUrlRaw = typeof raw.baseUrl === 'string' ? raw.baseUrl.trim() : '';
@@ -33,7 +125,7 @@ export function resolveClientLlmConfig(raw) {
   if (apiKey.length > MAX_KEY_LEN || baseUrlRaw.length > MAX_URL_LEN || model.length > MAX_MODEL_LEN) {
     return null;
   }
-  if (!/^https?:\/\//i.test(baseUrlRaw)) return null;
+  if (!(await isSafeLlmBaseUrl(baseUrlRaw))) return null; // SSRF 拦截
   let baseUrl;
   try {
     baseUrl = new URL(baseUrlRaw).toString().replace(/\/+$/, '');
@@ -41,6 +133,31 @@ export function resolveClientLlmConfig(raw) {
     return null;
   }
   return { apiKey, baseUrl, model };
+}
+
+/**
+ * 校验组装的工具调用是否完整：function.arguments 必须是有效的 JSON 对象/字符串。
+ * 流式断连可能留下被截断的半截 arguments，这类不完整的调用不应透传（BUG-12）。
+ */
+export function isCompleteToolCall(tc) {
+  if (!tc || typeof tc.function?.arguments !== 'string') return false;
+  try {
+    const parsed = JSON.parse(tc.function.arguments || '{}');
+    return typeof parsed === 'object' && parsed !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 对累积的 tool_call 增量做最终组装与完整性过滤。
+ * 输入 pendingTools（index → tool_call 组装对象），返回按 index 排序且 arguments 完好的调用列表。
+ */
+export function finalizeToolCalls(pendingTools) {
+  return [...pendingTools.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, v]) => v)
+    .filter(isCompleteToolCall);
 }
 
 /**
@@ -80,6 +197,7 @@ export async function* chatStream({ messages, tools, signal, config }) {
   // OpenAI 流式 tool_call 增量按 index 分片累积，流结束拼成完整调用。
   const pendingTools = new Map();
   let sawDone = false;
+  let producedOutput = false; // 是否已向客户端产出任何输出（文本或工具调用）
 
   const decoder = new TextDecoder();
   let buffer = '';
@@ -103,7 +221,10 @@ export async function* chatStream({ messages, tools, signal, config }) {
       }
       const delta = json.choices?.[0]?.delta;
       if (!delta) continue;
-      if (delta.content) yield { type: 'delta', text: delta.content };
+      if (delta.content) {
+        producedOutput = true;
+        yield { type: 'delta', text: delta.content };
+      }
       for (const frag of delta.tool_calls || []) {
         const idx = frag.index ?? 0;
         const acc = pendingTools.get(idx) || { id: '', type: 'function', function: { name: '', arguments: '' } };
@@ -116,13 +237,15 @@ export async function* chatStream({ messages, tools, signal, config }) {
   }
 
   if (pendingTools.size > 0) {
-    yield {
-      type: 'tool_calls',
-      tool_calls: [...pendingTools.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v),
-    };
+    const toolCalls = finalizeToolCalls(pendingTools);
+    if (toolCalls.length > 0) {
+      producedOutput = true;
+      yield { type: 'tool_calls', tool_calls: toolCalls };
+    }
   }
-  if (!sawDone && pendingTools.size === 0) {
+  if (!sawDone && !producedOutput) {
     // 上游异常断流且没有任何输出时显式报错，避免前端无限等待。
+    // 一旦已产出输出则优雅收尾（不再抛错），与注释意图一致（BUG-12）。
     const err = new Error('LLM 上游连接中断');
     err.status = 502;
     throw err;

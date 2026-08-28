@@ -9,7 +9,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
+        # appleboy/ssh-action@v1 固定到不可变 commit SHA，避免上游 tag 被
+        # 篡改/重定向（供应链风险）。v1 为轻量 tag，直接指向提交
+        # 0ff4204d...（与 v1.2.5 同一提交）。依赖机器人（如 Renovate 的
+        # digest 更新）应用 `git ls-remote https://github.com/appleboy/ssh-action.git refs/tags/v1`
+        # 重新解析该 tag 对应的 SHA，并把新 SHA 同步到此处。
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
