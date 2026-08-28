@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db } from '../db.js';
+import { db, transaction } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { copyOssObject, deleteOssObjectIfExists, putEmptyOssObject } from '../oss.js';
 import { nextSortOrder } from '../dbHelpers.js';
@@ -159,7 +159,7 @@ async function relocateFolderSubtree(folderId, { parentOverrides, nameOverrides,
   await batchOss(placeholdersToMove, (m) => putEmptyOssObject(m.newKey));
 
   const updateFile = db.prepare('UPDATE files SET oss_key = ? WHERE id = ?');
-  const tx = db.transaction(() => {
+  const tx = transaction(() => {
     updateFolder();
     for (const move of fileMoves) updateFile.run(move.newKey, move.id);
   });
@@ -444,7 +444,7 @@ router.post('/reorder', requireAdmin, (req, res) => {
     file: db.prepare('UPDATE files SET sort_order = ? WHERE id = ?'),
     folder: db.prepare('UPDATE folders SET sort_order = ? WHERE id = ?'),
   };
-  const tx = db.transaction(() => {
+  const tx = transaction(() => {
     for (let i = 0; i < order.length; i++) {
       const it = order[i];
       if (!isReorderItem(it)) continue;

@@ -4,8 +4,8 @@ on:
   push:
     branches: [main, master]
 
-# 手动部署（宝塔 Node + nginx），不再使用 Docker。
-# 流程：SSH 上服务器 → git pull → 后端装依赖并重启 → 前端装依赖并构建。
+# 标准 SSH 部署：后端用 systemd 托管（zyxf.service），前端构建产物交给 nginx。
+# 流程：SSH 上服务器 → git pull → 装依赖 → 构建前端 → systemctl 重启后端。
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -30,57 +30,43 @@ jobs:
             ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
             git pull origin main
 
-            # ----------------------------------------------------------------
-            # 后端：装依赖 + 重启（宝塔 Node 项目，进程 = www 用户跑的
-            # `node src/index.js`，监听 4000）。不用 Docker，也不用 pm2。
-            # ----------------------------------------------------------------
+            # 统一用服务器上的 Node 24（前端构建 + 后端安装/运行都走它）。
+            export PATH="/www/server/nodejs/v24.20.0/bin:$PATH"
+            npm config set registry https://registry.npmmirror.com
+
+            # 后端：装依赖
             cd /opt/zyxf/backend
-            # 用宝塔安装的 Node 24（避免 fallback 到系统旧 Node 12）
-            export PATH="/www/server/nodejs/v24.20.0/bin:$PATH"
-            # better-sqlite3 从 npmmirror 拉预编译二进制（绕开 GitHub），
-            # 必须以环境变量形式传入（不能 `npm config set better_sqlite3_binary_host`，
-            # 那不是合法的 npm option，会导致报错退出）。
-            export npm_config_better_sqlite3_binary_host=https://registry.npmmirror.com/-/binary/better-sqlite3
-            npm config set registry https://registry.npmmirror.com
             npm install --no-audit --no-fund
 
-            # 幂等重启：杀掉监听 4000 的旧后端进程，再以 www 用户后台拉起。
-            # 注意 1：不能用 `pkill -f "node src/index.js"` —— -f 按完整命令行匹配，
-            # 会误杀正执行本部署脚本的 bash（它的参数里含有该字符串），导致整个
-            # deploy 被 SIGTERM 终止（status 143）。所以改按端口定位。
-            # 注意 2：kill 后需重新启动，因为宝塔的 Node 项目不会因依赖变化自动重启。
-            if command -v fuser >/dev/null 2>&1; then
-              fuser -k 4000/tcp 2>/dev/null || true
-            else
-              # 回退：用 [n]ode 技巧避免 grep 匹配自身，并按 PID 精确 kill
-              # （不按完整命令行 -f 匹配，以免误杀本部署脚本进程）。
-              ps -eo pid,args | grep '[n]ode src/index.js' | awk '{print $1}' | xargs -r kill 2>/dev/null || true
-            fi
-            sleep 1
-            # 以 www 用户从 backend 目录后台启动，日志写入 run.log。
-            # 必须用 Node 24 的绝对路径：`su` 切换用户后 PATH 是系统默认
-            # （/usr/bin/node = v12），跑 express-rate-limit/helmet 等现代包会
-            # 抛 SyntaxError（`?.`/`??` 语法），导致后端起不来。手动验证过，
-            # 用 v24 绝对路径启动后端可正常返回 /api/health。
-            su -s /bin/bash www -c "cd /opt/zyxf/backend && nohup /www/server/nodejs/v24.20.0/bin/node src/index.js >> run.log 2>&1 &"
-            sleep 3
-            # 健康检查：确认后端起来（写库/加载环境变量失败会在此暴露）。
-            curl -fsS http://127.0.0.1:4000/api/health
-
-            # ----------------------------------------------------------------
             # 前端：装依赖 + 构建（产物交给 nginx，无需常驻进程）
-            # ----------------------------------------------------------------
             cd /opt/zyxf/frontend
-            export PATH="/www/server/nodejs/v24.20.0/bin:$PATH"
-            npm config set registry https://registry.npmmirror.com
             npm install --no-audit --no-fund
 
-            # vite build 会先清空 dist/，但宝塔生成的 dist/.user.ini 带 `i`
-            # 不可变位（immutable），连 root 直接 rm 都报 EPERM。必须先 chattr -i
-            # 解锁再删，否则 build 在 emptyDir 阶段失败。
+            # vite build 会先清空 dist/，若残留带 immutable 位的 .user.ini
+            # 会导致 emptyDir 阶段 EPERM，先解锁删除再构建。
             if [ -f /opt/zyxf/frontend/dist/.user.ini ]; then
               chattr -i /opt/zyxf/frontend/dist/.user.ini 2>/dev/null || true
               rm -f /opt/zyxf/frontend/dist/.user.ini || true
             fi
-
             npm run build
+
+            # 安装/更新 systemd 服务并重启后端（首次部署也会自举：enable + daemon-reload）。
+            cp /opt/zyxf/deploy/zyxf.service /etc/systemd/system/zyxf.service
+            systemctl daemon-reload
+            systemctl enable zyxf
+
+            # 先优雅停掉 systemd 旧实例，再清理仍占用 4000 的残留进程。
+            # 从宝塔/nohup 迁移到 systemd 的过渡期，旧后端可能不是 systemd 启动、
+            # 仍占着 4000，若不释放会让 systemd 起服务报 EADDRINUSE 反复重启失败。
+            # 按端口精确定位，避免 `pkill -f` 误杀本部署脚本自身。
+            systemctl stop zyxf 2>/dev/null || true
+            if command -v fuser >/dev/null 2>&1; then
+              fuser -k 4000/tcp 2>/dev/null || true
+            else
+              ss -tlnp 2>/dev/null | awk '/:4000 /{match($0, /pid=([0-9]+)/, m); if (m[1]) print m[1]}' | sort -u | xargs -r kill 2>/dev/null || true
+            fi
+            systemctl start zyxf
+
+            sleep 3
+            # 健康检查：确认后端起来（写库/加载环境变量失败会在此暴露）。
+            curl -fsS http://127.0.0.1:4000/api/health

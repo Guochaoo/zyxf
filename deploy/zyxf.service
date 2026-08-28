@@ -1,0 +1,16 @@
+[Unit]
+Description=zyxf backend (Express, Node 24)
+After=network.target
+
+[Service]
+Type=simple
+User=www
+WorkingDirectory=/opt/zyxf/backend
+# 生产安全校验（index.js 依赖 NODE_ENV=production 才会强制 JWT_SECRET / ADMIN_PASSWORD 强度）
+Environment=NODE_ENV=production
+ExecStart=/www/server/nodejs/v24.20.0/bin/node src/index.js
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
