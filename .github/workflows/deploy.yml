@@ -37,10 +37,6 @@ jobs:
             cd /opt/zyxf/backend
             # 用宝塔安装的 Node 24（避免 fallback 到系统旧 Node 12）
             export PATH="/www/server/nodejs/v24.20.0/bin:$PATH"
-            # better-sqlite3 从 npmmirror 拉预编译二进制（绕开 GitHub），
-            # 必须以环境变量形式传入（不能 `npm config set better_sqlite3_binary_host`，
-            # 那不是合法的 npm option，会导致报错退出）。
-            export npm_config_better_sqlite3_binary_host=https://registry.npmmirror.com/-/binary/better-sqlite3
             npm config set registry https://registry.npmmirror.com
             npm install --no-audit --no-fund
 

@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import bcrypt from 'bcryptjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,9 +9,9 @@ const dbPath =
     ? ':memory:'
     : path.resolve(process.env.DB_PATH || path.join(__dirname, '..', 'data.db'));
 
-export const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+export const db = new DatabaseSync(dbPath);
+db.exec('PRAGMA journal_mode = WAL');
+db.exec('PRAGMA foreign_keys = ON');
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
@@ -92,4 +92,21 @@ export function ensureAdmin(username, password) {
     'INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)'
   ).run(username, hash, 'admin', Date.now());
   console.log(`[db] created default admin user: ${username}`);
+}
+
+// node:sqlite has no `db.transaction()`; wrap a synchronous fn in
+// BEGIN/COMMIT/ROLLBACK and keep the call-return-later shape routes rely on
+// (`const tx = transaction(() => ...); tx();`).
+export function transaction(fn) {
+  return (...args) => {
+    db.exec('BEGIN');
+    try {
+      const result = fn(...args);
+      db.exec('COMMIT');
+      return result;
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  };
 }
