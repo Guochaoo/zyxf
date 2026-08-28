@@ -20,11 +20,34 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || '22' }}
+          # 给拉取 + 构建留足时间：曾出现基础镜像在 docker.io 上停滞导致默认 10m 超时。
+          command_timeout: 30m
           script: |
             cd /opt/zyxf
             git config --global --add safe.directory /opt/zyxf
             mkdir -p ~/.ssh
             ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
             git pull origin main
+
+            # 预先拉取基础镜像并带重试。之前失败是 `docker compose build` 拉取
+            # node:24-slim 的一个 layer 在 docker.io 上停滞，10 分钟命令超时被切断。
+            # 这里用 timeout 限定单次尝试，停滞时杀掉进程重连重试，避免卡死整个构建
+            # 步骤；镜像入缓存后后续 build 不再触网。
+            pull_with_retry() {
+              img="$1"
+              for i in 1 2 3; do
+                echo "== docker pull ${img} (attempt ${i}/3) =="
+                timeout 300 docker pull "$img" && return 0
+                echo "   pull ${img} attempt ${i} failed, retrying in 10s..."
+                sleep 10
+              done
+              echo "ERROR: failed to pull ${img}" >&2
+              return 1
+            }
+
+            pull_with_retry node:24-slim
+            pull_with_retry node:24-alpine
+            pull_with_retry nginx:1.27-alpine
+
             docker compose up -d --build --remove-orphans
             docker image prune -f
