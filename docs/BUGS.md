@@ -6,7 +6,7 @@
 
 ```yaml
 updated: 2026-08-27
-entries: 18
+entries: 20
 severity_levels:
   critical: 明确功能错误或崩溃风险，优先修复
   medium:   性能退化或逻辑隐患
@@ -48,6 +48,16 @@ severity_levels:
 - **修法**：分离编码器，签名用 `%20`、表单体用 `+`。
 - **验证**：需与阿里云联调验证（本机无法运行外部服务确认）。
 - **备注**：需联调后再改。
+
+### BUG-19 deploy workflow 使用可变 tag 的第三方 Action（供应链风险）
+`id: BUG-19` · `severity: critical` · `status: - [ ]` · `layer: ci` · `component: deploy-workflow`
+`files: [.github/workflows/deploy.yml]`
+
+- **现象**：部署流程使用 `appleboy/ssh-action@v1` 可变 tag。
+- **根因**：第三方 Action 未固定到不可变 commit SHA，存在上游 tag 被篡改/重定向风险。
+- **影响**：一旦供应链被劫持，攻击者可在 CI 中执行任意代码并窃取部署密钥，进一步接管目标主机。
+- **修法**：将第三方 Action 固定为 `@<full_commit_sha>`，并启用依赖机器人定期更新 SHA。
+- **验证**：workflow 仍可正常执行，且所有第三方 Action 均为 SHA 固定引用。
 
 ---
 
@@ -103,6 +113,16 @@ severity_levels:
 - **影响**：同步周期随数据量增长变慢。
 - **修法**：ext 修正改为批量（临时表 + 分组删除）；清理时用临时表缓存匹配段。
 - **验证**：对比不同数据量下 sync 的耗时与 DELETE 语句条数。
+
+### BUG-20 /api/chat 允许用户控制上游 baseUrl（SSRF）
+`id: BUG-20` · `severity: medium` · `status: - [ ]` · `layer: backend` · `component: llm-proxy`
+`files: [backend/src/routes/chat.js, backend/src/llm.js]`
+
+- **现象**：`/api/chat` 可接收并透传用户提供的 `llm.baseUrl`，后端直接向该地址发起请求。
+- **根因**：服务端仅校验协议/长度，未限制 host/IP/网段，也未做上游 allowlist。
+- **影响**：可被用于 SSRF（探测/访问内网、回环、链路本地或云元数据地址）。
+- **修法**：禁止客户端自定义任意 `baseUrl`，改为服务端固定上游或严格 allowlist，并拦截内网/回环地址。
+- **验证**：对内网与元数据地址请求被拒绝；合法上游请求正常返回。
 
 ---
 
@@ -217,9 +237,9 @@ severity_levels:
 
 | 等级 | 总数 | 未修 | 已修 |
 |---|---|---|---|
-| critical | 3 | 3 | 0 |
-| medium | 5 | 3 | 2 |
+| critical | 4 | 4 | 0 |
+| medium | 6 | 4 | 2 |
 | low | 10 | 9 | 1 |
-| 合计 | 18 | 15 | 3 |
+| 合计 | 20 | 17 | 3 |
 
 > 命名约定：`BUG-` + 两位序号，按严重程度分组（非按发现顺序）。修复后把对应 `- [ ]` 改为 `- [x]` 并在 status 行追加 `closed: yyyy-mm-dd`。
