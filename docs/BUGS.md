@@ -8,17 +8,17 @@
 updated: 2026-08-28
 entries: 20
 severity_levels:
-  critical: 明确功能错误或崩溃风险，优先修复
-  medium:   性能退化或逻辑隐患
-  low:      健壮性、规范、边缘 case
+  P0: 明确功能错误或崩溃风险，优先修复
+  P1: 性能退化或逻辑隐患
+  P2: 健壮性、规范、边缘 case
 ```
 
 ---
 
-## critical 严重
+## P0 严重
 
 ### BUG-01 上传进度条永远不动，文件卡在「上传中」
-`id: BUG-01` · `severity: critical` · `status: - [x] · closed: 2026-08-28` · `layer: frontend` · `component: UploadDialog`
+`id: BUG-01` · `severity: P0` · `status: - [x] · closed: 2026-08-28` · `layer: frontend` · `component: UploadDialog`
 `files: [frontend/src/components/UploadDialog.jsx]`
 
 - **现象**：文件实际上传成功，但进度条始终停在 0，状态一直显示「上传中」。
@@ -29,7 +29,7 @@ severity_levels:
 - **备注**：修复会改变画面行为（进度条开始走动）。当前「不动」反而不符合预期，需确认后改。
 
 ### BUG-02 Express 4 异步路由不捕获 Promise 拒绝（后端崩溃风险）
-`id: BUG-02` · `severity: critical` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: express-async-handler`
+`id: BUG-02` · `severity: P0` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: express-async-handler`
 `files: [backend/src/routes/files.js, backend/src/routes/folders.js]`
 
 - **现象**：`PATCH` / 部分 `POST` 处理器为 `async` 但无 try/catch。OSS/DB 调用出错时抛 `unhandledRejection`。
@@ -39,7 +39,7 @@ severity_levels:
 - **验证**：模拟一次 OSS 调用失败，确认返回 500 而非进程退出。
 
 ### BUG-03 文件名/键含空格时，IMM 预览 token 签名错误
-`id: BUG-03` · `severity: critical` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: imm-signature`
+`id: BUG-03` · `severity: P0` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: imm-signature`
 `files: [backend/src/imm.js]`
 
 - **现象**：文件名或 `oss_key` 含空格时，IMM 预览 token 生成失败。
@@ -50,7 +50,7 @@ severity_levels:
 - **备注**：需联调后再改。
 
 ### BUG-19 deploy workflow 使用可变 tag 的第三方 Action（供应链风险）
-`id: BUG-19` · `severity: critical` · `status: - [x] · closed: 2026-08-28` · `layer: ci` · `component: deploy-workflow`
+`id: BUG-19` · `severity: P0` · `status: - [x] · closed: 2026-08-28` · `layer: ci` · `component: deploy-workflow`
 `files: [.github/workflows/deploy.yml]`
 
 - **现象**：部署流程使用 `appleboy/ssh-action@v1` 可变 tag。
@@ -61,10 +61,10 @@ severity_levels:
 
 ---
 
-## medium 中等
+## P1 中等
 
 ### BUG-04 知识图谱每次导航都全量重建并重新布局
-`id: BUG-04` · `severity: medium` · `status: - [x] · closed: 2026-08-27` · `layer: frontend` · `component: KnowledgeGraph`
+`id: BUG-04` · `severity: P1` · `status: - [x] · closed: 2026-08-27` · `layer: frontend` · `component: KnowledgeGraph`
 `files: [frontend/src/components/KnowledgeGraph.jsx]`
 
 - **现象**：每次切换文件夹导航时整库重建并重新布局。
@@ -74,7 +74,7 @@ severity_levels:
 - **验证**：切换文件夹时性能不再随全库规模退化（已在 A 类修复处理）。
 
 ### BUG-05 快速输入时搜索结果可能被过期响应覆盖
-`id: BUG-05` · `severity: medium` · `status: - [x] · closed: 2026-08-27` · `layer: frontend` · `component: SearchBar`
+`id: BUG-05` · `severity: P1` · `status: - [x] · closed: 2026-08-27` · `layer: frontend` · `component: SearchBar`
 `files: [frontend/src/components/SearchBar.jsx]`
 
 - **现象**：快速输入时搜索结果可能被过期响应覆盖，加载状态闪烁。
@@ -84,7 +84,7 @@ severity_levels:
 - **验证**：快速键入并发大量请求，确认最终展示为最新查询结果（已在 A 类修复处理）。
 
 ### BUG-06 批量/树接口 N+1 查询（后端多次往返）
-`id: BUG-06` · `severity: medium` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: folders-n+1`
+`id: BUG-06` · `severity: P1` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: folders-n+1`
 `files: [backend/src/routes/folders.js]`
 
 - **现象**：`collectFolderTree`（约 74–88 行）与 `/tree`（约 164–187 行）每个节点做 2 次数据库查询。
@@ -94,7 +94,7 @@ severity_levels:
 - **验证**：用大目录树对比优化前后的查询次数与耗时。
 
 ### BUG-07 智能搜索每次输入全库扫描
-`id: BUG-07` · `severity: medium` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: searchService`
+`id: BUG-07` · `severity: P1` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: searchService`
 `files: [backend/src/routes/searchService.js]`
 
 - **现象**：每次查询/每次 AI 工具调用都加载全库 folders+files 再 `buildFolderPaths`。
@@ -105,7 +105,7 @@ severity_levels:
 - **备注**：需权衡排序行为后再处理。
 
 ### BUG-08 sync 全量扫描 + 逐行删除
-`id: BUG-08` · `severity: medium` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: sync`
+`id: BUG-08` · `severity: P1` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: sync`
 `files: [backend/src/routes/sync.js]`
 
 - **现象**：`fixExt` 每个同步周期全表扫描；清理清空对象时逐行 `DELETE`（可能触及 Sqlite 999 参数上限）。
@@ -115,7 +115,7 @@ severity_levels:
 - **验证**：对比不同数据量下 sync 的耗时与 DELETE 语句条数。
 
 ### BUG-20 /api/chat 允许用户控制上游 baseUrl（SSRF）
-`id: BUG-20` · `severity: medium` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: llm-proxy`
+`id: BUG-20` · `severity: P1` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: llm-proxy`
 `files: [backend/src/routes/chat.js, backend/src/llm.js]`
 
 - **现象**：`/api/chat` 可接收并透传用户提供的 `llm.baseUrl`，后端直接向该地址发起请求。
@@ -126,10 +126,10 @@ severity_levels:
 
 ---
 
-## low 轻微
+## P2 轻微
 
 ### BUG-09 chat 在响应头已发送后才构建系统 Prompt
-`id: BUG-09` · `severity: low` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: chat-stream`
+`id: BUG-09` · `severity: P2` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: chat-stream`
 `files: [backend/src/routes/chat.js]`
 
 - **现象**：`res.writeHead(200,...)` 之后才调用会查库的 `buildSystemPrompt()`，且不在内部 try 内。
@@ -139,7 +139,7 @@ severity_levels:
 - **验证**：模拟 Prompt 构建查库失败，确认不再出现 headers-already-sent。
 
 ### BUG-10 搜索 PATH_PENALTY 与其注释矛盾（排序行为）
-`id: BUG-10` · `severity: low` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: searchRanking`
+`id: BUG-10` · `severity: P2` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: searchRanking`
 `files: [backend/src/routes/searchService.js]`
 
 - **现象**：`PATH_PENALTY=10` 使路径前缀(90) 排到名称子串(80) 之前，与其注释「name-direct 总是领先」矛盾。
@@ -150,7 +150,7 @@ severity_levels:
 - **备注**：修复会改变搜索结果排序，属行为变更，需评审确认。
 
 ### BUG-11 文件名/路径含 `/` 与 `-` 导致 OSS key 冲突
-`id: BUG-11` · `severity: low` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: storagePath`
+`id: BUG-11` · `severity: P2` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: storagePath`
 `files: [backend/src/storagePath.js, backend/src/routes/folders.js]`
 
 - **现象**：文件夹名 `a/b` 与 `a-b` 生成相同 OSS key；`relocateFolderSubtree` 只校验文件 key 不校验占位符 key。
@@ -160,7 +160,7 @@ severity_levels:
 - **验证**：用例 `a/b` 与 `a-b` 确认不再生成相同 key。
 
 ### BUG-12 llm 在已输出文本后仍抛错 / 截断的 tool_call 被当作完整
-`id: BUG-12` · `severity: low` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: llm-stream`
+`id: BUG-12` · `severity: P2` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: llm-stream`
 `files: [backend/src/llm.js]`
 
 - **现象**：流式中途断连时即便已输出若干文本仍抛错（与注释矛盾）；被截断的 `tool_calls` 被当作完整结果透传。
@@ -170,7 +170,7 @@ severity_levels:
 - **验证**：模拟中途断流，确认不再误报错误、截断 tool_call 被丢弃。
 
 ### BUG-13 IMM RPC 请求无超时
-`id: BUG-13` · `severity: low` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: imm-rpc`
+`id: BUG-13` · `severity: P2` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: imm-rpc`
 `files: [backend/src/imm.js]`
 
 - **现象**：`fetch`（约 63–67 行）无超时，外部服务挂起时请求槽与 socket 被长期占用。
@@ -181,7 +181,7 @@ severity_levels:
 - **备注**：仅改变当前会挂死的场景。
 
 ### BUG-14 GROUP BY ext 依赖 SQLite 别名遮蔽（脆弱）
-`id: BUG-14` · `severity: low` · `status: - [x] · closed: 2026-08-27` · `layer: backend` · `component: stats-groupby`
+`id: BUG-14` · `severity: P2` · `status: - [x] · closed: 2026-08-27` · `layer: backend` · `component: stats-groupby`
 `files: [backend/src/routes/stats.js]`
 
 - **现象**：`SELECT ... AS ext ... GROUP BY ext` 依赖 SQLite 别名遮蔽，未来版本或迁移后可能不再成立。
@@ -191,7 +191,7 @@ severity_levels:
 - **验证**：运行 stats 用例确认分组结果一致（已在 A 类修复处理）。
 
 ### BUG-15 top_downloads 统计在重命名/删除后行不准
-`id: BUG-15` · `severity: low` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: stats-top-downloads`
+`id: BUG-15` · `severity: P2` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: stats-top-downloads`
 `files: [backend/src/routes/stats.js]`
 
 - **现象**：`GROUP BY dl.file_id, dl.file_name` —— 窗口内文件被重命名出现重复行，文件删除后该行元数据为 null。
@@ -202,7 +202,7 @@ severity_levels:
 - **备注**：修改分组会改变返回载荷，需评审确认。
 
 ### BUG-16 搜索把 parent_id = 0 当作根（死分支）
-`id: BUG-16` · `severity: low` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: root-sentinel`
+`id: BUG-16` · `severity: P2` · `status: - [x] · closed: 2026-08-28` · `layer: backend` · `component: root-sentinel`
 `files: [backend/src/routes/searchService.js, backend/src/routes/folders.js]`
 
 - **现象**：`WHERE parent_id IS NULL OR parent_id = 0`。Schema 用 `NULL` 表示根，`=0` 正常匹配不到任何行；一旦存在历史脏数据 `parent_id=0`，`top_folders` 会漏掉其子树。
@@ -212,7 +212,7 @@ severity_levels:
 - **验证**：确认 `parent_id=0` 的脏数据也能被正确统计。
 
 ### BUG-17 图标按钮缺 aria-label / type
-`id: BUG-17` · `severity: low` · `status: - [x] · closed: 2026-08-28` · `layer: frontend` · `component: accessibility`
+`id: BUG-17` · `severity: P2` · `status: - [x] · closed: 2026-08-28` · `layer: frontend` · `component: accessibility`
 `files: [frontend/src/components/UploadDialog.jsx, frontend/src/components/SearchBar.jsx]`
 
 - **现象**：部分 icon-only 按钮未设置 `aria-label` 或未显式 `type="button"`。
@@ -222,7 +222,7 @@ severity_levels:
 - **验证**：用读屏或检查 DOM，确认按钮有可访问名称。
 
 ### BUG-18 sizeChip 命名不符合 React 组件约定
-`id: BUG-18` · `severity: low` · `status: - [x] · closed: 2026-08-28` · `layer: frontend` · `component: naming`
+`id: BUG-18` · `severity: P2` · `status: - [x] · closed: 2026-08-28` · `layer: frontend` · `component: naming`
 `files: [frontend/src/pages/BrowsePage.jsx]`
 
 - **现象**：`sizeChip`（约 728 行）小写驼峰命名、返回 JSX，而 React 组件惯例为 PascalCase。
@@ -237,9 +237,9 @@ severity_levels:
 
 | 等级 | 总数 | 未修 | 已修 |
 |---|---|---|---|
-| critical | 4 | 0 | 4 |
-| medium | 6 | 0 | 6 |
-| low | 10 | 0 | 10 |
+| P0 | 4 | 0 | 4 |
+| P1 | 6 | 0 | 6 |
+| P2 | 10 | 0 | 10 |
 | 合计 | 20 | 0 | 20 |
 
 > 命名约定：`BUG-` + 两位序号，按严重程度分组（非按发现顺序）。修复后把对应 `- [ ]` 改为 `- [x]` 并在 status 行追加 `closed: yyyy-mm-dd`。
@@ -252,23 +252,23 @@ severity_levels:
 
 | 编号 | 严重度 | 标题 | 修复位置 | 关闭日期 |
 |---|---|---|---|---|
-| BUG-01 | critical | 上传进度条永远不动，文件卡在「上传中」 | `frontend/src/components/UploadDialog.jsx` | 2026-08-28 |
-| BUG-02 | critical | Express 4 异步路由不捕获 Promise 拒绝（后端崩溃风险） | `backend/src/routes/files.js`, `backend/src/routes/folders.js` | 2026-08-28 |
-| BUG-03 | critical | 文件名/键含空格时，IMM 预览 token 签名错误 | `backend/src/imm.js` | 2026-08-28 |
-| BUG-04 | medium | 知识图谱每次导航都全量重建并重新布局 | `frontend/src/components/KnowledgeGraph.jsx` | 2026-08-27 |
-| BUG-05 | medium | 快速输入时搜索结果可能被过期响应覆盖 | `frontend/src/components/SearchBar.jsx` | 2026-08-27 |
-| BUG-06 | medium | 批量/树接口 N+1 查询（后端多次往返） | `backend/src/routes/folders.js` | 2026-08-28 |
-| BUG-07 | medium | 智能搜索每次输入全库扫描 | `backend/src/searchService.js` | 2026-08-28 |
-| BUG-08 | medium | sync 全量扫描 + 逐行删除 | `backend/src/routes/sync.js` | 2026-08-28 |
-| BUG-09 | low | chat 在响应头已发送后才构建系统 Prompt | `backend/src/routes/chat.js` | 2026-08-28 |
-| BUG-10 | low | 搜索 PATH_PENALTY 与其注释矛盾（排序行为） | `backend/src/searchService.js` | 2026-08-28 |
-| BUG-11 | low | 文件名/路径含 `/` 与 `-` 导致 OSS key 冲突 | `backend/src/routes/folders.js` | 2026-08-28 |
-| BUG-12 | low | llm 在已输出文本后仍抛错 / 截断的 tool_call 被当作完整 | `backend/src/llm.js` | 2026-08-28 |
-| BUG-13 | low | IMM RPC 请求无超时 | `backend/src/imm.js` | 2026-08-28 |
-| BUG-14 | low | GROUP BY ext 依赖 SQLite 别名遮蔽（脆弱） | `backend/src/routes/stats.js` | 2026-08-27 |
-| BUG-15 | low | top_downloads 统计在重命名/删除后行不准 | `backend/src/routes/stats.js` | 2026-08-28 |
-| BUG-16 | low | 搜索把 parent_id = 0 当作根（死分支） | `backend/src/searchService.js`, `backend/src/routes/folders.js` | 2026-08-28 |
-| BUG-17 | low | 图标按钮缺 aria-label / type | `frontend/src/components/UploadDialog.jsx`, `frontend/src/components/SearchBar.jsx` | 2026-08-28 |
-| BUG-18 | low | sizeChip 命名不符合 React 组件约定 | `frontend/src/pages/BrowsePage.jsx` | 2026-08-28 |
-| BUG-19 | critical | deploy workflow 使用可变 tag 的第三方 Action（供应链风险） | `.github/workflows/deploy.yml` | 2026-08-28 |
-| BUG-20 | medium | /api/chat 允许用户控制上游 baseUrl（SSRF） | `backend/src/routes/chat.js`, `backend/src/llm.js` | 2026-08-28 |
+| BUG-01 | P0 | 上传进度条永远不动，文件卡在「上传中」 | `frontend/src/components/UploadDialog.jsx` | 2026-08-28 |
+| BUG-02 | P0 | Express 4 异步路由不捕获 Promise 拒绝（后端崩溃风险） | `backend/src/routes/files.js`, `backend/src/routes/folders.js` | 2026-08-28 |
+| BUG-03 | P0 | 文件名/键含空格时，IMM 预览 token 签名错误 | `backend/src/imm.js` | 2026-08-28 |
+| BUG-04 | P1 | 知识图谱每次导航都全量重建并重新布局 | `frontend/src/components/KnowledgeGraph.jsx` | 2026-08-27 |
+| BUG-05 | P1 | 快速输入时搜索结果可能被过期响应覆盖 | `frontend/src/components/SearchBar.jsx` | 2026-08-27 |
+| BUG-06 | P1 | 批量/树接口 N+1 查询（后端多次往返） | `backend/src/routes/folders.js` | 2026-08-28 |
+| BUG-07 | P1 | 智能搜索每次输入全库扫描 | `backend/src/searchService.js` | 2026-08-28 |
+| BUG-08 | P1 | sync 全量扫描 + 逐行删除 | `backend/src/routes/sync.js` | 2026-08-28 |
+| BUG-09 | P2 | chat 在响应头已发送后才构建系统 Prompt | `backend/src/routes/chat.js` | 2026-08-28 |
+| BUG-10 | P2 | 搜索 PATH_PENALTY 与其注释矛盾（排序行为） | `backend/src/searchService.js` | 2026-08-28 |
+| BUG-11 | P2 | 文件名/路径含 `/` 与 `-` 导致 OSS key 冲突 | `backend/src/routes/folders.js` | 2026-08-28 |
+| BUG-12 | P2 | llm 在已输出文本后仍抛错 / 截断的 tool_call 被当作完整 | `backend/src/llm.js` | 2026-08-28 |
+| BUG-13 | P2 | IMM RPC 请求无超时 | `backend/src/imm.js` | 2026-08-28 |
+| BUG-14 | P2 | GROUP BY ext 依赖 SQLite 别名遮蔽（脆弱） | `backend/src/routes/stats.js` | 2026-08-27 |
+| BUG-15 | P2 | top_downloads 统计在重命名/删除后行不准 | `backend/src/routes/stats.js` | 2026-08-28 |
+| BUG-16 | P2 | 搜索把 parent_id = 0 当作根（死分支） | `backend/src/searchService.js`, `backend/src/routes/folders.js` | 2026-08-28 |
+| BUG-17 | P2 | 图标按钮缺 aria-label / type | `frontend/src/components/UploadDialog.jsx`, `frontend/src/components/SearchBar.jsx` | 2026-08-28 |
+| BUG-18 | P2 | sizeChip 命名不符合 React 组件约定 | `frontend/src/pages/BrowsePage.jsx` | 2026-08-28 |
+| BUG-19 | P0 | deploy workflow 使用可变 tag 的第三方 Action（供应链风险） | `.github/workflows/deploy.yml` | 2026-08-28 |
+| BUG-20 | P1 | /api/chat 允许用户控制上游 baseUrl（SSRF） | `backend/src/routes/chat.js`, `backend/src/llm.js` | 2026-08-28 |
