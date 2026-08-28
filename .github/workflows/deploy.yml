@@ -58,7 +58,11 @@ jobs:
             fi
             sleep 1
             # 以 www 用户从 backend 目录后台启动，日志写入 run.log。
-            su -s /bin/bash www -c "cd /opt/zyxf/backend && nohup node src/index.js >> run.log 2>&1 &"
+            # 必须用 Node 24 的绝对路径：`su` 切换用户后 PATH 是系统默认
+            # （/usr/bin/node = v12），跑 express-rate-limit/helmet 等现代包会
+            # 抛 SyntaxError（`?.`/`??` 语法），导致后端起不来。手动验证过，
+            # 用 v24 绝对路径启动后端可正常返回 /api/health。
+            su -s /bin/bash www -c "cd /opt/zyxf/backend && nohup /www/server/nodejs/v24.20.0/bin/node src/index.js >> run.log 2>&1 &"
             sleep 3
             # 健康检查：确认后端起来（写库/加载环境变量失败会在此暴露）。
             curl -fsS http://127.0.0.1:4000/api/health
