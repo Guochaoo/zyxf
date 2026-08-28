@@ -56,6 +56,18 @@
   display: flex;
   flex-direction: column;
   gap: 13px;
+  /* 与文件树（.rb-side-scroll）相同的底部渐隐：列表滚动到底部时内容溶解进
+     卡片背景，而不是硬切。最后 16px 透明过渡。 */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
 }
 
 .notice-item {

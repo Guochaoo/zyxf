@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Route, Routes, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useAuth } from './auth.jsx';
 import BrowsePage from './pages/BrowsePage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
@@ -20,6 +21,12 @@ export default function App() {
   const isLg = useMediaQuery('(min-width: 1024px)');
   // Hide the floating menu button while the knowledge-graph dialog is open.
   const [graphFull, setGraphFull] = useState(false);
+  // Collapsible left rail (docs layout) on wide screens. Defaults open.
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // 侧边栏开合的缓动曲线与时长（与 ChatComposer/KnowledgeGraph 的收缩动画一致）。
+  const SIDEBAR_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+  const SIDEBAR_MS = 320;
 
   // Docs layout: brand + search + folder tree live in the left rail, which
   // appears on browse routes only. Other pages are standalone.
@@ -57,11 +64,31 @@ export default function App() {
     </Link>
   );
 
+  // 资料库标题行右侧的侧边栏开关按钮。展开时常驻侧边栏内（显示 PanelLeftClose，
+  // 点击收起）；收起时由左上角浮动按钮接管（显示 PanelLeftOpen，点击展开）。
+  // 图标刻意做细（1.7 线宽、18px），颜色偏浅，避免显得粗重。
+  const sidebarToggle = (className) => (
+    <button
+      type="button"
+      onClick={() => setSidebarOpen((v) => !v)}
+      aria-label={sidebarOpen ? '收起侧边栏' : '展开侧边栏'}
+      aria-pressed={sidebarOpen}
+      title={sidebarOpen ? '收起侧边栏' : '展开侧边栏'}
+      className={`flex items-center justify-center rounded-[7px] text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700 ${className}`}
+    >
+      <PanelLeftClose className="h-[18px] w-[18px]" strokeWidth={1.7} />
+    </button>
+  );
+
   // Middle-column layout: browse routes flank the fixed rails; dashboard &
   // about fill the viewport width; everything else is a centered column.
   let mainLayout;
   if (isBrowse) {
-    mainLayout = 'w-full lg:pl-[calc(250px+1rem)] lg:pr-[calc(300px+1rem)]';
+    // Left rail padding collapses with a smooth transition when the sidebar
+    // is toggled off, matching the rail's transform easing.
+    mainLayout = `w-full ${
+      sidebarOpen ? 'lg:pl-[calc(250px+1rem)]' : 'lg:pl-0'
+    } lg:pr-[calc(300px+1rem)] lg:transition-[padding] lg:duration-[${SIDEBAR_MS}ms] lg:ease-[${SIDEBAR_EASE}]`;
   } else if (location.pathname === '/dashboard' || location.pathname === '/about') {
     mainLayout = 'mx-auto w-full';
   } else {
@@ -94,16 +121,47 @@ export default function App() {
       {/* Docs layout: three columns on wide screens.
           Left rail = folder tree, right column = knowledge graph. Both are
           position:fixed to the viewport edges so they never move while the
-          page scrolls (sticky rails drift at scroll extremes). */}
+          page scrolls (sticky rails drift at scroll extremes).
+          开合用 transform:translateX 滑入/滑出（非线性缓动），而非瞬间显隐。 */}
       {isBrowse && (
-        <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-10 lg:flex lg:w-[250px] lg:flex-col lg:gap-4 lg:overflow-hidden lg:bg-[#ECECEE] lg:px-4 lg:pt-[11px]">
+        <div
+          className={`hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-10 lg:flex lg:flex-col lg:gap-4 lg:overflow-hidden lg:bg-[#ECECEE] lg:px-4 lg:pt-[11px] lg:w-[250px] ${
+            sidebarOpen ? 'lg:translate-x-0' : 'lg:-translate-x-full'
+          } transition-transform lg:duration-[${SIDEBAR_MS}ms] lg:ease-[${SIDEBAR_EASE}] will-change-transform ${
+            sidebarOpen ? 'lg:pointer-events-auto' : 'lg:pointer-events-none'
+          }`}
+        >
           {/* 34px-high row keeps the brand aligned with the middle toolbar (41px center). */}
-          <div className="flex h-[34px] items-center">
+          <div className="flex h-[34px] items-center justify-between gap-2">
             {brand}
+            <span
+              className={`transition-opacity duration-[${SIDEBAR_MS}ms] ease-[${SIDEBAR_EASE}] ${
+                sidebarOpen ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              {sidebarToggle('shrink-0 h-7 w-7')}
+            </span>
           </div>
           <SearchBar />
           <FolderTree currentId={folderId} />
         </div>
+      )}
+      {/* 折叠后，左上角浮现一个固定的「展开侧边栏」按钮；展开时它淡出消失，
+          避免与侧边栏内的收起按钮同时出现。 */}
+      {isBrowse && (
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          aria-label="展开侧边栏"
+          title="展开侧边栏"
+          aria-hidden={sidebarOpen}
+          tabIndex={sidebarOpen ? -1 : 0}
+          className={`fixed left-[18px] top-[13px] z-20 hidden lg:flex h-7 w-7 items-center justify-center rounded-[7px] text-slate-400 transition-all duration-[${SIDEBAR_MS}ms] ease-[${SIDEBAR_EASE}] hover:bg-slate-100 hover:text-slate-700 ${
+            sidebarOpen ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'
+          }`}
+        >
+          <PanelLeftOpen className="h-[18px] w-[18px]" strokeWidth={1.7} />
+        </button>
       )}
       <main
         className={`min-w-0 overflow-x-hidden ${
