@@ -39,24 +39,50 @@ jobs:
             # 二者互为兜底。仅在首次写入时重启一次 docker，幂等。
             MIRROR="https://k0sdnixc.mirror.aliyuncs.com"
             DAEMON=/etc/docker/daemon.json
-            if [ "$(id -u)" = "0" ] && command -v docker >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+            if [ "$(id -u)" = "0" ] && command -v docker >/dev/null 2>&1; then
               mkdir -p /etc/docker
-              # 确保文件存在且为合法 JSON；否则重置为 {}
-              if [ ! -f "$DAEMON" ] || ! jq -e . "$DAEMON" >/dev/null 2>&1; then
-                echo '{}' > "$DAEMON"
-              fi
-              # 幂等：已含 MIRROR 则跳过；否则插入并重启 docker（仅在真正改动时重启一次）
-              if jq -e --arg m "$MIRROR" '."registry-mirrors" // [] | index($m)' "$DAEMON" >/dev/null 2>&1; then
-                echo "镜像加速器 $MIRROR 已配置，跳过"
+              CHANGED=0
+              if command -v python3 >/dev/null 2>&1; then
+                # python3 幂等写入；有实际改动时输出 "changed" 供 shell 判定
+                if python3 - "$MIRROR" "$DAEMON" <<'PY' | grep -q changed
+import json, os, sys
+mirror, daemon = sys.argv[1], sys.argv[2]
+cfg = {}
+try:
+    with open(daemon) as f:
+        cfg = json.load(f)
+except Exception:
+    cfg = {}
+mirrors = cfg.get("registry-mirrors")
+if isinstance(mirrors, list) and mirror in mirrors:
+    sys.exit(0)                      # 已配置，无改动
+if not isinstance(mirrors, list):
+    mirrors = []
+cfg["registry-mirrors"] = [mirror] + [m for m in mirrors if m != mirror]
+with open(daemon, "w") as f:
+    json.dump(cfg, f, indent=2)
+print("changed")
+PY
+                then CHANGED=1; fi
+              elif command -v jq >/dev/null 2>&1; then
+                { [ ! -f "$DAEMON" ] || ! jq -e . "$DAEMON" >/dev/null 2>&1; } && echo '{}' > "$DAEMON"
+                if ! jq -e --arg m "$MIRROR" '."registry-mirrors" // [] | index($m)' "$DAEMON" >/dev/null 2>&1; then
+                  jq --arg m "$MIRROR" \
+                     '."registry-mirrors" = (([$m] + (."registry-mirrors" // [])) | unique)' \
+                     "$DAEMON" > "$DAEMON.tmp" && mv "$DAEMON.tmp" "$DAEMON"
+                  CHANGED=1
+                fi
               else
-                jq --arg m "$MIRROR" \
-                   '."registry-mirrors" = (([$m] + (."registry-mirrors" // [])) | unique)' \
-                   "$DAEMON" > "$DAEMON.tmp" && mv "$DAEMON.tmp" "$DAEMON"
+                echo "跳过加速器配置：python3/jq 均不可用" >&2
+              fi
+              if [ "$CHANGED" = "1" ]; then
                 systemctl restart docker || service docker restart || true
                 echo "已写入镜像加速器 $MIRROR 并重启 docker"
+              else
+                echo "镜像加速器 $MIRROR 已配置，跳过"
               fi
             else
-              echo "（跳过加速器配置：需 root 且已安装 docker 与 jq）"
+              echo "（跳过加速器配置：需 root 且已安装 docker）"
             fi
 
             # ----------------------------------------------------------------
