@@ -243,3 +243,32 @@ severity_levels:
 | 合计 | 20 | 0 | 20 |
 
 > 命名约定：`BUG-` + 两位序号，按严重程度分组（非按发现顺序）。修复后把对应 `- [ ]` 改为 `- [x]` 并在 status 行追加 `closed: yyyy-mm-dd`。
+
+---
+
+## 已修复 Bug 归档
+
+> 本清单按编号汇总所有已修复（`closed: 2026-08-28`）的 bug，供回溯查看修复位置与影响范围。
+
+| 编号 | 严重度 | 标题 | 修复位置 | 关闭日期 |
+|---|---|---|---|---|
+| BUG-01 | critical | 上传进度条永远不动，文件卡在「上传中」 | `frontend/src/components/UploadDialog.jsx` | 2026-08-28 |
+| BUG-02 | critical | Express 4 异步路由不捕获 Promise 拒绝（后端崩溃风险） | `backend/src/routes/files.js`, `backend/src/routes/folders.js` | 2026-08-28 |
+| BUG-03 | critical | 文件名/键含空格时，IMM 预览 token 签名错误 | `backend/src/imm.js` | 2026-08-28 |
+| BUG-04 | medium | 知识图谱每次导航都全量重建并重新布局 | `frontend/src/components/KnowledgeGraph.jsx` | 2026-08-27 |
+| BUG-05 | medium | 快速输入时搜索结果可能被过期响应覆盖 | `frontend/src/components/SearchBar.jsx` | 2026-08-27 |
+| BUG-06 | medium | 批量/树接口 N+1 查询（后端多次往返） | `backend/src/routes/folders.js` | 2026-08-28 |
+| BUG-07 | medium | 智能搜索每次输入全库扫描 | `backend/src/searchService.js` | 2026-08-28 |
+| BUG-08 | medium | sync 全量扫描 + 逐行删除 | `backend/src/routes/sync.js` | 2026-08-28 |
+| BUG-09 | low | chat 在响应头已发送后才构建系统 Prompt | `backend/src/routes/chat.js` | 2026-08-28 |
+| BUG-10 | low | 搜索 PATH_PENALTY 与其注释矛盾（排序行为） | `backend/src/searchService.js` | 2026-08-28 |
+| BUG-11 | low | 文件名/路径含 `/` 与 `-` 导致 OSS key 冲突 | `backend/src/routes/folders.js` | 2026-08-28 |
+| BUG-12 | low | llm 在已输出文本后仍抛错 / 截断的 tool_call 被当作完整 | `backend/src/llm.js` | 2026-08-28 |
+| BUG-13 | low | IMM RPC 请求无超时 | `backend/src/imm.js` | 2026-08-28 |
+| BUG-14 | low | GROUP BY ext 依赖 SQLite 别名遮蔽（脆弱） | `backend/src/routes/stats.js` | 2026-08-27 |
+| BUG-15 | low | top_downloads 统计在重命名/删除后行不准 | `backend/src/routes/stats.js` | 2026-08-28 |
+| BUG-16 | low | 搜索把 parent_id = 0 当作根（死分支） | `backend/src/searchService.js`, `backend/src/routes/folders.js` | 2026-08-28 |
+| BUG-17 | low | 图标按钮缺 aria-label / type | `frontend/src/components/UploadDialog.jsx`, `frontend/src/components/SearchBar.jsx` | 2026-08-28 |
+| BUG-18 | low | sizeChip 命名不符合 React 组件约定 | `frontend/src/pages/BrowsePage.jsx` | 2026-08-28 |
+| BUG-19 | critical | deploy workflow 使用可变 tag 的第三方 Action（供应链风险） | `.github/workflows/deploy.yml` | 2026-08-28 |
+| BUG-20 | medium | /api/chat 允许用户控制上游 baseUrl（SSRF） | `backend/src/routes/chat.js`, `backend/src/llm.js` | 2026-08-28 |
