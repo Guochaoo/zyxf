@@ -1,10 +1,10 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import { nextSortOrder } from '../src/dbHelpers.js';
 
 function makeDb() {
-  const db = new Database(':memory:');
+  const db = new DatabaseSync(':memory:');
   db.exec(`
     CREATE TABLE folders (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, parent_id INTEGER, sort_order INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
     CREATE TABLE files (id INTEGER PRIMARY KEY AUTOINCREMENT, folder_id INTEGER, name TEXT NOT NULL, oss_key TEXT NOT NULL UNIQUE, size INTEGER NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
