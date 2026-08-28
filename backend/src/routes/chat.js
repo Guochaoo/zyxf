@@ -93,9 +93,11 @@ function runSearchTool(q, pool) {
 
 router.post('/', chatLimiterShort, chatLimiterLong, async (req, res, next) => {
   try {
-    // LLM 配置优先级：请求携带的客户端配置（前端设置面板）> 服务端 env；都没有则 503。
-    const clientConfig = resolveClientLlmConfig(req.body?.llm);
-    if (!clientConfig && !isLlmEnabled()) {
+    // BUG-20 SSRF：服务端 env（LLM_BASE_URL）已配置时只用服务端配置，完全忽略客户端传入的 baseUrl；
+    // 服务端未配置时才对前端浏览器端配置做严格校验（仅 https + 拒绝内网/回环/云元数据）。
+    const serverEnabled = isLlmEnabled();
+    const clientConfig = serverEnabled ? null : await resolveClientLlmConfig(req.body?.llm);
+    if (!clientConfig && !serverEnabled) {
       return res.status(503).json({ error: 'AI 功能未配置' });
     }
 
@@ -103,6 +105,11 @@ router.post('/', chatLimiterShort, chatLimiterLong, async (req, res, next) => {
     if (!history.length || history[history.length - 1].role !== 'user') {
       return res.status(400).json({ error: '缺少用户消息' });
     }
+
+    // BUG-09：在 writeHead 之前构建系统 Prompt（内部查库）并组装 messages，
+    // 查库失败时返回 JSON 错误而非「headers already sent」。
+    const systemPrompt = buildSystemPrompt();
+    const messages = [{ role: 'system', content: systemPrompt }, ...history];
 
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
@@ -115,8 +122,6 @@ router.post('/', chatLimiterShort, chatLimiterLong, async (req, res, next) => {
     const abort = new AbortController();
     req.on('close', () => abort.abort());
     const timer = setTimeout(() => abort.abort(), OVERALL_TIMEOUT_MS);
-
-    const messages = [{ role: 'system', content: buildSystemPrompt() }, ...history];
     const pool = []; // 检索结果编号池，与【文件N】一一对应
     let fullText = '';
 
