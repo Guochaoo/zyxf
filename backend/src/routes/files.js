@@ -48,6 +48,11 @@ setInterval(() => {
 
 const router = Router();
 
+// Express 4 does NOT await/catch rejected promises returned by async handlers;
+// an unhandled rejection would terminate the process (Node ≥ 15). Wrap every
+// async handler so a rejection is forwarded to the error middleware as a 500.
+const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
+
 // 415 message shared by upload validation and rename validation.
 const rejectedExtMessage = (ext) => `不允许的文件类型: ${ext ? '.' + ext : '(无扩展名)'}`;
 
@@ -166,7 +171,7 @@ router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => 
 // WebOffice preview token via IMM GenerateWebofficeToken. Works for
 // browser-uploaded ("externally uploaded") objects too — the JS-SDK renders
 // the returned WebofficeURL in the browser, mobile WebViews included.
-router.get('/:id/weboffice-token', downloadLimiterShort, downloadLimiterLong, async (req, res) => {
+router.get('/:id/weboffice-token', downloadLimiterShort, downloadLimiterLong, wrap(async (req, res) => {
   const file = getFileOr404(req, res);
   if (!file) return;
   const ext = normalizeExt(file.ext);
@@ -179,12 +184,12 @@ router.get('/:id/weboffice-token', downloadLimiterShort, downloadLimiterLong, as
     console.warn('[files] weboffice token failed:', e.message);
     res.status(502).json({ error: '预览服务暂不可用，请稍后再试' });
   }
-});
+}));
 
 // Refresh a WebOffice access token (30-min lifetime) with the refresh token
 // (1-day lifetime). The frontend JS-SDK calls this via its refreshToken
 // callback before the access token expires.
-router.post('/:id/weboffice-refresh', downloadLimiterShort, downloadLimiterLong, async (req, res) => {
+router.post('/:id/weboffice-refresh', downloadLimiterShort, downloadLimiterLong, wrap(async (req, res) => {
   const file = getFileOr404(req, res);
   if (!file) return;
   const { access_token, refresh_token } = req.body || {};
@@ -199,10 +204,10 @@ router.post('/:id/weboffice-refresh', downloadLimiterShort, downloadLimiterLong,
     // then regenerate a fresh session via weboffice-token.
     res.status(502).json({ error: '预览凭证刷新失败，请关闭后重新打开' });
   }
-});
+}));
 
 // Move or rename a file
-router.patch('/:id', requireAdmin, async (req, res) => {
+router.patch('/:id', requireAdmin, wrap(async (req, res, next) => {
   const file = getFileOr404(req, res);
   if (!file) return;
   const id = file.id;
@@ -224,16 +229,20 @@ router.patch('/:id', requireAdmin, async (req, res) => {
       return res.status(409).json({ error: '目标存储路径已存在同名文件' });
     }
 
-    const keyChanged = file.oss_key !== newKey;
-    if (keyChanged) await copyOssObject(file.oss_key, newKey);
-    db.prepare('UPDATE files SET name = ?, ext = ?, oss_key = ? WHERE id = ?').run(
-      newName,
-      ext || null,
-      newKey,
-      id
-    );
-    if (keyChanged) await deleteOssObjectIfExists(file.oss_key);
-    return res.json({ ok: true, name: newName, oss_key: newKey });
+    try {
+      const keyChanged = file.oss_key !== newKey;
+      if (keyChanged) await copyOssObject(file.oss_key, newKey);
+      db.prepare('UPDATE files SET name = ?, ext = ?, oss_key = ? WHERE id = ?').run(
+        newName,
+        ext || null,
+        newKey,
+        id
+      );
+      if (keyChanged) await deleteOssObjectIfExists(file.oss_key);
+      return res.json({ ok: true, name: newName, oss_key: newKey });
+    } catch (e) {
+      return next(e);
+    }
   }
 
   const target = parseOptionalFolderId(req.body?.folder_id);
@@ -246,20 +255,24 @@ router.patch('/:id', requireAdmin, async (req, res) => {
     return res.status(409).json({ error: '目标文件夹中已存在同名文件' });
   }
   const newKey = objectKeyForFile(db, target, file.name);
-  await copyOssObject(file.oss_key, newKey);
-  const so = nextSortOrder(db, 'files', 'folder_id', target);
-  db.prepare('UPDATE files SET folder_id = ?, oss_key = ?, sort_order = ? WHERE id = ?').run(
-    target,
-    newKey,
-    so,
-    id
-  );
-  await deleteOssObjectIfExists(file.oss_key);
-  res.json({ ok: true });
-});
+  try {
+    await copyOssObject(file.oss_key, newKey);
+    const so = nextSortOrder(db, 'files', 'folder_id', target);
+    db.prepare('UPDATE files SET folder_id = ?, oss_key = ?, sort_order = ? WHERE id = ?').run(
+      target,
+      newKey,
+      so,
+      id
+    );
+    await deleteOssObjectIfExists(file.oss_key);
+    res.json({ ok: true });
+  } catch (e) {
+    return next(e);
+  }
+}));
 
 // Delete a file
-router.delete('/:id', requireAdmin, async (req, res) => {
+router.delete('/:id', requireAdmin, wrap(async (req, res) => {
   const file = getFileOr404(req, res);
   if (!file) return;
   try {
@@ -270,11 +283,11 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   }
   db.prepare('DELETE FROM files WHERE id = ?').run(file.id);
   res.json({ ok: true });
-});
+}));
 
 // Clean up an orphaned OSS object when metadata registration fails after upload.
 // Only keys matching the configured prefix are accepted.
-router.post('/cleanup-upload', requireAdmin, async (req, res) => {
+router.post('/cleanup-upload', requireAdmin, wrap(async (req, res) => {
   const { oss_key } = req.body || {};
   if (!oss_key) return res.status(400).json({ error: 'oss_key 不能为空' });
   const prefix = ossPrefix();
@@ -289,6 +302,6 @@ router.post('/cleanup-upload', requireAdmin, async (req, res) => {
     return res.json({ ok: true, warn: 'OSS 删除失败' });
   }
   res.json({ ok: true });
-});
+}));
 
 export default router;

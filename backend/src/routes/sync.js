@@ -19,6 +19,11 @@ const syncLimiter = rateLimit({
 
 const router = Router();
 
+// SQLite 绑定参数上限为 999，分批 DELETE/FIX 时每批不能超过该值（BUG-08）。
+// DELETE 用 1 参数/行；fixExt 的 CASE 用 3 参数/行（WHEN id, THEN ext, WHERE id IN）。
+const DELETE_BATCH = 500;
+const FIX_EXT_BATCH = 300;
+
 // Find a folder whose OSS segment (cleaned name) equals `segment`, under parentId.
 function findFolderBySegment(segment, parentId) {
   const rows =
@@ -113,26 +118,43 @@ router.post('/', syncLimiter, async (req, res, next) => {
 
       // Normalize the ext column from the file name — older imports stored the
       // whole filename there, which breaks mime/imm routing for previews.
-      const fixExt = db.prepare('UPDATE files SET ext = ? WHERE id = ?');
-      for (const f of db.prepare('SELECT id, name, ext FROM files').all()) {
-        const correct = normalizeExt(path.extname(f.name)) || null;
-        if ((correct ?? null) !== (f.ext ?? null)) {
-          fixExt.run(correct, f.id);
-          counts.repaired_files += 1;
-        }
+      // 批量修复：先查出不一致行，再用 CASE 单条 SQL 批量 UPDATE，避免逐行 UPDATE。
+      const mismatched = db
+        .prepare('SELECT id, name, ext FROM files')
+        .all()
+        .map((f) => ({ id: f.id, correct: normalizeExt(path.extname(f.name)) || null, cur: f.ext ?? null }))
+        .filter((x) => x.correct !== x.cur);
+      // fixExt 的批量 CASE：每条记录的 UPDATE 需要 2 个参数（WHEN id THEN correct），
+      // WHERE id IN 需要 1 个参数/id。为了不触及参数上限并保持统计准确，分批执行。
+      for (let i = 0; i < mismatched.length; i += FIX_EXT_BATCH) {
+        const chunk = mismatched.slice(i, i + FIX_EXT_BATCH);
+        const whenPart = chunk.map(() => 'WHEN ? THEN ?').join(' ');
+        const idList = chunk.map((c) => c.id);
+        const sql = `UPDATE files SET ext = CASE id ${whenPart} ELSE ext END WHERE id IN (${idList
+          .map(() => '?')
+          .join(', ')})`;
+        db.prepare(sql).run(...chunk.flatMap((c) => [c.id, c.correct]), ...idList);
+        counts.repaired_files += chunk.length;
       }
 
       // Drop local records whose OSS object is gone. Skip when the listing is
       // empty — an empty bucket must never wipe the library (misconfig guard).
       if (objects.length > 0) {
-        for (const f of db.prepare('SELECT id, oss_key FROM files').all()) {
-          if (!keySet.has(f.oss_key)) {
-            db.prepare('DELETE FROM files WHERE id = ?').run(f.id);
-            counts.removed_files += 1;
-          }
+        const staleFileIds = db
+          .prepare('SELECT id, oss_key FROM files')
+          .all()
+          .filter((f) => !keySet.has(f.oss_key))
+          .map((f) => f.id);
+        // 批量删除：收集待删 id 后分批 IN 删除，避免逐行 DELETE（BUG-08）。
+        for (let i = 0; i < staleFileIds.length; i += DELETE_BATCH) {
+          const chunk = staleFileIds.slice(i, i + DELETE_BATCH);
+          const ph = chunk.map(() => '?').join(', ');
+          const info = db.prepare(`DELETE FROM files WHERE id IN (${ph})`).run(...chunk);
+          counts.removed_files += info.changes;
         }
 
         // Prune folders with no placeholder object and no remaining content.
+        // 逐行 DELETE 改为：收集整棵死树的节点 id（后序），再分批 IN 删除（BUG-08）。
         const folderAlive = (folderId) => {
           for (const k of db.prepare('SELECT id FROM folders WHERE parent_id = ?').all(folderId)) {
             if (folderAlive(k.id)) return true;
@@ -141,15 +163,22 @@ router.post('/', syncLimiter, async (req, res, next) => {
           const ph = placeholderKeyForFolder(db, folderId);
           return !!ph && keySet.has(ph);
         };
-        const deleteTree = (folderId) => {
+        const collectDeadTree = (folderId, ids) => {
           for (const k of db.prepare('SELECT id FROM folders WHERE parent_id = ?').all(folderId)) {
-            deleteTree(k.id);
+            collectDeadTree(k.id, ids);
           }
-          db.prepare('DELETE FROM folders WHERE id = ?').run(folderId);
-          counts.removed_folders += 1;
+          ids.push(folderId);
         };
+        // 先汇总所有已死根的子树 id，再统一分批删除，避免每棵树的重复构建与逐行 DELETE。
+        const deadFolderIds = [];
         for (const root of db.prepare('SELECT id FROM folders WHERE parent_id IS NULL').all()) {
-          if (!folderAlive(root.id)) deleteTree(root.id);
+          if (!folderAlive(root.id)) collectDeadTree(root.id, deadFolderIds);
+        }
+        for (let i = 0; i < deadFolderIds.length; i += DELETE_BATCH) {
+          const chunk = deadFolderIds.slice(i, i + DELETE_BATCH);
+          const ph = chunk.map(() => '?').join(', ');
+          db.prepare(`DELETE FROM folders WHERE id IN (${ph})`).run(...chunk);
+          counts.removed_folders += chunk.length;
         }
       }
     });
