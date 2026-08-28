@@ -4,6 +4,8 @@ on:
   push:
     branches: [main, master]
 
+# 手动部署（宝塔 Node + nginx），不再使用 Docker。
+# 流程：SSH 上服务器 → git pull → 后端装依赖并重启 → 前端装依赖并构建。
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -28,35 +30,32 @@ jobs:
             ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
             git pull origin main
 
-            # 配置 Docker 走阿里云专属加速器（根治：绕开 docker.io 停滞节点）。
-            # 逻辑详见仓库内 deploy/setup-mirror.sh —— 独立脚本避免在 YAML 块里
-            # 内嵌 heredoc，否则 YAML 解析会失败（之前 0s 失败的根因）。
-            # 脚本幂等：已配置则不重复、不重启；仅在真正改动时重启一次 docker。
-            bash deploy/setup-mirror.sh
+            # ----------------------------------------------------------------
+            # 后端：装依赖 + 重启（宝塔 Node 项目，进程 = www 用户跑的
+            # `node src/index.js`，监听 4000）。不用 Docker，也不用 pm2。
+            # ----------------------------------------------------------------
+            cd /opt/zyxf/backend
+            # 用宝塔安装的 Node 24（避免 fallback 到系统旧 Node 12）
+            export PATH="/www/server/nodejs/v24.20.0/bin:$PATH"
+            npm config set better_sqlite3_binary_host https://registry.npmmirror.com/-/binary/better-sqlite3
+            npm config set registry https://registry.npmmirror.com
+            npm install --no-audit --no-fund
+
+            # 幂等重启：杀掉旧的 `node src/index.js`（若在跑），再以 www 用户后台拉起。
+            # 注意：kill 后需重新启动，因为宝塔的 Node 项目不会因依赖变化自动重启。
+            pkill -f "node src/index.js" || true
+            sleep 1
+            # 以 www 用户从 backend 目录后台启动，日志写入 run.log。
+            su -s /bin/bash www -c "cd /opt/zyxf/backend && nohup node src/index.js >> run.log 2>&1 &"
+            sleep 3
+            # 健康检查：确认后端起来（写库/加载环境变量失败会在此暴露）。
+            curl -fsS http://127.0.0.1:4000/api/health
 
             # ----------------------------------------------------------------
-            # 带重试地预拉取基础镜像，绕开 docker.io 的间歇性停滞
+            # 前端：装依赖 + 构建（产物交给 nginx，无需常驻进程）
             # ----------------------------------------------------------------
-            # 之前失败是 `docker compose build` 拉取 node:24-slim 的一个 layer
-            # 在 docker.io 上停滞，直至命令超时。Docker 分层缓存保证：某层下载
-            # 成功即永久缓存到磁盘，重试只会补还没下载的层，因此杀掉重连是安全
-            # 且有效的；镜像入缓存后，后续 compose build 不再触网。单一镜像哪怕
-            # 单次 pull 卡死，也会在 timeout 后被重试接管，不会再让整条 build 卡住。
-            pull_with_retry() {
-              img="$1"
-              for i in 1 2 3; do
-                echo "== docker pull ${img} (attempt ${i}/3) =="
-                timeout 300 docker pull "$img" && return 0
-                echo "   pull ${img} attempt ${i} failed, retrying in 10s..."
-                sleep 10
-              done
-              echo "ERROR: failed to pull ${img}" >&2
-              return 1
-            }
-
-            pull_with_retry node:24-slim
-            pull_with_retry node:24-alpine
-            pull_with_retry nginx:1.27-alpine
-
-            docker compose up -d --build --remove-orphans
-            docker image prune -f
+            cd /opt/zyxf/frontend
+            export PATH="/www/server/nodejs/v24.20.0/bin:$PATH"
+            npm config set registry https://registry.npmmirror.com
+            npm install --no-audit --no-fund
+            npm run build
