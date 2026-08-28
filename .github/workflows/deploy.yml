@@ -23,6 +23,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || '22' }}
           script: |
+            set -e
             cd /opt/zyxf
             git config --global --add safe.directory /opt/zyxf
             mkdir -p ~/.ssh
