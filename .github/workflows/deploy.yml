@@ -20,19 +20,22 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || '22' }}
-          # 给拉取 + 构建留足时间：曾出现基础镜像在 docker.io 上停滞导致默认 10m 超时。
-          command_timeout: 30m
           script: |
+            set -e
             cd /opt/zyxf
             git config --global --add safe.directory /opt/zyxf
             mkdir -p ~/.ssh
             ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
             git pull origin main
 
-            # 预先拉取基础镜像并带重试。之前失败是 `docker compose build` 拉取
-            # node:24-slim 的一个 layer 在 docker.io 上停滞，10 分钟命令超时被切断。
-            # 这里用 timeout 限定单次尝试，停滞时杀掉进程重连重试，避免卡死整个构建
-            # 步骤；镜像入缓存后后续 build 不再触网。
+            # ----------------------------------------------------------------
+            # 带重试地预拉取基础镜像，绕开 docker.io 的间歇性停滞
+            # ----------------------------------------------------------------
+            # 之前失败是 `docker compose build` 拉取 node:24-slim 的一个 layer
+            # 在 docker.io 上停滞，直至命令超时。Docker 分层缓存保证：某层下载
+            # 成功即永久缓存到磁盘，重试只会补还没下载的层，因此杀掉重连是安全
+            # 且有效的；镜像入缓存后，后续 compose build 不再触网。单一镜像哪怕
+            # 单次 pull 卡死，也会在 timeout 后被重试接管，不会再让整条 build 卡住。
             pull_with_retry() {
               img="$1"
               for i in 1 2 3; do
