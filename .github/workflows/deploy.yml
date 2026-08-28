@@ -4,6 +4,8 @@ on:
   push:
     branches: [main, master]
 
+# 手动部署（宝塔 Node + nginx），不再使用 Docker。
+# 流程：SSH 上服务器 → git pull → 后端装依赖并重启 → 前端装依赖并构建。
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -26,5 +28,33 @@ jobs:
             mkdir -p ~/.ssh
             ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
             git pull origin main
-            docker compose up -d --build --remove-orphans
-            docker image prune -f
+
+            # ----------------------------------------------------------------
+            # 后端：装依赖 + 重启（宝塔 Node 项目，进程 = www 用户跑的
+            # `node src/index.js`，监听 4000）。不用 Docker，也不用 pm2。
+            # ----------------------------------------------------------------
+            cd /opt/zyxf/backend
+            # 用宝塔安装的 Node 24（避免 fallback 到系统旧 Node 12）
+            export PATH="/www/server/nodejs/v24.20.0/bin:$PATH"
+            npm config set better_sqlite3_binary_host https://registry.npmmirror.com/-/binary/better-sqlite3
+            npm config set registry https://registry.npmmirror.com
+            npm install --no-audit --no-fund
+
+            # 幂等重启：杀掉旧的 `node src/index.js`（若在跑），再以 www 用户后台拉起。
+            # 注意：kill 后需重新启动，因为宝塔的 Node 项目不会因依赖变化自动重启。
+            pkill -f "node src/index.js" || true
+            sleep 1
+            # 以 www 用户从 backend 目录后台启动，日志写入 run.log。
+            su -s /bin/bash www -c "cd /opt/zyxf/backend && nohup node src/index.js >> run.log 2>&1 &"
+            sleep 3
+            # 健康检查：确认后端起来（写库/加载环境变量失败会在此暴露）。
+            curl -fsS http://127.0.0.1:4000/api/health
+
+            # ----------------------------------------------------------------
+            # 前端：装依赖 + 构建（产物交给 nginx，无需常驻进程）
+            # ----------------------------------------------------------------
+            cd /opt/zyxf/frontend
+            export PATH="/www/server/nodejs/v24.20.0/bin:$PATH"
+            npm config set registry https://registry.npmmirror.com
+            npm install --no-audit --no-fund
+            npm run build
