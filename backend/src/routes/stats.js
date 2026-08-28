@@ -107,12 +107,18 @@ router.get('/', (req, res) => {
     .all();
 
   // ---- Top downloads (last 30 days) ----
+  // 按 file_id 分组（而非 file_id + file_name）：窗口内文件被重命名时应只出现
+  // 一行，删除后也不会出现 null 元数据行（BUG-15）。
+  // 文件名聚合：优先取当前 files 表里的持久 name（LEFT JOIN），无则取组内最新名字。
   const last30Start = todayStart - 29 * DAY;
   const top_downloads = db
     .prepare(
       `SELECT
          dl.file_id,
-         dl.file_name,
+         COALESCE(f.name,
+                  (SELECT dl2.file_name FROM download_logs dl2
+                   WHERE dl2.file_id = dl.file_id
+                   ORDER BY dl2.downloaded_at DESC, dl2.id DESC LIMIT 1)) AS file_name,
          COUNT(*) AS count,
          f.ext AS ext,
          f.size AS size,
@@ -120,8 +126,8 @@ router.get('/', (req, res) => {
        FROM download_logs dl
        LEFT JOIN files f ON f.id = dl.file_id
        WHERE dl.downloaded_at >= ?
-       GROUP BY dl.file_id, dl.file_name
-       ORDER BY count DESC, dl.file_name ASC
+       GROUP BY dl.file_id
+       ORDER BY count DESC, file_name ASC
        LIMIT 10`
     )
     .all(last30Start);

@@ -7,6 +7,16 @@ import { objectKeyForFile, parseOptionalFolderId, placeholderKeyForFolder } from
 
 const router = Router();
 
+// Express 4 does NOT await/catch rejected promises returned by async handlers;
+// an unhandled rejection would terminate the process (Node ≥ 15). Wrap every
+// async handler so a rejection is forwarded to the error middleware as a 500.
+const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
+
+// Folder names are mapped to OSS object-segment keys (cleanObjectSegment);
+// a '/' or '\' would be normalized to '-' and could collide with a literal
+// 'a-b' name. Reject them at the entry points so keys stay unambiguous.
+const containsPathSeparator = (name) => /[\/\\]/.test(name);
+
 const SORT_FIELDS = {
   name: 'name COLLATE NOCASE',
   size: 'size',
@@ -70,20 +80,42 @@ function computeFolderSizes(folderIds) {
   return map;
 }
 
-// Every descendant folder id and its files (one query per node).
+// Collect every descendant folder id and its files using two flat queries
+// (BUG-06: the old version ran one query per node = N+1). Contract: returns
+// { folderIds, files } where each file row carries { id, folder_id, name, oss_key }.
 function collectFolderTree(folderId) {
+  // Query 1: all folders once, then group children by parent in memory.
+  const allFolders = db.prepare('SELECT id, parent_id FROM folders').all();
+  const childrenOf = new Map(); // parent_id -> [childId, ...]
+  for (const f of allFolders) {
+    if (f.parent_id == null) continue;
+    if (!childrenOf.has(f.parent_id)) childrenOf.set(f.parent_id, []);
+    childrenOf.get(f.parent_id).push(f.id);
+  }
+
+  // DFS pre-order from the root folder, preserving the original walk order.
   const folderIds = [];
-  const files = [];
-  const walk = (fid) => {
+  const stack = [folderId];
+  while (stack.length) {
+    const fid = stack.pop();
     folderIds.push(fid);
-    files.push(
-      ...db.prepare('SELECT id, folder_id, name, oss_key FROM files WHERE folder_id = ?').all(fid)
-    );
-    for (const sub of db.prepare('SELECT id FROM folders WHERE parent_id = ?').all(fid)) {
-      walk(sub.id);
-    }
-  };
-  walk(folderId);
+    const children = childrenOf.get(fid);
+    if (children) for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]);
+  }
+
+  // Query 2: all files once, grouped by folder_id for O(1) lookup.
+  const filesByFolder = new Map(); // folder_id -> [fileRow, ...]
+  for (const f of db.prepare('SELECT id, folder_id, name, oss_key FROM files').all()) {
+    const key = f.folder_id ?? null;
+    if (!filesByFolder.has(key)) filesByFolder.set(key, []);
+    filesByFolder.get(key).push(f);
+  }
+
+  const files = [];
+  for (const fid of folderIds) {
+    const list = filesByFolder.get(fid);
+    if (list) files.push(...list);
+  }
   return { folderIds, files };
 }
 
@@ -161,29 +193,49 @@ function getBreadcrumb(id) {
 // Full folder tree for the sidebar navigation (public).
 // Each node: { id, name, children: [...], files: [...] } ordered by
 // sort_order, then name. Root-level files are returned under `files`.
+// BUG-06: loaded with two flat queries (one for folders, one for files), then
+// grouped in memory — the old version ran a query per node (N+1).
 router.get('/tree', (_req, res) => {
-  const childrenStmt = db.prepare(
-    'SELECT id, name FROM folders WHERE parent_id = ? ORDER BY sort_order, name COLLATE NOCASE'
-  );
-  const rootStmt = db.prepare(
-    'SELECT id, name FROM folders WHERE parent_id IS NULL ORDER BY sort_order, name COLLATE NOCASE'
-  );
-  const filesStmt = db.prepare(
-    'SELECT id, name, ext, size, folder_id FROM files WHERE folder_id = ? ORDER BY sort_order, name COLLATE NOCASE'
-  );
-  const rootFilesStmt = db.prepare(
-    'SELECT id, name, ext, size, folder_id FROM files WHERE folder_id IS NULL ORDER BY sort_order, name COLLATE NOCASE'
-  );
+  const folders = db.prepare('SELECT id, name, parent_id, sort_order FROM folders').all();
+  const files = db.prepare('SELECT id, name, ext, size, folder_id, sort_order FROM files').all();
+
+  // Replicate SQL ORDER BY sort_order, name COLLATE NOCASE; id is a stable
+  // tiebreak for rows equal on both (undefined order in the original SQL).
+  const cellCompare = (a, b) => {
+    if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+    const an = String(a.name || '').toLowerCase();
+    const bn = String(b.name || '').toLowerCase();
+    if (an < bn) return -1;
+    if (an > bn) return 1;
+    return a.id - b.id;
+  };
+  const nodeFiles = (f) => ({ id: f.id, name: f.name, ext: f.ext, size: f.size, folder_id: f.folder_id });
+
+  const childrenOf = new Map(); // parent_id (or null) -> child folders
+  const filesOf = new Map(); // folder_id (or null) -> files
+  for (const f of folders) {
+    const key = f.parent_id ?? null;
+    if (!childrenOf.has(key)) childrenOf.set(key, []);
+    childrenOf.get(key).push(f);
+  }
+  for (const f of files) {
+    const key = f.folder_id ?? null;
+    if (!filesOf.has(key)) filesOf.set(key, []);
+    filesOf.get(key).push(f);
+  }
+
   const build = (parentId) => {
-    const rows = parentId === null ? rootStmt.all() : childrenStmt.all(parentId);
+    const rows = (childrenOf.get(parentId) || []).slice().sort(cellCompare);
     return rows.map((f) => ({
       id: f.id,
       name: f.name,
       children: build(f.id),
-      files: filesStmt.all(f.id),
+      files: (filesOf.get(f.id) || []).slice().sort(cellCompare).map(nodeFiles),
     }));
   };
-  res.json({ tree: build(null), files: rootFilesStmt.all() });
+
+  const rootFiles = (filesOf.get(null) || []).slice().sort(cellCompare).map(nodeFiles);
+  res.json({ tree: build(null), files: rootFiles });
 });
 
 // List the contents (subfolders + files) of a folder. id=0 means root.
@@ -247,7 +299,7 @@ router.get('/:id/contents', (req, res) => {
 });
 
 // Create folder
-router.post('/', requireAdmin, async (req, res) => {
+router.post('/', requireAdmin, wrap(async (req, res, next) => {
   const { name, parent_id } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: '名称不能为空' });
   const trimmed = name.trim();
@@ -259,6 +311,9 @@ router.post('/', requireAdmin, async (req, res) => {
   }
   if (findFolderInParent(trimmed, pid)) {
     return res.status(409).json({ error: '同名文件夹已存在' });
+  }
+  if (containsPathSeparator(trimmed)) {
+    return res.status(400).json({ error: '文件夹名不能包含斜杠' });
   }
   try {
     const so = nextSortOrder(db, 'folders', 'parent_id', pid);
@@ -278,12 +333,12 @@ router.post('/', requireAdmin, async (req, res) => {
     if (String(e.message).includes('UNIQUE')) {
       return res.status(409).json({ error: '同名文件夹已存在' });
     }
-    throw e;
+    return next(e);
   }
-});
+}));
 
 // Rename or move folder (parent_id = null means root)
-router.patch('/:id', requireAdmin, async (req, res) => {
+router.patch('/:id', requireAdmin, wrap(async (req, res, next) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: '无效的文件夹 ID' });
   const folder = db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
@@ -293,6 +348,9 @@ router.patch('/:id', requireAdmin, async (req, res) => {
     const newName = String(req.body?.name || '').trim();
     if (!newName) return res.status(400).json({ error: '名称不能为空' });
     if (newName === folder.name) return res.json({ ok: true, unchanged: true });
+    if (containsPathSeparator(newName)) {
+      return res.status(400).json({ error: '文件夹名不能包含斜杠' });
+    }
     const parentId = folder.parent_id ?? null;
     if (findFolderInParent(newName, parentId, id)) {
       return res.status(409).json({ error: '同名文件夹已存在' });
@@ -310,7 +368,7 @@ router.patch('/:id', requireAdmin, async (req, res) => {
       if (String(e.message).includes('UNIQUE')) {
         return res.status(409).json({ error: '同名文件夹已存在' });
       }
-      throw e;
+      return next(e);
     }
   }
 
@@ -354,9 +412,9 @@ router.patch('/:id', requireAdmin, async (req, res) => {
     if (String(e.message).includes('UNIQUE')) {
       return res.status(409).json({ error: '目标位置已存在同名文件夹' });
     }
-    throw e;
+    return next(e);
   }
-});
+}));
 
 // Reorder items (folders + files) inside the same parent.
 // Body: { parent_folder_id: number|null, order: [{type:'file'|'folder', id}, ...] }
@@ -398,7 +456,7 @@ router.post('/reorder', requireAdmin, (req, res) => {
 });
 
 // Delete folder (cascade)
-router.delete('/:id', requireAdmin, async (req, res) => {
+router.delete('/:id', requireAdmin, wrap(async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ error: '无效的 ID' });
   // Gather all descendant keys to clean up OSS objects.
@@ -419,6 +477,6 @@ router.delete('/:id', requireAdmin, async (req, res) => {
 
   db.prepare('DELETE FROM folders WHERE id = ?').run(id);
   res.json({ ok: true, removed_files: keys.length });
-});
+}));
 
 export default router;

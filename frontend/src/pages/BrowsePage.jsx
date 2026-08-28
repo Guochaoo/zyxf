@@ -725,7 +725,8 @@ function toneFor(size, thresholds) {
   return i;
 }
 
-function sizeChip(size, tone) {
+// 大小标签徽章：按档位取对应配色并渲染格式化后的文件大小
+function SizeChip(size, tone) {
   const c = SIZE_TONES[tone] ?? SIZE_TONES[0];
   return (
     <span className="records-tag" style={{ background: c.bg, color: c.fg, '--tag-base': c.fg }}>
@@ -782,7 +783,7 @@ function Row({
         <span className="min-w-0 truncate">{item.name}</span>
       </span>
       <span className="hidden sm:flex w-24 justify-end">
-        {sizeChip(item.size, tone)}
+        {SizeChip(item.size, tone)}
       </span>
       <span className="hidden sm:inline w-28 text-right text-xs text-slate-400">
         {formatDate(item.created_at)}
