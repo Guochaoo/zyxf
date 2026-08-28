@@ -1,5 +1,6 @@
 import { Liveline } from 'liveline';
 import { useState } from 'react';
+import { formatMonthDay } from '../utils.js';
 
 /* ─────────────────────────────────────────────────────────
  * INSIGHT CARDS
@@ -26,12 +27,6 @@ export function IconBadge({ className = '', color, children }) {
     </span>
   );
 }
-
-/* daily-series x-axis labels: local M/D instead of liveline's HH:MM:SS */
-const formatDay = (t) => {
-  const d = new Date(t * 1e3);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
-};
 
 function SubLabel({ children, tone }) {
   return (
@@ -247,7 +242,7 @@ export function AnomalyCard({ title, metrics, className = '' }) {
             cursor="crosshair"
             padding={{ top: 18, right: 8, bottom: 22, left: 8 }}
             formatValue={formatM}
-            formatTime={formatDay}
+            formatTime={(t) => formatMonthDay(t * 1e3)}
             onHover={onLivelineHover(setHover)}
           />
           <HoverMarker x={hover?.x ?? null}>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getStats, getHeatmap } from '../api.js';
-import { errMsg, formatSize } from '../utils.js';
+import { errMsg, formatSize, timeAgo } from '../utils.js';
 import FileIcon from '../components/FileIcon.jsx';
 import { AnomalyCard, AllocationCard, ChartTooltip, IconBadge, densifyBySpline } from '../components/InsightCards.jsx';
 import { BsArrowClockwise, BsFolder2Open } from 'react-icons/bs';
@@ -405,19 +405,6 @@ function Empty({ children }) {
   return <div className="mt-6 py-8 text-center text-[12px] text-ink-3">{children}</div>;
 }
 
-function timeAgo(ts) {
-  const diff = Date.now() - ts;
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return '刚刚';
-  if (m < 60) return `${m} 分钟前`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d} 天前`;
-  const mo = Math.floor(d / 30);
-  return `${mo} 月前`;
-}
-
 /* ============================================================
  * Page
  * ============================================================ */
@@ -548,7 +535,9 @@ export default function DashboardPage() {
     return <div className="py-24 text-center text-[14px] text-red">{err}</div>;
   }
 
-  if (!stats || !insights) return null;
+  if (!stats) {
+    return <div className="py-24 text-center text-[14px] text-red">{err || '暂无数据'}</div>;
+  }
 
   const typeExtra =
     (stats.type_breakdown?.length ?? 0) > 6 ? (

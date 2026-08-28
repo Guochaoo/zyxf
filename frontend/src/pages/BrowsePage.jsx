@@ -439,8 +439,9 @@ export default function BrowsePage() {
         </div>
       )}
 
-      {/* Body: file list takes the full middle column width (the graph lives
-          in the App right column on xl+, inline below the list otherwise). */}
+      {/* Body: file list takes the full middle column width. The knowledge
+          graph renders in the App right column only on browse routes at the
+          lg breakpoint (isBrowse && isLg); it is never inline below the list. */}
       <div className="bg-white rounded-[14px] overflow-hidden">
         {loading ? (
           <div className="py-16 flex items-center justify-center text-slate-400">

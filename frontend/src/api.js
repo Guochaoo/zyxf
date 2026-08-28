@@ -1,11 +1,12 @@
 import axios from 'axios';
+import { getToken, clearToken, TOKEN_KEY } from './ui.js';
 
-export const TOKEN_KEY = 'zyxf_token';
+export { TOKEN_KEY };
 
 const api = axios.create({ baseURL: '/api' });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -15,8 +16,8 @@ api.interceptors.response.use(
   (err) => {
     // Expired/invalid token: drop it so the user can log back in, and let the
     // AuthProvider clear the UI state.
-    if (err.response?.status === 401 && localStorage.getItem(TOKEN_KEY)) {
-      localStorage.removeItem(TOKEN_KEY);
+    if (err.response?.status === 401 && getToken()) {
+      clearToken();
       window.dispatchEvent(new CustomEvent('auth:expired'));
     }
     return Promise.reject(err);
@@ -34,7 +35,7 @@ export default api;
  * 用 AbortSignal 中止；非 2xx 抛 Error（message 为后端中文提示）。
  */
 export async function chatStream(messages, { onDelta, onFiles, signal, llm } = {}) {
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = getToken();
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: {
