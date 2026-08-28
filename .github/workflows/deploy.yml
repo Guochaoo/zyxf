@@ -29,6 +29,37 @@ jobs:
             git pull origin main
 
             # ----------------------------------------------------------------
+            # 配置 Docker 走阿里云专属加速器（根治：绕开 docker.io 停滞节点）
+            # ----------------------------------------------------------------
+            # 服务器为阿里云 ECS，控制台分配了专属加速器 k0sdnixc.mirror.aliyuncs.com。
+            # 只有该 ECS 本机/内网可达（公网访问返回 403 属正常鉴权），因此从服务器
+            # 拉取基础镜像走专线，快且稳定，不再依赖 docker.io 的间歇性连接。
+            # 注意：/etc/docker/daemon.json 的 registry-mirrors 遵循"最后一个兜底"语义，
+            # 即列表里的镜像源都失败时才回退到官方源。配合后面的 pull_with_retry，
+            # 二者互为兜底。仅在首次写入时重启一次 docker，幂等。
+            MIRROR="https://k0sdnixc.mirror.aliyuncs.com"
+            DAEMON=/etc/docker/daemon.json
+            if [ "$(id -u)" = "0" ] && command -v docker >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+              mkdir -p /etc/docker
+              # 确保文件存在且为合法 JSON；否则重置为 {}
+              if [ ! -f "$DAEMON" ] || ! jq -e . "$DAEMON" >/dev/null 2>&1; then
+                echo '{}' > "$DAEMON"
+              fi
+              # 幂等：已含 MIRROR 则跳过；否则插入并重启 docker（仅在真正改动时重启一次）
+              if jq -e --arg m "$MIRROR" '."registry-mirrors" // [] | index($m)' "$DAEMON" >/dev/null 2>&1; then
+                echo "镜像加速器 $MIRROR 已配置，跳过"
+              else
+                jq --arg m "$MIRROR" \
+                   '."registry-mirrors" = (([$m] + (."registry-mirrors" // [])) | unique)' \
+                   "$DAEMON" > "$DAEMON.tmp" && mv "$DAEMON.tmp" "$DAEMON"
+                systemctl restart docker || service docker restart || true
+                echo "已写入镜像加速器 $MIRROR 并重启 docker"
+              fi
+            else
+              echo "（跳过加速器配置：需 root 且已安装 docker 与 jq）"
+            fi
+
+            # ----------------------------------------------------------------
             # 带重试地预拉取基础镜像，绕开 docker.io 的间歇性停滞
             # ----------------------------------------------------------------
             # 之前失败是 `docker compose build` 拉取 node:24-slim 的一个 layer
