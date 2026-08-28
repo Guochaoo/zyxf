@@ -44,9 +44,18 @@ jobs:
             npm config set registry https://registry.npmmirror.com
             npm install --no-audit --no-fund
 
-            # 幂等重启：杀掉旧的 `node src/index.js`（若在跑），再以 www 用户后台拉起。
-            # 注意：kill 后需重新启动，因为宝塔的 Node 项目不会因依赖变化自动重启。
-            pkill -f "node src/index.js" || true
+            # 幂等重启：杀掉监听 4000 的旧后端进程，再以 www 用户后台拉起。
+            # 注意 1：不能用 `pkill -f "node src/index.js"` —— -f 按完整命令行匹配，
+            # 会误杀正执行本部署脚本的 bash（它的参数里含有该字符串），导致整个
+            # deploy 被 SIGTERM 终止（status 143）。所以改按端口定位。
+            # 注意 2：kill 后需重新启动，因为宝塔的 Node 项目不会因依赖变化自动重启。
+            if command -v fuser >/dev/null 2>&1; then
+              fuser -k 4000/tcp 2>/dev/null || true
+            else
+              # 回退：用 [n]ode 技巧避免 grep 匹配自身，并按 PID 精确 kill
+              # （不按完整命令行 -f 匹配，以免误杀本部署脚本进程）。
+              ps -eo pid,args | grep '[n]ode src/index.js' | awk '{print $1}' | xargs -r kill 2>/dev/null || true
+            fi
             sleep 1
             # 以 www 用户从 backend 目录后台启动，日志写入 run.log。
             su -s /bin/bash www -c "cd /opt/zyxf/backend && nohup node src/index.js >> run.log 2>&1 &"
