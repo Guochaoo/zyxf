@@ -13,13 +13,35 @@ import { envOrThrow } from './env.js';
 // This module hand-rolls the Aliyun RPC signature (HMAC-SHA1) so we don't
 // need to pull in the full OpenAPI SDK dependency tree just for one call.
 
-const percentEncode = (str) =>
-  encodeURIComponent(str)
-    .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
-    .replace(/%20/g, '+');
+// Aliyun RPC 签名规范与 form 表单体的空格编码不同：
+//  - 签名（stringToSign / canonical）用 RFC 3986，空格编码为 %20；
+//  - application/x-www-form-urlencoded 表单体用 HTML 表单规则，空格编码为 +。
+// 此外 `!` `'` `(` `)` `*` 都需要按 utf8 字节转义（RPC 规范要求）。
+// 若两者共用同一个编码器（把 %20 换成 +），含空格的文件名/oss_key 会导致
+// 签名串与实际发送的 body 不一致 → IMM 签名校验失败（BUG-03）。
+const encodeRfc3986 = (str) =>
+  encodeURIComponent(String(str)).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+
+// 签名用：空格 → %20（RFC 3986）
+export const percentEncodeForSign = (str) => encodeRfc3986(str);
+
+// 表单体（urlencoded）用：空格 → +（仍保持 `!` `'` `(` `)` `*` 的转义）
+export const percentEncodeUrlencoded = (str) => encodeRfc3986(str).replace(/%20/g, '+');
 
 const hmacSha1 = (secret, str) =>
   crypto.createHmac('sha1', secret).update(str).digest('base64');
+
+// 把 AbortSignal.timeout 触发的中止错误统一包装成友好超时错误（BUG-13）。
+// Node ≥ 17 的 AbortSignal.timeout 抛 TimeoutError（name TimeoutError / code 23），
+// 某些环境下可能抛 AbortError（code ABORT_ERR）。
+export function toImmTimeoutError(action, e) {
+  if (e.name === 'AbortError' || e.name === 'TimeoutError' || e.code === 'ABORT_ERR' || e.code === 23) {
+    const err = new Error(`IMM ${action} 请求超时（10 秒）`);
+    err.code = 'IMM_TIMEOUT';
+    return err;
+  }
+  return null;
+}
 
 // OSS_REGION is like "oss-cn-beijing"; IMM uses "cn-beijing".
 const regionId = () => envOrThrow('OSS_REGION').replace(/^oss-/, '');
@@ -47,19 +69,36 @@ async function immRpc(action, params) {
     Action: action,
   };
   const all = { ...common, ...params };
-  const canonical = Object.keys(all)
-    .sort()
-    .map((k) => `${percentEncode(k)}=${percentEncode(String(all[k]))}`)
+  const sortedKeys = Object.keys(all).sort();
+  // 签名 canonical：空格 → %20（RFC 3986）
+  const canonicalForSign = sortedKeys
+    .map((k) => `${percentEncodeForSign(k)}=${percentEncodeForSign(String(all[k]))}`)
     .join('&');
-  const stringToSign = `POST&${percentEncode('/')}&${percentEncode(canonical)}`;
+  const stringToSign = `POST&${percentEncodeForSign('/')}&${percentEncodeForSign(canonicalForSign)}`;
   const signature = hmacSha1(accessKeySecret + '&', stringToSign);
-  const body = `${canonical}&Signature=${percentEncode(signature)}`;
 
-  const res = await fetch(`https://imm.${regionId()}.aliyuncs.com/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
+  // 表单体 parameters：空格 → +（urlencoded）。两者不能共用同一编码器，否则
+  // 含空格文件名的签名与实际发送的 body 不一致（BUG-03）。
+  const bodyParams = sortedKeys
+    .map((k) => `${percentEncodeUrlencoded(k)}=${percentEncodeUrlencoded(String(all[k]))}`)
+    .join('&');
+  const body = `${bodyParams}&Signature=${percentEncodeUrlencoded(signature)}`;
+
+  let res;
+  try {
+    res = await fetch(`https://imm.${regionId()}.aliyuncs.com/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+      // IMM 是外部服务，无超时会让请求槽与 socket 被长期占用（BUG-13）。
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (e) {
+    // AbortSignal.timeout 触发时包装成友好错误，避免把「超时」误报成「预览服务不可用」（BUG-13）。
+    const timeoutErr = toImmTimeoutError(action, e);
+    if (timeoutErr) throw timeoutErr;
+    throw e;
+  }
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = new Error(json.Message || `IMM ${action} failed (HTTP ${res.status})`);

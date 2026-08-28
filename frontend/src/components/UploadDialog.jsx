@@ -30,20 +30,25 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
   };
 
   const uploadOne = async (item) => {
-    setFiles((prev) => prev.map((it) => (it === item ? { ...it, status: 'uploading' } : it)));
+    // Compare by the stable `item.file` reference instead of the item object:
+    // the first setFiles below replaces the item object with a new reference
+    // ({...it, status}), so an `it === item` compare would never match again
+    // and progress/status would freeze at the initial state (BUG-01).
+    const isItem = (it) => it.file === item.file;
+    setFiles((prev) => prev.map((it) => (isItem(it) ? { ...it, status: 'uploading' } : it)));
     try {
       await uploadFile({
         file: item.file,
         folderId,
         onProgress: (p) =>
-          setFiles((prev) => prev.map((it) => (it === item ? { ...it, progress: p } : it))),
+          setFiles((prev) => prev.map((it) => (isItem(it) ? { ...it, progress: p } : it))),
       });
       setFiles((prev) =>
-        prev.map((it) => (it === item ? { ...it, status: 'done', progress: 100 } : it))
+        prev.map((it) => (isItem(it) ? { ...it, status: 'done', progress: 100 } : it))
       );
     } catch (e) {
       setFiles((prev) =>
-        prev.map((it) => (it === item ? { ...it, status: 'error', error: errMsg(e) } : it))
+        prev.map((it) => (isItem(it) ? { ...it, status: 'error', error: errMsg(e) } : it))
       );
     }
   };
@@ -73,7 +78,7 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
             <Upload className="w-5 h-5" />
             上传文件
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100">
+          <button type="button" onClick={onClose} aria-label="关闭" className="p-1 rounded hover:bg-slate-100">
             <X className="w-5 h-5" />
           </button>
         </div>

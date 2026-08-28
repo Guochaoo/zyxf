@@ -149,7 +149,9 @@ export default function SearchBar({ className = '' }) {
         />
         {q && (
           <button
+            type="button"
             onClick={clear}
+            aria-label={loading ? '清除' : '清除搜索'}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900"
           >
             {loading ? (
