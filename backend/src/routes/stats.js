@@ -96,11 +96,13 @@ router.get('/', (req, res) => {
   const typeRows = db
     .prepare(
       `SELECT
-         COALESCE(NULLIF(LOWER(ext), ''), 'other') AS ext,
+         ext AS ext,
          COUNT(*) AS count,
          COALESCE(SUM(size), 0) AS size
-       FROM files
-       GROUP BY COALESCE(NULLIF(LOWER(ext), ''), 'other')
+       FROM (
+         SELECT COALESCE(NULLIF(LOWER(ext), ''), 'other') AS ext, size FROM files
+       )
+       GROUP BY ext
        ORDER BY count DESC
        LIMIT 8`
     )

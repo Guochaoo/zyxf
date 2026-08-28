@@ -1,21 +1,12 @@
 import { Router } from 'express';
-import rateLimit from 'express-rate-limit';
 import { chatStream, isLlmEnabled, resolveClientLlmConfig } from '../llm.js';
 import { searchLibrary, listTopFolders } from '../searchService.js';
+import { adminBypassLimiter } from '../limiter.js';
 
 const router = Router();
 
-const chatLimiter = (windowMs, max, message) =>
-  rateLimit({
-    windowMs,
-    max,
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: (req) => req.user?.role === 'admin',
-    message: { error: message },
-  });
-const chatLimiterShort = chatLimiter(60 * 1000, 6, 'AI 对话太频繁，请稍后再试');
-const chatLimiterLong = chatLimiter(60 * 60 * 1000, 20, '本小时 AI 对话次数已达上限，请稍后再试');
+const chatLimiterShort = adminBypassLimiter(60 * 1000, 6, 'AI 对话太频繁，请稍后再试');
+const chatLimiterLong = adminBypassLimiter(60 * 60 * 1000, 20, '本小时 AI 对话次数已达上限，请稍后再试');
 
 const MAX_MESSAGE_LEN = 500;
 const MAX_HISTORY = 8;

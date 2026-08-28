@@ -2,8 +2,8 @@ import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Single source of truth: the repo-root .env. In docker the same values are
-// injected via compose environment, so this only matters for local dev runs.
+// Single source of truth: the repo-root .env (local dev runs; production
+// injects the same values via the systemd unit environment, see docs/DEPLOY.md).
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../.env'), quiet: true });
 

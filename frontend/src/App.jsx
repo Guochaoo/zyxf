@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Route, Routes, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useAuth } from './auth.jsx';
@@ -13,6 +13,21 @@ import KnowledgeGraph from './components/KnowledgeGraph.jsx';
 import ChatComposer from './components/ChatComposer.jsx';
 import useMediaQuery from './hooks/useMediaQuery.js';
 import NoticeModal from './components/NoticeModal.jsx';
+
+// Static menu items for the floating StaggeredMenu — hoisted out of the
+// component so they are allocated once per module load, not per render.
+const menuItems = [
+  { label: '资料库', ariaLabel: '浏览资料库', link: '/' },
+  { label: '统计面板', ariaLabel: '查看统计仪表盘', link: '/dashboard' },
+  { label: '关于我们', ariaLabel: '了解仲英书院学业辅导中心', link: '/about' },
+];
+
+// Social links shown in the menu footer, also static.
+const socialItems = [
+  { label: 'Bilibili', link: 'https://space.bilibili.com/549612395' },
+  { label: 'Email', link: 'mailto:xjtuzyxf@163.com' },
+  { label: 'Wechat', link: 'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU4NTQ4NTg0Mg==&scene=110#wechat_redirect' },
+];
 
 export default function App() {
   const { user, logout, ready } = useAuth();
@@ -32,36 +47,38 @@ export default function App() {
   // appears on browse routes only. Other pages are standalone.
   const isBrowse = location.pathname === '/' || location.pathname.startsWith('/folder/');
   const isDashboard = location.pathname === '/dashboard';
+  const isAbout = location.pathname === '/about';
   const folderId = Number(location.pathname.match(/^\/folder\/(\d+)/)?.[1]) || 0;
-
-  const menuItems = [
-    { label: '资料库', ariaLabel: '浏览资料库', link: '/' },
-    { label: '统计面板', ariaLabel: '查看统计仪表盘', link: '/dashboard' },
-    { label: '关于我们', ariaLabel: '了解仲英书院学业辅导中心', link: '/about' },
-  ];
 
   // Bottom account card on the menu panel. Logged-in shows username + role
   // with a logout button; guests show a neutral "未登录" state whose icon
   // is a login button.
-  const account = user
-    ? {
-        name: user.username || '用户',
-        subtitle: user.role === 'admin' ? '管理员' : '普通用户',
-        avatarText: (user.username || '友').slice(0, 1).toUpperCase(),
-        onLogout: logout,
-      }
-    : { name: '未登录', subtitle: '游客', guest: true, avatarText: '', onLogin: () => navigate('/login') };
+  const account = useMemo(
+    () =>
+      user
+        ? {
+            name: user.username || '用户',
+            subtitle: user.role === 'admin' ? '管理员' : '普通用户',
+            avatarText: (user.username || '友').slice(0, 1).toUpperCase(),
+            onLogout: logout,
+          }
+        : { name: '未登录', subtitle: '游客', guest: true, avatarText: '', onLogin: () => navigate('/login') },
+    [user, logout, navigate]
+  );
 
-  const brand = (
-    <Link to="/" className="flex items-center gap-2 shrink-0 hover:text-brand-500">
-      <img
-        src="/favicon.png"
-        alt=""
-        aria-hidden="true"
-        className="w-7 h-7 rounded-full object-cover"
-      />
-      <span className="rb-brand-title whitespace-nowrap">仲英学辅资料库</span>
-    </Link>
+  const brand = useMemo(
+    () => (
+      <Link to="/" className="flex items-center gap-2 shrink-0 hover:text-brand-500">
+        <img
+          src="/favicon.png"
+          alt=""
+          aria-hidden="true"
+          className="w-7 h-7 rounded-full object-cover"
+        />
+        <span className="rb-brand-title whitespace-nowrap">仲英学辅资料库</span>
+      </Link>
+    ),
+    []
   );
 
   // 资料库标题行右侧的侧边栏开关按钮。展开时常驻侧边栏内（显示 PanelLeftClose，
@@ -89,7 +106,7 @@ export default function App() {
     mainLayout = `w-full ${
       sidebarOpen ? 'lg:pl-[calc(250px+1rem)]' : 'lg:pl-0'
     } lg:pr-[calc(300px+1rem)] lg:transition-[padding] lg:duration-[${SIDEBAR_MS}ms] lg:ease-[${SIDEBAR_EASE}]`;
-  } else if (location.pathname === '/dashboard' || location.pathname === '/about') {
+  } else if (isDashboard || isAbout) {
     mainLayout = 'mx-auto w-full';
   } else {
     mainLayout = 'mx-auto w-full max-w-7xl';
@@ -200,11 +217,7 @@ export default function App() {
         <StaggeredMenu
           position="right"
           items={menuItems}
-          socialItems={[
-            { label: 'Bilibili', link: 'https://space.bilibili.com/549612395' },
-            { label: 'Email', link: 'mailto:xjtuzyxf@163.com' },
-            { label: 'Wechat', link: 'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU4NTQ4NTg0Mg==&scene=110#wechat_redirect' },
-          ]}
+          socialItems={socialItems}
           account={account}
           displaySocials
           displayItemNumbering={false}

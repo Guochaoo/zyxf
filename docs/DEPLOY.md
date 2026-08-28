@@ -63,7 +63,6 @@ OSS 控制台 → 你的 Bucket → **数据安全 → 跨域设置** → 添加
 
 ```env
 PORT=4000              # 后端内部端口，保持 4000
-HTTP_PORT=80           # 对外 HTTP 端口（nginx 用）
 
 # JWT_SECRET 必须 ≥32 位随机串，且不含弱口令词（password/secret/dev/admin123 等）
 JWT_SECRET=<用 openssl rand -hex 32 生成>

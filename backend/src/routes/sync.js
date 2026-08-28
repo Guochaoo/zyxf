@@ -4,7 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { db, transaction } from '../db.js';
 import { listOssObjects } from '../oss.js';
 import { nextSortOrder } from '../dbHelpers.js';
-import { cleanObjectSegment, ossPrefix, placeholderKeyForFolder } from '../storagePath.js';
+import { cleanObjectSegment, ossPrefix, placeholderKeyForFolderFromMap } from '../storagePath.js';
 import { normalizeExt } from '../extPolicy.js';
 
 // Every IP may sync at most 5 times per minute (admins bypass, like download limits).
@@ -155,18 +155,30 @@ router.post('/', syncLimiter, async (req, res, next) => {
 
         // Prune folders with no placeholder object and no remaining content.
         // 逐行 DELETE 改为：收集整棵死树的节点 id（后序），再分批 IN 删除（BUG-08）。
+        // N+1 修复：一次加载全库 folders / files 到内存 map，再在内存里对整棵
+        // 树判活 + 收集死树，placeholder key 也从内存 map 计算，不再每层/每节点查库。
+        const allFolderRows = db.prepare('SELECT id, name, parent_id FROM folders').all();
+        const folderMap = new Map(); // id -> { name, parent_id }
+        const childrenOf = new Map(); // parent_id -> [childId, ...]
+        for (const f of allFolderRows) {
+          folderMap.set(f.id, { name: f.name, parent_id: f.parent_id });
+          if (f.parent_id == null) continue;
+          if (!childrenOf.has(f.parent_id)) childrenOf.set(f.parent_id, []);
+          childrenOf.get(f.parent_id).push(f.id);
+        }
+        const folderHasFiles = new Set(
+          db.prepare('SELECT DISTINCT folder_id FROM files').all().map((r) => r.folder_id)
+        );
         const folderAlive = (folderId) => {
-          for (const k of db.prepare('SELECT id FROM folders WHERE parent_id = ?').all(folderId)) {
-            if (folderAlive(k.id)) return true;
-          }
-          if (db.prepare('SELECT 1 FROM files WHERE folder_id = ?').get(folderId)) return true;
-          const ph = placeholderKeyForFolder(db, folderId);
+          const children = childrenOf.get(folderId);
+          if (children) for (const cid of children) if (folderAlive(cid)) return true;
+          if (folderHasFiles.has(folderId)) return true;
+          const ph = placeholderKeyForFolderFromMap(folderId, folderMap);
           return !!ph && keySet.has(ph);
         };
         const collectDeadTree = (folderId, ids) => {
-          for (const k of db.prepare('SELECT id FROM folders WHERE parent_id = ?').all(folderId)) {
-            collectDeadTree(k.id, ids);
-          }
+          const children = childrenOf.get(folderId);
+          if (children) for (const cid of children) collectDeadTree(cid, ids);
           ids.push(folderId);
         };
         // 先汇总所有已死根的子树 id，再统一分批删除，避免每棵树的重复构建与逐行 DELETE。

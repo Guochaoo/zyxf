@@ -41,8 +41,6 @@ export default {
         green: 'var(--green)',
       },
       boxShadow: {
-        // docs/DESIGN.md §2 shadow system (shadow-as-border)
-        card: 'rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px',
         // Insight card design system — raised button
         btn: 'rgba(23, 23, 23, 0.12) 0px 1px 2px, rgba(23, 23, 23, 0.06) 0px 0px 0px 1px',
       },
@@ -52,7 +50,6 @@ export default {
       },
       transitionDuration: {
         250: '250ms',
-        400: '400ms',
       },
       maxWidth: {
         95: '23.75rem',

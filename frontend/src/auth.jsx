@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import api, { TOKEN_KEY, login as loginApi } from './api.js';
+import api, { login as loginApi } from './api.js';
+import { getToken, setToken, clearToken } from './ui.js';
 
 const AuthContext = createContext(null);
 
@@ -8,7 +9,7 @@ export function AuthProvider({ children }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = getToken();
     if (!token) {
       setReady(true);
       return;
@@ -29,13 +30,13 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (username, password) => {
     const { token, user } = await loginApi(username, password);
-    localStorage.setItem(TOKEN_KEY, token);
+    setToken(token);
     setUser(user);
     return user;
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
+    clearToken();
     setUser(null);
   }, []);
 

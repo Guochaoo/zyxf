@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { ArrowUp, ArrowUpRight, ChevronDown, ChevronUp, Settings, Square, Trash2 } from 'lucide-react';
 import { chatStream } from '../api.js';
+import { ICON_BUTTON_CLASS } from './ui.js';
+import { openFilePreview } from '../ui.js';
 
 /* ─────────────────────────────────────────────────────────
  * CHAT — interactive panel with a header, replies, and composer.
@@ -39,9 +41,6 @@ const loadLlmCfg = () => {
   }
   return { apiKey: '', baseUrl: '', model: '' };
 };
-
-const HEADER_BTN_CLASS =
-  'flex size-6 items-center justify-center rounded-[6px] text-ink-3 transition-colors duration-100 hover:bg-hover hover:text-ink-2 disabled:opacity-40 disabled:hover:bg-transparent';
 
 // 像素网格波浪（Drive 变体）：3×3 格子按斜向相位依次点亮
 const CHEVRON = Array.from({ length: 9 }, (_, i) => {
@@ -116,8 +115,7 @@ function FileChip({ item }) {
     if (item.type === 'folder') {
       navigate(`/folder/${item.id}`);
     } else {
-      const targetPath = item.folder_id ? `/folder/${item.folder_id}` : '/';
-      navigate(targetPath, { state: { previewFile: item } });
+      openFilePreview(item, navigate);
     }
   };
 
@@ -333,7 +331,7 @@ export default function ChatComposer() {
                 title="清空会话历史"
                 disabled={busy || messages.length === 0}
                 onClick={() => setMessages([])}
-                className={HEADER_BTN_CLASS}
+                className={ICON_BUTTON_CLASS}
               >
                 <Trash2 className="h-[15px] w-[15px]" />
               </button>
@@ -343,7 +341,7 @@ export default function ChatComposer() {
                 title="AI 设置（API Key / 地址 / 模型）"
                 aria-expanded={settingsOpen}
                 onClick={openSettings}
-                className={HEADER_BTN_CLASS}
+                className={ICON_BUTTON_CLASS}
               >
                 <Settings className="h-[15px] w-[15px]" />
               </button>
@@ -355,7 +353,7 @@ export default function ChatComposer() {
             title={collapsed ? '展开对话' : '收起对话'}
             aria-label={collapsed ? '展开对话' : '收起对话'}
             aria-expanded={!collapsed}
-            className={HEADER_BTN_CLASS}
+            className={ICON_BUTTON_CLASS}
           >
             {collapsed ? (
               <ChevronDown className="h-[15px] w-[15px]" />

@@ -6,6 +6,7 @@ import { BsFolder } from 'react-icons/bs';
 import { getFileUrl, search as searchApi } from '../api.js';
 import { downloadFileById } from '../utils.js';
 import FileIcon from './FileIcon.jsx';
+import { openFilePreview } from '../ui.js';
 
 export default function SearchBar({ className = '' }) {
   const [q, setQ] = useState('');
@@ -115,10 +116,7 @@ export default function SearchBar({ className = '' }) {
     if (item.type === 'folder') {
       navigate(`/folder/${item.id}`);
     } else {
-      const targetPath = item.folder_id ? `/folder/${item.folder_id}` : '/';
-      navigate(targetPath, {
-        state: { previewFile: item },
-      });
+      openFilePreview(item, navigate);
     }
   };
 

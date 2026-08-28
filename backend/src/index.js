@@ -74,8 +74,8 @@ app.use(
   })
 );
 app.use(express.json({ limit: '1mb' }));
-app.use('/api', publicLimiter);
 app.use(attachUser);
+app.use('/api', publicLimiter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, time: Date.now() }));
 app.use('/api/auth', authRoutes);

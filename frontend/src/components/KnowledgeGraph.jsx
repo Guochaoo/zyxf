@@ -8,14 +8,12 @@ import {
   forceLink,
   forceSimulation,
 } from 'd3-force';
-import { getFolderTree } from '../api.js';
+import { useFolderTree } from '../hooks/useFolderTree.js';
+import { ICON_BUTTON_CLASS } from './ui.js';
+import { openFilePreview } from '../ui.js';
 
 const VIEW_W = 600;
 const VIEW_H = 420;
-
-// 头部图标按钮（globe / maximize）与 AI 助手卡片头部的按钮同样式。
-const ACTION_BTN_CLASS =
-  'flex size-6 items-center justify-center rounded-[6px] text-ink-3 transition-colors duration-100 hover:bg-hover hover:text-ink-2 disabled:opacity-40';
 
 // 图谱区高度：原卡片高 295px，头部栏占 37px（p-1.5×2 + size-6 + 1px 分割线）。
 const GRAPH_H = '258px';
@@ -77,30 +75,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
   // folder neighborhood zoomed (maximize). null = dialog closed.
   const [dialog, setDialog] = useState(null);
   const [collapsed, setCollapsed] = useState(collapsedPersistent);
-  const [tree, setTree] = useState(null);
-  const [rootFiles, setRootFiles] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let alive = true;
-    const load = () => {
-      setLoading(true);
-      getFolderTree()
-        .then((d) => {
-          if (!alive) return;
-          setTree(d.tree || []);
-          setRootFiles(d.files || []);
-        })
-        .catch(() => {})
-        .finally(() => alive && setLoading(false));
-    };
-    load();
-    window.addEventListener('folders-changed', load);
-    return () => {
-      alive = false;
-      window.removeEventListener('folders-changed', load);
-    };
-  }, []);
+  const { tree, rootFiles, loading } = useFolderTree();
 
   // Full graph only depends on the tree + root files: keep it stable across
   // folder navigation so browsing doesn't re-walk/re-allocate the whole library.
@@ -120,8 +95,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
       if (node.type === 'folder') {
         navigate(node.isRoot ? '/' : `/folder/${Number(node.id.slice(1))}`);
       } else {
-        const f = node.meta;
-        navigate(f.folder_id ? `/folder/${f.folder_id}` : '/', { state: { previewFile: f } });
+        openFilePreview(node.meta, navigate);
       }
     },
     [navigate]
@@ -150,7 +124,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
                 onClick={() => setDialog('full')}
                 title="查看全库图谱"
                 aria-label="查看全库图谱"
-                className={ACTION_BTN_CLASS}
+                className={ICON_BUTTON_CLASS}
               >
                 <Globe className="h-[15px] w-[15px]" />
               </button>
@@ -159,7 +133,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
                 onClick={() => setDialog('local')}
                 title="放大当前图谱"
                 aria-label="放大当前图谱"
-                className={ACTION_BTN_CLASS}
+                className={ICON_BUTTON_CLASS}
               >
                 <Maximize className="h-[15px] w-[15px]" />
               </button>
@@ -176,7 +150,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
             title={collapsed ? '展开图谱' : '收起图谱'}
             aria-label={collapsed ? '展开图谱' : '收起图谱'}
             aria-expanded={!collapsed}
-            className={ACTION_BTN_CLASS}
+            className={ICON_BUTTON_CLASS}
           >
             {collapsed ? (
               <ChevronDown className="h-[15px] w-[15px]" />
