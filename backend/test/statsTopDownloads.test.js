@@ -87,12 +87,12 @@ describe('BUG-15: top_downloads 按 file_id 分组', () => {
     todayStart.setHours(0, 0, 0, 0);
     const t0 = todayStart.getTime() + 1;
     const dl = db.prepare('INSERT INTO download_logs (file_id, file_name, downloaded_at) VALUES (?, ?, ?)');
-    db.pragma('foreign_keys = OFF');
+    db.exec('PRAGMA foreign_keys = OFF');
     try {
       dl.run(777777, 'deleted-a.txt', t0);
       dl.run(777777, 'deleted-b.txt', t0 + 1000);
     } finally {
-      db.pragma('foreign_keys = ON');
+      db.exec('PRAGMA foreign_keys = ON');
     }
 
     const { body } = await request('GET', '/api/stats', { token });

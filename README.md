@@ -19,7 +19,7 @@
 | 层 | 技术 |
 |---|---|
 | 前端 | React 18 · Vite 5 · TailwindCSS 3 · React Router 7 · d3-force · lucide-react |
-| 后端 | Node.js · Express 4 · better-sqlite3（SQLite）· JWT · express-rate-limit |
+| 后端 | Node.js · Express 4 · node:sqlite（SQLite）· JWT · express-rate-limit |
 | 存储 / 预览 | 阿里云 OSS（前端直传，后端仅签名）· 阿里云 IMM WebOffice |
 | AI（可选） | 任意 OpenAI 兼容 `/chat/completions` 接口（SSE 流式 + 工具调用） |
 
@@ -85,7 +85,7 @@ zyxf/
 │   │   └── components/    # 文件列表 / 预览 / 知识图谱 / 智能对话 / 菜单等
 │   └── test/
 ├── docs/
-│   ├── DEPLOY.md          # 部署指南（宝塔 Node + nginx + HTTPS）
+│   ├── DEPLOY.md          # 部署指南（systemd + nginx + HTTPS）
 │   └── DESIGN.md          # 设计系统规范
 └── start.sh               # 本地一键启动
 ```
@@ -101,7 +101,7 @@ Pull Request 到 `main` 时 GitHub Actions 自动跑前后端测试；合并到 
 
 ## 部署
 
-生产部署（阿里云 ECS + **宝塔面板：Node 项目跑后端 + nginx 托管前端 + Let's Encrypt 配 HTTPS**）见 **[docs/DEPLOY.md](docs/DEPLOY.md)**，含安全组、OSS 跨域、IMM 绑定与常见故障排查。
+生产部署（阿里云 ECS + **systemd 托管后端 + nginx 托管前端 + Let's Encrypt 配 HTTPS**）见 **[docs/DEPLOY.md](docs/DEPLOY.md)**，含安全组、OSS 跨域、IMM 绑定与常见故障排查。
 
 ## 设计规范
 

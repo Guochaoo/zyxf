@@ -1,14 +1,14 @@
-# 部署到阿里云 ECS（宝塔面板：Node + nginx）
+# 部署到阿里云 ECS（systemd + nginx）
 
-> 本项目已从 Docker 部署改版为**宝塔面板手动部署**（Node 项目跑后端 + nginx 托管前端 + Let's Encrypt 配 HTTPS）。
-> 服务器不再需要 Docker；仓库里也移除了 `docker-compose.yml` 与各 `Dockerfile`。
+> 后端用 **systemd** 托管（`deploy/zyxf.service`），前端构建产物由 **nginx** 托管并反代 `/api`，HTTPS 用 Let's Encrypt。
+> 部署不再依赖宝塔面板管理 Node 项目——SSH 上去 `git pull` + 装依赖 + 构建 + `systemctl restart zyxf` 即可，由 `.github/workflows/deploy.yml` 全自动完成。
 
 架构：
 
 ```
-浏览器 ──HTTP/HTTPS──> nginx (宝塔, 80/443)
+浏览器 ──HTTP/HTTPS──> nginx (80/443)
                          ├── /  /assets/*   → 静态文件 (frontend/dist)
-                         └── /api/*          → 反向代理 → http://127.0.0.1:4000 (宝塔 Node 项目)
+                         └── /api/*          → 反向代理 → http://127.0.0.1:4000 (systemd: zyxf.service)
                                                                └── 阿里云 OSS (直传/直读)
 ```
 
@@ -43,13 +43,15 @@ OSS 控制台 → 你的 Bucket → **数据安全 → 跨域设置** → 添加
 
 ---
 
-## 1. 宝塔面板准备
+## 1. 服务器准备
 
-在宝塔「软件商店」安装：
+需要：
 
 - **Nginx**（托管前端 + 反代 `/api`）
-- **Node.js 版本管理器**（安装 **Node 24**；better-sqlite3 v12 需 Node ≥ 22）
-- （可选）PM2 管理器——本项目后端不在命令行用 pm2 启动，而是走宝塔「Node 项目」，所以非必需。
+- **Node 24**（项目使用内置 `node:sqlite`，无原生编译依赖，安装后无需配置二进制源）
+- **systemd**（Linux 标配，无需额外安装）
+
+> Node 24 若仍装在宝塔路径 `/www/server/nodejs/v24.20.0/bin`，本仓库的 systemd unit 与 deploy workflow 都按该绝对路径调用，无需软链到全局；如果你想用全局 `node`，改 `deploy/zyxf.service` 的 `ExecStart` 和 `deploy.yml` 里的 `export PATH` 即可。
 
 ---
 
@@ -99,29 +101,28 @@ openssl rand -hex 32
 
 ---
 
-## 3. 后端：宝塔 Node 项目
+## 3. 后端：systemd 服务
 
-1. 宝塔 → **Node 项目** → **添加项目**
-2. 对照填写：
+后端由 systemd 托管，`deploy/zyxf.service` 已随仓库提供（`User=www`、`WorkingDirectory=/opt/zyxf/backend`、`NODE_ENV=production`、`ExecStart` 指向 Node 24 绝对路径）。
 
-   | 字段 | 值 |
-   |---|---|
-   | 项目目录 | `/opt/zyxf/backend` |
-   | 项目名称 | `zyxf` |
-   | 启动选项 | `start: node src/index.js` |
-   | Node 版本 | `v24.20.0` |
-   | 包管理器 | `npm` |
-   | 运行用户 | `www` |
-   | 项目端口 | `4000` |
+首次部署（deploy workflow 会自动执行）：
 
-3. 点**确定**（宝塔自动 `npm install` 并启动）。
-4. 验证：浏览器/本机 `curl http://127.0.0.1:4000/api/health` → 返回 `{"ok":true,...}`。
+```bash
+cp /opt/zyxf/deploy/zyxf.service /etc/systemd/system/zyxf.service
+systemctl daemon-reload
+systemctl enable zyxf
+systemctl restart zyxf
+```
 
-> 若 `npm install` 时 better-sqlite3 从 GitHub 下载失败，先设国内二进制源再装（终端执行）：
-> ```bash
-> npm config set better_sqlite3_binary_host https://registry.npmmirror.com/-/binary/better-sqlite3
-> ```
-> 且务必用 **Node 24** 安装（better-sqlite3 二进制 ABI 与旧 Node 不符会导致启动 `core dumped`）。
+日常命令：
+
+```bash
+systemctl restart zyxf          # 重启
+systemctl status zyxf           # 查看状态
+journalctl -u zyxf -f           # 跟踪日志
+```
+
+验证：`curl http://127.0.0.1:4000/api/health` → 返回 `{"ok":true,...}`。
 
 ---
 
@@ -136,54 +137,57 @@ npm install
 npm run build        # 生成 dist/
 ```
 
-### 4.2 添加站点
+### 4.2 nginx 站点配置
 
-宝塔 → **网站** → **添加站点**：
+在 `/etc/nginx/conf.d/zyxf.conf`（或宝塔已建站点的配置目录）写一份配置，把 `/` 静态托管与 `/api` 反代分开：
 
-| 字段 | 值 |
-|---|---|
-| 域名 | `zyxf.top` |
-| 根目录 | `/opt/zyxf/frontend/dist` |
-| PHP 版本 | 纯静态 |
+```nginx
+server {
+    listen 80;
+    server_name zyxf.top;
 
-### 4.3 配置反向代理
+    root /opt/zyxf/frontend/dist;
+    index index.html;
 
-站点 → **设置 → 反向代理** → 添加：
+    location /api/ {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;          # AI 聊天 SSE 流式需要
+        proxy_read_timeout 120s;
+    }
 
-| 字段 | 值 |
-|---|---|
-| 代理名称 | `zyxf-api` |
-| 代理目录 | `/api` |
-| 目标 URL | `http://127.0.0.1:4000` |
+    location / {
+        try_files $uri $uri/ /index.html;  # SPA 路由回退
+    }
+}
+```
 
-保存后 nginx 会生成 `location ^~ /api { proxy_pass http://127.0.0.1:4000; ... }`，只有 `/api/*` 转发给后端，`/` 由 nginx 从 `dist` 读取静态文件。
+写完后：
 
-> 也可在「配置文件」里手动粘贴（注意把 `/` 静态托管与 `/api` 反代分开）：
-> ```nginx
-> location /api/ {
->     proxy_pass http://127.0.0.1:4000;
->     proxy_http_version 1.1;
->     proxy_set_header Host $host;
->     proxy_set_header X-Real-IP $remote_addr;
->     proxy_set_header X-Forwarded-For $remote_addr;
->     proxy_set_header X-Forwarded-Proto $scheme;
->     proxy_buffering off;          # AI 聊天 SSE 流式需要
->     proxy_read_timeout 120s;
-> }
-> location / {
->     try_files $uri $uri/ /index.html;  # SPA 路由回退
-> }
-> ```
+```bash
+nginx -t && systemctl reload nginx
+```
+
+> 若 nginx 是宝塔安装的，配置文件可能放在宝塔的站点目录下；直接在对应站点配置里粘贴上述 `location` 块即可，效果一致。
 
 ---
 
 ## 5. HTTPS（Let's Encrypt）
 
-1. 站点 → **设置 → SSL → Let's Encrypt** → 勾选 `zyxf.top` → 申请证书。
-2. 申请成功后勾选「**强制 HTTPS**」。
-3. 之后用 `https://zyxf.top` 访问。
+用 certbot 直接申请（不经过宝塔）：
 
-> 前提：域名已解析到 ECS 公网 IP。若 80 端口被占用，把 `.env` 里 `HTTP_PORT` 改成 8080（但 Let's Encrypt 续期依赖 80/443，建议保持 80）。
+```bash
+apt install -y certbot python3-certbot-nginx   # 或 yum install certbot python3-certbot-nginx
+certbot --nginx -d zyxf.top
+```
+
+certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续期（`certbot renew` 由系统 timer 自动跑）。之后用 `https://zyxf.top` 访问。
+
+> 前提：域名已解析到 ECS 公网 IP，80/443 端口开放（Let's Encrypt 验证与续期都依赖）。
 
 ---
 
@@ -199,8 +203,9 @@ npm run build        # 生成 dist/
 
 ## 7. 日常运维
 
-- 后端日志：宝塔 Node 项目 → `zyxf` → 项目日志；或 `tail -f /opt/zyxf/backend/run.log`
-- 后端重启：宝塔 Node 项目 → `zyxf` → 重启
+- 后端日志：`journalctl -u zyxf -f`
+- 后端重启：`systemctl restart zyxf`
+- 后端状态：`systemctl status zyxf`
 - 前端重构：`cd /opt/zyxf/frontend && npm install && npm run build`
 - 数据库备份（重要）：
   ```bash
@@ -214,8 +219,7 @@ npm run build        # 生成 dist/
 
 | 现象 | 原因 | 解决 |
 |---|---|---|
-| `/api/*` 502 | 后端没起 | 看 `/opt/zyxf/backend/run.log`；`ps aux \| grep index.js` 确认进程 |
-| 后端启动即 `core dumped` | better-sqlite3 二进制 ABI 与运行 Node 版本不符 | 用 **Node 24** 重装（`rm -rf node_modules && npm install`）|
+| `/api/*` 502 | 后端没起 | `systemctl status zyxf`；`journalctl -u zyxf -n 50` 看启动报错 |
 | 后端启动即退（无日志） | `JWT_SECRET`/`ADMIN_PASSWORD` 不合生产校验 | 用 `openssl rand -hex 32` + 12 位强密码 |
 | 上传报 CORS | OSS 跨域规则没加域名 | 回 0.2 节加 `https://zyxf.top` |
 | 上传报 SignatureDoesNotMatch | 服务器时间不准 | `sudo timedatectl set-ntp true` |

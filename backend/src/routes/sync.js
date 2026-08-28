@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import path from 'node:path';
 import rateLimit from 'express-rate-limit';
-import { db } from '../db.js';
+import { db, transaction } from '../db.js';
 import { listOssObjects } from '../oss.js';
 import { nextSortOrder } from '../dbHelpers.js';
 import { cleanObjectSegment, ossPrefix, placeholderKeyForFolder } from '../storagePath.js';
@@ -54,7 +54,7 @@ router.post('/', syncLimiter, async (req, res, next) => {
       repaired_files: 0,
     };
 
-    const tx = db.transaction(() => {
+    const tx = transaction(() => {
       const ensureFolderChain = (segments) => {
         let parentId = null;
         for (const seg of segments) {
