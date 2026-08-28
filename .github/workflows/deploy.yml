@@ -74,4 +74,13 @@ jobs:
             export PATH="/www/server/nodejs/v24.20.0/bin:$PATH"
             npm config set registry https://registry.npmmirror.com
             npm install --no-audit --no-fund
+
+            # vite build 会先清空 dist/，但宝塔生成的 dist/.user.ini 带 `i`
+            # 不可变位（immutable），连 root 直接 rm 都报 EPERM。必须先 chattr -i
+            # 解锁再删，否则 build 在 emptyDir 阶段失败。
+            if [ -f /opt/zyxf/frontend/dist/.user.ini ]; then
+              chattr -i /opt/zyxf/frontend/dist/.user.ini 2>/dev/null || true
+              rm -f /opt/zyxf/frontend/dist/.user.ini || true
+            fi
+
             npm run build
