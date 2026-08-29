@@ -34,3 +34,27 @@ export function nextSortOrder(db, table, column, parentId) {
   const row = parentId === null ? stmt.get() : stmt.get(parentId);
   return row.n;
 }
+
+// Does a folder with this id exist? Shared by the "parent folder must exist"
+// checks in folders/files routes.
+export function folderExists(db, id) {
+  return !!db.prepare('SELECT id FROM folders WHERE id = ?').get(id);
+}
+
+// Same-name sibling check: a row in `table` with `name` under the same parent
+// (parentId === null means root), optionally excluding one id (rename/move
+// self-checks). table/parentColumn come from fixed call-site literals.
+export function findSibling(db, table, { name, parentColumn, parentId, excludeId = null }) {
+  const where = parentId === null ? `${parentColumn} IS NULL` : `${parentColumn} = ?`;
+  const args = parentId === null ? [] : [parentId];
+  return db
+    .prepare(
+      `SELECT id FROM ${table} WHERE name = ? AND ${where}${excludeId != null ? ' AND id != ?' : ''}`
+    )
+    .get(name, ...args, ...(excludeId != null ? [excludeId] : []));
+}
+
+// SQLite UNIQUE constraint violation predicate (shared 409 fallback).
+export function isUniqueError(e) {
+  return String(e.message).includes('UNIQUE');
+}
