@@ -604,6 +604,47 @@ function ItemListWithRename({
       ),
     [data]
   );
+  // 文件夹在前、文件在后合成单一渲染流（两段 .map 结构一致，仅点击与操作不同）。
+  const rows = [
+    ...(data?.folders || []).map((f) => ({
+      key: `d-${f.id}`,
+      item: { ...f, type: 'folder' },
+      onClick: () => onEnterFolder(f),
+      actions:
+        isAdmin && (
+          <>
+            <RowAction title="重命名" onClick={() => onRenameFolder(f)}>
+              <PenLine className="w-4 h-4" />
+            </RowAction>
+            <RowAction title="删除" onClick={() => onDeleteFolder(f)}>
+              <Trash className="w-4 h-4" />
+            </RowAction>
+          </>
+        ),
+    })),
+    ...(data?.files || []).map((f) => ({
+      key: `f-${f.id}`,
+      item: { ...f, type: 'file' },
+      onClick: () => onPreviewFile(f),
+      actions: (
+        <>
+          <RowAction title="下载" onClick={() => onDownloadFile(f)}>
+            <Download className="w-4 h-4" />
+          </RowAction>
+          {isAdmin && (
+            <>
+              <RowAction title="重命名" onClick={() => onRenameFile(f)}>
+                <PenLine className="w-4 h-4" />
+              </RowAction>
+              <RowAction title="删除" onClick={() => onDeleteFile(f)}>
+                <Trash className="w-4 h-4" />
+              </RowAction>
+            </>
+          )}
+        </>
+      ),
+    })),
+  ];
   return (
     <GlideList as="ul" highlightClassName="bg-slate-50">
       <li className="rb-table-heading hidden sm:flex items-center gap-2 px-4 py-2 text-xs text-slate-500 bg-[#EFEFEF]">
@@ -616,11 +657,11 @@ function ItemListWithRename({
         <span className="w-28 text-right">修改时间</span>
         <span className={`${actionWidthClass} text-right`}>操作</span>
       </li>
-      {data.folders.map((f) => (
+      {rows.map(({ key, item, onClick, actions }) => (
         <Row
-          key={`d-${f.id}`}
-          item={{ ...f, type: 'folder' }}
-          tone={toneFor(f.size, thresholds)}
+          key={key}
+          item={item}
+          tone={toneFor(item.size, thresholds)}
           isAdmin={isAdmin}
           dragging={dragging}
           dropZone={dropZone}
@@ -630,53 +671,8 @@ function ItemListWithRename({
           onRowDragOver={onRowDragOver}
           onRowDragLeave={onRowDragLeave}
           onRowDrop={onRowDrop}
-          onClick={() => onEnterFolder(f)}
-          actions={
-            isAdmin && (
-              <>
-                <RowAction title="重命名" onClick={() => onRenameFolder(f)}>
-                  <PenLine className="w-4 h-4" />
-                </RowAction>
-                <RowAction title="删除" onClick={() => onDeleteFolder(f)}>
-                  <Trash className="w-4 h-4" />
-                </RowAction>
-              </>
-            )
-          }
-        />
-      ))}
-      {data.files.map((f) => (
-        <Row
-          key={`f-${f.id}`}
-          item={{ ...f, type: 'file' }}
-          tone={toneFor(f.size, thresholds)}
-          isAdmin={isAdmin}
-          dragging={dragging}
-          dropZone={dropZone}
-          actionWidthClass={actionWidthClass}
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          onRowDragOver={onRowDragOver}
-          onRowDragLeave={onRowDragLeave}
-          onRowDrop={onRowDrop}
-          onClick={() => onPreviewFile(f)}
-          actions={
-            <>
-              <RowAction title="下载" onClick={() => onDownloadFile(f)}>
-                <Download className="w-4 h-4" />
-              </RowAction>
-              {isAdmin && (
-                <>
-                  <RowAction title="重命名" onClick={() => onRenameFile(f)}>
-                    <PenLine className="w-4 h-4" />
-                  </RowAction>
-                  <RowAction title="删除" onClick={() => onDeleteFile(f)}>
-                    <Trash className="w-4 h-4" />
-                  </RowAction>
-                </>
-              )}
-            </>
-          }
+          onClick={onClick}
+          actions={actions}
         />
       ))}
     </GlideList>
