@@ -2,8 +2,8 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
-// jsdom has no ResizeObserver; several components (nav indicator, glass
-// surfaces) instantiate one during effects.
+// jsdom has no ResizeObserver; several components (nav indicator,
+// GlideList/Silk/Dashboard) instantiate one during effects.
 class ResizeObserverStub {
   observe() {}
   unobserve() {}

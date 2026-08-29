@@ -4,10 +4,10 @@ import { formatMonthDay } from '../utils.js';
 
 /* ─────────────────────────────────────────────────────────
  * INSIGHT CARDS
- * Three card styles (compare / anomaly / allocation) driven
- * by real project data. Visuals keep the liveline design
- * system 1:1: bg-surface cards, inset chart panels, hairline
- * shadows, ink text and pill badges.
+ * Two card styles (anomaly / allocation) driven by real
+ * project data. Visuals keep the liveline design system 1:1:
+ * bg-surface cards, inset chart panels, subtle raised shadows
+ * (shadow-btn), ink text and pill badges.
  * ───────────────────────────────────────────────────────── */
 
 const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
@@ -165,7 +165,7 @@ function HoverMarker({ x, children }) {
   );
 }
 
-/* 2 — anomaly: threshold + big value, metric toggle, line chart
+/* 1 — anomaly: threshold + big value, metric toggle, line chart
    props: title, metrics = [{ key, label, points, value, thresholdText,
           footer, delta, vsText, formatValue, icon }] (exactly two).
    The chart shows only the selected metric; keying Liveline by the metric
@@ -259,7 +259,7 @@ export function AnomalyCard({ title, metrics, className = '' }) {
   );
 }
 
-/* 3 — allocation: hero number + segmented bar + legend
+/* 2 — allocation: hero number + segmented bar + legend
    props: title, segments = [{ name, label, badge, pct, amount, desc, cls, tone }],
           extra (optional trailing legend node) */
 export function AllocationCard({ title, segments, extra }) {

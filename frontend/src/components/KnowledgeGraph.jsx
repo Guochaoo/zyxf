@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronUp, Globe, Maximize, X } from 'lucide-react';
+import { Globe, Maximize, X } from 'lucide-react';
 import {
   forceCenter,
   forceCollide,
@@ -9,6 +9,7 @@ import {
   forceSimulation,
 } from 'd3-force';
 import { useFolderTree } from '../hooks/useFolderTree.js';
+import PanelHeader from './PanelHeader.jsx';
 import { ICON_BUTTON_CLASS } from './ui.js';
 import { openFilePreview } from '../ui.js';
 
@@ -114,52 +115,41 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
       className={`relative flex shrink-0 flex-col bg-white rounded-[14px] overflow-hidden ${className}`.trim()}
     >
       {/* 头部栏 — 灰底标签行；收起后仅剩本栏（14px 圆角胶囊） */}
-      <div className="flex shrink-0 items-center justify-between gap-1 bg-[#EFEFEF] p-1.5">
-        <span className="shrink-0 px-2 py-[3px] text-[13px] font-medium text-ink">知识图谱</span>
-        <div className="flex shrink-0 items-center gap-1">
-          {!empty && !collapsed && (
-            <>
-              <button
-                type="button"
-                onClick={() => setDialog('full')}
-                title="查看全库图谱"
-                aria-label="查看全库图谱"
-                className={ICON_BUTTON_CLASS}
-              >
-                <Globe className="h-[15px] w-[15px]" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setDialog('local')}
-                title="放大当前图谱"
-                aria-label="放大当前图谱"
-                className={ICON_BUTTON_CLASS}
-              >
-                <Maximize className="h-[15px] w-[15px]" />
-              </button>
-            </>
-          )}
-          <button
-            type="button"
-            onClick={() =>
-              setCollapsed((v) => {
-                collapsedPersistent = !v;
-                return !v;
-              })
-            }
-            title={collapsed ? '展开图谱' : '收起图谱'}
-            aria-label={collapsed ? '展开图谱' : '收起图谱'}
-            aria-expanded={!collapsed}
-            className={ICON_BUTTON_CLASS}
-          >
-            {collapsed ? (
-              <ChevronDown className="h-[15px] w-[15px]" />
-            ) : (
-              <ChevronUp className="h-[15px] w-[15px]" />
-            )}
-          </button>
-        </div>
-      </div>
+      <PanelHeader
+        title="知识图谱"
+        collapsed={collapsed}
+        onToggleCollapsed={() =>
+          setCollapsed((v) => {
+            collapsedPersistent = !v;
+            return !v;
+          })
+        }
+        expandTitle="展开图谱"
+        collapseTitle="收起图谱"
+      >
+        {!empty && (
+          <>
+            <button
+              type="button"
+              onClick={() => setDialog('full')}
+              title="查看全库图谱"
+              aria-label="查看全库图谱"
+              className={ICON_BUTTON_CLASS}
+            >
+              <Globe className="h-[15px] w-[15px]" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setDialog('local')}
+              title="放大当前图谱"
+              aria-label="放大当前图谱"
+              className={ICON_BUTTON_CLASS}
+            >
+              <Maximize className="h-[15px] w-[15px]" />
+            </button>
+          </>
+        )}
+      </PanelHeader>
       {/* 图谱内容区：高度动画收起/展开，下方对话卡片（flex-1）自然补位 */}
       <div
         className="overflow-hidden transition-[height] duration-[360ms]"

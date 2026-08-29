@@ -5,7 +5,7 @@ import { requireAdmin } from '../auth.js';
 import { buildPostPolicy, copyOssObject, deleteOssObjectIfExists, signedGetUrl } from '../oss.js';
 import { generateWebofficeToken, refreshWebofficeToken } from '../imm.js';
 import { mimeOf } from '../mime.js';
-import { nextSortOrder } from '../dbHelpers.js';
+import { findSibling, folderExists, isUniqueError, nextSortOrder } from '../dbHelpers.js';
 import { objectKeyForFile, ossPrefix, parseOptionalFolderId } from '../storagePath.js';
 import { isExtAllowed, normalizeExt, PREVIEWABLE_EXTS, shouldForceDownload } from '../extPolicy.js';
 import { adminBypassLimiter } from '../limiter.js';
@@ -52,15 +52,8 @@ function sanitizeName(name) {
 
 // Shared duplicate-name check: a file with the same (non-NULL) folder_id and
 // name, optionally excluding one id (for rename/move self-checks).
-function findFileByName(name, folderId, excludeId) {
-  return db
-    .prepare(
-      excludeId == null
-        ? 'SELECT id FROM files WHERE name = ? AND folder_id IS ?'
-        : 'SELECT id FROM files WHERE name = ? AND folder_id IS ? AND id != ?'
-    )
-    .get(name, folderId, ...(excludeId == null ? [] : [excludeId]));
-}
+const findFileByName = (name, folderId, excludeId) =>
+  findSibling(db, 'files', { name, parentColumn: 'folder_id', parentId: folderId, excludeId });
 
 // Shared validation for both upload steps: filename, parent folder, duplicate
 // name and extension whitelist. Returns { trimmed, pid, ext } or { error, status }.
@@ -69,7 +62,7 @@ function validateUploadInput(name, folderId) {
   if (!trimmed) return { error: '文件名不能为空' };
   const pid = parseOptionalFolderId(folderId);
   if (Number.isNaN(pid)) return { error: '无效的文件夹 ID' };
-  if (pid !== null && !db.prepare('SELECT id FROM folders WHERE id = ?').get(pid)) {
+  if (pid !== null && !folderExists(db, pid)) {
     return { error: '文件夹不存在' };
   }
   if (findFileByName(trimmed, pid)) {
@@ -137,7 +130,7 @@ router.post('/', requireAdmin, wrapAsync(async (req, res) => {
       );
     res.json({ id: info.lastInsertRowid });
   } catch (e) {
-    if (String(e.message).includes('UNIQUE')) {
+    if (isUniqueError(e)) {
       return res.status(409).json({ error: '此文件夹中已存在同名文件' });
     }
     throw e;
@@ -210,6 +203,15 @@ router.post('/:id/weboffice-refresh', downloadLimiterShort, downloadLimiterLong,
   }
 }));
 
+// Shared OSS write skeleton for rename/move: copy object → DB update → delete
+// old object. copyOssObject no-ops when keys are equal; `deleteOld` guards the
+// delete step so a same-key rename never deletes the live object.
+async function copyUpdateDelete(file, newKey, update, deleteOld = true) {
+  await copyOssObject(file.oss_key, newKey);
+  update();
+  if (deleteOld) await deleteOssObjectIfExists(file.oss_key);
+}
+
 // Move or rename a file
 router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
   const file = getFileOr404(req, res);
@@ -234,15 +236,18 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
     }
 
     try {
-      const keyChanged = file.oss_key !== newKey;
-      if (keyChanged) await copyOssObject(file.oss_key, newKey);
-      db.prepare('UPDATE files SET name = ?, ext = ?, oss_key = ? WHERE id = ?').run(
-        newName,
-        ext || null,
+      await copyUpdateDelete(
+        file,
         newKey,
-        id
+        () =>
+          db.prepare('UPDATE files SET name = ?, ext = ?, oss_key = ? WHERE id = ?').run(
+            newName,
+            ext || null,
+            newKey,
+            id
+          ),
+        file.oss_key !== newKey
       );
-      if (keyChanged) await deleteOssObjectIfExists(file.oss_key);
       return res.json({ ok: true, name: newName, oss_key: newKey });
     } catch (e) {
       return next(e);
@@ -251,7 +256,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
 
   const target = parseOptionalFolderId(req.body?.folder_id);
   if (Number.isNaN(target)) return res.status(400).json({ error: '无效的文件夹 ID' });
-  if (target !== null && !db.prepare('SELECT id FROM folders WHERE id = ?').get(target)) {
+  if (target !== null && !folderExists(db, target)) {
     return res.status(400).json({ error: '目标文件夹不存在' });
   }
   if (target === file.folder_id) return res.json({ ok: true, unchanged: true });
@@ -260,15 +265,15 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
   }
   const newKey = objectKeyForFile(db, target, file.name);
   try {
-    await copyOssObject(file.oss_key, newKey);
-    const so = nextSortOrder(db, 'files', 'folder_id', target);
-    db.prepare('UPDATE files SET folder_id = ?, oss_key = ?, sort_order = ? WHERE id = ?').run(
-      target,
-      newKey,
-      so,
-      id
-    );
-    await deleteOssObjectIfExists(file.oss_key);
+    await copyUpdateDelete(file, newKey, () => {
+      const so = nextSortOrder(db, 'files', 'folder_id', target);
+      db.prepare('UPDATE files SET folder_id = ?, oss_key = ?, sort_order = ? WHERE id = ?').run(
+        target,
+        newKey,
+        so,
+        id
+      );
+    });
     res.json({ ok: true });
   } catch (e) {
     return next(e);
