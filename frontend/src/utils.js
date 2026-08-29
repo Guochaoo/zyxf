@@ -32,14 +32,16 @@ export function timeAgo(ts) {
 }
 
 // ---- extension classification (mirrors backend extPolicy.js) ----
+// Macro-enabled Office formats (docm/dotm/xlsm/xltm/pptm/potm) are rejected
+// by the backend upload whitelist, so they are intentionally absent here too.
 
 const OFFICE_EXT = new Set([
   // Word
-  'doc', 'dot', 'wps', 'wpt', 'docx', 'dotx', 'docm', 'dotm', 'rtf',
+  'doc', 'dot', 'wps', 'wpt', 'docx', 'dotx', 'rtf',
   // PPT
-  'ppt', 'pptx', 'pptm', 'ppsx', 'ppsm', 'pps', 'potx', 'potm', 'dpt', 'dps',
+  'ppt', 'pptx', 'ppsx', 'ppsm', 'pps', 'potx', 'dpt', 'dps',
   // Excel
-  'xls', 'xlt', 'et', 'xlsx', 'xltx', 'csv', 'xlsm', 'xltm',
+  'xls', 'xlt', 'et', 'xlsx', 'xltx', 'csv',
   // PDF
   'pdf',
   // 文本

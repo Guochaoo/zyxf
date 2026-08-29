@@ -416,7 +416,7 @@ export default function BrowsePage() {
         </div>
       )}
       {moveError && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-40 text-xs text-red-700 bg-red-50 border border-red-200 rounded-full shadow-md px-4 py-1.5">
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-40 text-xs text-red bg-red/10 border border-red/30 rounded-full shadow-md px-4 py-1.5">
           {moveError}
         </div>
       )}
@@ -425,7 +425,7 @@ export default function BrowsePage() {
           className={`fixed left-1/2 -translate-x-1/2 bottom-14 z-40 text-xs rounded-full shadow-md px-4 py-1.5 ${
             syncMsgOk
               ? 'text-black/70 bg-black/5 border border-black/10'
-              : 'text-red-700 bg-red-50 border border-red-200'
+              : 'text-red bg-red/10 border border-red/30'
           }`}
           role="status"
         >
@@ -442,7 +442,7 @@ export default function BrowsePage() {
             <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-400" /> 加载中…
           </div>
         ) : err ? (
-          <div className="py-16 text-center text-red-500">{err}</div>
+          <div className="py-16 text-center text-red">{err}</div>
         ) : (
           <ItemListWithRename
             data={data}
