@@ -3,7 +3,7 @@ import path from 'node:path';
 import rateLimit from 'express-rate-limit';
 import { db, transaction } from '../db.js';
 import { listOssObjects } from '../oss.js';
-import { nextSortOrder } from '../dbHelpers.js';
+import { buildFolderIndex, nextSortOrder } from '../dbHelpers.js';
 import { cleanObjectSegment, ossPrefix, placeholderKeyForFolderFromMap } from '../storagePath.js';
 import { normalizeExt } from '../extPolicy.js';
 
@@ -157,15 +157,9 @@ router.post('/', syncLimiter, async (req, res, next) => {
         // 逐行 DELETE 改为：收集整棵死树的节点 id（后序），再分批 IN 删除（BUG-08）。
         // N+1 修复：一次加载全库 folders / files 到内存 map，再在内存里对整棵
         // 树判活 + 收集死树，placeholder key 也从内存 map 计算，不再每层/每节点查库。
-        const allFolderRows = db.prepare('SELECT id, name, parent_id FROM folders').all();
-        const folderMap = new Map(); // id -> { name, parent_id }
-        const childrenOf = new Map(); // parent_id -> [childId, ...]
-        for (const f of allFolderRows) {
-          folderMap.set(f.id, { name: f.name, parent_id: f.parent_id });
-          if (f.parent_id == null) continue;
-          if (!childrenOf.has(f.parent_id)) childrenOf.set(f.parent_id, []);
-          childrenOf.get(f.parent_id).push(f.id);
-        }
+        const { folderMap, childrenOf } = buildFolderIndex(
+          db.prepare('SELECT id, name, parent_id FROM folders').all()
+        );
         const folderHasFiles = new Set(
           db.prepare('SELECT DISTINCT folder_id FROM files').all().map((r) => r.folder_id)
         );

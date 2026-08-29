@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db, transaction } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { copyOssObject, deleteOssObjectIfExists, putEmptyOssObject } from '../oss.js';
-import { nextSortOrder } from '../dbHelpers.js';
+import { buildFolderIndex, groupByKey, nextSortOrder } from '../dbHelpers.js';
 import { wrapAsync, serviceError } from '../http.js';
 import { objectKeyForFileFromMap, parseOptionalFolderId, placeholderKeyForFolder, placeholderKeyForFolderFromMap } from '../storagePath.js';
 
@@ -83,15 +83,9 @@ function computeFolderSizes(folderIds) {
 // OSS keys from memory instead of re-querying per file/folder.
 function collectFolderTree(folderId) {
   // Query 1: all folders once, then group children by parent in memory.
-  const allFolders = db.prepare('SELECT id, name, parent_id FROM folders').all();
-  const childrenOf = new Map(); // parent_id -> [childId, ...]
-  const folderMap = new Map(); // id -> { name, parent_id }
-  for (const f of allFolders) {
-    folderMap.set(f.id, { name: f.name, parent_id: f.parent_id });
-    if (f.parent_id == null) continue;
-    if (!childrenOf.has(f.parent_id)) childrenOf.set(f.parent_id, []);
-    childrenOf.get(f.parent_id).push(f.id);
-  }
+  const { folderMap, childrenOf } = buildFolderIndex(
+    db.prepare('SELECT id, name, parent_id FROM folders').all()
+  );
 
   // DFS pre-order from the root folder, preserving the original walk order.
   const folderIds = [];
@@ -104,12 +98,10 @@ function collectFolderTree(folderId) {
   }
 
   // Query 2: all files once, grouped by folder_id for O(1) lookup.
-  const filesByFolder = new Map(); // folder_id -> [fileRow, ...]
-  for (const f of db.prepare('SELECT id, folder_id, name, oss_key FROM files').all()) {
-    const key = f.folder_id ?? null;
-    if (!filesByFolder.has(key)) filesByFolder.set(key, []);
-    filesByFolder.get(key).push(f);
-  }
+  const filesByFolder = groupByKey(
+    db.prepare('SELECT id, folder_id, name, oss_key FROM files').all(),
+    (f) => f.folder_id ?? null
+  );
 
   const files = [];
   for (const fid of folderIds) {
@@ -211,18 +203,8 @@ router.get('/tree', (_req, res) => {
   };
   const nodeFiles = (f) => ({ id: f.id, name: f.name, ext: f.ext, size: f.size, folder_id: f.folder_id });
 
-  const childrenOf = new Map(); // parent_id (or null) -> child folders
-  const filesOf = new Map(); // folder_id (or null) -> files
-  for (const f of folders) {
-    const key = f.parent_id ?? null;
-    if (!childrenOf.has(key)) childrenOf.set(key, []);
-    childrenOf.get(key).push(f);
-  }
-  for (const f of files) {
-    const key = f.folder_id ?? null;
-    if (!filesOf.has(key)) filesOf.set(key, []);
-    filesOf.get(key).push(f);
-  }
+  const childrenOf = groupByKey(folders, (f) => f.parent_id ?? null);
+  const filesOf = groupByKey(files, (f) => f.folder_id ?? null);
 
   const build = (parentId) => {
     const rows = (childrenOf.get(parentId) || []).slice().sort(cellCompare);
