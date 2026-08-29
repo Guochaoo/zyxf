@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db, transaction } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { copyOssObject, deleteOssObjectIfExists, putEmptyOssObject } from '../oss.js';
-import { buildFolderIndex, groupByKey, nextSortOrder } from '../dbHelpers.js';
+import { buildFolderIndex, findSibling, folderExists, groupByKey, isUniqueError, nextSortOrder } from '../dbHelpers.js';
 import { wrapAsync, serviceError } from '../http.js';
 import { objectKeyForFileFromMap, parseOptionalFolderId, placeholderKeyForFolder, placeholderKeyForFolderFromMap } from '../storagePath.js';
 
@@ -44,15 +44,8 @@ function getFolder(id) {
 }
 
 // A folder with the same name in the same parent, optionally excluding one id.
-function findFolderInParent(name, parentId, excludeId = null) {
-  const where = parentId === null ? 'parent_id IS NULL' : 'parent_id = ?';
-  const args = parentId === null ? [] : [parentId];
-  return db
-    .prepare(
-      `SELECT id FROM folders WHERE name = ? AND ${where}${excludeId ? ' AND id != ?' : ''}`
-    )
-    .get(name, ...args, ...(excludeId ? [excludeId] : []));
-}
+const findFolderInParent = (name, parentId, excludeId = null) =>
+  findSibling(db, 'folders', { name, parentColumn: 'parent_id', parentId, excludeId });
 
 // Recursive total size of each given folder (sum of all descendant files).
 function computeFolderSizes(folderIds) {
@@ -288,8 +281,7 @@ router.post('/', requireAdmin, wrapAsync(async (req, res, next) => {
   const pid = parseOptionalFolderId(parent_id);
   if (Number.isNaN(pid)) return res.status(400).json({ error: '无效的父级 ID' });
   if (pid !== null) {
-    const parent = db.prepare('SELECT id FROM folders WHERE id = ?').get(pid);
-    if (!parent) return res.status(400).json({ error: '父文件夹不存在' });
+    if (!folderExists(db, pid)) return res.status(400).json({ error: '父文件夹不存在' });
   }
   if (findFolderInParent(trimmed, pid)) {
     return res.status(409).json({ error: '同名文件夹已存在' });
@@ -312,7 +304,7 @@ router.post('/', requireAdmin, wrapAsync(async (req, res, next) => {
     }
     res.json({ id: info.lastInsertRowid, name: trimmed, parent_id: pid });
   } catch (e) {
-    if (String(e.message).includes('UNIQUE')) {
+    if (isUniqueError(e)) {
       return res.status(409).json({ error: '同名文件夹已存在' });
     }
     return next(e);
@@ -347,7 +339,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
       if (result.conflict) return res.status(409).json({ error: '目标存储路径已存在同名文件' });
       return res.json({ ok: true, name: newName });
     } catch (e) {
-      if (String(e.message).includes('UNIQUE')) {
+      if (isUniqueError(e)) {
         return res.status(409).json({ error: '同名文件夹已存在' });
       }
       return next(e);
@@ -361,8 +353,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
   if (newParent === id) return res.status(400).json({ error: '不能移动到自己内部' });
 
   if (newParent !== null) {
-    const exists = db.prepare('SELECT id FROM folders WHERE id = ?').get(newParent);
-    if (!exists) return res.status(400).json({ error: '目标父文件夹不存在' });
+    if (!folderExists(db, newParent)) return res.status(400).json({ error: '目标父文件夹不存在' });
     // Walk up from newParent; if we hit id, it's a descendant => cycle.
     let cur = newParent;
     const seen = new Set();
@@ -391,7 +382,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
     if (result.conflict) return res.status(409).json({ error: '目标存储路径已存在同名文件' });
     res.json({ ok: true });
   } catch (e) {
-    if (String(e.message).includes('UNIQUE')) {
+    if (isUniqueError(e)) {
       return res.status(409).json({ error: '目标位置已存在同名文件夹' });
     }
     return next(e);

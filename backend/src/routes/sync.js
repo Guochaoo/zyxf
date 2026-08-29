@@ -1,21 +1,14 @@
 import { Router } from 'express';
 import path from 'node:path';
-import rateLimit from 'express-rate-limit';
 import { db, transaction } from '../db.js';
 import { listOssObjects } from '../oss.js';
 import { buildFolderIndex, nextSortOrder } from '../dbHelpers.js';
+import { adminBypassLimiter } from '../limiter.js';
 import { cleanObjectSegment, ossPrefix, placeholderKeyForFolderFromMap } from '../storagePath.js';
 import { normalizeExt } from '../extPolicy.js';
 
 // Every IP may sync at most 5 times per minute (admins bypass, like download limits).
-const syncLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => req.user?.role === 'admin',
-  message: { error: '同步过于频繁，请 1 分钟后再试' },
-});
+const syncLimiter = adminBypassLimiter(60 * 1000, 5, '同步过于频繁，请 1 分钟后再试');
 
 const router = Router();
 
