@@ -14,6 +14,19 @@ export function openFilePreview(file, navigate) {
   navigate(target, { state: { previewFile: file } });
 }
 
+// 文件夹链接目标（root → '/'）。DashboardPage / openFolderOrFile 共用。
+export const folderTarget = (folderId) => (folderId ? `/folder/${folderId}` : '/');
+
+// 打开文件夹或文件：文件夹直接进入，文件走预览跳转。
+// SearchBar / ChatComposer 共用（KnowledgeGraph 的 root 特判保留自处）。
+export function openFolderOrFile(item, navigate) {
+  if (item.type === 'folder') {
+    navigate(folderTarget(item.id));
+  } else {
+    openFilePreview(item, navigate);
+  }
+}
+
 // ---- 安全 localStorage（隐私模式 / 被禁用的存储下不抛错）----
 // 与 NoticeModal / ChatComposer 现有的 try/catch 行为保持一致。
 

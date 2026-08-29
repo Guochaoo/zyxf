@@ -37,7 +37,7 @@ import FileIcon from '../components/FileIcon.jsx';
 import Preview from '../components/Preview/index.jsx';
 import UploadDialog from '../components/UploadDialog.jsx';
 import GlideList from '../components/GlideList.jsx';
-import { downloadFileById, errMsg, formatDate, formatSize } from '../utils.js';
+import { downloadAndAlert, errMsg, formatDate, formatSize } from '../utils.js';
 import { useSlidingIndicator } from '../hooks/useSlidingIndicator.js';
 
 // Default = admin-controlled manual order. Comes first.
@@ -359,13 +359,7 @@ export default function BrowsePage() {
     }
   };
 
-  const onDownloadFile = async (f) => {
-    try {
-      await downloadFileById(f, getFileUrl);
-    } catch (e) {
-      alert(e.message || '下载失败');
-    }
-  };
+  const onDownloadFile = (f) => downloadAndAlert(f, getFileUrl);
 
   return (
     <div className="space-y-4">
