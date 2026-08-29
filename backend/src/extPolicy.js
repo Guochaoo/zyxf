@@ -1,8 +1,8 @@
 // Centralized file-extension policy.
 // ---------------------------------------------------------------
 // ALLOWED_EXTS    -> accepted by the upload endpoint
-// FORCE_DOWNLOAD_EXTS -> never previewed inline; always returned with
-//                       Content-Disposition: attachment (defence in depth).
+// PREVIEWABLE_EXTS -> inline-previewable documents (allow-list minus archives)
+// INLINE_IMAGE_EXTS -> legacy raster images may still be served inline
 // BLOCKED_EXTS    -> never accepted, even if mis-listed above.
 // ---------------------------------------------------------------
 

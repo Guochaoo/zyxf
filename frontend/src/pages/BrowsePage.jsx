@@ -37,7 +37,7 @@ import FileIcon from '../components/FileIcon.jsx';
 import Preview from '../components/Preview/index.jsx';
 import UploadDialog from '../components/UploadDialog.jsx';
 import GlideList from '../components/GlideList.jsx';
-import { downloadFileById, errMsg, formatDate, formatSize } from '../utils.js';
+import { downloadAndAlert, errMsg, formatDate, formatSize } from '../utils.js';
 import { useSlidingIndicator } from '../hooks/useSlidingIndicator.js';
 
 // Default = admin-controlled manual order. Comes first.
@@ -359,13 +359,7 @@ export default function BrowsePage() {
     }
   };
 
-  const onDownloadFile = async (f) => {
-    try {
-      await downloadFileById(f, getFileUrl);
-    } catch (e) {
-      alert(e.message || '下载失败');
-    }
-  };
+  const onDownloadFile = (f) => downloadAndAlert(f, getFileUrl);
 
   return (
     <div className="space-y-4">
@@ -422,7 +416,7 @@ export default function BrowsePage() {
         </div>
       )}
       {moveError && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-40 text-xs text-red-700 bg-red-50 border border-red-200 rounded-full shadow-md px-4 py-1.5">
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-40 text-xs text-red bg-[#fef2f2] border border-[#fecaca] rounded-full shadow-md px-4 py-1.5">
           {moveError}
         </div>
       )}
@@ -431,7 +425,7 @@ export default function BrowsePage() {
           className={`fixed left-1/2 -translate-x-1/2 bottom-14 z-40 text-xs rounded-full shadow-md px-4 py-1.5 ${
             syncMsgOk
               ? 'text-black/70 bg-black/5 border border-black/10'
-              : 'text-red-700 bg-red-50 border border-red-200'
+              : 'text-red bg-[#fef2f2] border border-[#fecaca]'
           }`}
           role="status"
         >
@@ -448,7 +442,7 @@ export default function BrowsePage() {
             <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-400" /> 加载中…
           </div>
         ) : err ? (
-          <div className="py-16 text-center text-red-500">{err}</div>
+          <div className="py-16 text-center text-red">{err}</div>
         ) : (
           <ItemListWithRename
             data={data}
@@ -610,6 +604,47 @@ function ItemListWithRename({
       ),
     [data]
   );
+  // 文件夹在前、文件在后合成单一渲染流（两段 .map 结构一致，仅点击与操作不同）。
+  const rows = [
+    ...(data?.folders || []).map((f) => ({
+      key: `d-${f.id}`,
+      item: { ...f, type: 'folder' },
+      onClick: () => onEnterFolder(f),
+      actions:
+        isAdmin && (
+          <>
+            <RowAction title="重命名" onClick={() => onRenameFolder(f)}>
+              <PenLine className="w-4 h-4" />
+            </RowAction>
+            <RowAction title="删除" onClick={() => onDeleteFolder(f)}>
+              <Trash className="w-4 h-4" />
+            </RowAction>
+          </>
+        ),
+    })),
+    ...(data?.files || []).map((f) => ({
+      key: `f-${f.id}`,
+      item: { ...f, type: 'file' },
+      onClick: () => onPreviewFile(f),
+      actions: (
+        <>
+          <RowAction title="下载" onClick={() => onDownloadFile(f)}>
+            <Download className="w-4 h-4" />
+          </RowAction>
+          {isAdmin && (
+            <>
+              <RowAction title="重命名" onClick={() => onRenameFile(f)}>
+                <PenLine className="w-4 h-4" />
+              </RowAction>
+              <RowAction title="删除" onClick={() => onDeleteFile(f)}>
+                <Trash className="w-4 h-4" />
+              </RowAction>
+            </>
+          )}
+        </>
+      ),
+    })),
+  ];
   return (
     <GlideList as="ul" highlightClassName="bg-slate-50">
       <li className="rb-table-heading hidden sm:flex items-center gap-2 px-4 py-2 text-xs text-slate-500 bg-[#EFEFEF]">
@@ -622,11 +657,11 @@ function ItemListWithRename({
         <span className="w-28 text-right">修改时间</span>
         <span className={`${actionWidthClass} text-right`}>操作</span>
       </li>
-      {data.folders.map((f) => (
+      {rows.map(({ key, item, onClick, actions }) => (
         <Row
-          key={`d-${f.id}`}
-          item={{ ...f, type: 'folder' }}
-          tone={toneFor(f.size, thresholds)}
+          key={key}
+          item={item}
+          tone={toneFor(item.size, thresholds)}
           isAdmin={isAdmin}
           dragging={dragging}
           dropZone={dropZone}
@@ -636,53 +671,8 @@ function ItemListWithRename({
           onRowDragOver={onRowDragOver}
           onRowDragLeave={onRowDragLeave}
           onRowDrop={onRowDrop}
-          onClick={() => onEnterFolder(f)}
-          actions={
-            isAdmin && (
-              <>
-                <RowAction title="重命名" onClick={() => onRenameFolder(f)}>
-                  <PenLine className="w-4 h-4" />
-                </RowAction>
-                <RowAction title="删除" onClick={() => onDeleteFolder(f)}>
-                  <Trash className="w-4 h-4" />
-                </RowAction>
-              </>
-            )
-          }
-        />
-      ))}
-      {data.files.map((f) => (
-        <Row
-          key={`f-${f.id}`}
-          item={{ ...f, type: 'file' }}
-          tone={toneFor(f.size, thresholds)}
-          isAdmin={isAdmin}
-          dragging={dragging}
-          dropZone={dropZone}
-          actionWidthClass={actionWidthClass}
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          onRowDragOver={onRowDragOver}
-          onRowDragLeave={onRowDragLeave}
-          onRowDrop={onRowDrop}
-          onClick={() => onPreviewFile(f)}
-          actions={
-            <>
-              <RowAction title="下载" onClick={() => onDownloadFile(f)}>
-                <Download className="w-4 h-4" />
-              </RowAction>
-              {isAdmin && (
-                <>
-                  <RowAction title="重命名" onClick={() => onRenameFile(f)}>
-                    <PenLine className="w-4 h-4" />
-                  </RowAction>
-                  <RowAction title="删除" onClick={() => onDeleteFile(f)}>
-                    <Trash className="w-4 h-4" />
-                  </RowAction>
-                </>
-              )}
-            </>
-          }
+          onClick={onClick}
+          actions={actions}
         />
       ))}
     </GlideList>

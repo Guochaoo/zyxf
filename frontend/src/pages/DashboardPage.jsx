@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getStats, getHeatmap } from '../api.js';
 import { errMsg, formatSize, timeAgo } from '../utils.js';
+import { folderTarget } from '../ui.js';
 import FileIcon from '../components/FileIcon.jsx';
 import { AnomalyCard, AllocationCard, ChartTooltip, IconBadge, densifyBySpline } from '../components/InsightCards.jsx';
 import { BsArrowClockwise, BsFolder2Open } from 'react-icons/bs';
@@ -298,7 +299,7 @@ function TopDownloads({ items }) {
           <span className="w-5 text-right text-[11px] tabular-nums text-ink-3">{i + 1}</span>
           <FileIcon type="file" ext={f.ext} className="h-4 w-4 shrink-0" />
           <Link
-            to={f.folder_id ? `/folder/${f.folder_id}` : '/'}
+            to={folderTarget(f.folder_id)}
             className="min-w-0 flex-1 truncate text-[13px] text-ink hover:text-ink-2"
             title={f.file_name}
           >
@@ -326,7 +327,7 @@ function RecentUploads({ items }) {
       {items.map((f) => (
         <li key={f.id}>
           <Link
-            to={f.folder_id ? `/folder/${f.folder_id}` : '/'}
+            to={folderTarget(f.folder_id)}
             className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-hover"
           >
             <FileIcon type="file" ext={f.ext} className="h-4 w-4 shrink-0" />

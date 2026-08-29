@@ -4,7 +4,7 @@
 > This system is Vercel-inspired for the 仲英书院学业辅导中心 (Zhongying College Academic Counseling Center) material library website. Brand-owned assets are kept as-is and override the generic system:
 >
 > - **Brand font:** OPPO Sans 4.0 replaces Geist as the primary font (brand-owned, `frontend/public/fonts/OPPO Sans 4.0.ttf`). The *principles* of Geist typography (compression, three-weight hierarchy, tight tracking) still apply, but letter-spacing is adapted for CJK legibility — see §3.
-> - **Brand identity:** The brand logo (`favicon.png` / `brand-logo.png`) and brand names (仲英学辅资料库, 仲英书院学业辅导中心, 仲英学辅) are always preserved verbatim.
+> - **Brand identity:** The brand logo (`favicon.png`) and brand names (仲英学辅资料库, 仲英书院学业辅导中心, 仲英学辅) are always preserved verbatim.
 > - **Language:** All user-facing copy is Chinese (zh-CN); uppercase mono technical labels (TODAY, DOWNLOADS…) remain in English as decorative metadata, per the Geist Mono tradition.
 > - **Accent colors:** The old brand blue (#276DAB) is replaced by the Vercel interaction palette (§2) — Link Blue #0072f5, Develop Blue #0a72ef, Focus Blue hsla(212, 100%, 48%, 1). Primary CTAs are Vercel Black (#171717).
 > - **Data-viz accent tokens** for the stats dashboard — 下载蓝 `--accent` (#3d9aff), 上传橙 `--orange` (#f68f3c), 今日红 `--red` (#ee5c61), 占用绿 `--green` (#3fae6b) — the only permitted accent use (see the heatmap spec in §4).
@@ -160,7 +160,7 @@ Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视�
 
 ### Chat Card (智能对话卡片)
 - 与知识图谱卡片同款外壳：纯白无边框无阴影、`#EFEFEF` 头部条 + 13px 标题 + 24px 图标按钮（清空 / 设置 / 收起）
-- 收起/展开同款交互；实现上以像素高度冻结内容（内容不重排，由外层容器从下往上裁剪），动画期间消息列表临时 `overflow-y-hidden` 防滚动条闪现，展开时卡片本体随容器一起平滑长高
+- 收起/展开同款交互；实现上以像素高度冻结内容（内容不重排，由外层容器从下往上裁剪），消息列表始终 `overflow-y-auto` + `scrollbar-gutter: stable`（滚动条槽位恒定），展开时卡片本体随容器一起平滑长高
 - 输入框：`bg-field` 圆角 10px、**无描边**、仅极浅投影（聚焦微调）；发送按钮深色圆角方块，流式生成中变为停止按钮
 - 消息区：用户消息右对齐灰底气泡；AI 回复带小节头（检索中 / 生成中 / 完成 / 出错）+ 时间，流式打字机渲染，【文件N】引用渲染为可点击文件行（跳转 / 预览）；空态显示三条建议 chip
 - AI 设置面板：头部下展开的行内表单，配置存 localStorage，请求时随 body 下发覆盖服务端 env

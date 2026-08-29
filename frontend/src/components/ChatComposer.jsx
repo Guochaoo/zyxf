@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { ArrowUp, ArrowUpRight, ChevronDown, ChevronUp, Settings, Square, Trash2 } from 'lucide-react';
+import { ArrowUp, ArrowUpRight, Settings, Square, Trash2 } from 'lucide-react';
 import { chatStream } from '../api.js';
 import { ICON_BUTTON_CLASS } from './ui.js';
-import { openFilePreview } from '../ui.js';
+import PanelHeader from './PanelHeader.jsx';
+import { openFolderOrFile } from '../ui.js';
 
 /* ─────────────────────────────────────────────────────────
  * CHAT — interactive panel with a header, replies, and composer.
@@ -111,13 +112,7 @@ const DEFAULT_TONE = 'bg-brand-500';
 function FileChip({ item }) {
   const navigate = useNavigate();
 
-  const open = () => {
-    if (item.type === 'folder') {
-      navigate(`/folder/${item.id}`);
-    } else {
-      openFilePreview(item, navigate);
-    }
-  };
+  const open = () => openFolderOrFile(item, navigate);
 
   const badge = item.type === 'folder' ? 'DIR' : (item.ext || '').toUpperCase().slice(0, 4);
   const tone =
@@ -318,51 +313,34 @@ export default function ChatComposer() {
       }`}
     >
       {/* header — 智能对话标签 + 清空会话 + 设置 + 收起（样式对齐知识图谱卡片头部） */}
-      <div className="flex shrink-0 items-center justify-between gap-1 bg-[#EFEFEF] p-1.5">
-        <span className="shrink-0 px-2 py-[3px] text-[13px] font-medium text-ink">
-          智能对话
-        </span>
-        <div className="flex shrink-0 items-center gap-1">
-          {!collapsed && (
-            <>
-              <button
-                type="button"
-                aria-label="清空会话历史"
-                title="清空会话历史"
-                disabled={busy || messages.length === 0}
-                onClick={() => setMessages([])}
-                className={ICON_BUTTON_CLASS}
-              >
-                <Trash2 className="h-[15px] w-[15px]" />
-              </button>
-              <button
-                type="button"
-                aria-label="AI 设置"
-                title="AI 设置（API Key / 地址 / 模型）"
-                aria-expanded={settingsOpen}
-                onClick={openSettings}
-                className={ICON_BUTTON_CLASS}
-              >
-                <Settings className="h-[15px] w-[15px]" />
-              </button>
-            </>
-          )}
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            title={collapsed ? '展开对话' : '收起对话'}
-            aria-label={collapsed ? '展开对话' : '收起对话'}
-            aria-expanded={!collapsed}
-            className={ICON_BUTTON_CLASS}
-          >
-            {collapsed ? (
-              <ChevronDown className="h-[15px] w-[15px]" />
-            ) : (
-              <ChevronUp className="h-[15px] w-[15px]" />
-            )}
-          </button>
-        </div>
-      </div>
+      <PanelHeader
+        title="智能对话"
+        collapsed={collapsed}
+        onToggleCollapsed={toggleCollapsed}
+        expandTitle="展开对话"
+        collapseTitle="收起对话"
+      >
+        <button
+          type="button"
+          aria-label="清空会话历史"
+          title="清空会话历史"
+          disabled={busy || messages.length === 0}
+          onClick={() => setMessages([])}
+          className={ICON_BUTTON_CLASS}
+        >
+          <Trash2 className="h-[15px] w-[15px]" />
+        </button>
+        <button
+          type="button"
+          aria-label="AI 设置"
+          title="AI 设置（API Key / 地址 / 模型）"
+          aria-expanded={settingsOpen}
+          onClick={openSettings}
+          className={ICON_BUTTON_CLASS}
+        >
+          <Settings className="h-[15px] w-[15px]" />
+        </button>
+      </PanelHeader>
 
       {/* 主体：height 像素过渡收起/展开；动画期间锁定高度、隐藏列表滚动条 */}
       <div

@@ -6,7 +6,7 @@ import { errMsg, formatSize } from '../utils.js';
 const CONCURRENCY = 3; // files upload in parallel; each is an independent OSS direct-upload
 
 // Progress-bar color per upload status (pending/uploading default to brand).
-const PROGRESS_BAR_COLOR = { error: 'bg-red-500', done: 'bg-[#1E8E3E]' };
+const PROGRESS_BAR_COLOR = { error: 'bg-red', done: 'bg-[#1E8E3E]' };
 
 export default function UploadDialog({ folderId, onClose, onDone }) {
   const inputRef = useRef(null);
@@ -109,7 +109,7 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
                   />
                 </div>
                 {it.status === 'error' && (
-                  <div className="text-red-600 mt-0.5">{it.error}</div>
+                  <div className="text-red mt-0.5">{it.error}</div>
                 )}
               </li>
             ))}
