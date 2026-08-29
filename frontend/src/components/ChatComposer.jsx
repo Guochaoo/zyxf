@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import { ArrowUp, ArrowUpRight, ChevronDown, ChevronUp, Settings, Square, Trash2 } from 'lucide-react';
 import { chatStream } from '../api.js';
 import { ICON_BUTTON_CLASS } from './ui.js';
-import { openFilePreview } from '../ui.js';
+import { openFolderOrFile } from '../ui.js';
 
 /* ─────────────────────────────────────────────────────────
  * CHAT — interactive panel with a header, replies, and composer.
@@ -111,13 +111,7 @@ const DEFAULT_TONE = 'bg-brand-500';
 function FileChip({ item }) {
   const navigate = useNavigate();
 
-  const open = () => {
-    if (item.type === 'folder') {
-      navigate(`/folder/${item.id}`);
-    } else {
-      openFilePreview(item, navigate);
-    }
-  };
+  const open = () => openFolderOrFile(item, navigate);
 
   const badge = item.type === 'folder' ? 'DIR' : (item.ext || '').toUpperCase().slice(0, 4);
   const tone =

@@ -53,6 +53,11 @@ export const LARGE_FILE_HINT = '文件较大（>20MB），建议在 WiFi 下预�
 
 // ---- helpers ----
 
+// Strip the leading dot and lowercase an extension string (mirrors backend extPolicy.js).
+export function normalizeExt(ext) {
+  return String(ext || '').toLowerCase().replace(/^\./, '');
+}
+
 export async function downloadFileById(file, getFileUrl) {
   const meta = await getFileUrl(file.id, { download: true });
   const resp = await fetch(meta.url);
@@ -68,8 +73,17 @@ export async function downloadFileById(file, getFileUrl) {
   setTimeout(() => URL.revokeObjectURL(href), 1000);
 }
 
+// Download + alert on failure (shared by BrowsePage / SearchBar).
+export async function downloadAndAlert(file, getFileUrl) {
+  try {
+    await downloadFileById(file, getFileUrl);
+  } catch (e) {
+    alert(e.message || '下载失败');
+  }
+}
+
 export function getPreviewKind(ext) {
-  ext = (ext || '').toLowerCase().replace(/^\./, '');
+  ext = normalizeExt(ext);
   if (OFFICE_EXT.has(ext)) return 'office';
   if (ARCHIVE_EXT.has(ext)) return 'archive';
   return 'unknown';
