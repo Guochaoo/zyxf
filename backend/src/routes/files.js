@@ -203,6 +203,15 @@ router.post('/:id/weboffice-refresh', downloadLimiterShort, downloadLimiterLong,
   }
 }));
 
+// Shared OSS write skeleton for rename/move: copy object → DB update → delete
+// old object. copyOssObject no-ops when keys are equal; `deleteOld` guards the
+// delete step so a same-key rename never deletes the live object.
+async function copyUpdateDelete(file, newKey, update, deleteOld = true) {
+  await copyOssObject(file.oss_key, newKey);
+  update();
+  if (deleteOld) await deleteOssObjectIfExists(file.oss_key);
+}
+
 // Move or rename a file
 router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
   const file = getFileOr404(req, res);
@@ -227,15 +236,18 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
     }
 
     try {
-      const keyChanged = file.oss_key !== newKey;
-      if (keyChanged) await copyOssObject(file.oss_key, newKey);
-      db.prepare('UPDATE files SET name = ?, ext = ?, oss_key = ? WHERE id = ?').run(
-        newName,
-        ext || null,
+      await copyUpdateDelete(
+        file,
         newKey,
-        id
+        () =>
+          db.prepare('UPDATE files SET name = ?, ext = ?, oss_key = ? WHERE id = ?').run(
+            newName,
+            ext || null,
+            newKey,
+            id
+          ),
+        file.oss_key !== newKey
       );
-      if (keyChanged) await deleteOssObjectIfExists(file.oss_key);
       return res.json({ ok: true, name: newName, oss_key: newKey });
     } catch (e) {
       return next(e);
@@ -253,15 +265,15 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
   }
   const newKey = objectKeyForFile(db, target, file.name);
   try {
-    await copyOssObject(file.oss_key, newKey);
-    const so = nextSortOrder(db, 'files', 'folder_id', target);
-    db.prepare('UPDATE files SET folder_id = ?, oss_key = ?, sort_order = ? WHERE id = ?').run(
-      target,
-      newKey,
-      so,
-      id
-    );
-    await deleteOssObjectIfExists(file.oss_key);
+    await copyUpdateDelete(file, newKey, () => {
+      const so = nextSortOrder(db, 'files', 'folder_id', target);
+      db.prepare('UPDATE files SET folder_id = ?, oss_key = ?, sort_order = ? WHERE id = ?').run(
+        target,
+        newKey,
+        so,
+        id
+      );
+    });
     res.json({ ok: true });
   } catch (e) {
     return next(e);

@@ -311,8 +311,22 @@ router.post('/', requireAdmin, wrapAsync(async (req, res, next) => {
   }
 }));
 
+// Shared call shell for folder rename/move: run relocateFolderSubtree and map
+// the "target OSS path taken" and UNIQUE-constraint outcomes to their 409s.
+// Throws through on any other error (caller's wrapAsync forwards it as 500).
+async function relocateOrConflict(id, overrides, updateFolder, uniqueMessage) {
+  try {
+    const result = await relocateFolderSubtree(id, { ...overrides, updateFolder });
+    if (result.conflict) return { error: '目标存储路径已存在同名文件' };
+    return { ok: true };
+  } catch (e) {
+    if (isUniqueError(e)) return { error: uniqueMessage };
+    throw e;
+  }
+}
+
 // Rename or move folder (parent_id = null means root)
-router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
+router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: '无效的文件夹 ID' });
   const folder = db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
@@ -330,20 +344,14 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
       return res.status(409).json({ error: '同名文件夹已存在' });
     }
 
-    try {
-      const result = await relocateFolderSubtree(id, {
-        nameOverrides: new Map([[id, newName]]),
-        updateFolder: () =>
-          db.prepare('UPDATE folders SET name = ? WHERE id = ?').run(newName, id),
-      });
-      if (result.conflict) return res.status(409).json({ error: '目标存储路径已存在同名文件' });
-      return res.json({ ok: true, name: newName });
-    } catch (e) {
-      if (isUniqueError(e)) {
-        return res.status(409).json({ error: '同名文件夹已存在' });
-      }
-      return next(e);
-    }
+    const outcome = await relocateOrConflict(
+      id,
+      { nameOverrides: new Map([[id, newName]]) },
+      () => db.prepare('UPDATE folders SET name = ? WHERE id = ?').run(newName, id),
+      '同名文件夹已存在'
+    );
+    if (outcome.error) return res.status(409).json({ error: outcome.error });
+    return res.json({ ok: true, name: newName });
   }
 
   const raw = req.body?.parent_id;
@@ -370,23 +378,16 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
     return res.status(409).json({ error: '目标文件夹中已存在同名文件夹' });
   }
 
-  try {
-    const so = nextSortOrder(db, 'folders', 'parent_id', newParent);
-    const result = await relocateFolderSubtree(id, {
-      parentOverrides: new Map([[id, newParent]]),
-      updateFolder: () =>
-        db
-          .prepare('UPDATE folders SET parent_id = ?, sort_order = ? WHERE id = ?')
-          .run(newParent, so, id),
-    });
-    if (result.conflict) return res.status(409).json({ error: '目标存储路径已存在同名文件' });
-    res.json({ ok: true });
-  } catch (e) {
-    if (isUniqueError(e)) {
-      return res.status(409).json({ error: '目标位置已存在同名文件夹' });
-    }
-    return next(e);
-  }
+  const so = nextSortOrder(db, 'folders', 'parent_id', newParent);
+  const outcome = await relocateOrConflict(
+    id,
+    { parentOverrides: new Map([[id, newParent]]) },
+    () =>
+      db.prepare('UPDATE folders SET parent_id = ?, sort_order = ? WHERE id = ?').run(newParent, so, id),
+    '目标位置已存在同名文件夹'
+  );
+  if (outcome.error) return res.status(409).json({ error: outcome.error });
+  res.json({ ok: true });
 }));
 
 // Reorder items (folders + files) inside the same parent.
