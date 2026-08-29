@@ -4,7 +4,7 @@
 > This system is Vercel-inspired for the 仲英书院学业辅导中心 (Zhongying College Academic Counseling Center) material library website. Brand-owned assets are kept as-is and override the generic system:
 >
 > - **Brand font:** OPPO Sans 4.0 replaces Geist as the primary font (brand-owned, `frontend/public/fonts/OPPO Sans 4.0.ttf`). The *principles* of Geist typography (compression, three-weight hierarchy, tight tracking) still apply, but letter-spacing is adapted for CJK legibility — see §3.
-> - **Brand identity:** The brand logo (`favicon.png` / `brand-logo.png`) and brand names (仲英学辅资料库, 仲英书院学业辅导中心, 仲英学辅) are always preserved verbatim.
+> - **Brand identity:** The brand logo (`favicon.png`) and brand names (仲英学辅资料库, 仲英书院学业辅导中心, 仲英学辅) are always preserved verbatim.
 > - **Language:** All user-facing copy is Chinese (zh-CN); uppercase mono technical labels (TODAY, DOWNLOADS…) remain in English as decorative metadata, per the Geist Mono tradition.
 > - **Accent colors:** The old brand blue (#276DAB) is replaced by the Vercel interaction palette (§2) — Link Blue #0072f5, Develop Blue #0a72ef, Focus Blue hsla(212, 100%, 48%, 1). Primary CTAs are Vercel Black (#171717).
 > - **Data-viz accent tokens** for the stats dashboard — 下载蓝 `--accent` (#3d9aff), 上传橙 `--orange` (#f68f3c), 今日红 `--red` (#ee5c61), 占用绿 `--green` (#3fae6b) — the only permitted accent use (see the heatmap spec in §4).
