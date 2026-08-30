@@ -84,7 +84,7 @@ zyxf/
 │   └── test/
 ├── frontend/              # React 前端
 │   ├── src/
-│   │   ├── pages/         # BrowsePage / DashboardPage / LoginPage / AboutPage
+│   │   ├── pages/         # BrowsePage / DashboardPage / AuthPage（登录+注册） / AboutPage
 │   │   ├── components/    # 文件列表 / 预览 / 知识图谱 / 智能对话 / 菜单等
 │   │   └── test/          # vitest 测试
 ├── docs/
