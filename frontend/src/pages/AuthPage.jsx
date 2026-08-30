@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { BsCaretLeftFill, BsEyeFill, BsEyeSlashFill } from 'react-icons/bs';
 import { errMsg } from '../utils.js';
 import Silk from '../components/Silk.jsx';
+import ErrorToast from '../components/ErrorToast.jsx';
 
 /* ─────────────────────────────────────────────────────────
  * AUTH — 登录/注册合并页。/login 与 /register 渲染同一组件
@@ -20,11 +21,6 @@ const INPUT_CLS =
 const LABEL_CLS = 'mb-2 block text-xs font-medium text-neutral-700';
 const SUBMIT_CLS =
   'mt-2 inline-flex w-full items-center justify-center gap-2 rounded-[14px] bg-brand-600 px-4 py-2.5 sm:py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60';
-
-const ErrorBlock = ({ err }) =>
-  err ? (
-    <div className="rounded-lg border border-[#fecaca] bg-[#fef2f2] px-3 py-2 text-sm text-red">{err}</div>
-  ) : null;
 
 const SubmitButton = ({ loading, idleText }) => (
   <button type="submit" disabled={loading} className={SUBMIT_CLS}>
@@ -104,7 +100,7 @@ function LoginForm() {
           </div>
         </div>
 
-        <ErrorBlock err={err} />
+        {err && <ErrorToast message={err} onClose={() => setErr('')} />}
         <SubmitButton loading={loading} idleText="登录" />
       </form>
 
@@ -256,7 +252,7 @@ function RegisterForm() {
           </div>
         </div>
 
-        <ErrorBlock err={err} />
+        {err && <ErrorToast message={err} onClose={() => setErr('')} />}
         <SubmitButton loading={loading} idleText="注册" />
       </form>
 
