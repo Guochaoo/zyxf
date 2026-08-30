@@ -14,3 +14,8 @@ export function envOrThrow(name) {
   if (!v) throw new Error(`Missing env: ${name}`);
   return v;
 }
+
+/** Read an optional env var as a trimmed string ('' when unset). */
+export function envStr(name) {
+  return (process.env[name] || '').trim();
+}

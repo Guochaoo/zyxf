@@ -3,15 +3,12 @@
 // 三个 DM_* 变量齐全才启用；缺失时注册发码路由返回 503，不影响其他功能。
 
 import RPCClient from '@alicloud/pop-core';
+import { envStr } from './env.js';
 
-function env(name) {
-  return (process.env[name] || '').trim();
-}
-
-const DM_ACCESS_KEY_ID = env('DM_ACCESS_KEY_ID');
-const DM_ACCESS_KEY_SECRET = env('DM_ACCESS_KEY_SECRET');
-const DM_ACCOUNT_NAME = env('DM_ACCOUNT_NAME'); // 发信地址，如 no-reply@zyxf.top
-const DM_FROM_ALIAS = env('DM_FROM_ALIAS') || '仲英学辅';
+const DM_ACCESS_KEY_ID = envStr('DM_ACCESS_KEY_ID');
+const DM_ACCESS_KEY_SECRET = envStr('DM_ACCESS_KEY_SECRET');
+const DM_ACCOUNT_NAME = envStr('DM_ACCOUNT_NAME'); // 发信地址，如 no-reply@zyxf.top
+const DM_FROM_ALIAS = envStr('DM_FROM_ALIAS') || '仲英学辅';
 
 export function isMailEnabled() {
   return Boolean(DM_ACCESS_KEY_ID && DM_ACCESS_KEY_SECRET && DM_ACCOUNT_NAME);

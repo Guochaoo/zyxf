@@ -7,37 +7,22 @@ import { isUniqueError } from '../dbHelpers.js';
 import { signToken } from '../auth.js';
 import { wrapAsync, serviceError } from '../http.js';
 import { isMailEnabled, sendVerificationCode } from '../mail.js';
+import { limiterOptions } from '../limiter.js';
 
 const router = Router();
 
 // Brute-force protection: 10 attempts per 15 min per IP.
 // Successful logins do not count toward the cap.
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
+  ...limiterOptions(15 * 60 * 1000, 10, '尝试次数过多,请稍后再试'),
   skipSuccessfulRequests: true,
-  message: { error: '尝试次数过多,请稍后再试' },
 });
 
 // 发码限流：每 IP 每小时 10 次（叠加在全局 publicLimiter 之上）。
-const codeLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: '验证码请求过于频繁，请稍后再试' },
-});
+const codeLimiter = rateLimit(limiterOptions(60 * 60 * 1000, 10, '验证码请求过于频繁，请稍后再试'));
 
 // 注册限流：每 IP 每分钟 15 次。
-const registerLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 15,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: '操作过于频繁，请稍后再试' },
-});
+const registerLimiter = rateLimit(limiterOptions(60 * 1000, 15, '操作过于频繁，请稍后再试'));
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CODE_TTL_MS = 10 * 60 * 1000; // 验证码有效期 10 分钟
@@ -47,6 +32,7 @@ const MAX_CODE_ATTEMPTS = 5; // 单个验证码最多可尝试核验 5 次
 
 const hashCode = (code) => crypto.createHash('sha256').update(String(code)).digest('hex');
 const normalizeEmail = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : '');
+const emailRegistered = (email) => !!db.prepare('SELECT id FROM users WHERE email = ?').get(email);
 
 router.post('/login', loginLimiter, (req, res) => {
   const { username, password } = req.body || {};
@@ -74,7 +60,7 @@ router.post('/register/code', codeLimiter, wrapAsync(async (req, res) => {
   if (!EMAIL_RE.test(email)) {
     return res.status(400).json({ error: '邮箱格式不正确' });
   }
-  if (db.prepare('SELECT id FROM users WHERE email = ?').get(email)) {
+  if (emailRegistered(email)) {
     return res.status(409).json({ error: '该邮箱已被注册' });
   }
   const now = Date.now();
@@ -144,7 +130,7 @@ router.post('/register', registerLimiter, wrapAsync(async (req, res) => {
   if (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) {
     return res.status(409).json({ error: '用户名已被使用' });
   }
-  if (db.prepare('SELECT id FROM users WHERE email = ?').get(email)) {
+  if (emailRegistered(email)) {
     return res.status(409).json({ error: '该邮箱已被注册' });
   }
 
