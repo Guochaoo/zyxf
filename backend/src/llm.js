@@ -13,7 +13,7 @@ const LLM_BASE_URL = env('LLM_BASE_URL').replace(/\/+$/, '');
 const LLM_MODEL = env('LLM_MODEL');
 
 // 三个变量齐全才启用；缺失时聊天路由返回 503，不影响其他功能。
-// 用函数而非常量导出，便于测试注入（env 本身在运行期不变，参照 oss.js）。
+// 导出为函数而非常量：测试通过 mock.module 整体替换本模块来控制启用态（见 test/setup.js）。
 export function isLlmEnabled() {
   return Boolean(LLM_API_KEY && LLM_BASE_URL && LLM_MODEL);
 }
