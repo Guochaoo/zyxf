@@ -53,7 +53,11 @@ router.post('/login', loginLimiter, (req, res) => {
   if (!username || !password) {
     return res.status(400).json({ error: '用户名和密码不能为空' });
   }
-  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  // 用户名或邮箱均可登录：邮箱统一小写后匹配（注册时已归一化存储）。
+  const identifier = String(username).trim();
+  const user = db
+    .prepare('SELECT * FROM users WHERE username = ? OR email = ?')
+    .get(identifier, identifier.toLowerCase());
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: '用户名或密码错误' });
   }
@@ -116,8 +120,8 @@ router.post('/register', registerLimiter, wrapAsync(async (req, res) => {
   if (!EMAIL_RE.test(email)) {
     return res.status(400).json({ error: '邮箱格式不正确' });
   }
-  if (password.length < 6 || password.length > 72) {
-    return res.status(400).json({ error: '密码需为 6-72 位' });
+  if (password.length < 8 || password.length > 72) {
+    return res.status(400).json({ error: '密码需为 8-72 位' });
   }
   if (!/^\d{6}$/.test(code)) {
     return res.status(400).json({ error: '验证码格式不正确' });
