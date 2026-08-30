@@ -31,7 +31,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-[calc(100vh-24px)] items-center justify-center">
-      <div className="relative mx-auto w-full max-w-[1100px] grid items-stretch overflow-hidden rounded-[14px] sm:min-h-[655px] sm:grid-cols-[1.15fr_1fr]">
+      <div className="relative mx-auto w-full max-w-[1100px] grid items-stretch overflow-hidden rounded-[14px] sm:h-[655px] sm:grid-cols-[1.15fr_1fr]">
       {/* Left — silky brand panel with animated Silk background */}
       <div className="rb-dark relative z-0 hidden sm:flex sm:flex-col sm:justify-between p-12 overflow-hidden">
         <div className="absolute inset-0 -z-10">

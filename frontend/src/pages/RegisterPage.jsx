@@ -59,7 +59,7 @@ export default function RegisterPage() {
 
   return (
     <div className="flex min-h-[calc(100vh-24px)] items-center justify-center">
-      <div className="relative mx-auto w-full max-w-[1100px] grid items-stretch overflow-hidden rounded-[14px] sm:min-h-[655px] sm:grid-cols-[1.15fr_1fr]">
+      <div className="relative mx-auto w-full max-w-[1100px] grid items-stretch overflow-hidden rounded-[14px] sm:h-[655px] sm:grid-cols-[1.15fr_1fr]">
       {/* Left — silky brand panel with animated Silk background */}
       <div className="rb-dark relative z-0 hidden sm:flex sm:flex-col sm:justify-between p-12 overflow-hidden">
         <div className="absolute inset-0 -z-10">
@@ -104,14 +104,14 @@ export default function RegisterPage() {
             返回
           </Link>
 
-          <div className="mb-6 sm:mt-[5px] sm:mb-[71px] flex items-center justify-center gap-2.5">
+          <div className="mb-6 sm:mt-[5px] sm:mb-10 flex items-center justify-center gap-2.5">
             <img src="/favicon.png" alt="仲英学辅" className="h-9 w-9 rounded-full object-cover" />
             <span className="text-[22px] sm:text-[26px] font-bold tracking-tight text-neutral-900">
               仲英学辅
             </span>
           </div>
 
-          <div className="mb-5 sm:mb-9">
+          <div className="mb-5 sm:mb-6">
             <h1 className="text-[20px] sm:text-[22px] font-semibold leading-tight tracking-tight text-neutral-900">
               注册账号
             </h1>
@@ -120,7 +120,7 @@ export default function RegisterPage() {
             </p>
           </div>
 
-          <form onSubmit={onSubmit} className="space-y-4 sm:space-y-5">
+          <form onSubmit={onSubmit} className="space-y-4">
             <div>
               <label className="mb-2 block text-xs font-medium text-neutral-700" htmlFor="register-username">
                 用户名
@@ -168,7 +168,7 @@ export default function RegisterPage() {
                   type="button"
                   onClick={requestCode}
                   disabled={resendIn > 0 || sending || !email.trim()}
-                  className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[14px] border border-neutral-200 bg-white px-3.5 py-2.5 sm:py-3 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[14px] bg-neutral-100 px-3.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {sending && <Loader2 className="w-4 h-4 animate-spin" />}
                   {resendIn > 0 ? `${resendIn}s 后重发` : '获取验证码'}
