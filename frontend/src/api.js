@@ -87,6 +87,18 @@ export async function login(username, password) {
   return data;
 }
 
+// 注册发码：向邮箱发送 6 位验证码（服务端有 60s 冷却与频次限额）。
+export async function requestRegisterCode(email) {
+  const { data } = await api.post('/auth/register/code', { email });
+  return data;
+}
+
+// 注册成功即自动登录：响应与 login 同构 { token, user }。
+export async function register({ username, email, password, code }) {
+  const { data } = await api.post('/auth/register', { username, email, password, code });
+  return data;
+}
+
 export async function listFolder(id = 0, sort = 'name', order = 'asc') {
   const { data } = await api.get(`/folders/${id}/contents`, { params: { sort, order } });
   return data;

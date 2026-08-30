@@ -1,29 +1,57 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
+import { requestRegisterCode } from '../api.js';
 import { Loader2 } from 'lucide-react';
 import { BsCaretLeftFill, BsEyeFill, BsEyeSlashFill } from 'react-icons/bs';
 import { errMsg } from '../utils.js';
 import Silk from '../components/Silk.jsx';
 
-export default function LoginPage() {
-  const { login } = useAuth();
+const RESEND_SECONDS = 60;
+
+export default function RegisterPage() {
+  const { register } = useAuth();
   const nav = useNavigate();
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
   const [showPwd, setShowPwd] = useState(false);
+
+  // 验证码重发倒计时；归零后清除定时器。
+  useEffect(() => {
+    if (resendIn <= 0) return undefined;
+    const timer = setInterval(() => setResendIn((v) => (v > 0 ? v - 1 : 0)), 1000);
+    return () => clearInterval(timer);
+  }, [resendIn]);
+
+  const requestCode = async () => {
+    if (!email.trim() || resendIn > 0 || sending) return;
+    setErr('');
+    setSending(true);
+    try {
+      await requestRegisterCode(email.trim());
+      setResendIn(RESEND_SECONDS);
+    } catch (error) {
+      setErr(errMsg(error, '验证码发送失败'));
+    } finally {
+      setSending(false);
+    }
+  };
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setErr('');
     setLoading(true);
     try {
-      await login(username, password);
+      await register({ username: username.trim(), email: email.trim(), password, code: code.trim() });
       nav('/');
     } catch (error) {
-      setErr(errMsg(error, '登录失败'));
+      setErr(errMsg(error, '注册失败'));
     } finally {
       setLoading(false);
     }
@@ -65,7 +93,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right — login form (pure white) */}
+      {/* Right — register form (pure white) */}
       <div className="relative flex w-full items-center justify-center bg-white px-5 pt-6 pb-[76px] sm:px-14 sm:pt-0 sm:pb-14">
         <div className="w-full max-w-[360px]">
           <Link
@@ -85,40 +113,81 @@ export default function LoginPage() {
 
           <div className="mb-5 sm:mb-9">
             <h1 className="text-[20px] sm:text-[22px] font-semibold leading-tight tracking-tight text-neutral-900">
-              欢迎回来
+              注册账号
             </h1>
             <p className="mt-1.5 sm:mt-2.5 text-[13px] sm:text-sm text-neutral-500">
-              输入用户名和密码登录
+              使用邮箱验证码注册普通用户账号
             </p>
           </div>
 
           <form onSubmit={onSubmit} className="space-y-4 sm:space-y-5">
             <div>
-              <label className="mb-2 block text-xs font-medium text-neutral-700" htmlFor="login-username">
+              <label className="mb-2 block text-xs font-medium text-neutral-700" htmlFor="register-username">
                 用户名
               </label>
               <input
-                id="login-username"
+                id="register-username"
                 className="rb-auth-input w-full !rounded-[14px] border-0 bg-neutral-100 px-3.5 py-2.5 sm:py-3 text-sm text-neutral-900 transition-colors focus:outline-none"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                maxLength={32}
                 autoFocus
                 autoComplete="username"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-xs font-medium text-neutral-700" htmlFor="login-password">
+              <label className="mb-2 block text-xs font-medium text-neutral-700" htmlFor="register-email">
+                邮箱
+              </label>
+              <input
+                id="register-email"
+                type="email"
+                className="rb-auth-input w-full !rounded-[14px] border-0 bg-neutral-100 px-3.5 py-2.5 sm:py-3 text-sm text-neutral-900 transition-colors focus:outline-none"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-medium text-neutral-700" htmlFor="register-code">
+                邮箱验证码
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="register-code"
+                  inputMode="numeric"
+                  maxLength={6}
+                  className="rb-auth-input w-full min-w-0 !rounded-[14px] border-0 bg-neutral-100 px-3.5 py-2.5 sm:py-3 text-sm text-neutral-900 transition-colors focus:outline-none"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                  autoComplete="one-time-code"
+                />
+                <button
+                  type="button"
+                  onClick={requestCode}
+                  disabled={resendIn > 0 || sending || !email.trim()}
+                  className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[14px] border border-neutral-200 bg-white px-3.5 py-2.5 sm:py-3 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {sending && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {resendIn > 0 ? `${resendIn}s 后重发` : '获取验证码'}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-medium text-neutral-700" htmlFor="register-password">
                 密码
               </label>
               <div className="relative">
                 <input
-                  id="login-password"
+                  id="register-password"
                   type={showPwd ? 'text' : 'password'}
                   className="rb-auth-input w-full !rounded-[14px] border-0 bg-neutral-100 px-3.5 py-2.5 sm:py-3 pr-11 text-sm text-neutral-900 transition-colors focus:outline-none"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                 />
                 <button
                   type="button"
@@ -142,16 +211,16 @@ export default function LoginPage() {
               className="mt-2 sm:mt-3 inline-flex w-full items-center justify-center gap-2 rounded-[14px] bg-brand-600 px-4 py-2.5 sm:py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {loading ? '登录中…' : '登录'}
+              {loading ? '注册中…' : '注册'}
             </button>
-
-            <p className="text-center text-sm text-neutral-500">
-              还没有账号？{' '}
-              <Link to="/register" className="font-medium text-brand-600 transition-colors hover:text-brand-700">
-                注册账号
-              </Link>
-            </p>
           </form>
+
+          <p className="mt-4 text-center text-sm text-neutral-500">
+            已有账号？{' '}
+            <Link to="/login" className="font-medium text-brand-600 transition-colors hover:text-brand-700">
+              去登录
+            </Link>
+          </p>
 
           <p className="absolute bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs text-neutral-400 sm:bottom-6">
             由{' '}
