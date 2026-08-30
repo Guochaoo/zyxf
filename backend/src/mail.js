@@ -30,7 +30,7 @@ function getClient() {
   return client;
 }
 
-export function buildCodeMailHtml(code) {
+function buildCodeMailHtml(code) {
   return [
     '<div style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',\'PingFang SC\',\'Microsoft YaHei\',sans-serif;max-width:420px;margin:0 auto;padding:32px 24px;color:#171717;">',
     '<h2 style="margin:0 0 16px;font-size:18px;font-weight:600;">仲英学辅资料库</h2>',

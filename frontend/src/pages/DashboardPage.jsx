@@ -537,7 +537,7 @@ export default function DashboardPage() {
   }
 
   if (!stats) {
-    return <div className="py-24 text-center text-[14px] text-red">{err || '暂无数据'}</div>;
+    return <div className="py-24 text-center text-[14px] text-red">{'暂无数据'}</div>;
   }
 
   const typeExtra =
