@@ -3,8 +3,7 @@ import { Route, Routes, Link, Navigate, useLocation, useNavigate } from 'react-r
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useAuth } from './auth.jsx';
 import BrowsePage from './pages/BrowsePage.jsx';
-import LoginPage from './pages/LoginPage.jsx';
-import RegisterPage from './pages/RegisterPage.jsx';
+import AuthPage from './pages/AuthPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import AboutPage from './pages/AboutPage.jsx';
 import StaggeredMenu from './components/StaggeredMenu.jsx';
@@ -194,8 +193,9 @@ export default function App() {
           <Route path="/folder/:id" element={<BrowsePage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/about" element={<AboutPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          {/* /login 与 /register 渲染同一 AuthPage 实例：切换不重挂载，仅表单区过渡 */}
+          <Route path="/login" element={<AuthPage />} />
+          <Route path="/register" element={<AuthPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
