@@ -15,6 +15,7 @@ export default {
           400: '#808080', // gray-400 placeholder, disabled
           500: '#666666', // gray-500 tertiary text
           600: '#4D4D4D', // gray-600 secondary text
+          700: '#404040', // gray-700 hover text (sidebar toggle buttons)
           800: '#262626',
           900: '#171717', // gray-900 primary text (Vercel Black)
         },

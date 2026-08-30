@@ -54,7 +54,7 @@ Defined as CSS variables in `index.css :root` and consumed through Tailwind toke
 
 ### Neutral Scale (via Tailwind `slate` tokens)
 - Gray 900 (#171717, `slate-900` / `--ink`): Primary text, headings, nav text.
-- Gray 700 (#404040, `slate-700`): removed — the scale is 50/100/200/300/400/500/600/800/900.
+- Gray 700 (#404040, `slate-700`): hover text on sidebar toggle buttons.
 - Gray 600 (#4d4d4d, `slate-600`): Secondary text, file icons.
 - Gray 500 (#666666, `slate-500`): Tertiary text, muted links.
 - Gray 400 (#808080, `slate-400`): Placeholder text, disabled states.
