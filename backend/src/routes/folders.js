@@ -329,7 +329,7 @@ async function relocateOrConflict(id, overrides, updateFolder, uniqueMessage) {
 router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: '无效的文件夹 ID' });
-  const folder = db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
+  const folder = getFolder(id);
   if (!folder) return res.status(404).json({ error: '资源不存在' });
 
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {

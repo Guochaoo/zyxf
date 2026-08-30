@@ -41,8 +41,7 @@ export function ossPublicHost() {
  * Returns the fields the browser must include in the multipart/form-data POST.
  */
 export function buildPostPolicy({ key, maxSizeBytes = 200 * 1024 * 1024, expiresSec = 600 }) {
-  const accessKeyId = envOrThrow('OSS_ACCESS_KEY_ID');
-  const accessKeySecret = envOrThrow('OSS_ACCESS_KEY_SECRET');
+  const { accessKeyId, accessKeySecret } = baseOssConfig();
   const expiration = new Date(Date.now() + expiresSec * 1000).toISOString();
 
   const policy = {

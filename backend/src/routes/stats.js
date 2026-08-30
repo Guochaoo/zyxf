@@ -16,25 +16,26 @@ function dayLabel(ts) {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+/* Count rows per day bucket for one table/column. Returns rows with
+   `i` (whole days relative to today's local midnight, 0 = today, -1 =
+   yesterday …) and `c`. FLOOR is required — CAST truncates toward zero,
+   which would split a calendar day across two buckets just after midnight.
+   Table/column names come only from fixed literals in this module. */
+function countByDay(table, tsCol, todayStart, seriesStart) {
+  return db
+    .prepare(
+      `SELECT FLOOR((${tsCol} - ?) / ?) AS i, COUNT(*) AS c FROM ${table}
+       WHERE ${tsCol} >= ? GROUP BY i`
+    )
+    .all(todayStart, DAY, seriesStart);
+}
+
 /* Daily series (downloads + uploads): one GROUP BY per table. Returns `days`
    rows, oldest → newest, ending today. */
 function dailySeries(days, todayStart) {
   const seriesStart = todayStart - (days - 1) * DAY;
-  // i = whole days relative to today's local midnight (0 = today, -1 =
-  // yesterday …). FLOOR is required — CAST truncates toward zero, which would
-  // split a calendar day across two buckets just after midnight.
-  const dlByDay = db
-    .prepare(
-      `SELECT FLOOR((downloaded_at - ?) / ?) AS i, COUNT(*) AS c FROM download_logs
-       WHERE downloaded_at >= ? GROUP BY i`
-    )
-    .all(todayStart, DAY, seriesStart);
-  const upByDay = db
-    .prepare(
-      `SELECT FLOOR((created_at - ?) / ?) AS i, COUNT(*) AS c FROM files
-       WHERE created_at >= ? GROUP BY i`
-    )
-    .all(todayStart, DAY, seriesStart);
+  const dlByDay = countByDay('download_logs', 'downloaded_at', todayStart, seriesStart);
+  const upByDay = countByDay('files', 'created_at', todayStart, seriesStart);
   const series = Array.from({ length: days }, (_, k) => {
     const start = todayStart - (days - 1 - k) * DAY;
     return { date: dayLabel(start), ts: start, downloads: 0, uploads: 0 };
