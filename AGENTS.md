@@ -47,10 +47,10 @@ zyxf/
 
 ## 1. 文档维护（docs/ + README）
 
-仓库内的文档（`README.md`、`docs/DEPLOY.md`、`docs/DESIGN.md`、`docs/BUGS.md`）必须与代码保持一致。
+仓库内的文档（`README.md`、`docs/DEPLOY.md`、`docs/DESIGN.md`、`docs/ISSUES.md`）必须与代码保持一致。
 
 - **触发时机**：每次代码改动若影响文档描述的行为、路径、端口、断点、环境变量、token、目录或组件，就必须同步更新对应文档。
-  - 高频影响点：`frontend/src/test` 路径、`docs/BUGS.md` 存在性、tailwind token（如 `shadow-card` 是否仍存在）、右栏 `300px`/`lg` 断点、登录入口位置、`rb-btn-dark` 圆角等。
+  - 高频影响点：`frontend/src/test` 路径、`docs/ISSUES.md` 存在性、tailwind token（如 `shadow-card` 是否仍存在）、右栏 `300px`/`lg` 断点、登录入口位置、`rb-btn-dark` 圆角等。
 - **同步节奏**：可以每条消息后立即更新，也可以按内容分批（隔几条消息）更新一次；但**本轮会话结束前**必须确保文档与本轮所有改动一致。
 - **完成时说明**：若本次改动未影响文档，明确说「无文档需更新」；若影响了，列出更新了哪些文档及对应改动。
 - **追加要求**：当人类对 AGENTS.md 提出新的工程化要求时，按实际工程化结构更新本文件；保持简洁、不冗余。
