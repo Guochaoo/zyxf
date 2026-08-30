@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import api, { login as loginApi } from './api.js';
+import api, { login as loginApi, register as registerApi } from './api.js';
 import { getToken, setToken, clearToken } from './ui.js';
 
 const AuthContext = createContext(null);
@@ -35,13 +35,21 @@ export function AuthProvider({ children }) {
     return user;
   }, []);
 
+  // 注册即登录：后端核验验证码后直接返回 { token, user }。
+  const register = useCallback(async (payload) => {
+    const { token, user } = await registerApi(payload);
+    setToken(token);
+    setUser(user);
+    return user;
+  }, []);
+
   const logout = useCallback(() => {
     clearToken();
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, ready, login, logout, isAdmin: user?.role === 'admin' }}>
+    <AuthContext.Provider value={{ user, ready, login, register, logout, isAdmin: user?.role === 'admin' }}>
       {children}
     </AuthContext.Provider>
   );
