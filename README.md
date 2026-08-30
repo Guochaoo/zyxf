@@ -88,7 +88,7 @@ zyxf/
 ├── docs/
 │   ├── DEPLOY.md          # 部署指南（systemd + nginx + HTTPS）
 │   ├── DESIGN.md          # 设计系统规范
-│   └── BUGS.md            # bug 追踪清单
+│   └── ISSUES.md          # 缺陷 + 改进建议追踪清单
 └── start.sh               # 本地一键启动
 ```
 
