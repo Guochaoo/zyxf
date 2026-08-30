@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import './ErrorToast.css';
 
 /* 顶部错误提示卡：从页面上边缘滑入，停留 duration 后自动淡出，点 × 可提前关闭。
+   用 Portal 挂到 body——避免落在带 transform 的祖先内导致 fixed 失效（相对容器定位）。
    样式移植自 uiverse 错误卡（wave 装饰 + 红色圆形图标 + 纯投影，无界——无边框）。 */
 
 export default function ErrorToast({ message, sub = '请检查后重试', duration = 3500, onClose }) {
@@ -12,7 +14,7 @@ export default function ErrorToast({ message, sub = '请检查后重试', durati
     return () => clearTimeout(timer);
   }, [duration, message]);
 
-  return (
+  return createPortal(
     <div
       role="alert"
       className={`error-toast ${closing ? 'error-toast--closing' : ''}`}
@@ -48,6 +50,7 @@ export default function ErrorToast({ message, sub = '请检查后重试', durati
           />
         </svg>
       </button>
-    </div>
+      </div>,
+    document.body
   );
 }
