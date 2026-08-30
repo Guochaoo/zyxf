@@ -364,7 +364,7 @@ export default function ChatComposer() {
           收起后表单不可聚焦。 */}
       <div
         ref={settingsRef}
-        className="absolute inset-x-2 top-[40px] z-10 max-h-[calc(100%-52px)] overflow-y-auto rounded-[10px] border border-line bg-white p-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
+        className="absolute inset-x-2 top-[40px] z-10 max-h-[calc(100%-52px)] overflow-y-auto rounded-[10px] bg-white p-2.5 shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.10)]"
         style={{
           visibility: settingsOpen ? 'visible' : 'hidden',
           opacity: settingsOpen ? 1 : 0,

@@ -8,7 +8,7 @@
 > - **Language:** All user-facing copy is Chinese (zh-CN); uppercase mono technical labels (TODAY, DOWNLOADS…) remain in English as decorative metadata, per the Geist Mono tradition.
 > - **Accent colors:** The old brand blue (#276DAB) is replaced by the Vercel interaction palette (§2) — Link Blue #0072f5, Develop Blue #0a72ef, Focus Blue hsla(212, 100%, 48%, 1). Primary CTAs are Vercel Black (#171717).
 > - **Data-viz accent tokens** for the stats dashboard — 下载蓝 `--accent` (#3d9aff), 上传橙 `--orange` (#f68f3c), 今日红 `--red` (#ee5c61), 占用绿 `--green` (#3fae6b) — the only permitted accent use (see the heatmap spec in §4).
-> - **无界 (Borderless) philosophy:** This site deliberately moves *away* from Vercel's line-dominated separation (shadow-as-border everywhere). Separation comes from whitespace and soft surface tints (#FAFAFA) first; lines/borders are used only where function requires them (e.g., table rows, dashed dropzone). There is **no topbar** — navigation is a StaggeredMenu hamburger on every layout; the brand, search and folder tree live in the left rail (see §4).
+> - **无界 (Borderless) philosophy — 本项目的核心设计理念：** This site deliberately moves *away* from Vercel's line-dominated separation (shadow-as-border everywhere). 边界不靠边框线表达，而靠**颜色对比与其他效果**：表面色块深浅（#FAFAFA / #EFEFEF / #ECECEE）、留白间距、投影海拔（multi-layer shadow）。CSS `border` 仅在功能确有必要时使用（e.g., table rows, dashed dropzone, form input hairline）。There is **no topbar** — navigation is a StaggeredMenu hamburger on every layout; the brand, search and folder tree live in the left rail (see §4).
 
 ## 1. Visual Theme & Atmosphere
 
@@ -286,6 +286,7 @@ Download Heatmap（下载热力图，`/dashboard` 首行左卡）
 | Flat (Level 0) | No shadow | Page background, text blocks, **heatmap panel** (deliberately borderless) |
 | Inset Panel (Level 1) | `#f7f8f9` tint, no shadow (`bg-inset`) | Chart stages, anomaly-card plot area |
 | Card (Level 2) | `.rb-card` (CSS 类): rgba(0,0,0,0.08) 0 0 0 1px, rgba(0,0,0,0.04) 0 2px 2px, rgba(0,0,0,0.04) 0 8px 8px -8px, inner #fafafa ring | Upload/rename dialogs (`rb-card`). Dashboard cards are `bg-surface` with **no shadow** (无界) |
+| Popover (Level 3) | 纯投影浮层：rgba(0,0,0,0.04) 0 0 0 1px（shadow-as-border，非 CSS border）+ rgba(0,0,0,0.10) 0 8px 24px | 卡片内悬浮层（如智能对话的 AI 设置浮层）；无界——靠投影海拔与色块对比分层，不画边框 |
 | Raised Toggle (Level 2b) | `shadow-btn`: rgba(23,23,23,.12) 0 1px 2px, rgba(23,23,23,.06) 0 0 0 1px | Active pill toggles, refresh button |
 | Input Border (inline) | rgba(0,0,0,0.08) 0 0 0 1px; focus adds hsla(212,100%,48%,.25) 0 0 0 3px | All form inputs/selects (CSS, not a token) |
 | Focus (Accessibility) | 2px solid hsla(212, 100%, 48%, 1) outline | Keyboard focus on all interactive elements |
