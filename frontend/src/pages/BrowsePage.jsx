@@ -39,6 +39,7 @@ import UploadDialog from '../components/UploadDialog.jsx';
 import GlideList from '../components/GlideList.jsx';
 import { downloadAndAlert, errMsg, formatDate, formatSize } from '../utils.js';
 import { useSlidingIndicator } from '../hooks/useSlidingIndicator.js';
+import { EASE_COLLAPSE } from '../components/ui.js';
 
 // Default = admin-controlled manual order. Comes first.
 const SORT_OPTIONS = [
@@ -535,8 +536,7 @@ function SortControl({ sort, order, onChange }) {
             width: indicator.width,
             transform: `translateX(${indicator.left}px)`,
             opacity: indicator.ready ? 1 : 0,
-            transition:
-              'transform 360ms cubic-bezier(0.22, 1, 0.36, 1), width 360ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease',
+            transition: `transform 360ms ${EASE_COLLAPSE}, width 360ms ${EASE_COLLAPSE}, opacity 160ms ease`,
           }}
         />
         {SORT_OPTIONS.map((opt) => {

@@ -7,6 +7,7 @@ import { getFileUrl, search as searchApi } from '../api.js';
 import { downloadAndAlert } from '../utils.js';
 import FileIcon from './FileIcon.jsx';
 import { openFolderOrFile } from '../ui.js';
+import { useClickOutside } from '../hooks/useClickOutside.js';
 
 export default function SearchBar({ className = '' }) {
   const [q, setQ] = useState('');
@@ -94,20 +95,7 @@ export default function SearchBar({ className = '' }) {
     };
   }, [open]);
 
-  useEffect(() => {
-    const onClick = (e) => {
-      if (
-        wrapRef.current &&
-        !wrapRef.current.contains(e.target) &&
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target)
-      ) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, []);
+  useClickOutside(true, () => setOpen(false), wrapRef, dropdownRef);
 
   const handleResult = (item) => {
     setOpen(false);

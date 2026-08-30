@@ -10,7 +10,7 @@ import {
 } from 'd3-force';
 import { useFolderTree } from '../hooks/useFolderTree.js';
 import PanelHeader from './PanelHeader.jsx';
-import { ICON_BUTTON_CLASS } from './ui.js';
+import { ICON_BUTTON_CLASS, EASE_COLLAPSE } from './ui.js';
 import { openFilePreview } from '../ui.js';
 
 const VIEW_W = 600;
@@ -155,7 +155,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
         className="overflow-hidden transition-[height] duration-[360ms]"
         style={{
           height: collapsed ? 0 : GRAPH_H,
-          transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          transitionTimingFunction: EASE_COLLAPSE,
         }}
       >
         {loading || empty ? (

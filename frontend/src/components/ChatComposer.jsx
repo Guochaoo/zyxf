@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { ArrowUp, ArrowUpRight, Settings, Square, Trash2 } from 'lucide-react';
 import { chatStream } from '../api.js';
-import { ICON_BUTTON_CLASS } from './ui.js';
+import { EASE_COLLAPSE, ICON_BUTTON_CLASS } from './ui.js';
 import PanelHeader from './PanelHeader.jsx';
 import { openFolderOrFile } from '../ui.js';
+import { useClickOutside } from '../hooks/useClickOutside.js';
 
 /* ─────────────────────────────────────────────────────────
  * CHAT — interactive panel with a header, replies, and composer.
@@ -169,17 +170,7 @@ export default function ChatComposer() {
   useEffect(() => () => clearTimeout(snapTimer.current), []);
 
   // 设置浮层打开时，点击浮层与设置按钮之外的空白处收起。
-  useEffect(() => {
-    if (!settingsOpen) return undefined;
-    const onDocMouseDown = (e) => {
-      const t = e.target;
-      if (!settingsRef.current?.contains(t) && !settingsBtnRef.current?.contains(t)) {
-        setSettingsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDocMouseDown);
-    return () => document.removeEventListener('mousedown', onDocMouseDown);
-  }, [settingsOpen]);
+  useClickOutside(settingsOpen, () => setSettingsOpen(false), settingsRef, settingsBtnRef);
 
   // 动画结束（360ms 过渡 + 余量）后回到自然布局（高度交还给 flex）
   const endSnap = () => {
@@ -371,7 +362,7 @@ export default function ChatComposer() {
           transform: settingsOpen ? 'translateY(0)' : 'translateY(-4px)',
           transitionProperty: 'visibility, opacity, transform',
           transitionDuration: '240ms',
-          transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          transitionTimingFunction: EASE_COLLAPSE,
         }}
       >
         <div className="flex flex-col gap-1.5">
@@ -421,7 +412,7 @@ export default function ChatComposer() {
         }`}
         style={{
           height: snapH ?? (collapsed ? '0px' : undefined),
-          transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          transitionTimingFunction: EASE_COLLAPSE,
         }}
       >
         <div

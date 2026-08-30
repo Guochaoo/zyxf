@@ -13,6 +13,7 @@ import KnowledgeGraph from './components/KnowledgeGraph.jsx';
 import ChatComposer from './components/ChatComposer.jsx';
 import useMediaQuery from './hooks/useMediaQuery.js';
 import NoticeModal from './components/NoticeModal.jsx';
+import { EASE_COLLAPSE } from './components/ui.js';
 
 // Static menu items for the floating StaggeredMenu — hoisted out of the
 // component so they are allocated once per module load, not per render.
@@ -40,7 +41,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // 侧边栏开合的缓动曲线与时长（与 ChatComposer/KnowledgeGraph 的收缩动画一致）。
-  const SIDEBAR_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+  const SIDEBAR_EASE = EASE_COLLAPSE;
   const SIDEBAR_MS = 320;
 
   // Docs layout: brand + search + folder tree live in the left rail, which
