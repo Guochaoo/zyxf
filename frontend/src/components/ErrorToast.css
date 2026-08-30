@@ -1,0 +1,124 @@
+/* 顶部错误提示卡（ErrorToast）——移植自 uiverse 错误卡样式。
+   无界：无 CSS 边框，靠纯投影 + 红色 tint 分层；从上边缘滑入/滑出。 */
+
+.error-toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  z-index: 80;
+  width: 330px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  padding: 10px 15px;
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: rgba(149, 157, 165, 0.2) 0px 8px 24px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 15px;
+  transform: translate(-50%, 0);
+  animation: error-toast-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes error-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -14px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.error-toast--closing {
+  animation: error-toast-out 300ms ease-in both;
+}
+
+@keyframes error-toast-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -14px);
+  }
+}
+
+.error-toast__wave {
+  position: absolute;
+  transform: rotate(90deg);
+  left: -31px;
+  top: 32px;
+  width: 80px;
+  fill: #fc0c0c3a;
+}
+
+.error-toast__icon {
+  width: 35px;
+  height: 35px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #fc0c0c48;
+  border-radius: 50%;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.error-toast__icon svg {
+  width: 17px;
+  height: 17px;
+  color: #d10d0d;
+}
+
+.error-toast__text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.error-toast__message,
+.error-toast__sub {
+  margin: 0;
+  cursor: default;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.error-toast__message {
+  color: #d10d0d;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.error-toast__sub {
+  font-size: 13px;
+  color: #555;
+}
+
+.error-toast__close {
+  width: 18px;
+  height: 18px;
+  color: #555;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 150ms;
+}
+
+.error-toast__close:hover {
+  color: #171717;
+}
+
+.error-toast__close svg {
+  width: 100%;
+  height: 100%;
+}
