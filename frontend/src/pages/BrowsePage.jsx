@@ -62,6 +62,27 @@ function notifyFoldersChanged() {
   window.dispatchEvent(new Event('folders-changed'));
 }
 
+// 工具栏图标按钮：外层裸 button + 内层 rb-toolbar-btn 固定宽度槽位。
+function ToolbarIconButton({ title, onClick, children }) {
+  return (
+    <button onClick={onClick} className="p-0" title={title}>
+      <span className="rb-toolbar-btn w-[38.5px] p-0">{children}</span>
+    </button>
+  );
+}
+
+// 底部悬浮胶囊横幅（拖拽提示/移动错误/同步结果共用骨架）。
+function FloatingPill({ className = '', bottom = 'bottom-6', role, children }) {
+  return (
+    <div
+      className={`fixed left-1/2 -translate-x-1/2 ${bottom} z-40 text-xs rounded-full shadow-md px-4 py-1.5 ${className}`}
+      role={role}
+    >
+      {children}
+    </div>
+  );
+}
+
 export default function BrowsePage() {
   const { id: idParam } = useParams();
   const folderId = Number(idParam) || 0;
@@ -161,37 +182,32 @@ export default function BrowsePage() {
     navigate(location.pathname, { replace: true, state: null });
   }, [data, loading, location.pathname, location.state, navigate]);
 
-  const onCreateFolder = async () => {
+  // 管理操作共享骨架：await 动作 → 通知目录树 + 刷新；失败 alert 兜底。
+  // notify=false 用于不影响目录树的操作（如删除文件）。
+  const runAdmin = async (fn, failMsg, notify = true) => {
+    try {
+      await fn();
+      if (notify) notifyFoldersChanged();
+      refresh();
+    } catch (e) {
+      alert(errMsg(e, failMsg));
+    }
+  };
+
+  const onCreateFolder = () => {
     const name = window.prompt('新建文件夹名称');
     if (!name) return;
-    try {
-      await createFolder(name, folderId || null);
-      notifyFoldersChanged();
-      refresh();
-    } catch (e) {
-      alert(errMsg(e, '创建失败'));
-    }
+    runAdmin(() => createFolder(name, folderId || null), '创建失败');
   };
 
-  const onDeleteFolder = async (f) => {
+  const onDeleteFolder = (f) => {
     if (!confirm(`确认删除文件夹「${f.name}」及其所有内容？此操作不可恢复。`)) return;
-    try {
-      await deleteFolder(f.id);
-      notifyFoldersChanged();
-      refresh();
-    } catch (e) {
-      alert(errMsg(e, '删除失败'));
-    }
+    runAdmin(() => deleteFolder(f.id), '删除失败');
   };
 
-  const onDeleteFile = async (f) => {
+  const onDeleteFile = (f) => {
     if (!confirm(`确认删除文件「${f.name}」？`)) return;
-    try {
-      await deleteFile(f.id);
-      refresh();
-    } catch (e) {
-      alert(errMsg(e, '删除失败'));
-    }
+    runAdmin(() => deleteFile(f.id), '删除失败', false);
   };
 
   const openRenameDialog = (item) => {
@@ -367,25 +383,13 @@ export default function BrowsePage() {
       {/* Toolbar — sits above the file list */}
       <div className="flex w-full flex-wrap items-center justify-end gap-2">
         <SortControl sort={sort} order={order} onChange={toggleSort} />
-        <button
-          onClick={onSyncRefresh}
-          className="p-0"
-          title="刷新（同步远端资料库）"
-        >
-          <span className="rb-toolbar-btn w-[38.5px] p-0">
-            <RotateCw className={`w-6 h-6 ${syncing ? 'animate-spin' : ''}`} />
-          </span>
-        </button>
+        <ToolbarIconButton title="刷新（同步远端资料库）" onClick={onSyncRefresh}>
+          <RotateCw className={`w-6 h-6 ${syncing ? 'animate-spin' : ''}`} />
+        </ToolbarIconButton>
         {folderId !== 0 && (
-          <button
-            onClick={onGoBack}
-            className="p-0"
-            title="返回上一级"
-          >
-            <span className="rb-toolbar-btn w-[38.5px] p-0">
-              <ArrowLeft className="w-6 h-6" />
-            </span>
-          </button>
+          <ToolbarIconButton title="返回上一级" onClick={onGoBack}>
+            <ArrowLeft className="w-6 h-6" />
+          </ToolbarIconButton>
         )}
         {isAdmin && (
           <>
@@ -409,29 +413,28 @@ export default function BrowsePage() {
 
       {/* Floating banners — fixed so they don't disrupt drag layout */}
       {isAdmin && dragging && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-40 pointer-events-none text-xs text-black/70 bg-black/5 border border-black/10 rounded-full shadow-md px-4 py-1.5">
+        <FloatingPill className="pointer-events-none text-black/70 bg-black/5 border border-black/10">
           正在移动「{dragging.name}」
           {sort === 'manual'
             ? ' — 在行的上/下边缘可插入排序，拖到文件夹中部可移入'
             : ' — 拖到左侧目录中的文件夹'}
-        </div>
+        </FloatingPill>
       )}
       {moveError && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-40 text-xs text-red bg-[#fef2f2] border border-[#fecaca] rounded-full shadow-md px-4 py-1.5">
-          {moveError}
-        </div>
+        <FloatingPill className="text-red bg-[#fef2f2] border border-[#fecaca]">{moveError}</FloatingPill>
       )}
       {syncMsg && (
-        <div
-          className={`fixed left-1/2 -translate-x-1/2 bottom-14 z-40 text-xs rounded-full shadow-md px-4 py-1.5 ${
+        <FloatingPill
+          bottom="bottom-14"
+          role="status"
+          className={
             syncMsgOk
               ? 'text-black/70 bg-black/5 border border-black/10'
               : 'text-red bg-[#fef2f2] border border-[#fecaca]'
-          }`}
-          role="status"
+          }
         >
           {syncMsg}
-        </div>
+        </FloatingPill>
       )}
 
       {/* Body: file list takes the full middle column width. The knowledge

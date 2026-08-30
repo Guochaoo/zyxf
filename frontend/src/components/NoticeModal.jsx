@@ -11,6 +11,7 @@ import {
   ShieldAlert,
   TriangleAlert,
 } from 'lucide-react';
+import { storageGet, storageSet } from '../ui.js';
 import './NoticeModal.css';
 
 /**
@@ -69,11 +70,7 @@ const NOTICE_ITEMS = [
 ];
 
 function readAgreed() {
-  try {
-    return localStorage.getItem(STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
+  return storageGet(STORAGE_KEY) === '1';
 }
 
 export default function NoticeModal() {
@@ -92,11 +89,8 @@ export default function NoticeModal() {
   if (agreed) return null;
 
   const agree = () => {
-    try {
-      localStorage.setItem(STORAGE_KEY, '1');
-    } catch {
-      /* 隐私模式下存储失败也放行，避免每次访问都被拦截 */
-    }
+    // 隐私模式下存储失败也放行（storageSet 内部吞掉异常），避免每次访问都被拦截。
+    storageSet(STORAGE_KEY, '1');
     setAgreed(true);
   };
 

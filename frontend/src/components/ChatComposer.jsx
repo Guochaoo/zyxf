@@ -5,7 +5,7 @@ import { ArrowUp, ArrowUpRight, Settings, Square, Trash2 } from 'lucide-react';
 import { chatStream } from '../api.js';
 import { EASE_COLLAPSE, ICON_BUTTON_CLASS } from './ui.js';
 import PanelHeader from './PanelHeader.jsx';
-import { openFolderOrFile } from '../ui.js';
+import { openFolderOrFile, storageGet, storageSet, storageRemove } from '../ui.js';
 import { useClickOutside } from '../hooks/useClickOutside.js';
 
 /* ─────────────────────────────────────────────────────────
@@ -29,17 +29,13 @@ const fmtTime = () => {
 };
 
 const loadLlmCfg = () => {
-  try {
-    const raw = JSON.parse(localStorage.getItem(LLM_KEY) || 'null');
-    if (raw && typeof raw === 'object') {
-      return {
-        apiKey: typeof raw.apiKey === 'string' ? raw.apiKey : '',
-        baseUrl: typeof raw.baseUrl === 'string' ? raw.baseUrl : '',
-        model: typeof raw.model === 'string' ? raw.model : '',
-      };
-    }
-  } catch {
-    /* fallthrough */
+  const raw = JSON.parse(storageGet(LLM_KEY) ?? 'null');
+  if (raw && typeof raw === 'object') {
+    return {
+      apiKey: typeof raw.apiKey === 'string' ? raw.apiKey : '',
+      baseUrl: typeof raw.baseUrl === 'string' ? raw.baseUrl : '',
+      model: typeof raw.model === 'string' ? raw.model : '',
+    };
   }
   return { apiKey: '', baseUrl: '', model: '' };
 };
@@ -299,7 +295,7 @@ export default function ChatComposer() {
       model: cfgDraft.model.trim(),
     };
     setLlmCfg(next);
-    localStorage.setItem(LLM_KEY, JSON.stringify(next));
+    storageSet(LLM_KEY, JSON.stringify(next));
     setSettingsOpen(false);
   };
 
@@ -307,7 +303,7 @@ export default function ChatComposer() {
     const empty = { apiKey: '', baseUrl: '', model: '' };
     setLlmCfg(empty);
     setCfgDraft(empty);
-    localStorage.removeItem(LLM_KEY);
+    storageRemove(LLM_KEY);
   };
 
   const canSend = draft.trim().length > 0 && !busy;
