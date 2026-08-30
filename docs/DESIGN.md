@@ -163,7 +163,7 @@ Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视�
 - 收起/展开同款交互；实现上以像素高度冻结内容（内容不重排，由外层容器从下往上裁剪），消息列表始终 `overflow-y-auto` + `scrollbar-gutter: stable`（滚动条槽位恒定），展开时卡片本体随容器一起平滑长高
 - 输入框：`bg-field` 圆角 10px、**无描边**、仅极浅投影（聚焦微调）；发送按钮深色圆角方块，流式生成中变为停止按钮
 - 消息区：用户消息右对齐灰底气泡；AI 回复带小节头（检索中 / 生成中 / 完成 / 出错）+ 时间，流式打字机渲染，【文件N】引用渲染为可点击文件行（跳转 / 预览）；空态显示三条建议 chip
-- AI 设置面板：头部下展开的行内表单，配置存 localStorage，请求时随 body 下发覆盖服务端 env
+- AI 设置面板：头部下浮出的悬浮层（覆盖对话区，点击空白收起），配置存 localStorage，请求时随 body 下发覆盖服务端 env
 
 ### File List (资料库中列)
 - Monochrome throughout (no accent colors): rows on white, dividers rgba(23,23,23,0.08)
@@ -182,11 +182,11 @@ Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视�
 
 ### Navigation
 - **No topbar on any layout** — the page is three columns (left rail + content + right rail)
-- Navigation lives in the **StaggeredMenu** (hamburger) on **all** screen sizes: right-side slide-out panel with the main items (资料库 / 统计 / 关于我们 / 登录（未登录）或账号卡片+退出登录) + social channels
+- Navigation lives in the **StaggeredMenu** (hamburger) on **all** screen sizes: right-side slide-out panel with the main items (资料库 / 统计 / 关于我们 / 登录（未登录）/账号卡片 + 展开式用户菜单：登录 · 退出登录 · 预留设置项) + social channels
 - Brand logo + brand name (仲英学辅资料库) sit at the top of the **left rail** (desktop) / a slim mobile-only top row
 - Menu toggle: white shadow-border button, 6px radius, 14px weight 500, fixed at top-right
 - Active: weight 600 or underline
-- CTA: dark pill buttons ("Start Deploying", "Contact Sales")
+- CTA: dark pill buttons (`rb-btn-dark`, 上传 / 新建文件夹)
 
 ### Docs Layout & Sidebar (Folder Tree)
 - Vercel-docs-style **three-column layout** on **browse routes only** (`/` and `/folder/:id`); every other page (统计 / 关于我们 / 登录) is **standalone** (no fixed rails)
@@ -195,7 +195,7 @@ Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视�
     1. **Brand logo + brand name** (brand identity, verbatim)
     2. **Search field** (Vercel-docs pattern)
     3. **Folder tree** (fills the remaining rail height, scrolls internally) — folders **and files**: file leaves show the file-type icon, indented under their folder; clicking a file jumps to its folder and opens the preview. Root-level files sit under the 首页 node, which is **expanded by default**. Chevron toggles any folder that contains folders or files.
-  - **Middle column** (`flex-1`, scrolls internally): sticky breadcrumb/toolbar row (white background) — sort segments (默认 / 名称 / 时间 / 大小), refresh, 新建文件夹, 上传 — above the file list
+  - **Middle column** (`flex-1`, scrolls internally): toolbar row (white background) — sort segments (默认 / 名称 / 时间 / 大小), refresh, 新建文件夹, 上传 — above the file list
   - **Right rail** (fixed full-height, 300px): **knowledge-graph card** below (the graph's local view is `sticky` to the rail; the full-library modal is unaffected) then the **AI 资料助手 card** (`lg`+ only): streaming chat panel (SSE) that answers file-finding questions with smart-search tool calls; replies render typewriter-style with 【文件N】 citations rendered as clickable file rows (jump/preview); welcome state shows three suggestion chips; composer doubles as a stop button while streaming. Requires `LLM_*` env (otherwise 503 → 「AI 功能未配置」); the rail scrolls when both cards overflow. The StaggeredMenu toggle button floats separately at the top-right.
   - Below `lg` (1024px) the right rail hides (no inline fallback); the left rail hides below `lg` — browse pages get a slim mobile brand row + search below it, navigation via StaggeredMenu
 - Content column: browse is full-width between the rails (no max-width); standalone pages are `mx-auto w-full`; login is `max-w-7xl`
@@ -345,7 +345,7 @@ Shadow Philosophy: Vercel has arguably the most sophisticated shadow system in m
 ### Collapsing Strategy
 - Hero: display 48px → scales down, maintains negative tracking proportionally
 - Navigation: StaggeredMenu hamburger on all sizes (no topbar on any layout)
-- Left rail (brand + search + folder tree): hidden below `lg` (1024px) — mobile gets a slim brand row, search below it, breadcrumb + search for folder navigation
+- Left rail (brand + search + folder tree): hidden below `lg` (1024px) — mobile gets a slim brand row, search below it, navigation falls back to StaggeredMenu + search
 - Feature cards: 3-column → 2-column → single column stacked
 - Code screenshots: maintain aspect ratio, may horizontally scroll
 - Trust bar logos: grid → horizontal scroll

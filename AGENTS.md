@@ -43,7 +43,7 @@ zyxf/
 - **手动启动**（PowerShell / 需要单独控制时）：
   - 后端：`cd backend && npm install && npm run dev`
   - 前端：`cd frontend && npm install && npm run dev`
-- 首次启动自动创建 SQLite 数据库 `backend/data.db` 并按 `start.sh` 说明写入管理员账号；`.env` 至少需填写 `OSS_*` 凭证（见 README）。用户注册（邮箱验证码）需额外填写 `DM_*` 三项，未配置时仅注册功能返回 503。
+- 首次启动自动创建 SQLite 数据库 `backend/data.db` 并按 `.env` 的 `ADMIN_USER`/`ADMIN_PASSWORD` 写入管理员账号；`.env` 至少需填写 `OSS_*` 凭证（见 README）。用户注册（邮箱验证码）需额外填写 `DM_*` 三项，未配置时仅注册功能返回 503。
 
 ## 1. 文档维护（docs/ + README）
 
