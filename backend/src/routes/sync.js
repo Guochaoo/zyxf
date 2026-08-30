@@ -12,7 +12,8 @@ const syncLimiter = adminBypassLimiter(60 * 1000, 5, '同步过于频繁，请 1
 
 const router = Router();
 
-// SQLite 绑定参数上限为 999，分批 DELETE/FIX 时每批不能超过该值（BUG-08）。
+// SQLite 绑定参数上限为 32766（Node 24 捆绑的 SQLite 编译值；999 是 3.32 前的旧默认）。
+// 分批 DELETE/FIX 每批远低于该上限，留足余量（BUG-08）。
 // DELETE 用 1 参数/行；fixExt 的 CASE 用 3 参数/行（WHEN id, THEN ext, WHERE id IN）。
 const DELETE_BATCH = 500;
 const FIX_EXT_BATCH = 300;
