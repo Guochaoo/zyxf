@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { BsCaretLeftFill, BsEyeFill, BsEyeSlashFill } from 'react-icons/bs';
 import { errMsg } from '../utils.js';
 import Silk from '../components/Silk.jsx';
-import ErrorToast from '../components/ErrorToast.jsx';
+import Toast from '../components/Toast.jsx';
 
 /* ─────────────────────────────────────────────────────────
  * AUTH — 登录/注册合并页。/login 与 /register 渲染同一组件
@@ -100,7 +100,7 @@ function LoginForm() {
           </div>
         </div>
 
-        {err && <ErrorToast message={err} onClose={() => setErr('')} />}
+        {err && <Toast type="error" message={err} onClose={() => setErr('')} />}
         <SubmitButton loading={loading} idleText="登录" />
       </form>
 
@@ -252,7 +252,7 @@ function RegisterForm() {
           </div>
         </div>
 
-        {err && <ErrorToast message={err} onClose={() => setErr('')} />}
+        {err && <Toast type="error" message={err} onClose={() => setErr('')} />}
         <SubmitButton loading={loading} idleText="注册" />
       </form>
 
