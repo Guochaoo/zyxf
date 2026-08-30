@@ -1,7 +1,5 @@
 import axios from 'axios';
-import { getToken, clearToken, TOKEN_KEY } from './ui.js';
-
-export { TOKEN_KEY };
+import { getToken, clearToken } from './ui.js';
 
 const api = axios.create({ baseURL: '/api' });
 

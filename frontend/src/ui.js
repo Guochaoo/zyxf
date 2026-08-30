@@ -2,7 +2,6 @@
 // 仅供各组件 import，不承载业务状态。
 
 // 认证 token 的 localStorage key —— 单一来源，避免 api.js 与 ui.js 互相 import。
-// api.js 从本模块 re-export 以保持 `import { TOKEN_KEY } from '../api.js'` 兼容。
 export const TOKEN_KEY = 'zyxf_token';
 
 /**
