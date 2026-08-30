@@ -62,13 +62,13 @@ function LoginForm() {
         <h1 className="text-[20px] sm:text-[22px] font-semibold leading-tight tracking-tight text-neutral-900">
           欢迎回来
         </h1>
-        <p className="mt-1.5 sm:mt-2.5 text-[13px] sm:text-sm text-neutral-500">输入用户名和密码登录</p>
+        <p className="mt-1.5 sm:mt-2.5 text-[13px] sm:text-sm text-neutral-500">输入用户名或邮箱登录</p>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
           <label className={LABEL_CLS} htmlFor="login-username">
-            用户名
+            用户名或邮箱
           </label>
           <input
             id="login-username"

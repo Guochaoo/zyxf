@@ -806,4 +806,33 @@ describe('POST /api/auth/register (+ /register/code)', () => {
     assert.equal(status, 409);
     assert.equal(body.error, '该邮箱已被注册');
   });
+
+  test('login works with either email or username after register', async () => {
+    await registerViaCode('loginby@test.dev');
+    const byEmail = await request('POST', '/api/auth/login', {
+      body: { username: 'loginby@test.dev', password: 'secret123' },
+    });
+    assert.equal(byEmail.status, 200);
+    assert.equal(byEmail.body.user.username, 'newbie');
+
+    const byName = await request('POST', '/api/auth/login', {
+      body: { username: 'newbie', password: 'secret123' },
+    });
+    assert.equal(byName.status, 200);
+  });
+
+  test('password below 8 chars is rejected at register', async () => {
+    await requestCode('shortpw@test.dev');
+    const { status, body } = await request('POST', '/api/auth/register', {
+      body: {
+        username: 'shortpw',
+        email: 'shortpw@test.dev',
+        password: 'abc1234',
+        code: mailState.lastCode,
+      },
+      headers: xff,
+    });
+    assert.equal(status, 400);
+    assert.equal(body.error, '密码需为 8-72 位');
+  });
 });
