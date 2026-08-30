@@ -105,8 +105,8 @@ export default function RegisterPage() {
           </Link>
 
           <div className="mb-4 sm:mb-8 flex items-center justify-center gap-2.5">
-            <img src="/favicon.png" alt="仲英学辅" className="h-8 w-8 rounded-full object-cover" />
-            <span className="text-[20px] sm:text-[24px] font-bold tracking-tight text-neutral-900">
+            <img src="/favicon.png" alt="仲英学辅" className="h-9 w-9 rounded-full object-cover" />
+            <span className="text-[22px] sm:text-[26px] font-bold tracking-tight text-neutral-900">
               仲英学辅
             </span>
           </div>
