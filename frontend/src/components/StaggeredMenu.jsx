@@ -324,33 +324,48 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     });
   }, []);
 
+  // 主菜单开/关共用的动画编排：面板滑动 + 图标/配色/文字三联动。
+  const animateTo = useCallback(
+    (target) => {
+      if (target) {
+        playOpen();
+      } else {
+        playClose();
+      }
+      animateIcon(target);
+      animateColor(target);
+      animateText(target);
+    },
+    [playOpen, playClose, animateIcon, animateColor, animateText]
+  );
+
   const toggleMenu = useCallback(() => {
     const target = !openRef.current;
     openRef.current = target;
     setOpen(target);
     if (target) {
       onMenuOpen?.();
-      playOpen();
     } else {
       onMenuClose?.();
-      playClose();
     }
-    animateIcon(target);
-    animateColor(target);
-    animateText(target);
-  }, [playOpen, playClose, animateIcon, animateColor, animateText, onMenuOpen, onMenuClose]);
+    animateTo(target);
+  }, [animateTo, onMenuOpen, onMenuClose]);
 
   const closeMenu = useCallback(() => {
     if (openRef.current) {
       openRef.current = false;
       setOpen(false);
       onMenuClose?.();
-      playClose();
-      animateIcon(false);
-      animateColor(false);
-      animateText(false);
+      animateTo(false);
     }
-  }, [playClose, animateIcon, animateColor, animateText, onMenuClose]);
+  }, [animateTo, onMenuClose]);
+
+  // 账号菜单项点击的统一编排：先收起弹出层，再执行动作，最后关主菜单。
+  const handleAccountAction = (action) => {
+    setAcctOpen(false);
+    action?.();
+    closeMenu();
+  };
 
   useClickOutside(acctOpen, () => setAcctOpen(false), acctRef);
 
@@ -480,11 +495,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
                             type="button"
                             role="menuitem"
                             className="sm-account-pop-item"
-                            onClick={() => {
-                              setAcctOpen(false);
-                              account.onLogin?.();
-                              closeMenu();
-                            }}
+                            onClick={() => handleAccountAction(account.onLogin)}
                           >
                             <LogIn size={17} strokeWidth={1.8} aria-hidden="true" />
                             <span>登录</span>
@@ -494,11 +505,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
                             type="button"
                             role="menuitem"
                             className="sm-account-pop-item sm-account-pop-item--danger"
-                            onClick={() => {
-                              setAcctOpen(false);
-                              account.onLogout?.();
-                              closeMenu();
-                            }}
+                            onClick={() => handleAccountAction(account.onLogout)}
                           >
                             <LogOut size={17} strokeWidth={1.8} aria-hidden="true" />
                             <span>退出登录</span>

@@ -29,37 +29,84 @@ const SubmitButton = ({ loading, idleText }) => (
   </button>
 );
 
+// 密码输入框 + 显隐切换（登录/注册两表单共用，显隐状态各自独立）。
+function PasswordInput({ id, value, onChange, autoComplete }) {
+  const [showPwd, setShowPwd] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        id={id}
+        type={showPwd ? 'text' : 'password'}
+        className={`${INPUT_CLS} pr-11`}
+        value={value}
+        onChange={onChange}
+        autoComplete={autoComplete}
+      />
+      <button
+        type="button"
+        onClick={() => setShowPwd((v) => !v)}
+        aria-label={showPwd ? '隐藏密码' : '显示密码'}
+        className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex w-8 h-8 items-center justify-center text-neutral-400 transition-colors hover:text-neutral-700"
+      >
+        {showPwd ? <BsEyeSlashFill className="w-4 h-4" /> : <BsEyeFill className="w-4 h-4" />}
+      </button>
+    </div>
+  );
+}
+
+const AuthHeading = ({ title, sub }) => (
+  <div className="mb-5">
+    <h1 className="text-[20px] sm:text-[22px] font-semibold leading-tight tracking-tight text-neutral-900">
+      {title}
+    </h1>
+    <p className="mt-1.5 sm:mt-2.5 text-[13px] sm:text-sm text-neutral-500">{sub}</p>
+  </div>
+);
+
+const AuthSwapLink = ({ to, prompt, action }) => (
+  <p className="mt-4 text-center text-sm text-neutral-500">
+    {prompt}{' '}
+    <Link to={to} className="font-medium text-brand-600 transition-colors hover:text-brand-700">
+      {action}
+    </Link>
+  </p>
+);
+
+// 表单动作共享骨架：清错 → busy → await → 成功回调 / 失败提示。
+// setErr 由调用方传入，让同一表单的多个动作（注册页的发码/提交）共享错误状态。
+function useSubmit(setErr) {
+  const [busy, setBusy] = useState(false);
+  const run = async (action, fallbackMsg, onSuccess) => {
+    setErr('');
+    setBusy(true);
+    try {
+      await action();
+      onSuccess?.();
+    } catch (error) {
+      setErr(errMsg(error, fallbackMsg));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { busy, run };
+}
+
 function LoginForm() {
   const { login } = useAuth();
   const nav = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [showPwd, setShowPwd] = useState(false);
+  const { busy: loading, run } = useSubmit(setErr);
 
-  const onSubmit = async (e) => {
+  const onSubmit = (e) => {
     e.preventDefault();
-    setErr('');
-    setLoading(true);
-    try {
-      await login(username, password);
-      nav('/');
-    } catch (error) {
-      setErr(errMsg(error, '登录失败'));
-    } finally {
-      setLoading(false);
-    }
+    run(() => login(username, password), '登录失败', () => nav('/'));
   };
 
   return (
     <div style={{ animation: FORM_ANIM }}>
-      <div className="mb-5">
-        <h1 className="text-[20px] sm:text-[22px] font-semibold leading-tight tracking-tight text-neutral-900">
-          欢迎回来
-        </h1>
-        <p className="mt-1.5 sm:mt-2.5 text-[13px] sm:text-sm text-neutral-500">输入用户名或邮箱登录</p>
-      </div>
+      <AuthHeading title="欢迎回来" sub="输入用户名或邮箱登录" />
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
@@ -80,36 +127,19 @@ function LoginForm() {
           <label className={LABEL_CLS} htmlFor="login-password">
             密码
           </label>
-          <div className="relative">
-            <input
-              id="login-password"
-              type={showPwd ? 'text' : 'password'}
-              className={`${INPUT_CLS} pr-11`}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPwd((v) => !v)}
-              aria-label={showPwd ? '隐藏密码' : '显示密码'}
-              className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex w-8 h-8 items-center justify-center text-neutral-400 transition-colors hover:text-neutral-700"
-            >
-              {showPwd ? <BsEyeSlashFill className="w-4 h-4" /> : <BsEyeFill className="w-4 h-4" />}
-            </button>
-          </div>
+          <PasswordInput
+            id="login-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+          />
         </div>
 
         {err && <Toast type="error" message={err} onClose={() => setErr('')} />}
         <SubmitButton loading={loading} idleText="登录" />
       </form>
 
-      <p className="mt-4 text-center text-sm text-neutral-500">
-        还没有账号？{' '}
-        <Link to="/register" className="font-medium text-brand-600 transition-colors hover:text-brand-700">
-          注册账号
-        </Link>
-      </p>
+      <AuthSwapLink to="/register" prompt="还没有账号？" action="注册账号" />
     </div>
   );
 }
@@ -122,10 +152,10 @@ function RegisterForm() {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [err, setErr] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
   const [resendIn, setResendIn] = useState(0);
-  const [showPwd, setShowPwd] = useState(false);
+  // 发码与提交是两个 busy 态，但共享同一 err（任一失败都显示在表单顶部）。
+  const { busy: loading, run } = useSubmit(setErr);
+  const { busy: sending, run: runRequest } = useSubmit(setErr);
 
   // 验证码重发倒计时；归零后清除定时器。
   useEffect(() => {
@@ -134,44 +164,23 @@ function RegisterForm() {
     return () => clearInterval(timer);
   }, [resendIn]);
 
-  const requestCode = async () => {
+  const requestCode = () => {
     if (!email.trim() || resendIn > 0 || sending) return;
-    setErr('');
-    setSending(true);
-    try {
-      await requestRegisterCode(email.trim());
-      setResendIn(RESEND_SECONDS);
-    } catch (error) {
-      setErr(errMsg(error, '验证码发送失败'));
-    } finally {
-      setSending(false);
-    }
+    runRequest(() => requestRegisterCode(email.trim()), '验证码发送失败', () => setResendIn(RESEND_SECONDS));
   };
 
-  const onSubmit = async (e) => {
+  const onSubmit = (e) => {
     e.preventDefault();
-    setErr('');
-    setLoading(true);
-    try {
-      await register({ username: username.trim(), email: email.trim(), password, code: code.trim() });
-      nav('/');
-    } catch (error) {
-      setErr(errMsg(error, '注册失败'));
-    } finally {
-      setLoading(false);
-    }
+    run(
+      () => register({ username: username.trim(), email: email.trim(), password, code: code.trim() }),
+      '注册失败',
+      () => nav('/')
+    );
   };
 
   return (
     <div style={{ animation: FORM_ANIM }}>
-      <div className="mb-5">
-        <h1 className="text-[20px] sm:text-[22px] font-semibold leading-tight tracking-tight text-neutral-900">
-          注册账号
-        </h1>
-        <p className="mt-1.5 sm:mt-2.5 text-[13px] sm:text-sm text-neutral-500">
-          使用邮箱验证码注册普通用户账号
-        </p>
-      </div>
+      <AuthHeading title="注册账号" sub="使用邮箱验证码注册普通用户账号" />
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
@@ -232,36 +241,19 @@ function RegisterForm() {
           <label className={LABEL_CLS} htmlFor="register-password">
             密码
           </label>
-          <div className="relative">
-            <input
-              id="register-password"
-              type={showPwd ? 'text' : 'password'}
-              className={`${INPUT_CLS} pr-11`}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="new-password"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPwd((v) => !v)}
-              aria-label={showPwd ? '隐藏密码' : '显示密码'}
-              className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex w-8 h-8 items-center justify-center text-neutral-400 transition-colors hover:text-neutral-700"
-            >
-              {showPwd ? <BsEyeSlashFill className="w-4 h-4" /> : <BsEyeFill className="w-4 h-4" />}
-            </button>
-          </div>
+          <PasswordInput
+            id="register-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+          />
         </div>
 
         {err && <Toast type="error" message={err} onClose={() => setErr('')} />}
         <SubmitButton loading={loading} idleText="注册" />
       </form>
 
-      <p className="mt-4 text-center text-sm text-neutral-500">
-        已有账号？{' '}
-        <Link to="/login" className="font-medium text-brand-600 transition-colors hover:text-brand-700">
-          去登录
-        </Link>
-      </p>
+      <AuthSwapLink to="/login" prompt="已有账号？" action="去登录" />
     </div>
   );
 }

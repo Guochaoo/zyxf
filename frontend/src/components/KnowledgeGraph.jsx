@@ -25,6 +25,10 @@ let collapsedPersistent = false;
 // Node ids: folders are `f<id>` (root is f0), files are `file<id>`.
 const nodeIdOf = (currentId) => (currentId ? `f${currentId}` : 'f0');
 
+// d3-force 在模拟运行后会把 l.source/l.target 从字符串 id 改写为节点对象，
+// 取端点 id 前先归一化。
+const endpointId = (n) => (typeof n === 'object' ? n.id : n);
+
 function buildGraph(tree, rootFiles) {
   const nodes = [{ id: 'f0', name: '首页', type: 'folder', isRoot: true }];
   const links = [];
@@ -299,10 +303,8 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
       if (!id) return;
       const set = new Set([id]);
       for (const l of links) {
-        // d3-force rewrites l.source/l.target from string ids to node objects
-        // after the simulation runs, so normalize before comparing.
-        const s = typeof l.source === 'object' ? l.source.id : l.source;
-        const t = typeof l.target === 'object' ? l.target.id : l.target;
+        const s = endpointId(l.source);
+        const t = endpointId(l.target);
         if (s === id) set.add(t);
         if (t === id) set.add(s);
       }
@@ -439,8 +441,8 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
       {positioned && (
         <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
           {links.map((l, i) => {
-            const s = typeof l.source === 'object' ? l.source.id : l.source;
-            const t = typeof l.target === 'object' ? l.target.id : l.target;
+            const s = endpointId(l.source);
+            const t = endpointId(l.target);
             const active = hovered && (neighborsRef.current.has(s) || neighborsRef.current.has(t));
             const dim = hovered && !active;
             return (
