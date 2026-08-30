@@ -30,10 +30,10 @@ const codeLimiter = rateLimit({
   message: { error: '验证码请求过于频繁，请稍后再试' },
 });
 
-// 注册限流：每 IP 每小时 20 次。
+// 注册限流：每 IP 每分钟 15 次。
 const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 20,
+  windowMs: 60 * 1000,
+  max: 15,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: '操作过于频繁，请稍后再试' },
