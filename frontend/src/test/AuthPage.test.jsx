@@ -21,14 +21,14 @@ vi.mock('../api.js', () => {
 // Silk 的 WebGL 动效在 jsdom 中无法运行，stub 掉。
 vi.mock('../components/Silk.jsx', () => ({ default: () => null }));
 
-const { default: RegisterPage } = await import('../pages/RegisterPage.jsx');
+const { default: AuthPage } = await import('../pages/AuthPage.jsx');
 const { AuthProvider } = await import('../auth.jsx');
 
-function renderPage() {
+function renderPage(initialEntries = ['/register']) {
   return render(
-    <MemoryRouter initialEntries={['/register']}>
+    <MemoryRouter initialEntries={initialEntries}>
       <AuthProvider>
-        <RegisterPage />
+        <AuthPage />
       </AuthProvider>
     </MemoryRouter>
   );
@@ -41,11 +41,33 @@ function fillForm({ username = 'newbie', email = 'stu@example.com', code = '1234
   fireEvent.change(screen.getByLabelText('密码'), { target: { value: password } });
 }
 
-describe('RegisterPage', () => {
+describe('AuthPage', () => {
   beforeEach(() => {
     localStorage.clear();
     requestRegisterCode.mockReset();
     register.mockReset();
+  });
+
+  test('renders the login form on /login', () => {
+    renderPage(['/login']);
+    expect(screen.getByText('欢迎回来')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('邮箱验证码')).not.toBeInTheDocument();
+  });
+
+  test('renders the register form on /register', () => {
+    renderPage(['/register']);
+    expect(screen.getByText('注册账号')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '获取验证码' })).toBeInTheDocument();
+  });
+
+  test('switches forms in place via the footer links (no full page remount)', () => {
+    renderPage(['/login']);
+    fireEvent.click(screen.getByRole('link', { name: '注册账号' }));
+    expect(screen.getByText('注册账号')).toBeInTheDocument();
+    expect(screen.getByLabelText('邮箱验证码')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('link', { name: '去登录' }));
+    expect(screen.getByText('欢迎回来')).toBeInTheDocument();
   });
 
   test('code button is disabled until an email is entered', () => {
