@@ -50,9 +50,9 @@ export default function App() {
   const isAbout = location.pathname === '/about';
   const folderId = Number(location.pathname.match(/^\/folder\/(\d+)/)?.[1]) || 0;
 
-  // Bottom account card on the menu panel. Logged-in shows username + role
-  // with a logout button; guests show a neutral "未登录" state whose icon
-  // is a login button.
+  // Bottom account card on the menu panel. Logged-in shows username + role;
+  // guests show a neutral "未登录" state. Login/logout actions live in the
+  // card's ChevronsUpDown popup menu, not on the card itself.
   const account = useMemo(
     () =>
       user
@@ -202,7 +202,7 @@ export default function App() {
       {/* Right column — the original StaggeredMenu toggle button stays
           fixed at the top-right; the knowledge graph sits below it.
           pt matches the file list card top in the middle column:
-          main sm:py-6 (24px) + toolbar (35px) + space-y-4 gap (16px),
+          main sm:pt-[10.5px] + toolbar (35px) + space-y-4 gap (16px),
           so the graph's top border lines up with the list card. */}
       {isBrowse && isLg && (
         <div className="fixed inset-y-0 right-0 z-10 hidden flex-col gap-4 overflow-hidden pr-2 pt-[61.5px] lg:flex lg:w-[300px]">

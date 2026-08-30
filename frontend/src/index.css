@@ -105,7 +105,7 @@ textarea:focus-visible {
 
 /* ---- DESIGN.md §4: Buttons ---- */
 
-/* Primary Dark CTA — #171717 bg, white text, 6px radius */
+/* Primary Dark CTA — #171717 bg, white text, 14px radius */
 .rb-btn-dark {
   display: inline-flex;
   align-items: center;

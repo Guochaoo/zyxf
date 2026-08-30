@@ -384,7 +384,7 @@
   cursor: pointer;
 }
 
-/* Guest login button reuses the gear slot; strip native button chrome. */
+/* Account card chevron toggle reuses the gear slot; strip native button chrome. */
 button.sm-account-gear {
   padding: 0;
   border: 0;
