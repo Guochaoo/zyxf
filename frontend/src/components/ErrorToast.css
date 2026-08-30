@@ -3,7 +3,7 @@
 
 .error-toast {
   position: fixed;
-  top: 16px;
+  top: 30px;
   left: 50%;
   z-index: 80;
   width: 330px;
