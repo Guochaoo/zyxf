@@ -84,6 +84,26 @@ CREATE INDEX IF NOT EXISTS idx_folders_sort ON folders(parent_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_files_sort ON files(folder_id, sort_order);
 `);
 
+// --- migration: users.email（注册功能）---
+// 老库补列；admin 等未绑邮箱的行 email 为 NULL（部分唯一索引跳过 NULL）。
+if (!hasColumn('users', 'email')) {
+  db.exec(`ALTER TABLE users ADD COLUMN email TEXT`);
+}
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL`);
+
+// --- migration: email_codes（邮箱注册验证码）---
+db.exec(`
+CREATE TABLE IF NOT EXISTS email_codes (
+  email TEXT PRIMARY KEY,
+  code_hash TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  sent_count INTEGER NOT NULL DEFAULT 0,
+  first_sent_at INTEGER NOT NULL
+);
+`);
+
 export function ensureAdmin(username, password) {
   const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
   if (existing) return;

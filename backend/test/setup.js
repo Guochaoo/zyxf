@@ -59,3 +59,17 @@ mock.module('../src/llm.js', {
     },
   },
 });
+
+// DirectMail 邮件客户端 — 不真正发信。sendVerificationCode 收到的验证码
+// 记录在 mailState.lastCode，注册流程测试据此取回明文验证码。
+export const mailState = { enabled: true, calls: [], lastCode: null };
+
+mock.module('../src/mail.js', {
+  exports: {
+    isMailEnabled: () => mailState.enabled,
+    sendVerificationCode: async (email, code) => {
+      mailState.calls.push({ email, code });
+      mailState.lastCode = code;
+    },
+  },
+});
