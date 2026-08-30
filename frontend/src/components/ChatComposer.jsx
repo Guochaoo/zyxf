@@ -29,7 +29,12 @@ const fmtTime = () => {
 };
 
 const loadLlmCfg = () => {
-  const raw = JSON.parse(storageGet(LLM_KEY) ?? 'null');
+  let raw = null;
+  try {
+    raw = JSON.parse(storageGet(LLM_KEY) ?? 'null');
+  } catch {
+    /* 存储值损坏时按未配置处理 */
+  }
   if (raw && typeof raw === 'object') {
     return {
       apiKey: typeof raw.apiKey === 'string' ? raw.apiKey : '',
