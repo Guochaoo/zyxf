@@ -155,6 +155,8 @@ export default function ChatComposer() {
   const bodyRef = useRef(null);
   const snapTimer = useRef(null);
   const snapSeq = useRef(0);
+  const settingsRef = useRef(null);
+  const settingsBtnRef = useRef(null);
   // 最近一次收起时的完整高度（px 数值）：展开动画的目标值——卡片本体跟着容器
   // 一起长高（而不是瞬间弹到全高再揭示内容），结束后无缝交还给 flex 布局。
   const fullHRef = useRef(null);
@@ -165,6 +167,19 @@ export default function ChatComposer() {
   }, [messages]);
 
   useEffect(() => () => clearTimeout(snapTimer.current), []);
+
+  // 设置浮层打开时，点击浮层与设置按钮之外的空白处收起。
+  useEffect(() => {
+    if (!settingsOpen) return undefined;
+    const onDocMouseDown = (e) => {
+      const t = e.target;
+      if (!settingsRef.current?.contains(t) && !settingsBtnRef.current?.contains(t)) {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [settingsOpen]);
 
   // 动画结束（360ms 过渡 + 余量）后回到自然布局（高度交还给 flex）
   const endSnap = () => {
@@ -308,7 +323,7 @@ export default function ChatComposer() {
 
   return (
     <div
-      className={`flex w-full flex-col overflow-hidden rounded-[14px] bg-white ${
+      className={`relative flex w-full flex-col overflow-hidden rounded-[14px] bg-white ${
         collapsed || snapping ? '' : 'min-h-[288px] max-w-95 flex-1'
       }`}
     >
@@ -332,6 +347,7 @@ export default function ChatComposer() {
         </button>
         <button
           type="button"
+          ref={settingsBtnRef}
           aria-label="AI 设置"
           title="AI 设置（API Key / 地址 / 模型）"
           aria-expanded={settingsOpen}
@@ -341,6 +357,61 @@ export default function ChatComposer() {
           <Settings className="h-[15px] w-[15px]" />
         </button>
       </PanelHeader>
+
+      {/* 设置浮层：客户端 LLM 配置（留空项回退服务器 env 配置）。
+          悬浮在对话区上方（不挤占布局），常驻挂载以保留淡入/淡出过渡；
+          点击浮层与设置按钮之外的空白处收起；visibility 随过渡翻转，
+          收起后表单不可聚焦。 */}
+      <div
+        ref={settingsRef}
+        className="absolute inset-x-2 top-[40px] z-10 max-h-[calc(100%-52px)] overflow-y-auto rounded-[10px] border border-line bg-white p-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
+        style={{
+          visibility: settingsOpen ? 'visible' : 'hidden',
+          opacity: settingsOpen ? 1 : 0,
+          transform: settingsOpen ? 'translateY(0)' : 'translateY(-4px)',
+          transitionProperty: 'visibility, opacity, transform',
+          transitionDuration: '240ms',
+          transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        }}
+      >
+        <div className="flex flex-col gap-1.5">
+          {[
+            { key: 'apiKey', label: 'API Key', placeholder: 'sk-…', type: 'password' },
+            { key: 'baseUrl', label: 'API 地址', placeholder: 'https://open.bigmodel.cn/api/paas/v4', type: 'text' },
+            { key: 'model', label: '模型', placeholder: 'glm-4.6 / deepseek-chat …', type: 'text' },
+          ].map(({ key, label, placeholder, type }) => (
+            <label key={key} className="flex items-center gap-2 text-[11px] text-ink-2">
+              <span className="w-12 shrink-0">{label}</span>
+              <input
+                type={type}
+                value={cfgDraft[key]}
+                onChange={(e) => setCfgDraft((d) => ({ ...d, [key]: e.target.value }))}
+                placeholder={placeholder}
+                className="min-w-0 flex-1 rounded-[6px] border border-line bg-field px-2 py-1 text-[12px] text-ink outline-none transition-colors placeholder:text-ink-3 focus:border-line-strong"
+              />
+            </label>
+          ))}
+          <p className="text-[11px] leading-relaxed text-ink-3">
+            三项都填写后使用本浏览器配置；留空任意项则使用服务器配置。配置仅保存在本地浏览器。
+          </p>
+          <div className="flex items-center justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={clearSettings}
+              className="rounded-[6px] px-2 py-[3px] text-[12px] text-ink-2 transition-colors duration-100 hover:bg-hover hover:text-ink"
+            >
+              恢复默认设置
+            </button>
+            <button
+              type="button"
+              onClick={saveSettings}
+              className="rounded-[6px] bg-field px-2 py-[3px] text-[12px] text-ink transition-colors duration-100 hover:bg-hover"
+            >
+              保存
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* 主体：height 像素过渡收起/展开；动画期间锁定高度、隐藏列表滚动条 */}
       <div
@@ -357,66 +428,6 @@ export default function ChatComposer() {
           className={`flex min-h-0 flex-col overflow-hidden ${snapping ? '' : 'h-full'}`}
           style={{ height: snapping ? innerH : undefined }}
         >
-      {/* 设置面板：客户端 LLM 配置（留空项回退服务器 env 配置）。
-          常驻挂载，展开/收起用 grid-rows 0fr→1fr 做高度过渡（缓动与卡片收起动画一致），
-          面板本体顺带淡入 + 轻微下移；visibility 随过渡翻转，收起后表单不可聚焦。 */}
-      <div
-        className="grid shrink-0 overflow-hidden transition-[grid-template-rows] duration-[320ms]"
-        style={{
-          gridTemplateRows: settingsOpen ? '1fr' : '0fr',
-          transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
-        }}
-      >
-        <div
-          className="min-h-0 overflow-hidden"
-          style={{
-            visibility: settingsOpen ? 'visible' : 'hidden',
-            opacity: settingsOpen ? 1 : 0,
-            transform: settingsOpen ? 'translateY(0)' : 'translateY(-4px)',
-            transitionProperty: 'visibility, opacity, transform',
-            transitionDuration: '320ms',
-            transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
-          }}
-        >
-          <div className="flex flex-col gap-1.5 border-b border-line p-2.5">
-            {[
-              { key: 'apiKey', label: 'API Key', placeholder: 'sk-…', type: 'password' },
-              { key: 'baseUrl', label: 'API 地址', placeholder: 'https://open.bigmodel.cn/api/paas/v4', type: 'text' },
-              { key: 'model', label: '模型', placeholder: 'glm-4.6 / deepseek-chat …', type: 'text' },
-            ].map(({ key, label, placeholder, type }) => (
-              <label key={key} className="flex items-center gap-2 text-[11px] text-ink-2">
-                <span className="w-12 shrink-0">{label}</span>
-                <input
-                  type={type}
-                  value={cfgDraft[key]}
-                  onChange={(e) => setCfgDraft((d) => ({ ...d, [key]: e.target.value }))}
-                  placeholder={placeholder}
-                  className="min-w-0 flex-1 rounded-[6px] border border-line bg-field px-2 py-1 text-[12px] text-ink outline-none transition-colors placeholder:text-ink-3 focus:border-line-strong"
-                />
-              </label>
-            ))}
-            <p className="text-[11px] leading-relaxed text-ink-3">
-              三项都填写后使用本浏览器配置；留空任意项则使用服务器配置。配置仅保存在本地浏览器。
-            </p>
-            <div className="flex items-center justify-end gap-1.5">
-              <button
-                type="button"
-                onClick={clearSettings}
-                className="rounded-[6px] px-2 py-[3px] text-[12px] text-ink-2 transition-colors duration-100 hover:bg-hover hover:text-ink"
-              >
-                清除本机配置
-              </button>
-              <button
-                type="button"
-                onClick={saveSettings}
-                className="rounded-[6px] bg-field px-2 py-[3px] text-[12px] text-ink transition-colors duration-100 hover:bg-hover"
-              >
-                保存
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* conversation — fixed region so the card never changes shape */}
       <div

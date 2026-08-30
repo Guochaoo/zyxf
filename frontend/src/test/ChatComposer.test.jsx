@@ -115,7 +115,7 @@ describe('ChatComposer', () => {
     renderPanel();
 
     fireEvent.click(screen.getByRole('button', { name: 'AI 设置' }));
-    fireEvent.click(screen.getByRole('button', { name: '清除本机配置' }));
+    fireEvent.click(screen.getByRole('button', { name: '恢复默认设置' }));
     expect(localStorage.getItem('zyxf_llm')).toBeNull();
 
     typeAndSend('你好');
