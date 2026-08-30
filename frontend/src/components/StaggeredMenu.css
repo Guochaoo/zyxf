@@ -401,6 +401,100 @@ button.sm-account-gear {
   color: #171717;
 }
 
+/* ---- account user menu (chevron popover) ----
+   无界：白色浮层 + 纯投影分层（无描边），行 hover 用浅灰 tint；
+   危险操作（退出登录）hover 浅红。锚定账号卡片上方展开。 */
+.sm-account-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.sm-account-pop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 10;
+  width: 180px;
+  padding: 6px;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow:
+    rgba(0, 0, 0, 0.06) 0 4px 10px,
+    rgba(0, 0, 0, 0.12) 0 12px 32px;
+  transform-origin: bottom right;
+  animation: sm-account-pop-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sm-account-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.sm-account-pop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sm-account-pop-sep {
+  height: 1px;
+  margin: 5px 4px;
+  background: #f0f0f0;
+}
+
+.sm-account-pop-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: #525252;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.sm-account-pop-item svg {
+  color: #8a8a8f;
+  transition: color 150ms ease;
+}
+
+.sm-account-pop-item:hover {
+  background: #f5f5f5;
+  color: #171717;
+}
+
+.sm-account-pop-item:hover svg {
+  color: #171717;
+}
+
+.sm-account-pop-item--danger:hover {
+  background: #fef2f2;
+  color: #d10d0d;
+}
+
+.sm-account-pop-item--danger:hover svg {
+  color: #d10d0d;
+}
+
+.sm-account-pop-item:active {
+  transform: scale(0.99);
+}
+
 .sm-panel-item {
   position: relative;
   width: 100%;
