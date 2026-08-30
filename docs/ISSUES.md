@@ -67,16 +67,6 @@ severity_levels:
 - **修法**：以后端返回的 previewable 能力为展示依据，或移除前端宏格式预览分类；后端安全策略作唯一准入权威。
 - **验证**：补充宏格式上传、预览与前端分类契约测试。
 
-#### BUG-25 · 前端使用未配置的 slate-700 色阶
-`frontend · Tailwind 主题`
-`files: [frontend/tailwind.config.js, frontend/src/App.jsx]`
-
-- **现象**：侧栏按钮用 `hover:text-slate-700`，但自定义 slate 色阶未定义 700；实际落到默认蓝灰 `#334155`。
-- **根因**：主题 token 裁剪后消费方仍保留旧色阶名；Tailwind `extend` 与默认调色板合并，`slate-700` 并不缺失，而是取默认蓝灰。
-- **影响**：悬停色偏离 DESIGN.md §2 的无彩中性灰体系（Gray 700 应在 50/100/…/900 中取舍），与设计意图不一致。
-- **修法**：改用已有色阶（如 `hover:text-slate-600`），或补自定义 `slate-700` 使其落在中性灰。
-- **验证**：生产构建后确认 `slate-700` 对应规则及其色值。
-
 #### BUG-26 · 文件 MIME 元数据可能与扩展名派生值不一致
 `frontend/backend · 文件注册`
 `files: [frontend/src/api.js, backend/src/routes/files.js]`
@@ -96,26 +86,6 @@ severity_levels:
 - **影响**：按 README 用 Node 20 部署可能无法运行（`node:sqlite` 不存在），增加排查成本。
 - **修法**：统一文档与 CI 的最低 Node 版本为 24，并在 package manifest 声明 `engines.node`。
 - **验证**：用声明的最低版本执行依赖安装、测试与启动检查。
-
-#### BUG-30 · 扩展名策略注释引用已不存在的实现
-`backend · 扩展名策略`
-`files: [backend/src/extPolicy.js]`
-
-- **现象**：文件头注释提及全仓无引用的 `FORCE_DOWNLOAD_EXTS`；实际实现用 `shouldForceDownload` 与 `ARCHIVE_EXTS`。
-- **根因**：策略实现重构后遗留旧注释。
-- **影响**：维护者可能按过时说明改错位置，降低可读性。
-- **修法**：删除旧名称并改写为当前策略流程说明。
-- **验证**：全仓搜索旧符号，确认注释与代码命名一致。
-
-#### BUG-31 · Primary Dark CTA 的 CSS 注释与实际圆角不一致
-`frontend · 主题样式`
-`files: [frontend/src/index.css, docs/DESIGN.md]`
-
-- **现象**：CSS 注释称 Primary Dark CTA 用 6px 圆角；实际 `.rb-btn-dark` 用 14px，设计文档记录也是 14px。
-- **根因**：样式调整后实现已更新，CSS 内联注释未同步。
-- **影响**：后续维护可能依据错误注释回退正确视觉规范。
-- **修法**：把注释修正为实际设计 token，保持代码与设计文档一致。
-- **验证**：检查 CSS 规则、设计文档与按钮组件的圆角值一致。
 
 ---
 
@@ -159,6 +129,9 @@ severity_levels:
 | BUG-18 | P2 | sizeChip 命名不符合 React 组件约定 | `frontend/src/pages/BrowsePage.jsx` | 2026-08-28 |
 | BUG-19 | P0 | deploy workflow 使用可变 tag 的第三方 Action（供应链风险） | `.github/workflows/deploy.yml` | 2026-08-28 |
 | BUG-20 | P1 | /api/chat 允许用户控制上游 baseUrl（SSRF） | `backend/src/routes/chat.js`, `backend/src/llm.js` | 2026-08-28 |
+| BUG-25 | P2 | 前端使用未配置的 slate-700 色阶 | `frontend/tailwind.config.js` | 2026-08-30 |
+| BUG-30 | P2 | 扩展名策略注释引用已不存在的实现 | `backend/src/extPolicy.js` | 2026-08-30 |
+| BUG-31 | P2 | Primary Dark CTA 的 CSS 注释与实际圆角不一致 | `frontend/src/index.css` | 2026-08-30 |
 
 ### 已关闭改进项
 
