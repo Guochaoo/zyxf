@@ -6,6 +6,7 @@ dist
 data.db
 data.db-*
 .DS_Store
+certs/
 
 # local dev / scratch
 .tmp-*
