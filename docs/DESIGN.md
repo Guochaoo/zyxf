@@ -182,7 +182,7 @@ Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视�
 
 ### Navigation
 - **No topbar on any layout** — the page is three columns (left rail + content + right rail)
-- Navigation lives in the **StaggeredMenu** (hamburger) on **all** screen sizes: right-side slide-out panel with the main items (资料库 / 统计 / 关于我们 / 管理员登录或退出登录) + social channels
+- Navigation lives in the **StaggeredMenu** (hamburger) on **all** screen sizes: right-side slide-out panel with the main items (资料库 / 统计 / 关于我们 / 登录（未登录）或账号卡片+退出登录) + social channels
 - Brand logo + brand name (仲英学辅资料库) sit at the top of the **left rail** (desktop) / a slim mobile-only top row
 - Menu toggle: white shadow-border button, 6px radius, 14px weight 500, fixed at top-right
 - Active: weight 600 or underline
