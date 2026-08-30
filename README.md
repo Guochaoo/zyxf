@@ -64,6 +64,8 @@ cd frontend && npm install && npm run dev
 | `OSS_KEY_PREFIX` / `OSS_ENDPOINT` |  | 上传根前缀 / 自定义直传 endpoint |
 | `IMM_PROJECT` |  | IMM 项目名（默认 `zyxf`），与 OSS Bucket 绑定的 IMM 项目名不同才需设置 |
 | `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` |  | 三者齐备才启用 AI 对话，留空则该接口返回 503 |
+| `DM_ACCESS_KEY_ID` / `DM_ACCESS_KEY_SECRET` / `DM_ACCOUNT_NAME` |  | 三者齐备才启用用户注册（阿里云邮件推送 DirectMail 发送邮箱验证码），留空则注册发码接口返回 503 |
+| `DM_FROM_ALIAS` |  | 发件人显示名（默认「仲英学辅」） |
 
 ## 项目结构
 

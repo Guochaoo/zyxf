@@ -88,6 +88,12 @@ IMM_PROJECT=
 LLM_API_KEY=
 LLM_BASE_URL=
 LLM_MODEL=
+
+# 可选：用户注册邮箱验证码（阿里云邮件推送 DirectMail，三项齐备才启用）
+DM_ACCESS_KEY_ID=<AccessKey ID>
+DM_ACCESS_KEY_SECRET=<AccessKey Secret>
+DM_ACCOUNT_NAME=<发信地址，如 no-reply@zyxf.top>
+DM_FROM_ALIAS=
 ```
 
 生成 JWT_SECRET：
