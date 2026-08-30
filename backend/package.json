@@ -9,6 +9,7 @@
     "test": "node --test --experimental-test-module-mocks --import ./test/setup.js \"test/*.test.js\""
   },
   "dependencies": {
+    "@alicloud/pop-core": "^1.8.0",
     "ali-oss": "^6.20.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",

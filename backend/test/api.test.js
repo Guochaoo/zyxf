@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
 import { signToken } from '../src/auth.js';
 import { app } from '../src/index.js';
-import { ossObjectStore } from './setup.js';
+import { ossObjectStore, mailState } from './setup.js';
 
 let server;
 let base;
@@ -703,5 +703,107 @@ describe('sync', () => {
     }
     assert.equal(ok, 5);
     assert.equal(limited, 1);
+  });
+});
+
+describe('POST /api/auth/register (+ /register/code)', () => {
+  // Unique XFF IP per test group so rate-limit buckets never collide.
+  const xff = { 'x-forwarded-for': '203.0.113.200' };
+
+  beforeEach(() => {
+    db.prepare('DELETE FROM email_codes').run();
+    db.prepare("DELETE FROM users WHERE role != 'admin'").run();
+  });
+
+  async function requestCode(email, headers = xff) {
+    return request('POST', '/api/auth/register/code', { body: { email }, headers });
+  }
+
+  async function registerViaCode(email, headers = xff) {
+    await requestCode(email, headers);
+    const code = mailState.lastCode;
+    return request('POST', '/api/auth/register', {
+      body: { username: 'newbie', email, password: 'secret123', code },
+      headers,
+    });
+  }
+
+  test('full flow: request code, register, token works, role is user', async () => {
+    const { status, body } = await registerViaCode('newbie@test.dev');
+    assert.equal(status, 200);
+    assert.equal(body.user.role, 'user');
+    assert.equal(body.user.username, 'newbie');
+
+    const me = await request('GET', '/api/auth/me', { token: body.token });
+    assert.equal(me.status, 200);
+    assert.equal(me.body.user.username, 'newbie');
+
+    // The code row is consumed after a successful register.
+    const left = db.prepare('SELECT * FROM email_codes WHERE email = ?').get('newbie@test.dev');
+    assert.equal(left, undefined);
+  });
+
+  test('mail disabled returns 503 on code request', async () => {
+    mailState.enabled = false;
+    const { status } = await requestCode('disabled@test.dev');
+    assert.equal(status, 503);
+    mailState.enabled = true;
+  });
+
+  test('bad email format returns 400', async () => {
+    const { status } = await requestCode('not-an-email');
+    assert.equal(status, 400);
+  });
+
+  test('already-registered email returns 409', async () => {
+    const { status } = await requestCode('admin@example.dev');
+    // Seed admin has no email; register one first, then re-request the code.
+    assert.equal(status, 200);
+    await request('POST', '/api/auth/register', {
+      body: {
+        username: 'taken',
+        email: 'admin@example.dev',
+        password: 'secret123',
+        code: mailState.lastCode,
+      },
+      headers: xff,
+    });
+    const second = await requestCode('admin@example.dev');
+    assert.equal(second.status, 409);
+  });
+
+  test('wrong code returns 400 and counts attempts', async () => {
+    await requestCode('wrong@test.dev');
+    const { status, body } = await request('POST', '/api/auth/register', {
+      body: { username: 'wronger', email: 'wrong@test.dev', password: 'secret123', code: '000000' },
+      headers: xff,
+    });
+    assert.equal(status, 400);
+    assert.equal(body.error, '验证码错误');
+    const rec = db.prepare('SELECT attempts FROM email_codes WHERE email = ?').get('wrong@test.dev');
+    assert.equal(rec.attempts, 1);
+  });
+
+  test('duplicate username returns 409', async () => {
+    await registerViaCode('first@test.dev');
+    const { status } = await registerViaCode('second@test.dev', { 'x-forwarded-for': '203.0.113.201' });
+    // registerViaCode hardcodes username 'newbie' — already taken by the first run.
+    assert.equal(status, 409);
+  });
+
+  test('duplicate email registration returns 409 (race guard)', async () => {
+    await requestCode('dup@test.dev');
+    // The code endpoint refuses already-registered emails, so the only way to
+    // hit the register-side pre-check is a race: the email gets registered
+    // after the code was issued. Simulate it with a direct insert.
+    db.prepare(
+      "INSERT INTO users (username, password_hash, role, email, created_at) VALUES ('racer', 'x', 'user', 'dup@test.dev', ?)"
+    ).run(Date.now());
+    const { status, body } = await request('POST', '/api/auth/register', {
+      body: { username: 'newbie', email: 'dup@test.dev', password: 'secret123', code: mailState.lastCode },
+      headers: xff,
+    });
+    assert.equal(status, 409);
+    assert.equal(body.error, '该邮箱已被注册');
   });
 });
