@@ -2,6 +2,8 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffec
 import { gsap } from 'gsap';
 import { Link } from 'react-router-dom';
 import { CircleUserRound, ChevronsUpDown, LogIn, LogOut, Settings } from 'lucide-react';
+import { EASE_COLLAPSE } from './ui.js';
+import { useClickOutside } from '../hooks/useClickOutside.js';
 import './StaggeredMenu.css';
 
 // Query the animated panel content and reset it to its pre-open state
@@ -350,34 +352,9 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     }
   }, [playClose, animateIcon, animateColor, animateText, onMenuClose]);
 
-  useEffect(() => {
-    if (!acctOpen) return undefined;
-    const onDocMouseDown = (e) => {
-      if (acctRef.current && !acctRef.current.contains(e.target)) setAcctOpen(false);
-    };
-    document.addEventListener('mousedown', onDocMouseDown);
-    return () => document.removeEventListener('mousedown', onDocMouseDown);
-  }, [acctOpen]);
+  useClickOutside(acctOpen, () => setAcctOpen(false), acctRef);
 
-  useEffect(() => {
-    if (!closeOnClickAway || !open) return;
-
-    const handleClickOutside = event => {
-      if (
-        panelRef.current &&
-        !panelRef.current.contains(event.target) &&
-        toggleBtnRef.current &&
-        !toggleBtnRef.current.contains(event.target)
-      ) {
-        closeMenu();
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [closeOnClickAway, open, closeMenu]);
+  useClickOutside(closeOnClickAway && open, closeMenu, panelRef, toggleBtnRef);
 
   useImperativeHandle(
     ref,
@@ -556,7 +533,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
                       aria-hidden="true"
                       style={{
                         transform: acctOpen ? 'rotate(180deg)' : 'none',
-                        transition: 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1)',
+                        transition: `transform 240ms ${EASE_COLLAPSE}`,
                       }}
                     />
                   </button>
