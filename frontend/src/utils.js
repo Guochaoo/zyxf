@@ -13,15 +13,35 @@ export function formatDate(ts) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+export function formatMonthDay(ts) {
+  const d = new Date(ts);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+export function timeAgo(ts) {
+  const diff = Date.now() - ts;
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return '刚刚';
+  if (m < 60) return `${m} 分钟前`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} 小时前`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d} 天前`;
+  const mo = Math.floor(d / 30);
+  return `${mo} 月前`;
+}
+
 // ---- extension classification (mirrors backend extPolicy.js) ----
+// Macro-enabled Office formats (docm/dotm/xlsm/xltm/pptm/potm) are rejected
+// by the backend upload whitelist, so they are intentionally absent here too.
 
 const OFFICE_EXT = new Set([
   // Word
-  'doc', 'dot', 'wps', 'wpt', 'docx', 'dotx', 'docm', 'dotm', 'rtf',
+  'doc', 'dot', 'wps', 'wpt', 'docx', 'dotx', 'rtf',
   // PPT
-  'ppt', 'pptx', 'pptm', 'ppsx', 'ppsm', 'pps', 'potx', 'potm', 'dpt', 'dps',
+  'ppt', 'pptx', 'ppsx', 'ppsm', 'pps', 'potx', 'dpt', 'dps',
   // Excel
-  'xls', 'xlt', 'et', 'xlsx', 'xltx', 'csv', 'xlsm', 'xltm',
+  'xls', 'xlt', 'et', 'xlsx', 'xltx', 'csv',
   // PDF
   'pdf',
   // 文本
@@ -34,6 +54,11 @@ export const LARGE_FILE_THRESHOLD = 20 * 1024 * 1024; // 20 MB
 export const LARGE_FILE_HINT = '文件较大（>20MB），建议在 WiFi 下预览或直接下载';
 
 // ---- helpers ----
+
+// Strip the leading dot and lowercase an extension string (mirrors backend extPolicy.js).
+export function normalizeExt(ext) {
+  return String(ext || '').toLowerCase().replace(/^\./, '');
+}
 
 export async function downloadFileById(file, getFileUrl) {
   const meta = await getFileUrl(file.id, { download: true });
@@ -50,8 +75,17 @@ export async function downloadFileById(file, getFileUrl) {
   setTimeout(() => URL.revokeObjectURL(href), 1000);
 }
 
+// Download + alert on failure (shared by BrowsePage / SearchBar).
+export async function downloadAndAlert(file, getFileUrl) {
+  try {
+    await downloadFileById(file, getFileUrl);
+  } catch (e) {
+    alert(e.message || '下载失败');
+  }
+}
+
 export function getPreviewKind(ext) {
-  ext = (ext || '').toLowerCase().replace(/^\./, '');
+  ext = normalizeExt(ext);
   if (OFFICE_EXT.has(ext)) return 'office';
   if (ARCHIVE_EXT.has(ext)) return 'archive';
   return 'unknown';

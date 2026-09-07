@@ -1,7 +1,7 @@
 # 部署到阿里云 ECS（systemd + nginx）
 
 > 后端用 **systemd** 托管（`deploy/zyxf.service`），前端构建产物由 **nginx** 托管并反代 `/api`，HTTPS 用 Let's Encrypt。
-> 部署不再依赖宝塔面板管理 Node 项目——SSH 上去 `git pull` + 装依赖 + 构建 + `systemctl restart zyxf` 即可，由 `.github/workflows/deploy.yml` 全自动完成。
+> 部署不再依赖宝塔面板管理 Node 项目——SSH 上去 `git fetch + reset --hard`（对齐 origin/main）+ 装依赖 + 构建 + `systemctl restart zyxf` 即可，由 `.github/workflows/deploy.yml` 全自动完成。
 
 架构：
 
@@ -26,7 +26,7 @@
 | TCP | 80 | 0.0.0.0/0 | HTTP |
 | TCP | 443 | 0.0.0.0/0 | HTTPS |
 
-> 不要把 4000（后端）暴露公网，让它只在本机监听，由 nginx 转发。
+> 不要把 4000（后端）暴露公网：后端 `app.listen(PORT)` 默认绑定 `0.0.0.0`，需靠**安全组规则**限制 4000 端口仅本机可访问（nginx 在本机反代 `127.0.0.1:4000` 不受影响）。
 
 ### 0.2 OSS CORS 加白名单
 
@@ -63,7 +63,6 @@ OSS 控制台 → 你的 Bucket → **数据安全 → 跨域设置** → 添加
 
 ```env
 PORT=4000              # 后端内部端口，保持 4000
-HTTP_PORT=80           # 对外 HTTP 端口（nginx 用）
 
 # JWT_SECRET 必须 ≥32 位随机串，且不含弱口令词（password/secret/dev/admin123 等）
 JWT_SECRET=<用 openssl rand -hex 32 生成>
@@ -89,6 +88,12 @@ IMM_PROJECT=
 LLM_API_KEY=
 LLM_BASE_URL=
 LLM_MODEL=
+
+# 可选：用户注册邮箱验证码（阿里云邮件推送 DirectMail，三项齐备才启用）
+DM_ACCESS_KEY_ID=<AccessKey ID>
+DM_ACCESS_KEY_SECRET=<AccessKey Secret>
+DM_ACCOUNT_NAME=<发信地址，如 no-reply@zyxf.top>
+DM_FROM_ALIAS=
 ```
 
 生成 JWT_SECRET：
@@ -140,6 +145,8 @@ npm run build        # 生成 dist/
 ### 4.2 nginx 站点配置
 
 在 `/etc/nginx/conf.d/zyxf.conf`（或宝塔已建站点的配置目录）写一份配置，把 `/` 静态托管与 `/api` 反代分开：
+
+> 下面是**简版模板**（仅 `listen 80`，用于起步验证）。完整版（含 80→443 跳转、`/assets/` 长缓存、Let's Encrypt 证书路径）见仓库里的 [frontend/nginx.conf](../frontend/nginx.conf)，证书申请见第 5 节。
 
 ```nginx
 server {
@@ -194,7 +201,7 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 ## 6. 校验清单
 
 - [ ] `https://zyxf.top` 能看到首页
-- [ ] 右上角「管理员登录」→ 用 `.env` 账号密码能登录
+- [ ] 展开右侧菜单 → 底部账户卡右侧箭头展开菜单 → 「登录」 → 用 `.env` 账号密码能登录
 - [ ] 上传一个 PDF → 不报 CORS 错
 - [ ] 点击 PDF → 能预览（需先开通 IMM；失败提示「预览服务暂不可用」多半是 IMM 未绑定）
 - [ ] 点「下载」→ 文件名是原中文文件名
@@ -220,9 +227,9 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 | 现象 | 原因 | 解决 |
 |---|---|---|
 | `/api/*` 502 | 后端没起 | `systemctl status zyxf`；`journalctl -u zyxf -n 50` 看启动报错 |
-| 后端启动即退（无日志） | `JWT_SECRET`/`ADMIN_PASSWORD` 不合生产校验 | 用 `openssl rand -hex 32` + 12 位强密码 |
+| 后端启动即退（无正常启动日志） | `JWT_SECRET`/`ADMIN_PASSWORD` 不合生产校验（会打印 `[index] FATAL...` 到 stderr） | 用 `openssl rand -hex 32` + 12 位强密码 |
 | 上传报 CORS | OSS 跨域规则没加域名 | 回 0.2 节加 `https://zyxf.top` |
 | 上传报 SignatureDoesNotMatch | 服务器时间不准 | `sudo timedatectl set-ntp true` |
-| 预览报「预览服务暂不可用」 | IMM 未开通 / 未绑定 | 开通 IMM 并绑定 bucket；`IMM_PROJECT` 匹配 |
+| 预览报「预览服务暂不可用」 | IMM 未开通 / 未绑定（也可能是凭证缺失或请求超时） | 开通 IMM 并绑定 bucket；`IMM_PROJECT` 匹配；查 `journalctl -u zyxf` |
 | 首页白屏 / `https` 连不上 | SSL 未配或证书没生效 | 见第 5 节申请 Let's Encrypt |
 | 访问命中默认站点（旧页） | 按 IP 访问，非域名 | 用域名 `zyxf.top` 访问；确认域名已解析 |

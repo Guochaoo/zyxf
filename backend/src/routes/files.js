@@ -1,29 +1,21 @@
 import { Router } from 'express';
 import path from 'node:path';
-import rateLimit from 'express-rate-limit';
 import { db } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { buildPostPolicy, copyOssObject, deleteOssObjectIfExists, signedGetUrl } from '../oss.js';
 import { generateWebofficeToken, refreshWebofficeToken } from '../imm.js';
 import { mimeOf } from '../mime.js';
-import { nextSortOrder } from '../dbHelpers.js';
+import { findSibling, folderExists, isUniqueError, nextSortOrder } from '../dbHelpers.js';
 import { objectKeyForFile, ossPrefix, parseOptionalFolderId } from '../storagePath.js';
 import { isExtAllowed, normalizeExt, PREVIEWABLE_EXTS, shouldForceDownload } from '../extPolicy.js';
+import { adminBypassLimiter } from '../limiter.js';
+import { wrapAsync, serviceError } from '../http.js';
 
 // ---- Anti-abuse: per-IP signed-URL issue limit ----
 // Every call issues a 30-min valid signed URL, so previews and downloads are
 // equally throttled (admins bypass the cap).
-const downloadLimiter = (windowMs, max, message) =>
-  rateLimit({
-    windowMs,
-    max,
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: (req) => req.user?.role === 'admin',
-    message: { error: message },
-  });
-const downloadLimiterShort = downloadLimiter(60 * 1000, 60, '请求过于频繁,请稍后再试');
-const downloadLimiterLong = downloadLimiter(60 * 60 * 1000, 240, '本小时请求次数已达上限,请稍后再试');
+const downloadLimiterShort = adminBypassLimiter(60 * 1000, 60, '请求过于频繁,请稍后再试');
+const downloadLimiterLong = adminBypassLimiter(60 * 60 * 1000, 240, '本小时请求次数已达上限,请稍后再试');
 
 const SHORT_SIGN_TTL = 1800; // 30 min — enough for long preview sessions, short enough to limit link-sharing risk
 
@@ -48,11 +40,6 @@ setInterval(() => {
 
 const router = Router();
 
-// Express 4 does NOT await/catch rejected promises returned by async handlers;
-// an unhandled rejection would terminate the process (Node ≥ 15). Wrap every
-// async handler so a rejection is forwarded to the error middleware as a 500.
-const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
-
 // 415 message shared by upload validation and rename validation.
 const rejectedExtMessage = (ext) => `不允许的文件类型: ${ext ? '.' + ext : '(无扩展名)'}`;
 
@@ -63,6 +50,11 @@ function sanitizeName(name) {
   return String(name || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
 }
 
+// Shared duplicate-name check: a file with the same (non-NULL) folder_id and
+// name, optionally excluding one id (for rename/move self-checks).
+const findFileByName = (name, folderId, excludeId) =>
+  findSibling(db, 'files', { name, parentColumn: 'folder_id', parentId: folderId, excludeId });
+
 // Shared validation for both upload steps: filename, parent folder, duplicate
 // name and extension whitelist. Returns { trimmed, pid, ext } or { error, status }.
 function validateUploadInput(name, folderId) {
@@ -70,10 +62,10 @@ function validateUploadInput(name, folderId) {
   if (!trimmed) return { error: '文件名不能为空' };
   const pid = parseOptionalFolderId(folderId);
   if (Number.isNaN(pid)) return { error: '无效的文件夹 ID' };
-  if (pid !== null && !db.prepare('SELECT id FROM folders WHERE id = ?').get(pid)) {
+  if (pid !== null && !folderExists(db, pid)) {
     return { error: '文件夹不存在' };
   }
-  if (db.prepare('SELECT id FROM files WHERE name = ? AND folder_id IS ?').get(trimmed, pid)) {
+  if (findFileByName(trimmed, pid)) {
     return { error: '此文件夹中已存在同名文件', status: 409 };
   }
   const ext = normalizeExt(path.extname(trimmed));
@@ -107,7 +99,7 @@ router.post('/upload-url', requireAdmin, (req, res) => {
 });
 
 // Step 2: after the browser uploads to OSS, register metadata
-router.post('/', requireAdmin, (req, res) => {
+router.post('/', requireAdmin, wrapAsync(async (req, res) => {
   const { name, oss_key, size, mime_type, folder_id } = req.body || {};
   if (!oss_key || !Number.isFinite(size) || size < 0) {
     return res.status(400).json({ error: '缺少必要参数（name/oss_key/size）' });
@@ -119,24 +111,31 @@ router.post('/', requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'oss_key 与文件夹路径不匹配' });
   }
   const so = nextSortOrder(db, 'files', 'folder_id', v.pid);
-  const info = db
-    .prepare(
-      `INSERT INTO files (folder_id, name, oss_key, size, mime_type, ext, uploader, sort_order, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      v.pid,
-      v.trimmed,
-      oss_key,
-      size,
-      mime_type || null,
-      v.ext || null,
-      req.user?.username || null,
-      so,
-      Date.now()
-    );
-  res.json({ id: info.lastInsertRowid });
-});
+  try {
+    const info = db
+      .prepare(
+        `INSERT INTO files (folder_id, name, oss_key, size, mime_type, ext, uploader, sort_order, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        v.pid,
+        v.trimmed,
+        oss_key,
+        size,
+        mime_type || null,
+        v.ext || null,
+        req.user?.username || null,
+        so,
+        Date.now()
+      );
+    res.json({ id: info.lastInsertRowid });
+  } catch (e) {
+    if (isUniqueError(e)) {
+      return res.status(409).json({ error: '此文件夹中已存在同名文件' });
+    }
+    throw e;
+  }
+}));
 
 // Get a bare signed url for the object. The frontend will fetch it as a Blob
 // and convert to a Blob URL so the browser ignores OSS's force-download header
@@ -171,7 +170,7 @@ router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => 
 // WebOffice preview token via IMM GenerateWebofficeToken. Works for
 // browser-uploaded ("externally uploaded") objects too — the JS-SDK renders
 // the returned WebofficeURL in the browser, mobile WebViews included.
-router.get('/:id/weboffice-token', downloadLimiterShort, downloadLimiterLong, wrap(async (req, res) => {
+router.get('/:id/weboffice-token', downloadLimiterShort, downloadLimiterLong, wrapAsync(async (req, res) => {
   const file = getFileOr404(req, res);
   if (!file) return;
   const ext = normalizeExt(file.ext);
@@ -181,15 +180,14 @@ router.get('/:id/weboffice-token', downloadLimiterShort, downloadLimiterLong, wr
   try {
     res.json(await generateWebofficeToken(file));
   } catch (e) {
-    console.warn('[files] weboffice token failed:', e.message);
-    res.status(502).json({ error: '预览服务暂不可用，请稍后再试' });
+    serviceError(res, e, '预览服务暂不可用，请稍后再试');
   }
 }));
 
 // Refresh a WebOffice access token (30-min lifetime) with the refresh token
 // (1-day lifetime). The frontend JS-SDK calls this via its refreshToken
 // callback before the access token expires.
-router.post('/:id/weboffice-refresh', downloadLimiterShort, downloadLimiterLong, wrap(async (req, res) => {
+router.post('/:id/weboffice-refresh', downloadLimiterShort, downloadLimiterLong, wrapAsync(async (req, res) => {
   const file = getFileOr404(req, res);
   if (!file) return;
   const { access_token, refresh_token } = req.body || {};
@@ -199,15 +197,23 @@ router.post('/:id/weboffice-refresh', downloadLimiterShort, downloadLimiterLong,
   try {
     res.json(await refreshWebofficeToken({ accessToken: access_token, refreshToken: refresh_token }));
   } catch (e) {
-    console.warn('[files] weboffice refresh failed:', e.message);
     // Refresh token may itself be expired (1-day lifetime) — the client can
     // then regenerate a fresh session via weboffice-token.
-    res.status(502).json({ error: '预览凭证刷新失败，请关闭后重新打开' });
+    serviceError(res, e, '预览凭证刷新失败，请关闭后重新打开');
   }
 }));
 
+// Shared OSS write skeleton for rename/move: copy object → DB update → delete
+// old object. copyOssObject no-ops when keys are equal; `deleteOld` guards the
+// delete step so a same-key rename never deletes the live object.
+async function copyUpdateDelete(file, newKey, update, deleteOld = true) {
+  await copyOssObject(file.oss_key, newKey);
+  update();
+  if (deleteOld) await deleteOssObjectIfExists(file.oss_key);
+}
+
 // Move or rename a file
-router.patch('/:id', requireAdmin, wrap(async (req, res, next) => {
+router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
   const file = getFileOr404(req, res);
   if (!file) return;
   const id = file.id;
@@ -220,7 +226,7 @@ router.patch('/:id', requireAdmin, wrap(async (req, res, next) => {
     if (!isExtAllowed(ext)) {
       return res.status(415).json({ error: rejectedExtMessage(ext) });
     }
-    if (db.prepare('SELECT id FROM files WHERE name = ? AND folder_id IS ? AND id != ?').get(newName, file.folder_id, id)) {
+    if (findFileByName(newName, file.folder_id, id)) {
       return res.status(409).json({ error: '此文件夹中已存在同名文件' });
     }
 
@@ -230,15 +236,18 @@ router.patch('/:id', requireAdmin, wrap(async (req, res, next) => {
     }
 
     try {
-      const keyChanged = file.oss_key !== newKey;
-      if (keyChanged) await copyOssObject(file.oss_key, newKey);
-      db.prepare('UPDATE files SET name = ?, ext = ?, oss_key = ? WHERE id = ?').run(
-        newName,
-        ext || null,
+      await copyUpdateDelete(
+        file,
         newKey,
-        id
+        () =>
+          db.prepare('UPDATE files SET name = ?, ext = ?, oss_key = ? WHERE id = ?').run(
+            newName,
+            ext || null,
+            newKey,
+            id
+          ),
+        file.oss_key !== newKey
       );
-      if (keyChanged) await deleteOssObjectIfExists(file.oss_key);
       return res.json({ ok: true, name: newName, oss_key: newKey });
     } catch (e) {
       return next(e);
@@ -247,24 +256,24 @@ router.patch('/:id', requireAdmin, wrap(async (req, res, next) => {
 
   const target = parseOptionalFolderId(req.body?.folder_id);
   if (Number.isNaN(target)) return res.status(400).json({ error: '无效的文件夹 ID' });
-  if (target !== null && !db.prepare('SELECT id FROM folders WHERE id = ?').get(target)) {
+  if (target !== null && !folderExists(db, target)) {
     return res.status(400).json({ error: '目标文件夹不存在' });
   }
   if (target === file.folder_id) return res.json({ ok: true, unchanged: true });
-  if (db.prepare('SELECT id FROM files WHERE name = ? AND folder_id IS ? AND id != ?').get(file.name, target, id)) {
+  if (findFileByName(file.name, target, id)) {
     return res.status(409).json({ error: '目标文件夹中已存在同名文件' });
   }
   const newKey = objectKeyForFile(db, target, file.name);
   try {
-    await copyOssObject(file.oss_key, newKey);
-    const so = nextSortOrder(db, 'files', 'folder_id', target);
-    db.prepare('UPDATE files SET folder_id = ?, oss_key = ?, sort_order = ? WHERE id = ?').run(
-      target,
-      newKey,
-      so,
-      id
-    );
-    await deleteOssObjectIfExists(file.oss_key);
+    await copyUpdateDelete(file, newKey, () => {
+      const so = nextSortOrder(db, 'files', 'folder_id', target);
+      db.prepare('UPDATE files SET folder_id = ?, oss_key = ?, sort_order = ? WHERE id = ?').run(
+        target,
+        newKey,
+        so,
+        id
+      );
+    });
     res.json({ ok: true });
   } catch (e) {
     return next(e);
@@ -272,14 +281,13 @@ router.patch('/:id', requireAdmin, wrap(async (req, res, next) => {
 }));
 
 // Delete a file
-router.delete('/:id', requireAdmin, wrap(async (req, res) => {
+router.delete('/:id', requireAdmin, wrapAsync(async (req, res) => {
   const file = getFileOr404(req, res);
   if (!file) return;
   try {
     await deleteOssObjectIfExists(file.oss_key);
   } catch (e) {
-    console.warn('oss delete failed:', e.message);
-    return res.status(502).json({ error: 'OSS 删除失败' });
+    return serviceError(res, e, 'OSS 删除失败');
   }
   db.prepare('DELETE FROM files WHERE id = ?').run(file.id);
   res.json({ ok: true });
@@ -287,7 +295,7 @@ router.delete('/:id', requireAdmin, wrap(async (req, res) => {
 
 // Clean up an orphaned OSS object when metadata registration fails after upload.
 // Only keys matching the configured prefix are accepted.
-router.post('/cleanup-upload', requireAdmin, wrap(async (req, res) => {
+router.post('/cleanup-upload', requireAdmin, wrapAsync(async (req, res) => {
   const { oss_key } = req.body || {};
   if (!oss_key) return res.status(400).json({ error: 'oss_key 不能为空' });
   const prefix = ossPrefix();

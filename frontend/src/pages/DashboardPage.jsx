@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getStats, getHeatmap } from '../api.js';
-import { errMsg, formatSize } from '../utils.js';
+import { errMsg, formatSize, timeAgo } from '../utils.js';
+import { folderTarget } from '../ui.js';
 import FileIcon from '../components/FileIcon.jsx';
 import { AnomalyCard, AllocationCard, ChartTooltip, IconBadge, densifyBySpline } from '../components/InsightCards.jsx';
 import { BsArrowClockwise, BsFolder2Open } from 'react-icons/bs';
@@ -298,7 +299,7 @@ function TopDownloads({ items }) {
           <span className="w-5 text-right text-[11px] tabular-nums text-ink-3">{i + 1}</span>
           <FileIcon type="file" ext={f.ext} className="h-4 w-4 shrink-0" />
           <Link
-            to={f.folder_id ? `/folder/${f.folder_id}` : '/'}
+            to={folderTarget(f.folder_id)}
             className="min-w-0 flex-1 truncate text-[13px] text-ink hover:text-ink-2"
             title={f.file_name}
           >
@@ -326,7 +327,7 @@ function RecentUploads({ items }) {
       {items.map((f) => (
         <li key={f.id}>
           <Link
-            to={f.folder_id ? `/folder/${f.folder_id}` : '/'}
+            to={folderTarget(f.folder_id)}
             className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-hover"
           >
             <FileIcon type="file" ext={f.ext} className="h-4 w-4 shrink-0" />
@@ -403,19 +404,6 @@ function RangeSwitch({ value, onChange }) {
 
 function Empty({ children }) {
   return <div className="mt-6 py-8 text-center text-[12px] text-ink-3">{children}</div>;
-}
-
-function timeAgo(ts) {
-  const diff = Date.now() - ts;
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return '刚刚';
-  if (m < 60) return `${m} 分钟前`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d} 天前`;
-  const mo = Math.floor(d / 30);
-  return `${mo} 月前`;
 }
 
 /* ============================================================
@@ -548,7 +536,9 @@ export default function DashboardPage() {
     return <div className="py-24 text-center text-[14px] text-red">{err}</div>;
   }
 
-  if (!stats || !insights) return null;
+  if (!stats) {
+    return <div className="py-24 text-center text-[14px] text-red">{'暂无数据'}</div>;
+  }
 
   const typeExtra =
     (stats.type_breakdown?.length ?? 0) > 6 ? (

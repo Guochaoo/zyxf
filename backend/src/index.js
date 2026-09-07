@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { ensureAdmin } from './db.js';
 import { attachUser, DEV_JWT_SECRET } from './auth.js';
+import { limiterOptions } from './limiter.js';
 import authRoutes from './routes/auth.js';
 import folderRoutes from './routes/folders.js';
 import fileRoutes from './routes/files.js';
@@ -41,13 +42,7 @@ if (isProd) {
 
 // ---- Loose anti-abuse limit for anonymous API traffic ----
 // login/download have their own tighter limits; this only stops scripted floods.
-const publicLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: '请求过于频繁,请稍后再试' },
-});
+const publicLimiter = rateLimit(limiterOptions(60 * 1000, 300, '请求过于频繁,请稍后再试'));
 
 const adminUser = process.env.ADMIN_USER || 'admin';
 const adminPass = process.env.ADMIN_PASSWORD || 'admin123';
@@ -74,8 +69,8 @@ app.use(
   })
 );
 app.use(express.json({ limit: '1mb' }));
-app.use('/api', publicLimiter);
 app.use(attachUser);
+app.use('/api', publicLimiter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, time: Date.now() }));
 app.use('/api/auth', authRoutes);

@@ -20,6 +20,8 @@ import {
   BsFolder,
 } from 'react-icons/bs';
 
+import { normalizeExt } from '../utils.js';
+
 const EXT_MAP = {
   pdf: BsFiletypePdf,
   doc: BsFiletypeDoc,
@@ -44,7 +46,7 @@ const EXT_MAP = {
 const ICON_COLOR = 'text-slate-600';
 
 export default function FileIcon({ type, ext, className = 'w-5 h-5' }) {
-  const key = (ext || '').toLowerCase().replace(/^\./, '');
+  const key = normalizeExt(ext);
   if (type === 'folder') {
     return (
       <span className={`${className} inline-flex shrink-0 items-center justify-center`}>

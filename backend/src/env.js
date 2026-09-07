@@ -2,8 +2,9 @@ import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Single source of truth: the repo-root .env. In docker the same values are
-// injected via compose environment, so this only matters for local dev runs.
+// Single source of truth: the repo-root .env, read unconditionally in both
+// local dev and production (deployed at /opt/zyxf/.env, see docs/DEPLOY.md §2).
+// The systemd unit only injects NODE_ENV.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../.env'), quiet: true });
 
@@ -12,4 +13,9 @@ export function envOrThrow(name) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
   return v;
+}
+
+/** Read an optional env var as a trimmed string ('' when unset). */
+export function envStr(name) {
+  return (process.env[name] || '').trim();
 }

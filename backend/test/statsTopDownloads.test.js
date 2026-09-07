@@ -1,7 +1,6 @@
 import { describe, test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
-import { signToken } from '../src/auth.js';
 import { app } from '../src/index.js';
 import { ossObjectStore } from './setup.js';
 

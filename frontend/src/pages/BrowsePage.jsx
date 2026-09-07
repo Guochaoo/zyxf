@@ -37,8 +37,9 @@ import FileIcon from '../components/FileIcon.jsx';
 import Preview from '../components/Preview/index.jsx';
 import UploadDialog from '../components/UploadDialog.jsx';
 import GlideList from '../components/GlideList.jsx';
-import { downloadFileById, errMsg, formatDate, formatSize } from '../utils.js';
+import { downloadAndAlert, errMsg, formatDate, formatSize } from '../utils.js';
 import { useSlidingIndicator } from '../hooks/useSlidingIndicator.js';
+import { EASE_COLLAPSE } from '../components/ui.js';
 
 // Default = admin-controlled manual order. Comes first.
 const SORT_OPTIONS = [
@@ -59,6 +60,27 @@ const SORT_ARROWS = {
 // move/delete/reorder) so it refetches.
 function notifyFoldersChanged() {
   window.dispatchEvent(new Event('folders-changed'));
+}
+
+// 工具栏图标按钮：外层裸 button + 内层 rb-toolbar-btn 固定宽度槽位。
+function ToolbarIconButton({ title, onClick, children }) {
+  return (
+    <button onClick={onClick} className="p-0" title={title}>
+      <span className="rb-toolbar-btn w-[38.5px] p-0">{children}</span>
+    </button>
+  );
+}
+
+// 底部悬浮胶囊横幅（拖拽提示/移动错误/同步结果共用骨架）。
+function FloatingPill({ className = '', bottom = 'bottom-6', role, children }) {
+  return (
+    <div
+      className={`fixed left-1/2 -translate-x-1/2 ${bottom} z-40 text-xs rounded-full shadow-md px-4 py-1.5 ${className}`}
+      role={role}
+    >
+      {children}
+    </div>
+  );
 }
 
 export default function BrowsePage() {
@@ -160,37 +182,32 @@ export default function BrowsePage() {
     navigate(location.pathname, { replace: true, state: null });
   }, [data, loading, location.pathname, location.state, navigate]);
 
-  const onCreateFolder = async () => {
+  // 管理操作共享骨架：await 动作 → 通知目录树 + 刷新；失败 alert 兜底。
+  // notify=false 用于不影响目录树的操作（如删除文件）。
+  const runAdmin = async (fn, failMsg, notify = true) => {
+    try {
+      await fn();
+      if (notify) notifyFoldersChanged();
+      refresh();
+    } catch (e) {
+      alert(errMsg(e, failMsg));
+    }
+  };
+
+  const onCreateFolder = () => {
     const name = window.prompt('新建文件夹名称');
     if (!name) return;
-    try {
-      await createFolder(name, folderId || null);
-      notifyFoldersChanged();
-      refresh();
-    } catch (e) {
-      alert(errMsg(e, '创建失败'));
-    }
+    runAdmin(() => createFolder(name, folderId || null), '创建失败');
   };
 
-  const onDeleteFolder = async (f) => {
+  const onDeleteFolder = (f) => {
     if (!confirm(`确认删除文件夹「${f.name}」及其所有内容？此操作不可恢复。`)) return;
-    try {
-      await deleteFolder(f.id);
-      notifyFoldersChanged();
-      refresh();
-    } catch (e) {
-      alert(errMsg(e, '删除失败'));
-    }
+    runAdmin(() => deleteFolder(f.id), '删除失败');
   };
 
-  const onDeleteFile = async (f) => {
+  const onDeleteFile = (f) => {
     if (!confirm(`确认删除文件「${f.name}」？`)) return;
-    try {
-      await deleteFile(f.id);
-      refresh();
-    } catch (e) {
-      alert(errMsg(e, '删除失败'));
-    }
+    runAdmin(() => deleteFile(f.id), '删除失败', false);
   };
 
   const openRenameDialog = (item) => {
@@ -359,38 +376,20 @@ export default function BrowsePage() {
     }
   };
 
-  const onDownloadFile = async (f) => {
-    try {
-      await downloadFileById(f, getFileUrl);
-    } catch (e) {
-      alert(e.message || '下载失败');
-    }
-  };
+  const onDownloadFile = (f) => downloadAndAlert(f, getFileUrl);
 
   return (
     <div className="space-y-4">
       {/* Toolbar — sits above the file list */}
       <div className="flex w-full flex-wrap items-center justify-end gap-2">
         <SortControl sort={sort} order={order} onChange={toggleSort} />
-        <button
-          onClick={onSyncRefresh}
-          className="p-0"
-          title="刷新（同步远端资料库）"
-        >
-          <span className="rb-toolbar-btn w-[38.5px] p-0">
-            <RotateCw className={`w-6 h-6 ${syncing ? 'animate-spin' : ''}`} />
-          </span>
-        </button>
+        <ToolbarIconButton title="刷新（同步远端资料库）" onClick={onSyncRefresh}>
+          <RotateCw className={`w-6 h-6 ${syncing ? 'animate-spin' : ''}`} />
+        </ToolbarIconButton>
         {folderId !== 0 && (
-          <button
-            onClick={onGoBack}
-            className="p-0"
-            title="返回上一级"
-          >
-            <span className="rb-toolbar-btn w-[38.5px] p-0">
-              <ArrowLeft className="w-6 h-6" />
-            </span>
-          </button>
+          <ToolbarIconButton title="返回上一级" onClick={onGoBack}>
+            <ArrowLeft className="w-6 h-6" />
+          </ToolbarIconButton>
         )}
         {isAdmin && (
           <>
@@ -414,40 +413,40 @@ export default function BrowsePage() {
 
       {/* Floating banners — fixed so they don't disrupt drag layout */}
       {isAdmin && dragging && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-40 pointer-events-none text-xs text-black/70 bg-black/5 border border-black/10 rounded-full shadow-md px-4 py-1.5">
+        <FloatingPill className="pointer-events-none text-black/70 bg-black/5 border border-black/10">
           正在移动「{dragging.name}」
           {sort === 'manual'
             ? ' — 在行的上/下边缘可插入排序，拖到文件夹中部可移入'
             : ' — 拖到左侧目录中的文件夹'}
-        </div>
+        </FloatingPill>
       )}
       {moveError && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-40 text-xs text-red-700 bg-red-50 border border-red-200 rounded-full shadow-md px-4 py-1.5">
-          {moveError}
-        </div>
+        <FloatingPill className="text-red bg-[#fef2f2] border border-[#fecaca]">{moveError}</FloatingPill>
       )}
       {syncMsg && (
-        <div
-          className={`fixed left-1/2 -translate-x-1/2 bottom-14 z-40 text-xs rounded-full shadow-md px-4 py-1.5 ${
+        <FloatingPill
+          bottom="bottom-14"
+          role="status"
+          className={
             syncMsgOk
               ? 'text-black/70 bg-black/5 border border-black/10'
-              : 'text-red-700 bg-red-50 border border-red-200'
-          }`}
-          role="status"
+              : 'text-red bg-[#fef2f2] border border-[#fecaca]'
+          }
         >
           {syncMsg}
-        </div>
+        </FloatingPill>
       )}
 
-      {/* Body: file list takes the full middle column width (the graph lives
-          in the App right column on xl+, inline below the list otherwise). */}
+      {/* Body: file list takes the full middle column width. The knowledge
+          graph renders in the App right column only on browse routes at the
+          lg breakpoint (isBrowse && isLg); it is never inline below the list. */}
       <div className="bg-white rounded-[14px] overflow-hidden">
         {loading ? (
           <div className="py-16 flex items-center justify-center text-slate-400">
             <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-400" /> 加载中…
           </div>
         ) : err ? (
-          <div className="py-16 text-center text-red-500">{err}</div>
+          <div className="py-16 text-center text-red">{err}</div>
         ) : (
           <ItemListWithRename
             data={data}
@@ -540,8 +539,7 @@ function SortControl({ sort, order, onChange }) {
             width: indicator.width,
             transform: `translateX(${indicator.left}px)`,
             opacity: indicator.ready ? 1 : 0,
-            transition:
-              'transform 360ms cubic-bezier(0.22, 1, 0.36, 1), width 360ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease',
+            transition: `transform 360ms ${EASE_COLLAPSE}, width 360ms ${EASE_COLLAPSE}, opacity 160ms ease`,
           }}
         />
         {SORT_OPTIONS.map((opt) => {
@@ -609,6 +607,47 @@ function ItemListWithRename({
       ),
     [data]
   );
+  // 文件夹在前、文件在后合成单一渲染流（两段 .map 结构一致，仅点击与操作不同）。
+  const rows = [
+    ...(data?.folders || []).map((f) => ({
+      key: `d-${f.id}`,
+      item: { ...f, type: 'folder' },
+      onClick: () => onEnterFolder(f),
+      actions:
+        isAdmin && (
+          <>
+            <RowAction title="重命名" onClick={() => onRenameFolder(f)}>
+              <PenLine className="w-4 h-4" />
+            </RowAction>
+            <RowAction title="删除" onClick={() => onDeleteFolder(f)}>
+              <Trash className="w-4 h-4" />
+            </RowAction>
+          </>
+        ),
+    })),
+    ...(data?.files || []).map((f) => ({
+      key: `f-${f.id}`,
+      item: { ...f, type: 'file' },
+      onClick: () => onPreviewFile(f),
+      actions: (
+        <>
+          <RowAction title="下载" onClick={() => onDownloadFile(f)}>
+            <Download className="w-4 h-4" />
+          </RowAction>
+          {isAdmin && (
+            <>
+              <RowAction title="重命名" onClick={() => onRenameFile(f)}>
+                <PenLine className="w-4 h-4" />
+              </RowAction>
+              <RowAction title="删除" onClick={() => onDeleteFile(f)}>
+                <Trash className="w-4 h-4" />
+              </RowAction>
+            </>
+          )}
+        </>
+      ),
+    })),
+  ];
   return (
     <GlideList as="ul" highlightClassName="bg-slate-50">
       <li className="rb-table-heading hidden sm:flex items-center gap-2 px-4 py-2 text-xs text-slate-500 bg-[#EFEFEF]">
@@ -621,11 +660,11 @@ function ItemListWithRename({
         <span className="w-28 text-right">修改时间</span>
         <span className={`${actionWidthClass} text-right`}>操作</span>
       </li>
-      {data.folders.map((f) => (
+      {rows.map(({ key, item, onClick, actions }) => (
         <Row
-          key={`d-${f.id}`}
-          item={{ ...f, type: 'folder' }}
-          tone={toneFor(f.size, thresholds)}
+          key={key}
+          item={item}
+          tone={toneFor(item.size, thresholds)}
           isAdmin={isAdmin}
           dragging={dragging}
           dropZone={dropZone}
@@ -635,53 +674,8 @@ function ItemListWithRename({
           onRowDragOver={onRowDragOver}
           onRowDragLeave={onRowDragLeave}
           onRowDrop={onRowDrop}
-          onClick={() => onEnterFolder(f)}
-          actions={
-            isAdmin && (
-              <>
-                <RowAction title="重命名" onClick={() => onRenameFolder(f)}>
-                  <PenLine className="w-4 h-4" />
-                </RowAction>
-                <RowAction title="删除" onClick={() => onDeleteFolder(f)}>
-                  <Trash className="w-4 h-4" />
-                </RowAction>
-              </>
-            )
-          }
-        />
-      ))}
-      {data.files.map((f) => (
-        <Row
-          key={`f-${f.id}`}
-          item={{ ...f, type: 'file' }}
-          tone={toneFor(f.size, thresholds)}
-          isAdmin={isAdmin}
-          dragging={dragging}
-          dropZone={dropZone}
-          actionWidthClass={actionWidthClass}
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          onRowDragOver={onRowDragOver}
-          onRowDragLeave={onRowDragLeave}
-          onRowDrop={onRowDrop}
-          onClick={() => onPreviewFile(f)}
-          actions={
-            <>
-              <RowAction title="下载" onClick={() => onDownloadFile(f)}>
-                <Download className="w-4 h-4" />
-              </RowAction>
-              {isAdmin && (
-                <>
-                  <RowAction title="重命名" onClick={() => onRenameFile(f)}>
-                    <PenLine className="w-4 h-4" />
-                  </RowAction>
-                  <RowAction title="删除" onClick={() => onDeleteFile(f)}>
-                    <Trash className="w-4 h-4" />
-                  </RowAction>
-                </>
-              )}
-            </>
-          }
+          onClick={onClick}
+          actions={actions}
         />
       ))}
     </GlideList>

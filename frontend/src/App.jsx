@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Route, Routes, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useAuth } from './auth.jsx';
 import BrowsePage from './pages/BrowsePage.jsx';
-import LoginPage from './pages/LoginPage.jsx';
+import AuthPage from './pages/AuthPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import AboutPage from './pages/AboutPage.jsx';
 import StaggeredMenu from './components/StaggeredMenu.jsx';
@@ -13,6 +13,22 @@ import KnowledgeGraph from './components/KnowledgeGraph.jsx';
 import ChatComposer from './components/ChatComposer.jsx';
 import useMediaQuery from './hooks/useMediaQuery.js';
 import NoticeModal from './components/NoticeModal.jsx';
+import { EASE_COLLAPSE } from './components/ui.js';
+
+// Static menu items for the floating StaggeredMenu — hoisted out of the
+// component so they are allocated once per module load, not per render.
+const menuItems = [
+  { label: '资料库', ariaLabel: '浏览资料库', link: '/' },
+  { label: '统计面板', ariaLabel: '查看统计仪表盘', link: '/dashboard' },
+  { label: '关于我们', ariaLabel: '了解仲英书院学业辅导中心', link: '/about' },
+];
+
+// Social links shown in the menu footer, also static.
+const socialItems = [
+  { label: 'Bilibili', link: 'https://space.bilibili.com/549612395' },
+  { label: 'Email', link: 'mailto:xjtuzyxf@163.com' },
+  { label: 'Wechat', link: 'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU4NTQ4NTg0Mg==&scene=110#wechat_redirect' },
+];
 
 export default function App() {
   const { user, logout, ready } = useAuth();
@@ -25,43 +41,45 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // 侧边栏开合的缓动曲线与时长（与 ChatComposer/KnowledgeGraph 的收缩动画一致）。
-  const SIDEBAR_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+  const SIDEBAR_EASE = EASE_COLLAPSE;
   const SIDEBAR_MS = 320;
 
   // Docs layout: brand + search + folder tree live in the left rail, which
   // appears on browse routes only. Other pages are standalone.
   const isBrowse = location.pathname === '/' || location.pathname.startsWith('/folder/');
   const isDashboard = location.pathname === '/dashboard';
+  const isAbout = location.pathname === '/about';
   const folderId = Number(location.pathname.match(/^\/folder\/(\d+)/)?.[1]) || 0;
 
-  const menuItems = [
-    { label: '资料库', ariaLabel: '浏览资料库', link: '/' },
-    { label: '统计面板', ariaLabel: '查看统计仪表盘', link: '/dashboard' },
-    { label: '关于我们', ariaLabel: '了解仲英书院学业辅导中心', link: '/about' },
-  ];
+  // Bottom account card on the menu panel. Logged-in shows username + role;
+  // guests show a neutral "未登录" state. Login/logout actions live in the
+  // card's ChevronsUpDown popup menu, not on the card itself.
+  const account = useMemo(
+    () =>
+      user
+        ? {
+            name: user.username || '用户',
+            subtitle: user.role === 'admin' ? '管理员' : '普通用户',
+            avatarText: (user.username || '友').slice(0, 1).toUpperCase(),
+            onLogout: logout,
+          }
+        : { name: '未登录', subtitle: '游客', guest: true, avatarText: '', onLogin: () => navigate('/login') },
+    [user, logout, navigate]
+  );
 
-  // Bottom account card on the menu panel. Logged-in shows username + role
-  // with a logout button; guests show a neutral "未登录" state whose icon
-  // is a login button.
-  const account = user
-    ? {
-        name: user.username || '用户',
-        subtitle: user.role === 'admin' ? '管理员' : '普通用户',
-        avatarText: (user.username || '友').slice(0, 1).toUpperCase(),
-        onLogout: logout,
-      }
-    : { name: '未登录', subtitle: '游客', guest: true, avatarText: '', onLogin: () => navigate('/login') };
-
-  const brand = (
-    <Link to="/" className="flex items-center gap-2 shrink-0 hover:text-brand-500">
-      <img
-        src="/favicon.png"
-        alt=""
-        aria-hidden="true"
-        className="w-7 h-7 rounded-full object-cover"
-      />
-      <span className="rb-brand-title whitespace-nowrap">仲英学辅资料库</span>
-    </Link>
+  const brand = useMemo(
+    () => (
+      <Link to="/" className="flex items-center gap-2 shrink-0 hover:text-brand-500">
+        <img
+          src="/favicon.png"
+          alt=""
+          aria-hidden="true"
+          className="w-7 h-7 rounded-full object-cover"
+        />
+        <span className="rb-brand-title whitespace-nowrap">仲英学辅资料库</span>
+      </Link>
+    ),
+    []
   );
 
   // 资料库标题行右侧的侧边栏开关按钮。展开时常驻侧边栏内（显示 PanelLeftClose，
@@ -89,7 +107,7 @@ export default function App() {
     mainLayout = `w-full ${
       sidebarOpen ? 'lg:pl-[calc(250px+1rem)]' : 'lg:pl-0'
     } lg:pr-[calc(300px+1rem)] lg:transition-[padding] lg:duration-[${SIDEBAR_MS}ms] lg:ease-[${SIDEBAR_EASE}]`;
-  } else if (location.pathname === '/dashboard' || location.pathname === '/about') {
+  } else if (isDashboard || isAbout) {
     mainLayout = 'mx-auto w-full';
   } else {
     mainLayout = 'mx-auto w-full max-w-7xl';
@@ -176,14 +194,16 @@ export default function App() {
           <Route path="/folder/:id" element={<BrowsePage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/about" element={<AboutPage />} />
-          <Route path="/login" element={<LoginPage />} />
+          {/* /login 与 /register 渲染同一 AuthPage 实例：切换不重挂载，仅表单区过渡 */}
+          <Route path="/login" element={<AuthPage />} />
+          <Route path="/register" element={<AuthPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
       {/* Right column — the original StaggeredMenu toggle button stays
           fixed at the top-right; the knowledge graph sits below it.
           pt matches the file list card top in the middle column:
-          main sm:py-6 (24px) + toolbar (35px) + space-y-4 gap (16px),
+          main sm:pt-[10.5px] + toolbar (35px) + space-y-4 gap (16px),
           so the graph's top border lines up with the list card. */}
       {isBrowse && isLg && (
         <div className="fixed inset-y-0 right-0 z-10 hidden flex-col gap-4 overflow-hidden pr-2 pt-[61.5px] lg:flex lg:w-[300px]">
@@ -200,11 +220,7 @@ export default function App() {
         <StaggeredMenu
           position="right"
           items={menuItems}
-          socialItems={[
-            { label: 'Bilibili', link: 'https://space.bilibili.com/549612395' },
-            { label: 'Email', link: 'mailto:xjtuzyxf@163.com' },
-            { label: 'Wechat', link: 'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU4NTQ4NTg0Mg==&scene=110#wechat_redirect' },
-          ]}
+          socialItems={socialItems}
           account={account}
           displaySocials
           displayItemNumbering={false}

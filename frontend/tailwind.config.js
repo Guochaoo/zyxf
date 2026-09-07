@@ -15,6 +15,7 @@ export default {
           400: '#808080', // gray-400 placeholder, disabled
           500: '#666666', // gray-500 tertiary text
           600: '#4D4D4D', // gray-600 secondary text
+          700: '#404040', // gray-700 hover text (sidebar toggle buttons)
           800: '#262626',
           900: '#171717', // gray-900 primary text (Vercel Black)
         },
@@ -41,8 +42,6 @@ export default {
         green: 'var(--green)',
       },
       boxShadow: {
-        // docs/DESIGN.md §2 shadow system (shadow-as-border)
-        card: 'rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px',
         // Insight card design system — raised button
         btn: 'rgba(23, 23, 23, 0.12) 0px 1px 2px, rgba(23, 23, 23, 0.06) 0px 0px 0px 1px',
       },
@@ -52,7 +51,6 @@ export default {
       },
       transitionDuration: {
         250: '250ms',
-        400: '400ms',
       },
       maxWidth: {
         95: '23.75rem',

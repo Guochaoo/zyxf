@@ -1,8 +1,8 @@
 // Centralized file-extension policy.
 // ---------------------------------------------------------------
 // ALLOWED_EXTS    -> accepted by the upload endpoint
-// FORCE_DOWNLOAD_EXTS -> never previewed inline; always returned with
-//                       Content-Disposition: attachment (defence in depth).
+// PREVIEWABLE_EXTS -> inline-previewable documents (allow-list minus archives)
+// INLINE_IMAGE_EXTS -> legacy raster images may still be served inline
 // BLOCKED_EXTS    -> never accepted, even if mis-listed above.
 // ---------------------------------------------------------------
 
@@ -17,6 +17,10 @@ export const BLOCKED_EXTS = new Set([
   // dlls / shared libs
   'dll', 'so', 'dylib',
 ]);
+
+// Archives are download-only (never previewed); unknown types are also forced
+// to download at serve time.
+const ARCHIVE_EXTS = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2']);
 
 // Only these file types are allowed for upload.
 // All previewable files go through Alibaba Cloud WebOffice (IMM doc/preview).
@@ -35,12 +39,7 @@ export const ALLOWED_EXTS = new Set([
   // 文本
   'txt',
   // 压缩包（仅下载，不预览）
-  'zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2',
-]);
-
-// Archives and unknown types are forced to download.
-const ARCHIVE_EXTS = new Set([
-  'zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2',
+  ...ARCHIVE_EXTS,
 ]);
 
 // Everything on the allow-list that isn't an archive is previewable.

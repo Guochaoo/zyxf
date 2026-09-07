@@ -4,11 +4,11 @@
 > This system is Vercel-inspired for the 仲英书院学业辅导中心 (Zhongying College Academic Counseling Center) material library website. Brand-owned assets are kept as-is and override the generic system:
 >
 > - **Brand font:** OPPO Sans 4.0 replaces Geist as the primary font (brand-owned, `frontend/public/fonts/OPPO Sans 4.0.ttf`). The *principles* of Geist typography (compression, three-weight hierarchy, tight tracking) still apply, but letter-spacing is adapted for CJK legibility — see §3.
-> - **Brand identity:** The brand logo (`favicon.png` / `brand-logo.png`) and brand names (仲英学辅资料库, 仲英书院学业辅导中心, 仲英学辅) are always preserved verbatim.
+> - **Brand identity:** The brand logo (`favicon.png`) and brand names (仲英学辅资料库, 仲英书院学业辅导中心, 仲英学辅) are always preserved verbatim.
 > - **Language:** All user-facing copy is Chinese (zh-CN); uppercase mono technical labels (TODAY, DOWNLOADS…) remain in English as decorative metadata, per the Geist Mono tradition.
 > - **Accent colors:** The old brand blue (#276DAB) is replaced by the Vercel interaction palette (§2) — Link Blue #0072f5, Develop Blue #0a72ef, Focus Blue hsla(212, 100%, 48%, 1). Primary CTAs are Vercel Black (#171717).
 > - **Data-viz accent tokens** for the stats dashboard — 下载蓝 `--accent` (#3d9aff), 上传橙 `--orange` (#f68f3c), 今日红 `--red` (#ee5c61), 占用绿 `--green` (#3fae6b) — the only permitted accent use (see the heatmap spec in §4).
-> - **无界 (Borderless) philosophy:** This site deliberately moves *away* from Vercel's line-dominated separation (shadow-as-border everywhere). Separation comes from whitespace and soft surface tints (#FAFAFA) first; lines/borders are used only where function requires them (e.g., table rows, dashed dropzone). There is **no topbar** — navigation is a StaggeredMenu hamburger on every layout; the brand, search and folder tree live in the left rail (see §4).
+> - **无界 (Borderless) philosophy — 本项目的核心设计理念：** This site deliberately moves *away* from Vercel's line-dominated separation (shadow-as-border everywhere). 边界不靠边框线表达，而靠**颜色对比与其他效果**：表面色块深浅（#FAFAFA / #EFEFEF / #ECECEE）、留白间距、投影海拔（multi-layer shadow）。CSS `border` 仅在功能确有必要时使用（e.g., table rows, dashed dropzone, form input hairline）。There is **no topbar** — navigation is a StaggeredMenu hamburger on every layout; the brand, search and folder tree live in the left rail (see §4).
 
 ## 1. Visual Theme & Atmosphere
 
@@ -42,7 +42,7 @@ Key Characteristics:
 - Develop Blue (#0a72ef, `brand-500`): Brand mark hover, progress-bar default fill.
 - Badge Blue Text (#0068d6, `brand-700`): CTA hover state (darkens the blue).
 - Focus Blue (hsla(212, 100%, 48%, 1)): keyboard focus outline on all interactive elements.
-- **Icons are monochrome `slate-600` (#4d4d4d) on light surfaces** — `FileIcon` renders every file/folder icon via `currentColor`; white icons appear on dark CTA buttons and colored icon badges (see §4).
+- **Icons are monochrome on light surfaces** — `FileIcon` renders file/folder icons with the `text-slate-600` class (actual color is forced to `#000000` by `.app-theme svg { color: #000000 }`); white icons appear on dark CTA buttons and colored icon badges (see §4).
 
 ### Data-viz tokens (stats dashboard only — the one permitted accent use)
 Defined as CSS variables in `index.css :root` and consumed through Tailwind tokens (`bg-accent`, `text-orange`, …):
@@ -54,7 +54,7 @@ Defined as CSS variables in `index.css :root` and consumed through Tailwind toke
 
 ### Neutral Scale (via Tailwind `slate` tokens)
 - Gray 900 (#171717, `slate-900` / `--ink`): Primary text, headings, nav text.
-- Gray 700 (#404040, `slate-700`): removed — the scale is 50/100/200/300/400/500/600/800/900.
+- Gray 700 (#404040, `slate-700`): hover text on sidebar toggle buttons.
 - Gray 600 (#4d4d4d, `slate-600`): Secondary text, file icons.
 - Gray 500 (#666666, `slate-500`): Tertiary text, muted links.
 - Gray 400 (#808080, `slate-400`): Placeholder text, disabled states.
@@ -71,9 +71,9 @@ Defined as CSS variables in `index.css :root` and consumed through Tailwind toke
 - Selection Text (hsla(0, 0%, 95%, 1)): text selection highlight — *kept from the original spec.*
 - Badge Blue Bg (#ebf5ff) / Badge Blue Text (#0068d6): *not in use — superseded by the dashboard's colored icon badges (solid accents, white glyph).*
 
-### Shadows & Depth (Tailwind `shadow-card` is the only full card stack)
-- Card Stack (`shadow-card`): rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px — used by dashboard cards and the chat panel.
-- Button (`shadow-btn`): rgba(23,23,23,.12) 0px 1px 2px, rgba(23,23,23,.06) 0px 0px 0px 1px — raised toggle pills / refresh button.
+### Shadows & Depth (卡片阴影为 CSS 类 `.rb-card`，非 tailwind token)
+- Card Stack（`.rb-card`，index.css 内联定义）: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px — 仅用于上传 / 重命名弹窗。Dashboard 卡片为 `bg-surface` 无阴影（无界）。
+- Button（`shadow-btn`，tailwind token）: rgba(23,23,23,.12) 0px 1px 2px, rgba(23,23,23,.06) 0px 0px 0px 1px — raised toggle pills / refresh button.
 - Border Shadow (rgba(0,0,0,0.08) 0px 0px 0px 1px) and Ring Border (rgb(235,235,235) 0px 0px 0px 1px) — *removed from the config; nothing references `shadow-ring` / `shadow-ringlight`.* Inputs still use the border-shadow inline in CSS.
 
 ## 3. Typography Rules
@@ -119,7 +119,7 @@ Defined as CSS variables in `index.css :root` and consumed through Tailwind toke
 Primary Dark (`rb-btn-dark`)
 - Background: #171717, hover #000000
 - Text: #ffffff
-- Padding: 8px 16px, Radius: 6px
+- Padding: 8px 16px, Radius: 14px
 - Use: Primary CTA — 上传、新建文件夹、重命名保存、刷新
 
 Ghost (`rb-btn-ghost`)
@@ -142,17 +142,17 @@ Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视�
 - 取代了原 spec 的 tinted pill badge（#ebf5ff 底 + 深蓝字）
 
 ### Cards & Containers
-- Dashboard 卡片（`rounded-card bg-surface p-3`）: 白色、12px 圆角、`shadow-card` 多层阴影、12px 内边距；同栏卡片间距 12px，区块间也是 12px（无界，不画分割线）
+- Dashboard 卡片（`rounded-card bg-surface p-3`）: 白色、12px 圆角、**无阴影**（无界，靠留白与表面色分层）、12px 内边距；同栏卡片间距 12px，区块间也是 12px（无界，不画分割线）
 - 图表/内嵌面板（`rounded-control bg-inset`）: 10px 圆角、`#f7f8f9` 底，用于今日下载曲线、AnomalyCard 图表区
 - 热力图面板: `bg-surface` **无边框无阴影**，直接融入页面
-- 列表行 hover: `#fafafa` 表面微 tint（`hover:bg-hover`），无描边（无界）
+- 列表行 hover: `#fafafa` 表面微 tint（`bg-slate-50`，经 GlideList 滑动高亮条），无描边（无界）
 - 浏览页三卡片（文件列表 / 知识图谱 / 智能对话）: 纯白 `bg-white rounded-[14px]`，**无边框无阴影**（无界）；头部条 `#EFEFEF` + `p-1.5`，标题 13px weight 500，操作图标按钮 24px / 圆角 6px
-- 卡片阴影（`shadow-card`）现存用途仅 Dashboard 卡片与弹窗（上传 / 重命名 `rb-card`）: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px
+- 卡片阴影（CSS 类 `.rb-card`）现存用途仅弹窗（上传 / 重命名 `rb-card`），Dashboard 卡片无阴影: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px
 
 ### Knowledge Graph (知识库卡片)
-- forestry.md "Connected Pages" style, sits in the fixed **right rail** (300px, `lg`+) with the 智能对话 card below it; below `lg` it stacks inline under the file list
+- forestry.md "Connected Pages" style, sits in the fixed **right rail** (300px, `lg`+) with the 智能对话 card below it; below `lg`（1024px）它随右栏一同隐藏（无内联回退）
 - 头部条可经 chevron 按钮收起为一条灰底胶囊（360ms 高度动画），收起时 globe / 放大按钮隐藏，收起状态跨路由保留
-- Force-directed layout (d3-force): circular nodes, **radius scaled by degree** (`2 + sqrt(degree)`), monochrome — folders solid `#171717`, files white with `rgba(23,23,23,0.45)` ring; current folder gets an outer ring
+- Force-directed layout (d3-force): circular nodes, **radius scaled by degree** (`2 + sqrt(degree) * 2.2`), monochrome — folders solid `#171717`, files white with `rgba(23,23,23,0.45)` ring; current folder gets an outer ring
 - **Local view**: current folder + direct neighbors; globe button opens a full-library modal
 - Hover highlights the node + its neighbors (others dim to 0.12, links 0.7/0.05); labels appear on hover or when zoomed past 1.2×
 - Pan by dragging background, wheel zoom (0.25–2.5), drag nodes, click (no drag) navigates — folder enters, file previews; auto-fits the graph after settling
@@ -160,15 +160,15 @@ Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视�
 
 ### Chat Card (智能对话卡片)
 - 与知识图谱卡片同款外壳：纯白无边框无阴影、`#EFEFEF` 头部条 + 13px 标题 + 24px 图标按钮（清空 / 设置 / 收起）
-- 收起/展开同款交互；实现上以像素高度冻结内容（内容不重排，由外层容器从下往上裁剪），动画期间消息列表临时 `overflow-y-hidden` 防滚动条闪现，展开时卡片本体随容器一起平滑长高
+- 收起/展开同款交互；实现上以像素高度冻结内容（内容不重排，由外层容器从下往上裁剪），消息列表始终 `overflow-y-auto` + `scrollbar-gutter: stable`（滚动条槽位恒定），展开时卡片本体随容器一起平滑长高
 - 输入框：`bg-field` 圆角 10px、**无描边**、仅极浅投影（聚焦微调）；发送按钮深色圆角方块，流式生成中变为停止按钮
-- 消息区：用户消息右对齐灰底气泡；AI 回复带「资料查询 · 状态 · 时间」小节头，流式打字机渲染，【文件N】引用解析为可点击文件行（跳转 / 预览 / 下载）；空态显示三条建议 chip
-- AI 设置面板：头部下展开的行内表单，配置存 localStorage，请求时随 body 下发覆盖服务端 env
+- 消息区：用户消息右对齐灰底气泡；AI 回复带小节头（检索中 / 生成中 / 完成 / 出错）+ 时间，流式打字机渲染，【文件N】引用渲染为可点击文件行（跳转 / 预览）；空态显示三条建议 chip
+- AI 设置面板：头部下浮出的悬浮层（覆盖对话区，点击空白收起），配置存 localStorage，请求时随 body 下发覆盖服务端 env
 
 ### File List (资料库中列)
 - Monochrome throughout (no accent colors): rows on white, dividers rgba(23,23,23,0.08)
-- Row hover: `#FAFAFA` surface tint only — no ring/outline (无界)
-- Header row: 12px #666 on `#EFEFEF`（与右栏卡片头部同款灰底）
+- Row hover: `#FAFAFA`（`bg-slate-50`，经 GlideList 滑动高亮条）surface tint only — no ring/outline (无界)
+- Header row: 12px on `#EFEFEF`（与右栏卡片头部同款灰底；文字色被 `.rb-table-heading` 强制为 `#171717`）
 - Metadata (size/date): 12px #808080
 - Row action buttons (download/rename/delete): black icons, hover `rgba(0,0,0,0.05)` — no red/blue tints
 - Drag/drop indicators: neutral — drop-into `rgba(0,0,0,0.05)` + 1px `rgba(0,0,0,0.1)` inset ring, insert lines `inset 0 2px 0 rgba(0,0,0,0.6)`
@@ -182,24 +182,24 @@ Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视�
 
 ### Navigation
 - **No topbar on any layout** — the page is three columns (left rail + content + right rail)
-- Navigation lives in the **StaggeredMenu** (hamburger) on **all** screen sizes: right-side slide-out panel with the main items (资料库 / 统计 / 关于我们 / 管理员登录或退出登录) + social channels
+- Navigation lives in the **StaggeredMenu** (hamburger) on **all** screen sizes: right-side slide-out panel with the main items (资料库 / 统计 / 关于我们 / 登录（未登录）/账号卡片 + 展开式用户菜单：登录 · 退出登录 · 预留设置项) + social channels
 - Brand logo + brand name (仲英学辅资料库) sit at the top of the **left rail** (desktop) / a slim mobile-only top row
 - Menu toggle: white shadow-border button, 6px radius, 14px weight 500, fixed at top-right
 - Active: weight 600 or underline
-- CTA: dark pill buttons ("Start Deploying", "Contact Sales")
+- CTA: dark pill buttons (`rb-btn-dark`, 上传 / 新建文件夹)
 
 ### Docs Layout & Sidebar (Folder Tree)
-- Vercel-docs-style **three-column layout** on **browse routes only** (`/` and `/folder/:id`); every other page (统计 / 关于我们 / 登录) is **standalone** — a single centered `max-w-6xl` column with no rail
-- Browse routes (desktop ≥1280px):
-  - **Left rail** — **full-bleed to the viewport's left edge** (no white gap), **250px**, full viewport height `#FAFAFA` tint (no border line, 无界), `sticky top-0`; contains, top to bottom:
+- Vercel-docs-style **three-column layout** on **browse routes only** (`/` and `/folder/:id`); every other page (统计 / 关于我们 / 登录) is **standalone** (no fixed rails)
+- Browse routes (desktop ≥1024px):
+  - **Left rail** — **full-bleed to the viewport's left edge** (no white gap), **250px**, full viewport height `#ECECEE` tint (no border line, 无界), `fixed`; contains, top to bottom:
     1. **Brand logo + brand name** (brand identity, verbatim)
     2. **Search field** (Vercel-docs pattern)
     3. **Folder tree** (fills the remaining rail height, scrolls internally) — folders **and files**: file leaves show the file-type icon, indented under their folder; clicking a file jumps to its folder and opens the preview. Root-level files sit under the 首页 node, which is **expanded by default**. Chevron toggles any folder that contains folders or files.
-  - **Middle column** (`flex-1`, scrolls internally): sticky breadcrumb/toolbar row (white background) — sort segments (默认 / 名称 / 时间 / 大小), refresh, 新建文件夹, 上传 — above the file list
-  - **Right rail** (fixed full-height): **打开菜单栏 button** on top (opens StaggeredMenu; replaces its floating toggle at ≥1280px), **knowledge-graph card** below — the graph's local view is `sticky` to the rail; the full-library modal is unaffected — then the **AI 资料助手 card** (`lg`+ only): streaming chat panel (SSE) that answers file-finding questions with smart-search tool calls; replies render typewriter-style with 【文件N】 citations resolved into clickable file rows (jump/preview/download); welcome state shows three suggestion chips; composer doubles as a stop button while streaming. Requires `LLM_*` env (otherwise 503 → 「AI 功能未配置」); the rail scrolls when both cards overflow.
-  - Below 1280px the knowledge graph falls back to an inline card under the file list; the left rail hides below `lg` (1024px) — browse pages get a slim mobile brand row + search below it, navigation via StaggeredMenu
-- Content column: centered, max `1200px` (browse) / `1280px` (standalone `max-w-7xl`)
-- Standalone pages (统计 / 关于我们): single centered `max-w-7xl` column
+  - **Middle column** (`flex-1`, scrolls internally): toolbar row (white background) — sort segments (默认 / 名称 / 时间 / 大小), refresh, 新建文件夹, 上传 — above the file list
+  - **Right rail** (fixed full-height, 300px): **knowledge-graph card** below (the graph's local view is `sticky` to the rail; the full-library modal is unaffected) then the **AI 资料助手 card** (`lg`+ only): streaming chat panel (SSE) that answers file-finding questions with smart-search tool calls; replies render typewriter-style with 【文件N】 citations rendered as clickable file rows (jump/preview); welcome state shows three suggestion chips; composer doubles as a stop button while streaming. Requires `LLM_*` env (otherwise 503 → 「AI 功能未配置」); the rail scrolls when both cards overflow. The StaggeredMenu toggle button floats separately at the top-right.
+  - Below `lg` (1024px) the right rail hides (no inline fallback); the left rail hides below `lg` — browse pages get a slim mobile brand row + search below it, navigation via StaggeredMenu
+- Content column: browse is full-width between the rails (no max-width); standalone pages are `mx-auto w-full`; login is `max-w-7xl`
+- Standalone pages (统计 / 关于我们): a single full-width column (`mx-auto w-full`, no fixed rails)
 - Login page is standalone (no rail, no brand row)
 - Sidebar = the library's folder tree (GET `/api/folders/tree`):
   - Section label "目录" — 12px weight 500, #666
@@ -210,7 +210,7 @@ Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视�
   - Ancestor chain of the current folder auto-expands
   - Refreshes on the global `folders-changed` event (dispatched after admin create/rename/move/delete/reorder)
 - Brand + rail content align to the left edge (full-bleed)
-- Responsive: right rail hidden below `xl` (1280px), left sidebar hidden below `lg` (1024px); navigation falls back to breadcrumb + search
+- Responsive: right rail hidden below `lg` (1024px), left sidebar hidden below `lg` (1024px); navigation falls back to StaggeredMenu + search
 
 ### Image Treatment
 - Product screenshots with 1px solid #ebebeb border
@@ -255,8 +255,8 @@ Download Heatmap（下载热力图，`/dashboard` 首行左卡）
 
 ### Grid & Container
 - Browse pages: left rail full-bleed to viewport edge (250px), content fills `flex-1` between the rails
-- Standalone pages: single centered 1280px (`max-w-7xl`) column
-- Browse routes: three-column docs layout — 250px folder-tree sidebar + `flex-1` content + 360px right rail (menu button + knowledge graph)
+- Standalone pages: single full-width column (`mx-auto w-full`); login uses `max-w-7xl`
+- Browse routes: three-column docs layout — 250px folder-tree sidebar + `flex-1` content + 300px right rail (knowledge graph + AI chat card)
 - Hero: centered single-column with generous top padding
 - Feature sections: 2–3 column grids for cards
 - No full-width divider lines — sections are separated by whitespace and surface tints only (无界)
@@ -285,12 +285,13 @@ Download Heatmap（下载热力图，`/dashboard` 首行左卡）
 |-------|-----------|-----|
 | Flat (Level 0) | No shadow | Page background, text blocks, **heatmap panel** (deliberately borderless) |
 | Inset Panel (Level 1) | `#f7f8f9` tint, no shadow (`bg-inset`) | Chart stages, anomaly-card plot area |
-| Card (Level 2) | `shadow-card`: rgba(0,0,0,0.08) 0 0 0 1px, rgba(0,0,0,0.04) 0 2px 2px, rgba(0,0,0,0.04) 0 8px 8px -8px, inner #fafafa ring | Dashboard cards, upload/rename dialogs (`rb-card`) |
+| Card (Level 2) | `.rb-card` (CSS 类): rgba(0,0,0,0.08) 0 0 0 1px, rgba(0,0,0,0.04) 0 2px 2px, rgba(0,0,0,0.04) 0 8px 8px -8px, inner #fafafa ring | Upload/rename dialogs (`rb-card`). Dashboard cards are `bg-surface` with **no shadow** (无界) |
+| Popover (Level 3) | 纯投影浮层，**无任何描边/光晕圈**（连 shadow-as-border ring 都不用）：rgba(0,0,0,0.06) 0 4px 10px + rgba(0,0,0,0.12) 0 12px 32px 双层柔和投影 | 卡片内悬浮层（如智能对话的 AI 设置浮层）与页面顶部 Toast（`Toast` 组件，error 红 / success 绿 / info 蓝 / warning 橙 四类型通知卡）；无界——浮层边界完全由投影海拔表达 |
 | Raised Toggle (Level 2b) | `shadow-btn`: rgba(23,23,23,.12) 0 1px 2px, rgba(23,23,23,.06) 0 0 0 1px | Active pill toggles, refresh button |
 | Input Border (inline) | rgba(0,0,0,0.08) 0 0 0 1px; focus adds hsla(212,100%,48%,.25) 0 0 0 3px | All form inputs/selects (CSS, not a token) |
 | Focus (Accessibility) | 2px solid hsla(212, 100%, 48%, 1) outline | Keyboard focus on all interactive elements |
 
-> Removed from the config: `shadow-ring`, `shadow-ringlight`, `shadow-card-subtle`, `shadow-hairline` — nothing references them.
+> Removed from the config: `shadow-card`, `shadow-ring`, `shadow-ringlight`, `shadow-card-subtle`, `shadow-hairline` — nothing references them (the card stack lives only as the CSS class `.rb-card`).
 
 Shadow Philosophy: Vercel has arguably the most sophisticated shadow system in modern web design. Rather than using shadows for elevation in the traditional Material Design sense, Vercel uses multi-value shadow stacks where each layer has a distinct architectural purpose: one creates the "border" (0px spread, 1px), another adds ambient softness (2px blur), another handles depth at distance (8px blur with negative spread), and an inner ring (#fafafa) creates the subtle highlight that makes the card "glow" from within. This layered approach means cards feel built, not floating.
 
@@ -306,7 +307,7 @@ Shadow Philosophy: Vercel has arguably the most sophisticated shadow system in m
 - Separate content with whitespace and #FAFAFA surface tints first — lines only where function requires
 - Use the three-weight system: 400 (body), 500 (UI), 600 (headings)
 - Apply the four dashboard accent tokens (下载蓝/上传橙/今日红/占用绿) only inside dashboard cards — icon badges and data series
-- Use multi-layer shadow stacks for cards (`shadow-card`)
+- Use the multi-layer card shadow stack via the `.rb-card` CSS class for dialogs; keep dashboard cards borderless (无界)
 - Keep the color palette achromatic — grays from #171717 to #ffffff are the system
 - Use #171717 instead of #000000 for primary text — the micro-warmth matters
 
@@ -344,7 +345,7 @@ Shadow Philosophy: Vercel has arguably the most sophisticated shadow system in m
 ### Collapsing Strategy
 - Hero: display 48px → scales down, maintains negative tracking proportionally
 - Navigation: StaggeredMenu hamburger on all sizes (no topbar on any layout)
-- Left rail (brand + search + folder tree): hidden below `lg` (1024px) — mobile gets a slim brand row, search below it, breadcrumb + search for folder navigation
+- Left rail (brand + search + folder tree): hidden below `lg` (1024px) — mobile gets a slim brand row, search below it, navigation falls back to StaggeredMenu + search
 - Feature cards: 3-column → 2-column → single column stacked
 - Code screenshots: maintain aspect ratio, may horizontally scroll
 - Trust bar logos: grid → horizontal scroll
@@ -365,7 +366,7 @@ Shadow Philosophy: Vercel has arguably the most sophisticated shadow system in m
 - Heading text: Vercel Black (#171717)
 - Body text: Gray 600 (#4d4d4d)
 - File icons: Gray 600 (#4d4d4d, monochrome)
-- Card shadow: `shadow-card` (see §6)
+- Card shadow: `.rb-card` CSS class (dialogs only; see §6). Dashboard cards are borderless.
 - Link: Link Blue (#0072f5, brand-600)
 - Focus ring: Focus Blue (hsla(212, 100%, 48%, 1))
 - Dashboard accents (cards only): 下载 `--accent` #3d9aff · 上传 `--orange` #f68f3c · 今日 `--red` #ee5c61 · 存储 `--green` #3fae6b

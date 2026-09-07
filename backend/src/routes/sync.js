@@ -1,25 +1,19 @@
 import { Router } from 'express';
 import path from 'node:path';
-import rateLimit from 'express-rate-limit';
 import { db, transaction } from '../db.js';
 import { listOssObjects } from '../oss.js';
-import { nextSortOrder } from '../dbHelpers.js';
-import { cleanObjectSegment, ossPrefix, placeholderKeyForFolder } from '../storagePath.js';
+import { buildFolderIndex, nextSortOrder } from '../dbHelpers.js';
+import { adminBypassLimiter } from '../limiter.js';
+import { cleanObjectSegment, ossPrefix, placeholderKeyForFolderFromMap } from '../storagePath.js';
 import { normalizeExt } from '../extPolicy.js';
 
 // Every IP may sync at most 5 times per minute (admins bypass, like download limits).
-const syncLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => req.user?.role === 'admin',
-  message: { error: '同步过于频繁，请 1 分钟后再试' },
-});
+const syncLimiter = adminBypassLimiter(60 * 1000, 5, '同步过于频繁，请 1 分钟后再试');
 
 const router = Router();
 
-// SQLite 绑定参数上限为 999，分批 DELETE/FIX 时每批不能超过该值（BUG-08）。
+// SQLite 绑定参数上限为 32766（Node 24 捆绑的 SQLite 编译值；999 是 3.32 前的旧默认）。
+// 分批 DELETE/FIX 每批远低于该上限，留足余量（BUG-08）。
 // DELETE 用 1 参数/行；fixExt 的 CASE 用 3 参数/行（WHEN id, THEN ext, WHERE id IN）。
 const DELETE_BATCH = 500;
 const FIX_EXT_BATCH = 300;
@@ -155,18 +149,24 @@ router.post('/', syncLimiter, async (req, res, next) => {
 
         // Prune folders with no placeholder object and no remaining content.
         // 逐行 DELETE 改为：收集整棵死树的节点 id（后序），再分批 IN 删除（BUG-08）。
+        // N+1 修复：一次加载全库 folders / files 到内存 map，再在内存里对整棵
+        // 树判活 + 收集死树，placeholder key 也从内存 map 计算，不再每层/每节点查库。
+        const { folderMap, childrenOf } = buildFolderIndex(
+          db.prepare('SELECT id, name, parent_id FROM folders').all()
+        );
+        const folderHasFiles = new Set(
+          db.prepare('SELECT DISTINCT folder_id FROM files').all().map((r) => r.folder_id)
+        );
         const folderAlive = (folderId) => {
-          for (const k of db.prepare('SELECT id FROM folders WHERE parent_id = ?').all(folderId)) {
-            if (folderAlive(k.id)) return true;
-          }
-          if (db.prepare('SELECT 1 FROM files WHERE folder_id = ?').get(folderId)) return true;
-          const ph = placeholderKeyForFolder(db, folderId);
+          const children = childrenOf.get(folderId);
+          if (children) for (const cid of children) if (folderAlive(cid)) return true;
+          if (folderHasFiles.has(folderId)) return true;
+          const ph = placeholderKeyForFolderFromMap(folderId, folderMap);
           return !!ph && keySet.has(ph);
         };
         const collectDeadTree = (folderId, ids) => {
-          for (const k of db.prepare('SELECT id FROM folders WHERE parent_id = ?').all(folderId)) {
-            collectDeadTree(k.id, ids);
-          }
+          const children = childrenOf.get(folderId);
+          if (children) for (const cid of children) collectDeadTree(cid, ids);
           ids.push(folderId);
         };
         // 先汇总所有已死根的子树 id，再统一分批删除，避免每棵树的重复构建与逐行 DELETE。

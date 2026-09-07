@@ -3,17 +3,14 @@
 
 import net from 'node:net';
 import dns from 'node:dns';
+import { envStr } from './env.js';
 
-function env(name) {
-  return (process.env[name] || '').trim();
-}
-
-const LLM_API_KEY = env('LLM_API_KEY');
-const LLM_BASE_URL = env('LLM_BASE_URL').replace(/\/+$/, '');
-const LLM_MODEL = env('LLM_MODEL');
+const LLM_API_KEY = envStr('LLM_API_KEY');
+const LLM_BASE_URL = envStr('LLM_BASE_URL').replace(/\/+$/, '');
+const LLM_MODEL = envStr('LLM_MODEL');
 
 // 三个变量齐全才启用；缺失时聊天路由返回 503，不影响其他功能。
-// 用函数而非常量导出，便于测试注入（env 本身在运行期不变，参照 oss.js）。
+// 导出为函数而非常量：测试通过 mock.module 整体替换本模块来控制启用态（见 test/setup.js）。
 export function isLlmEnabled() {
   return Boolean(LLM_API_KEY && LLM_BASE_URL && LLM_MODEL);
 }
@@ -139,7 +136,7 @@ export async function resolveClientLlmConfig(raw) {
  * 校验组装的工具调用是否完整：function.arguments 必须是有效的 JSON 对象/字符串。
  * 流式断连可能留下被截断的半截 arguments，这类不完整的调用不应透传（BUG-12）。
  */
-export function isCompleteToolCall(tc) {
+function isCompleteToolCall(tc) {
   if (!tc || typeof tc.function?.arguments !== 'string') return false;
   try {
     const parsed = JSON.parse(tc.function.arguments || '{}');
@@ -153,7 +150,7 @@ export function isCompleteToolCall(tc) {
  * 对累积的 tool_call 增量做最终组装与完整性过滤。
  * 输入 pendingTools（index → tool_call 组装对象），返回按 index 排序且 arguments 完好的调用列表。
  */
-export function finalizeToolCalls(pendingTools) {
+function finalizeToolCalls(pendingTools) {
   return [...pendingTools.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([, v]) => v)
@@ -201,8 +198,11 @@ export async function* chatStream({ messages, tools, signal, config }) {
 
   const decoder = new TextDecoder();
   let buffer = '';
-  for await (const chunk of res.body) {
-    buffer += decoder.decode(chunk, { stream: true });
+  // 以换行切分并处理 SSE 数据块。返回本次应产出的事件；buffer/sawDone/producedOutput/pendingTools 由闭包共享。
+  // 抽成函数以复用同一套切分逻辑：流结束后也能处理 buffer 残留的末段（无换行的尾行）以及 decoder 最后 flush 出的字节。
+  const consumeBuffer = (text) => {
+    buffer += text;
+    const outputs = [];
     let nl;
     while ((nl = buffer.indexOf('\n')) >= 0) {
       const line = buffer.slice(0, nl).trim();
@@ -223,7 +223,7 @@ export async function* chatStream({ messages, tools, signal, config }) {
       if (!delta) continue;
       if (delta.content) {
         producedOutput = true;
-        yield { type: 'delta', text: delta.content };
+        outputs.push({ type: 'delta', text: delta.content });
       }
       for (const frag of delta.tool_calls || []) {
         const idx = frag.index ?? 0;
@@ -234,7 +234,15 @@ export async function* chatStream({ messages, tools, signal, config }) {
         pendingTools.set(idx, acc);
       }
     }
+    return outputs;
+  };
+
+  for await (const chunk of res.body) {
+    for (const out of consumeBuffer(decoder.decode(chunk, { stream: true }))) yield out;
   }
+  // 流结束：先 flush decoder（个别 provider 只在最后的 flush 中吐出字节），
+  // 再处理 buffer 中残留的无换行尾行（否则末尾的 data: 行会被丢弃）。
+  for (const out of consumeBuffer(decoder.decode())) yield out;
 
   if (pendingTools.size > 0) {
     const toolCalls = finalizeToolCalls(pendingTools);

@@ -92,7 +92,7 @@ export default function Preview({ file, onClose }) {
           </div>
           <div className="flex items-center gap-2">
             {downloadErr && (
-              <span className="text-xs text-red-500 mr-1">{downloadErr}</span>
+              <span className="text-xs text-red mr-1">{downloadErr}</span>
             )}
             <button
               onClick={download}
@@ -134,7 +134,7 @@ export default function Preview({ file, onClose }) {
 
           {!loading && err && (
             <div className="h-full flex flex-col items-center justify-center gap-3 p-4">
-              <div className="text-red-500 text-sm text-center">{err}</div>
+              <div className="text-red text-sm text-center">{err}</div>
               <button
                 onClick={loadUrl}
                 className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm hover:bg-brand-700 transition-colors"

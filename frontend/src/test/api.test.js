@@ -26,7 +26,8 @@ vi.mock('axios', () => {
 
 // Imported after axios is mocked (vi.mock is hoisted above these).
 import axios from 'axios';
-import api, { TOKEN_KEY, login, uploadFile } from '../api.js';
+import { login, uploadFile } from '../api.js';
+import { TOKEN_KEY } from '../ui.js';
 
 const instance = axios.__instance;
 const reqHandlers = axios.__reqHandlers;

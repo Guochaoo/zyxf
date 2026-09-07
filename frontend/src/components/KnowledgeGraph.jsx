@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronUp, Globe, Maximize, X } from 'lucide-react';
+import { Globe, Maximize, X } from 'lucide-react';
 import {
   forceCenter,
   forceCollide,
@@ -8,14 +8,13 @@ import {
   forceLink,
   forceSimulation,
 } from 'd3-force';
-import { getFolderTree } from '../api.js';
+import { useFolderTree } from '../hooks/useFolderTree.js';
+import PanelHeader from './PanelHeader.jsx';
+import { ICON_BUTTON_CLASS, EASE_COLLAPSE } from './ui.js';
+import { openFilePreview } from '../ui.js';
 
 const VIEW_W = 600;
 const VIEW_H = 420;
-
-// 头部图标按钮（globe / maximize）与 AI 助手卡片头部的按钮同样式。
-const ACTION_BTN_CLASS =
-  'flex size-6 items-center justify-center rounded-[6px] text-ink-3 transition-colors duration-100 hover:bg-hover hover:text-ink-2 disabled:opacity-40';
 
 // 图谱区高度：原卡片高 295px，头部栏占 37px（p-1.5×2 + size-6 + 1px 分割线）。
 const GRAPH_H = '258px';
@@ -25,6 +24,10 @@ let collapsedPersistent = false;
 
 // Node ids: folders are `f<id>` (root is f0), files are `file<id>`.
 const nodeIdOf = (currentId) => (currentId ? `f${currentId}` : 'f0');
+
+// d3-force 在模拟运行后会把 l.source/l.target 从字符串 id 改写为节点对象，
+// 取端点 id 前先归一化。
+const endpointId = (n) => (typeof n === 'object' ? n.id : n);
 
 function buildGraph(tree, rootFiles) {
   const nodes = [{ id: 'f0', name: '首页', type: 'folder', isRoot: true }];
@@ -77,30 +80,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
   // folder neighborhood zoomed (maximize). null = dialog closed.
   const [dialog, setDialog] = useState(null);
   const [collapsed, setCollapsed] = useState(collapsedPersistent);
-  const [tree, setTree] = useState(null);
-  const [rootFiles, setRootFiles] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let alive = true;
-    const load = () => {
-      setLoading(true);
-      getFolderTree()
-        .then((d) => {
-          if (!alive) return;
-          setTree(d.tree || []);
-          setRootFiles(d.files || []);
-        })
-        .catch(() => {})
-        .finally(() => alive && setLoading(false));
-    };
-    load();
-    window.addEventListener('folders-changed', load);
-    return () => {
-      alive = false;
-      window.removeEventListener('folders-changed', load);
-    };
-  }, []);
+  const { tree, rootFiles, loading } = useFolderTree();
 
   // Full graph only depends on the tree + root files: keep it stable across
   // folder navigation so browsing doesn't re-walk/re-allocate the whole library.
@@ -120,8 +100,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
       if (node.type === 'folder') {
         navigate(node.isRoot ? '/' : `/folder/${Number(node.id.slice(1))}`);
       } else {
-        const f = node.meta;
-        navigate(f.folder_id ? `/folder/${f.folder_id}` : '/', { state: { previewFile: f } });
+        openFilePreview(node.meta, navigate);
       }
     },
     [navigate]
@@ -140,58 +119,47 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
       className={`relative flex shrink-0 flex-col bg-white rounded-[14px] overflow-hidden ${className}`.trim()}
     >
       {/* 头部栏 — 灰底标签行；收起后仅剩本栏（14px 圆角胶囊） */}
-      <div className="flex shrink-0 items-center justify-between gap-1 bg-[#EFEFEF] p-1.5">
-        <span className="shrink-0 px-2 py-[3px] text-[13px] font-medium text-ink">知识图谱</span>
-        <div className="flex shrink-0 items-center gap-1">
-          {!empty && !collapsed && (
-            <>
-              <button
-                type="button"
-                onClick={() => setDialog('full')}
-                title="查看全库图谱"
-                aria-label="查看全库图谱"
-                className={ACTION_BTN_CLASS}
-              >
-                <Globe className="h-[15px] w-[15px]" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setDialog('local')}
-                title="放大当前图谱"
-                aria-label="放大当前图谱"
-                className={ACTION_BTN_CLASS}
-              >
-                <Maximize className="h-[15px] w-[15px]" />
-              </button>
-            </>
-          )}
-          <button
-            type="button"
-            onClick={() =>
-              setCollapsed((v) => {
-                collapsedPersistent = !v;
-                return !v;
-              })
-            }
-            title={collapsed ? '展开图谱' : '收起图谱'}
-            aria-label={collapsed ? '展开图谱' : '收起图谱'}
-            aria-expanded={!collapsed}
-            className={ACTION_BTN_CLASS}
-          >
-            {collapsed ? (
-              <ChevronDown className="h-[15px] w-[15px]" />
-            ) : (
-              <ChevronUp className="h-[15px] w-[15px]" />
-            )}
-          </button>
-        </div>
-      </div>
+      <PanelHeader
+        title="知识图谱"
+        collapsed={collapsed}
+        onToggleCollapsed={() =>
+          setCollapsed((v) => {
+            collapsedPersistent = !v;
+            return !v;
+          })
+        }
+        expandTitle="展开图谱"
+        collapseTitle="收起图谱"
+      >
+        {!empty && (
+          <>
+            <button
+              type="button"
+              onClick={() => setDialog('full')}
+              title="查看全库图谱"
+              aria-label="查看全库图谱"
+              className={ICON_BUTTON_CLASS}
+            >
+              <Globe className="h-[15px] w-[15px]" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setDialog('local')}
+              title="放大当前图谱"
+              aria-label="放大当前图谱"
+              className={ICON_BUTTON_CLASS}
+            >
+              <Maximize className="h-[15px] w-[15px]" />
+            </button>
+          </>
+        )}
+      </PanelHeader>
       {/* 图谱内容区：高度动画收起/展开，下方对话卡片（flex-1）自然补位 */}
       <div
         className="overflow-hidden transition-[height] duration-[360ms]"
         style={{
           height: collapsed ? 0 : GRAPH_H,
-          transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          transitionTimingFunction: EASE_COLLAPSE,
         }}
       >
         {loading || empty ? (
@@ -335,10 +303,8 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
       if (!id) return;
       const set = new Set([id]);
       for (const l of links) {
-        // d3-force rewrites l.source/l.target from string ids to node objects
-        // after the simulation runs, so normalize before comparing.
-        const s = typeof l.source === 'object' ? l.source.id : l.source;
-        const t = typeof l.target === 'object' ? l.target.id : l.target;
+        const s = endpointId(l.source);
+        const t = endpointId(l.target);
         if (s === id) set.add(t);
         if (t === id) set.add(s);
       }
@@ -475,8 +441,8 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
       {positioned && (
         <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
           {links.map((l, i) => {
-            const s = typeof l.source === 'object' ? l.source.id : l.source;
-            const t = typeof l.target === 'object' ? l.target.id : l.target;
+            const s = endpointId(l.source);
+            const t = endpointId(l.target);
             const active = hovered && (neighborsRef.current.has(s) || neighborsRef.current.has(t));
             const dim = hovered && !active;
             return (

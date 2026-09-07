@@ -43,6 +43,45 @@ export function placeholderKeyForFolder(db, folderId, parentOverrides = new Map(
   return `${parts.join('/')}/`;
 }
 
+// ---- In-memory map variants (N+1 refactors) ----------------------------------
+// These mirror the pure functions above but derive ancestor path segments from a
+// preloaded `Map(id -> { name, parent_id })` instead of one query per ancestor.
+// The DB-taking functions above keep their exact signatures; the route layer
+// uses these variants to avoid re-querying per file/folder.
+
+export function folderPathSegmentsFromMap(folderId, folderMap, parentOverrides = new Map(), nameOverrides = new Map()) {
+  if (!folderId) return [];
+  const chain = [];
+  const seen = new Set();
+  let curId = folderId;
+  let cur = folderMap.get(folderId);
+  while (cur && !seen.has(curId)) {
+    seen.add(curId);
+    const name = nameOverrides.has(curId) ? nameOverrides.get(curId) : cur.name;
+    chain.unshift(cleanObjectSegment(name));
+    const parent = parentOverrides.has(curId) ? parentOverrides.get(curId) : cur.parent_id;
+    if (!parent) break;
+    curId = parent;
+    cur = folderMap.get(parent);
+  }
+  return chain.filter(Boolean);
+}
+
+export function objectKeyForFileFromMap(folderId, filename, folderMap, parentOverrides = new Map(), nameOverrides = new Map()) {
+  const parts = [
+    ossPrefix(),
+    ...folderPathSegmentsFromMap(folderId, folderMap, parentOverrides, nameOverrides),
+    cleanObjectSegment(filename || path.basename(filename || 'file')),
+  ].filter(Boolean);
+  return parts.join('/');
+}
+
+export function placeholderKeyForFolderFromMap(folderId, folderMap, parentOverrides = new Map(), nameOverrides = new Map()) {
+  const parts = [ossPrefix(), ...folderPathSegmentsFromMap(folderId, folderMap, parentOverrides, nameOverrides)].filter(Boolean);
+  if (!parts.length) return null;
+  return `${parts.join('/')}/`;
+}
+
 export function parseOptionalFolderId(value) {
   if (value === null || value === undefined || value === 0 || value === '0' || value === '') {
     return null;
