@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { BsFolder } from 'react-icons/bs';
 import FileIcon from './FileIcon.jsx';
-import { getFolderTree } from '../api.js';
 import GlideList from './GlideList.jsx';
+import { useFolderTree } from '../hooks/useFolderTree.js';
+import { openFilePreview } from '../ui.js';
 
 /**
  * Sidebar folder tree, Vercel-docs style:
@@ -14,31 +15,11 @@ import GlideList from './GlideList.jsx';
  * - listens for the global 'folders-changed' event to refresh after admin ops
  */
 export default function FolderTree({ currentId = 0, className = '' }) {
-  const [tree, setTree] = useState(null);
-  const [rootFiles, setRootFiles] = useState([]);
+  const { tree, rootFiles } = useFolderTree();
   const [expanded, setExpanded] = useState(() => new Set());
   const location = useLocation();
   const currentRef = useRef(currentId);
   currentRef.current = currentId;
-
-  useEffect(() => {
-    let alive = true;
-    const load = () => {
-      getFolderTree()
-        .then((d) => {
-          if (!alive) return;
-          setTree(d.tree || []);
-          setRootFiles(d.files || []);
-        })
-        .catch(() => {});
-    };
-    load();
-    window.addEventListener('folders-changed', load);
-    return () => {
-      alive = false;
-      window.removeEventListener('folders-changed', load);
-    };
-  }, []);
 
   // Collapse everything when switching folders unless it's on the active path.
   const toggle = useCallback((id) => {
@@ -195,11 +176,13 @@ function TreeNode({ node, depth, currentId, expanded, onToggle }) {
 
 // File leaf — clicking navigates to its folder and opens the preview.
 function FileRow({ file, depth }) {
+  const navigate = useNavigate();
+
   return (
-    <Link
-      className="block"
-      to={file.folder_id ? `/folder/${file.folder_id}` : '/'}
-      state={{ previewFile: file }}
+    <button
+      type="button"
+      onClick={() => openFilePreview(file, navigate)}
+      className="block w-full text-left"
     >
       <span
         data-glide-row
@@ -210,6 +193,6 @@ function FileRow({ file, depth }) {
         <FileIcon type="file" ext={file.ext} className="h-4 w-4 shrink-0" />
         <span className="min-w-0 flex-1 truncate">{file.name}</span>
       </span>
-    </Link>
+    </button>
   );
 }

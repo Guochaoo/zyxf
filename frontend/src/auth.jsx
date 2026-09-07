@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import api, { TOKEN_KEY, login as loginApi } from './api.js';
+import api, { login as loginApi, register as registerApi } from './api.js';
+import { getToken, setToken, clearToken } from './ui.js';
 
 const AuthContext = createContext(null);
 
@@ -8,7 +9,7 @@ export function AuthProvider({ children }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = getToken();
     if (!token) {
       setReady(true);
       return;
@@ -29,18 +30,26 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (username, password) => {
     const { token, user } = await loginApi(username, password);
-    localStorage.setItem(TOKEN_KEY, token);
+    setToken(token);
+    setUser(user);
+    return user;
+  }, []);
+
+  // 注册即登录：后端核验验证码后直接返回 { token, user }。
+  const register = useCallback(async (payload) => {
+    const { token, user } = await registerApi(payload);
+    setToken(token);
     setUser(user);
     return user;
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
+    clearToken();
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, ready, login, logout, isAdmin: user?.role === 'admin' }}>
+    <AuthContext.Provider value={{ user, ready, login, register, logout, isAdmin: user?.role === 'admin' }}>
       {children}
     </AuthContext.Provider>
   );

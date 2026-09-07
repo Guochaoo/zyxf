@@ -1,11 +1,10 @@
 import axios from 'axios';
-
-export const TOKEN_KEY = 'zyxf_token';
+import { getToken, clearToken } from './ui.js';
 
 const api = axios.create({ baseURL: '/api' });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -15,8 +14,8 @@ api.interceptors.response.use(
   (err) => {
     // Expired/invalid token: drop it so the user can log back in, and let the
     // AuthProvider clear the UI state.
-    if (err.response?.status === 401 && localStorage.getItem(TOKEN_KEY)) {
-      localStorage.removeItem(TOKEN_KEY);
+    if (err.response?.status === 401 && getToken()) {
+      clearToken();
       window.dispatchEvent(new CustomEvent('auth:expired'));
     }
     return Promise.reject(err);
@@ -34,7 +33,7 @@ export default api;
  * 用 AbortSignal 中止；非 2xx 抛 Error（message 为后端中文提示）。
  */
 export async function chatStream(messages, { onDelta, onFiles, signal, llm } = {}) {
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = getToken();
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: {
@@ -83,6 +82,18 @@ export async function chatStream(messages, { onDelta, onFiles, signal, llm } = {
 
 export async function login(username, password) {
   const { data } = await api.post('/auth/login', { username, password });
+  return data;
+}
+
+// 注册发码：向邮箱发送 6 位验证码（服务端有 60s 冷却与频次限额）。
+export async function requestRegisterCode(email) {
+  const { data } = await api.post('/auth/register/code', { email });
+  return data;
+}
+
+// 注册成功即自动登录：响应与 login 同构 { token, user }。
+export async function register({ username, email, password, code }) {
+  const { data } = await api.post('/auth/register', { username, email, password, code });
   return data;
 }
 

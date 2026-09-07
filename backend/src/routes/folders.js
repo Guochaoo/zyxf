@@ -2,15 +2,11 @@ import { Router } from 'express';
 import { db, transaction } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { copyOssObject, deleteOssObjectIfExists, putEmptyOssObject } from '../oss.js';
-import { nextSortOrder } from '../dbHelpers.js';
-import { objectKeyForFile, parseOptionalFolderId, placeholderKeyForFolder } from '../storagePath.js';
+import { buildFolderIndex, findSibling, folderExists, groupByKey, isUniqueError, nextSortOrder } from '../dbHelpers.js';
+import { wrapAsync, serviceError } from '../http.js';
+import { objectKeyForFileFromMap, parseOptionalFolderId, placeholderKeyForFolder, placeholderKeyForFolderFromMap } from '../storagePath.js';
 
 const router = Router();
-
-// Express 4 does NOT await/catch rejected promises returned by async handlers;
-// an unhandled rejection would terminate the process (Node ≥ 15). Wrap every
-// async handler so a rejection is forwarded to the error middleware as a 500.
-const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // Folder names are mapped to OSS object-segment keys (cleanObjectSegment);
 // a '/' or '\' would be normalized to '-' and could collide with a literal
@@ -48,15 +44,8 @@ function getFolder(id) {
 }
 
 // A folder with the same name in the same parent, optionally excluding one id.
-function findFolderInParent(name, parentId, excludeId = null) {
-  const where = parentId === null ? 'parent_id IS NULL' : 'parent_id = ?';
-  const args = parentId === null ? [] : [parentId];
-  return db
-    .prepare(
-      `SELECT id FROM folders WHERE name = ? AND ${where}${excludeId ? ' AND id != ?' : ''}`
-    )
-    .get(name, ...args, ...(excludeId ? [excludeId] : []));
-}
+const findFolderInParent = (name, parentId, excludeId = null) =>
+  findSibling(db, 'folders', { name, parentColumn: 'parent_id', parentId, excludeId });
 
 // Recursive total size of each given folder (sum of all descendant files).
 function computeFolderSizes(folderIds) {
@@ -83,15 +72,13 @@ function computeFolderSizes(folderIds) {
 // Collect every descendant folder id and its files using two flat queries
 // (BUG-06: the old version ran one query per node = N+1). Contract: returns
 // { folderIds, files } where each file row carries { id, folder_id, name, oss_key }.
+// `folderMap` (id -> { name, parent_id }) is an add-on so callers can compute
+// OSS keys from memory instead of re-querying per file/folder.
 function collectFolderTree(folderId) {
   // Query 1: all folders once, then group children by parent in memory.
-  const allFolders = db.prepare('SELECT id, parent_id FROM folders').all();
-  const childrenOf = new Map(); // parent_id -> [childId, ...]
-  for (const f of allFolders) {
-    if (f.parent_id == null) continue;
-    if (!childrenOf.has(f.parent_id)) childrenOf.set(f.parent_id, []);
-    childrenOf.get(f.parent_id).push(f.id);
-  }
+  const { folderMap, childrenOf } = buildFolderIndex(
+    db.prepare('SELECT id, name, parent_id FROM folders').all()
+  );
 
   // DFS pre-order from the root folder, preserving the original walk order.
   const folderIds = [];
@@ -104,19 +91,17 @@ function collectFolderTree(folderId) {
   }
 
   // Query 2: all files once, grouped by folder_id for O(1) lookup.
-  const filesByFolder = new Map(); // folder_id -> [fileRow, ...]
-  for (const f of db.prepare('SELECT id, folder_id, name, oss_key FROM files').all()) {
-    const key = f.folder_id ?? null;
-    if (!filesByFolder.has(key)) filesByFolder.set(key, []);
-    filesByFolder.get(key).push(f);
-  }
+  const filesByFolder = groupByKey(
+    db.prepare('SELECT id, folder_id, name, oss_key FROM files').all(),
+    (f) => f.folder_id ?? null
+  );
 
   const files = [];
   for (const fid of folderIds) {
     const list = filesByFolder.get(fid);
     if (list) files.push(...list);
   }
-  return { folderIds, files };
+  return { folderIds, files, folderMap };
 }
 
 // Run OSS object operations concurrently in small batches (each is an HTTP round trip).
@@ -131,11 +116,11 @@ async function batchOss(items, op, size = 10) {
 // objectKeyForFile / placeholderKeyForFolder how the top folder moved.
 // Returns { conflict: true } when a target OSS path is already taken.
 async function relocateFolderSubtree(folderId, { parentOverrides, nameOverrides, updateFolder }) {
-  const { folderIds, files } = collectFolderTree(folderId);
+  const { folderIds, files, folderMap } = collectFolderTree(folderId);
 
   const fileMoves = files.map((file) => ({
     ...file,
-    newKey: objectKeyForFile(db, file.folder_id, file.name, parentOverrides, nameOverrides),
+    newKey: objectKeyForFileFromMap(file.folder_id, file.name, folderMap, parentOverrides, nameOverrides),
   }));
   for (const move of fileMoves) {
     if (db.prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?').get(move.newKey, move.id)) {
@@ -145,8 +130,8 @@ async function relocateFolderSubtree(folderId, { parentOverrides, nameOverrides,
 
   const placeholderMoves = folderIds
     .map((fid) => ({
-      oldKey: placeholderKeyForFolder(db, fid),
-      newKey: placeholderKeyForFolder(db, fid, parentOverrides, nameOverrides),
+      oldKey: placeholderKeyForFolderFromMap(fid, folderMap),
+      newKey: placeholderKeyForFolderFromMap(fid, folderMap, parentOverrides, nameOverrides),
     }))
     .filter((move) => move.oldKey && move.newKey);
 
@@ -211,18 +196,8 @@ router.get('/tree', (_req, res) => {
   };
   const nodeFiles = (f) => ({ id: f.id, name: f.name, ext: f.ext, size: f.size, folder_id: f.folder_id });
 
-  const childrenOf = new Map(); // parent_id (or null) -> child folders
-  const filesOf = new Map(); // folder_id (or null) -> files
-  for (const f of folders) {
-    const key = f.parent_id ?? null;
-    if (!childrenOf.has(key)) childrenOf.set(key, []);
-    childrenOf.get(key).push(f);
-  }
-  for (const f of files) {
-    const key = f.folder_id ?? null;
-    if (!filesOf.has(key)) filesOf.set(key, []);
-    filesOf.get(key).push(f);
-  }
+  const childrenOf = groupByKey(folders, (f) => f.parent_id ?? null);
+  const filesOf = groupByKey(files, (f) => f.folder_id ?? null);
 
   const build = (parentId) => {
     const rows = (childrenOf.get(parentId) || []).slice().sort(cellCompare);
@@ -299,15 +274,14 @@ router.get('/:id/contents', (req, res) => {
 });
 
 // Create folder
-router.post('/', requireAdmin, wrap(async (req, res, next) => {
+router.post('/', requireAdmin, wrapAsync(async (req, res, next) => {
   const { name, parent_id } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: '名称不能为空' });
   const trimmed = name.trim();
   const pid = parseOptionalFolderId(parent_id);
   if (Number.isNaN(pid)) return res.status(400).json({ error: '无效的父级 ID' });
   if (pid !== null) {
-    const parent = db.prepare('SELECT id FROM folders WHERE id = ?').get(pid);
-    if (!parent) return res.status(400).json({ error: '父文件夹不存在' });
+    if (!folderExists(db, pid)) return res.status(400).json({ error: '父文件夹不存在' });
   }
   if (findFolderInParent(trimmed, pid)) {
     return res.status(409).json({ error: '同名文件夹已存在' });
@@ -330,18 +304,32 @@ router.post('/', requireAdmin, wrap(async (req, res, next) => {
     }
     res.json({ id: info.lastInsertRowid, name: trimmed, parent_id: pid });
   } catch (e) {
-    if (String(e.message).includes('UNIQUE')) {
+    if (isUniqueError(e)) {
       return res.status(409).json({ error: '同名文件夹已存在' });
     }
     return next(e);
   }
 }));
 
+// Shared call shell for folder rename/move: run relocateFolderSubtree and map
+// the "target OSS path taken" and UNIQUE-constraint outcomes to their 409s.
+// Throws through on any other error (caller's wrapAsync forwards it as 500).
+async function relocateOrConflict(id, overrides, updateFolder, uniqueMessage) {
+  try {
+    const result = await relocateFolderSubtree(id, { ...overrides, updateFolder });
+    if (result.conflict) return { error: '目标存储路径已存在同名文件' };
+    return { ok: true };
+  } catch (e) {
+    if (isUniqueError(e)) return { error: uniqueMessage };
+    throw e;
+  }
+}
+
 // Rename or move folder (parent_id = null means root)
-router.patch('/:id', requireAdmin, wrap(async (req, res, next) => {
+router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: '无效的文件夹 ID' });
-  const folder = db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
+  const folder = getFolder(id);
   if (!folder) return res.status(404).json({ error: '资源不存在' });
 
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
@@ -356,20 +344,14 @@ router.patch('/:id', requireAdmin, wrap(async (req, res, next) => {
       return res.status(409).json({ error: '同名文件夹已存在' });
     }
 
-    try {
-      const result = await relocateFolderSubtree(id, {
-        nameOverrides: new Map([[id, newName]]),
-        updateFolder: () =>
-          db.prepare('UPDATE folders SET name = ? WHERE id = ?').run(newName, id),
-      });
-      if (result.conflict) return res.status(409).json({ error: '目标存储路径已存在同名文件' });
-      return res.json({ ok: true, name: newName });
-    } catch (e) {
-      if (String(e.message).includes('UNIQUE')) {
-        return res.status(409).json({ error: '同名文件夹已存在' });
-      }
-      return next(e);
-    }
+    const outcome = await relocateOrConflict(
+      id,
+      { nameOverrides: new Map([[id, newName]]) },
+      () => db.prepare('UPDATE folders SET name = ? WHERE id = ?').run(newName, id),
+      '同名文件夹已存在'
+    );
+    if (outcome.error) return res.status(409).json({ error: outcome.error });
+    return res.json({ ok: true, name: newName });
   }
 
   const raw = req.body?.parent_id;
@@ -379,8 +361,7 @@ router.patch('/:id', requireAdmin, wrap(async (req, res, next) => {
   if (newParent === id) return res.status(400).json({ error: '不能移动到自己内部' });
 
   if (newParent !== null) {
-    const exists = db.prepare('SELECT id FROM folders WHERE id = ?').get(newParent);
-    if (!exists) return res.status(400).json({ error: '目标父文件夹不存在' });
+    if (!folderExists(db, newParent)) return res.status(400).json({ error: '目标父文件夹不存在' });
     // Walk up from newParent; if we hit id, it's a descendant => cycle.
     let cur = newParent;
     const seen = new Set();
@@ -397,23 +378,16 @@ router.patch('/:id', requireAdmin, wrap(async (req, res, next) => {
     return res.status(409).json({ error: '目标文件夹中已存在同名文件夹' });
   }
 
-  try {
-    const so = nextSortOrder(db, 'folders', 'parent_id', newParent);
-    const result = await relocateFolderSubtree(id, {
-      parentOverrides: new Map([[id, newParent]]),
-      updateFolder: () =>
-        db
-          .prepare('UPDATE folders SET parent_id = ?, sort_order = ? WHERE id = ?')
-          .run(newParent, so, id),
-    });
-    if (result.conflict) return res.status(409).json({ error: '目标存储路径已存在同名文件' });
-    res.json({ ok: true });
-  } catch (e) {
-    if (String(e.message).includes('UNIQUE')) {
-      return res.status(409).json({ error: '目标位置已存在同名文件夹' });
-    }
-    return next(e);
-  }
+  const so = nextSortOrder(db, 'folders', 'parent_id', newParent);
+  const outcome = await relocateOrConflict(
+    id,
+    { parentOverrides: new Map([[id, newParent]]) },
+    () =>
+      db.prepare('UPDATE folders SET parent_id = ?, sort_order = ? WHERE id = ?').run(newParent, so, id),
+    '目标位置已存在同名文件夹'
+  );
+  if (outcome.error) return res.status(409).json({ error: outcome.error });
+  res.json({ ok: true });
 }));
 
 // Reorder items (folders + files) inside the same parent.
@@ -456,14 +430,14 @@ router.post('/reorder', requireAdmin, (req, res) => {
 });
 
 // Delete folder (cascade)
-router.delete('/:id', requireAdmin, wrap(async (req, res) => {
+router.delete('/:id', requireAdmin, wrapAsync(async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ error: '无效的 ID' });
   // Gather all descendant keys to clean up OSS objects.
-  const { folderIds, files } = collectFolderTree(id);
+  const { folderIds, files, folderMap } = collectFolderTree(id);
   const keys = files.map((f) => f.oss_key);
   for (const fid of folderIds) {
-    const placeholder = placeholderKeyForFolder(db, fid);
+    const placeholder = placeholderKeyForFolderFromMap(fid, folderMap);
     if (placeholder) keys.push(placeholder);
   }
 
@@ -471,8 +445,7 @@ router.delete('/:id', requireAdmin, wrap(async (req, res) => {
   try {
     await batchOss(keys, (k) => deleteOssObjectIfExists(k));
   } catch (e) {
-    console.warn('OSS 删除失败', e.message);
-    return res.status(502).json({ error: 'OSS 删除失败' });
+    return serviceError(res, e, 'OSS 删除失败');
   }
 
   db.prepare('DELETE FROM folders WHERE id = ?').run(id);

@@ -4,8 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { Download, Loader2, Search, X } from 'lucide-react';
 import { BsFolder } from 'react-icons/bs';
 import { getFileUrl, search as searchApi } from '../api.js';
-import { downloadFileById } from '../utils.js';
+import { downloadAndAlert } from '../utils.js';
 import FileIcon from './FileIcon.jsx';
+import { openFolderOrFile } from '../ui.js';
+import { useClickOutside } from '../hooks/useClickOutside.js';
 
 export default function SearchBar({ className = '' }) {
   const [q, setQ] = useState('');
@@ -93,33 +95,13 @@ export default function SearchBar({ className = '' }) {
     };
   }, [open]);
 
-  useEffect(() => {
-    const onClick = (e) => {
-      if (
-        wrapRef.current &&
-        !wrapRef.current.contains(e.target) &&
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target)
-      ) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, []);
+  useClickOutside(true, () => setOpen(false), wrapRef, dropdownRef);
 
   const handleResult = (item) => {
     setOpen(false);
     setQ('');
     setResults(null);
-    if (item.type === 'folder') {
-      navigate(`/folder/${item.id}`);
-    } else {
-      const targetPath = item.folder_id ? `/folder/${item.folder_id}` : '/';
-      navigate(targetPath, {
-        state: { previewFile: item },
-      });
-    }
+    openFolderOrFile(item, navigate);
   };
 
   const total = results ? (results.folders?.length || 0) + (results.files?.length || 0) : 0;
@@ -127,11 +109,7 @@ export default function SearchBar({ className = '' }) {
   const handleDownload = async (e, file) => {
     e.preventDefault();
     e.stopPropagation();
-    try {
-      await downloadFileById(file, getFileUrl);
-    } catch (err) {
-      alert(err.message || '下载失败');
-    }
+    await downloadAndAlert(file, getFileUrl);
   };
 
   return (

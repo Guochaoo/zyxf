@@ -1,7 +1,9 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { Link } from 'react-router-dom';
-import { CircleUserRound, LogIn, LogOut } from 'lucide-react';
+import { CircleUserRound, ChevronsUpDown, LogIn, LogOut, Settings } from 'lucide-react';
+import { EASE_COLLAPSE } from './ui.js';
+import { useClickOutside } from '../hooks/useClickOutside.js';
 import './StaggeredMenu.css';
 
 // Query the animated panel content and reset it to its pre-open state
@@ -66,6 +68,9 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   const iconRef = useRef(null);
   const textInnerRef = useRef(null);
   const [textLines, setTextLines] = useState(['菜单', '关闭']);
+  // 账号卡片的用户菜单（登录/退出/设置）展开状态；点击卡片外空白处收起。
+  const [acctOpen, setAcctOpen] = useState(false);
+  const acctRef = useRef(null);
 
   const openTlRef = useRef(null);
   const closeTweenRef = useRef(null);
@@ -319,53 +324,52 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     });
   }, []);
 
+  // 主菜单开/关共用的动画编排：面板滑动 + 图标/配色/文字三联动。
+  const animateTo = useCallback(
+    (target) => {
+      if (target) {
+        playOpen();
+      } else {
+        playClose();
+      }
+      animateIcon(target);
+      animateColor(target);
+      animateText(target);
+    },
+    [playOpen, playClose, animateIcon, animateColor, animateText]
+  );
+
   const toggleMenu = useCallback(() => {
     const target = !openRef.current;
     openRef.current = target;
     setOpen(target);
     if (target) {
       onMenuOpen?.();
-      playOpen();
     } else {
       onMenuClose?.();
-      playClose();
     }
-    animateIcon(target);
-    animateColor(target);
-    animateText(target);
-  }, [playOpen, playClose, animateIcon, animateColor, animateText, onMenuOpen, onMenuClose]);
+    animateTo(target);
+  }, [animateTo, onMenuOpen, onMenuClose]);
 
   const closeMenu = useCallback(() => {
     if (openRef.current) {
       openRef.current = false;
       setOpen(false);
       onMenuClose?.();
-      playClose();
-      animateIcon(false);
-      animateColor(false);
-      animateText(false);
+      animateTo(false);
     }
-  }, [playClose, animateIcon, animateColor, animateText, onMenuClose]);
+  }, [animateTo, onMenuClose]);
 
-  useEffect(() => {
-    if (!closeOnClickAway || !open) return;
+  // 账号菜单项点击的统一编排：先收起弹出层，再执行动作，最后关主菜单。
+  const handleAccountAction = (action) => {
+    setAcctOpen(false);
+    action?.();
+    closeMenu();
+  };
 
-    const handleClickOutside = event => {
-      if (
-        panelRef.current &&
-        !panelRef.current.contains(event.target) &&
-        toggleBtnRef.current &&
-        !toggleBtnRef.current.contains(event.target)
-      ) {
-        closeMenu();
-      }
-    };
+  useClickOutside(acctOpen, () => setAcctOpen(false), acctRef);
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [closeOnClickAway, open, closeMenu]);
+  useClickOutside(closeOnClickAway && open, closeMenu, panelRef, toggleBtnRef);
 
   useImperativeHandle(
     ref,
@@ -482,33 +486,65 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
                     <span className="sm-account-sub">{account.subtitle}</span>
                   )}
                 </span>
-                {account.guest ? (
+                <span className="sm-account-menu" ref={acctRef}>
+                  {acctOpen && (
+                    <div className="sm-account-pop" role="menu" aria-label="账户操作">
+                      <div className="sm-account-pop-list">
+                        {account.guest ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="sm-account-pop-item"
+                            onClick={() => handleAccountAction(account.onLogin)}
+                          >
+                            <LogIn size={17} strokeWidth={1.8} aria-hidden="true" />
+                            <span>登录</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="sm-account-pop-item sm-account-pop-item--danger"
+                            onClick={() => handleAccountAction(account.onLogout)}
+                          >
+                            <LogOut size={17} strokeWidth={1.8} aria-hidden="true" />
+                            <span>退出登录</span>
+                          </button>
+                        )}
+                      </div>
+                      <div className="sm-account-pop-sep" />
+                      <div className="sm-account-pop-list">
+                        {/* 预留：设置入口，后续接入设置面板 */}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="sm-account-pop-item"
+                          onClick={() => setAcctOpen(false)}
+                        >
+                          <Settings size={17} strokeWidth={1.8} aria-hidden="true" />
+                          <span>设置</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <button
                     type="button"
                     className="sm-account-gear"
-                    aria-label="登录"
-                    title="登录"
-                    onClick={() => {
-                      account.onLogin?.();
-                      closeMenu();
-                    }}
+                    aria-label={acctOpen ? '收起账户菜单' : '展开账户菜单'}
+                    aria-expanded={acctOpen}
+                    onClick={() => setAcctOpen((v) => !v)}
                   >
-                    <LogIn size={18} strokeWidth={1.6} aria-hidden="true" />
+                    <ChevronsUpDown
+                      size={18}
+                      strokeWidth={1.6}
+                      aria-hidden="true"
+                      style={{
+                        transform: acctOpen ? 'rotate(180deg)' : 'none',
+                        transition: `transform 240ms ${EASE_COLLAPSE}`,
+                      }}
+                    />
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="sm-account-gear"
-                    aria-label="退出登录"
-                    title="退出登录"
-                    onClick={() => {
-                      account.onLogout?.();
-                      closeMenu();
-                    }}
-                  >
-                    <LogOut size={18} strokeWidth={1.6} aria-hidden="true" />
-                  </button>
-                )}
+                </span>
               </div>
             )}
           </div>

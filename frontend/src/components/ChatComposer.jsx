@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { ArrowUp, ArrowUpRight, ChevronDown, ChevronUp, Settings, Square, Trash2 } from 'lucide-react';
+import { ArrowUp, ArrowUpRight, Settings, Square, Trash2 } from 'lucide-react';
 import { chatStream } from '../api.js';
+import { EASE_COLLAPSE, ICON_BUTTON_CLASS } from './ui.js';
+import PanelHeader from './PanelHeader.jsx';
+import { openFolderOrFile, storageGet, storageSet, storageRemove } from '../ui.js';
+import { useClickOutside } from '../hooks/useClickOutside.js';
 
 /* ─────────────────────────────────────────────────────────
  * CHAT — interactive panel with a header, replies, and composer.
@@ -25,23 +29,21 @@ const fmtTime = () => {
 };
 
 const loadLlmCfg = () => {
+  let raw = null;
   try {
-    const raw = JSON.parse(localStorage.getItem(LLM_KEY) || 'null');
-    if (raw && typeof raw === 'object') {
-      return {
-        apiKey: typeof raw.apiKey === 'string' ? raw.apiKey : '',
-        baseUrl: typeof raw.baseUrl === 'string' ? raw.baseUrl : '',
-        model: typeof raw.model === 'string' ? raw.model : '',
-      };
-    }
+    raw = JSON.parse(storageGet(LLM_KEY) ?? 'null');
   } catch {
-    /* fallthrough */
+    /* 存储值损坏时按未配置处理 */
+  }
+  if (raw && typeof raw === 'object') {
+    return {
+      apiKey: typeof raw.apiKey === 'string' ? raw.apiKey : '',
+      baseUrl: typeof raw.baseUrl === 'string' ? raw.baseUrl : '',
+      model: typeof raw.model === 'string' ? raw.model : '',
+    };
   }
   return { apiKey: '', baseUrl: '', model: '' };
 };
-
-const HEADER_BTN_CLASS =
-  'flex size-6 items-center justify-center rounded-[6px] text-ink-3 transition-colors duration-100 hover:bg-hover hover:text-ink-2 disabled:opacity-40 disabled:hover:bg-transparent';
 
 // 像素网格波浪（Drive 变体）：3×3 格子按斜向相位依次点亮
 const CHEVRON = Array.from({ length: 9 }, (_, i) => {
@@ -112,14 +114,7 @@ const DEFAULT_TONE = 'bg-brand-500';
 function FileChip({ item }) {
   const navigate = useNavigate();
 
-  const open = () => {
-    if (item.type === 'folder') {
-      navigate(`/folder/${item.id}`);
-    } else {
-      const targetPath = item.folder_id ? `/folder/${item.folder_id}` : '/';
-      navigate(targetPath, { state: { previewFile: item } });
-    }
-  };
+  const open = () => openFolderOrFile(item, navigate);
 
   const badge = item.type === 'folder' ? 'DIR' : (item.ext || '').toUpperCase().slice(0, 4);
   const tone =
@@ -162,6 +157,8 @@ export default function ChatComposer() {
   const bodyRef = useRef(null);
   const snapTimer = useRef(null);
   const snapSeq = useRef(0);
+  const settingsRef = useRef(null);
+  const settingsBtnRef = useRef(null);
   // 最近一次收起时的完整高度（px 数值）：展开动画的目标值——卡片本体跟着容器
   // 一起长高（而不是瞬间弹到全高再揭示内容），结束后无缝交还给 flex 布局。
   const fullHRef = useRef(null);
@@ -172,6 +169,9 @@ export default function ChatComposer() {
   }, [messages]);
 
   useEffect(() => () => clearTimeout(snapTimer.current), []);
+
+  // 设置浮层打开时，点击浮层与设置按钮之外的空白处收起。
+  useClickOutside(settingsOpen, () => setSettingsOpen(false), settingsRef, settingsBtnRef);
 
   // 动画结束（360ms 过渡 + 余量）后回到自然布局（高度交还给 flex）
   const endSnap = () => {
@@ -300,7 +300,7 @@ export default function ChatComposer() {
       model: cfgDraft.model.trim(),
     };
     setLlmCfg(next);
-    localStorage.setItem(LLM_KEY, JSON.stringify(next));
+    storageSet(LLM_KEY, JSON.stringify(next));
     setSettingsOpen(false);
   };
 
@@ -308,82 +308,65 @@ export default function ChatComposer() {
     const empty = { apiKey: '', baseUrl: '', model: '' };
     setLlmCfg(empty);
     setCfgDraft(empty);
-    localStorage.removeItem(LLM_KEY);
+    storageRemove(LLM_KEY);
   };
 
   const canSend = draft.trim().length > 0 && !busy;
 
   return (
     <div
-      className={`flex w-full flex-col overflow-hidden rounded-[14px] bg-white ${
+      className={`relative flex w-full flex-col overflow-hidden rounded-[14px] bg-white ${
         collapsed || snapping ? '' : 'min-h-[288px] max-w-95 flex-1'
       }`}
     >
       {/* header — 智能对话标签 + 清空会话 + 设置 + 收起（样式对齐知识图谱卡片头部） */}
-      <div className="flex shrink-0 items-center justify-between gap-1 bg-[#EFEFEF] p-1.5">
-        <span className="shrink-0 px-2 py-[3px] text-[13px] font-medium text-ink">
-          智能对话
-        </span>
-        <div className="flex shrink-0 items-center gap-1">
-          {!collapsed && (
-            <>
-              <button
-                type="button"
-                aria-label="清空会话历史"
-                title="清空会话历史"
-                disabled={busy || messages.length === 0}
-                onClick={() => setMessages([])}
-                className={HEADER_BTN_CLASS}
-              >
-                <Trash2 className="h-[15px] w-[15px]" />
-              </button>
-              <button
-                type="button"
-                aria-label="AI 设置"
-                title="AI 设置（API Key / 地址 / 模型）"
-                aria-expanded={settingsOpen}
-                onClick={openSettings}
-                className={HEADER_BTN_CLASS}
-              >
-                <Settings className="h-[15px] w-[15px]" />
-              </button>
-            </>
-          )}
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            title={collapsed ? '展开对话' : '收起对话'}
-            aria-label={collapsed ? '展开对话' : '收起对话'}
-            aria-expanded={!collapsed}
-            className={HEADER_BTN_CLASS}
-          >
-            {collapsed ? (
-              <ChevronDown className="h-[15px] w-[15px]" />
-            ) : (
-              <ChevronUp className="h-[15px] w-[15px]" />
-            )}
-          </button>
-        </div>
-      </div>
+      <PanelHeader
+        title="智能对话"
+        collapsed={collapsed}
+        onToggleCollapsed={toggleCollapsed}
+        expandTitle="展开对话"
+        collapseTitle="收起对话"
+      >
+        <button
+          type="button"
+          aria-label="清空会话历史"
+          title="清空会话历史"
+          disabled={busy || messages.length === 0}
+          onClick={() => setMessages([])}
+          className={ICON_BUTTON_CLASS}
+        >
+          <Trash2 className="h-[15px] w-[15px]" />
+        </button>
+        <button
+          type="button"
+          ref={settingsBtnRef}
+          aria-label="AI 设置"
+          title="AI 设置（API Key / 地址 / 模型）"
+          aria-expanded={settingsOpen}
+          onClick={openSettings}
+          className={ICON_BUTTON_CLASS}
+        >
+          <Settings className="h-[15px] w-[15px]" />
+        </button>
+      </PanelHeader>
 
-      {/* 主体：height 像素过渡收起/展开；动画期间锁定高度、隐藏列表滚动条 */}
+      {/* 设置浮层：客户端 LLM 配置（留空项回退服务器 env 配置）。
+          悬浮在对话区上方（不挤占布局），常驻挂载以保留淡入/淡出过渡；
+          点击浮层与设置按钮之外的空白处收起；visibility 随过渡翻转，
+          收起后表单不可聚焦。 */}
       <div
-        ref={bodyRef}
-        className={`min-h-0 shrink overflow-hidden transition-[height] duration-[360ms] ${
-          snapH == null ? 'grow' : ''
-        }`}
+        ref={settingsRef}
+        className="absolute inset-x-2 top-[40px] z-10 max-h-[calc(100%-52px)] overflow-y-auto rounded-[10px] bg-white p-2.5 shadow-[0_4px_10px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.12)]"
         style={{
-          height: snapH ?? (collapsed ? '0px' : undefined),
-          transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          visibility: settingsOpen ? 'visible' : 'hidden',
+          opacity: settingsOpen ? 1 : 0,
+          transform: settingsOpen ? 'translateY(0)' : 'translateY(-4px)',
+          transitionProperty: 'visibility, opacity, transform',
+          transitionDuration: '240ms',
+          transitionTimingFunction: EASE_COLLAPSE,
         }}
       >
-        <div
-          className={`flex min-h-0 flex-col overflow-hidden ${snapping ? '' : 'h-full'}`}
-          style={{ height: snapping ? innerH : undefined }}
-        >
-      {/* 设置面板：客户端 LLM 配置（留空项回退服务器 env 配置） */}
-      {settingsOpen && (
-        <div className="flex shrink-0 flex-col gap-1.5 border-b border-line p-2.5">
+        <div className="flex flex-col gap-1.5">
           {[
             { key: 'apiKey', label: 'API Key', placeholder: 'sk-…', type: 'password' },
             { key: 'baseUrl', label: 'API 地址', placeholder: 'https://open.bigmodel.cn/api/paas/v4', type: 'text' },
@@ -409,7 +392,7 @@ export default function ChatComposer() {
               onClick={clearSettings}
               className="rounded-[6px] px-2 py-[3px] text-[12px] text-ink-2 transition-colors duration-100 hover:bg-hover hover:text-ink"
             >
-              清除本机配置
+              恢复默认设置
             </button>
             <button
               type="button"
@@ -420,7 +403,23 @@ export default function ChatComposer() {
             </button>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* 主体：height 像素过渡收起/展开；动画期间锁定高度、隐藏列表滚动条 */}
+      <div
+        ref={bodyRef}
+        className={`min-h-0 shrink overflow-hidden transition-[height] duration-[360ms] ${
+          snapH == null ? 'grow' : ''
+        }`}
+        style={{
+          height: snapH ?? (collapsed ? '0px' : undefined),
+          transitionTimingFunction: EASE_COLLAPSE,
+        }}
+      >
+        <div
+          className={`flex min-h-0 flex-col overflow-hidden ${snapping ? '' : 'h-full'}`}
+          style={{ height: snapping ? innerH : undefined }}
+        >
 
       {/* conversation — fixed region so the card never changes shape */}
       <div
