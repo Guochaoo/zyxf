@@ -101,7 +101,7 @@ describe('DashboardPage', () => {
     renderApp();
     await waitFor(() => {
       expect(screen.getByText('今日下载')).toBeInTheDocument();
-      expect(screen.getByText('文件类型分布')).toBeInTheDocument();
+      expect(screen.getByText('类型分布')).toBeInTheDocument();
       // the removed compare card's series headers must not leak back
       expect(screen.queryByText('7日 2 次')).not.toBeInTheDocument();
       expect(screen.queryByText('7日 850 个')).not.toBeInTheDocument();

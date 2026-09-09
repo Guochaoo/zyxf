@@ -34,7 +34,7 @@ body,
 #root {
   height: 100%;
   background: var(--page) !important;
-  color: #171717;
+  color: var(--ink);
 }
 
 body,
@@ -68,13 +68,13 @@ textarea:focus-visible {
 }
 
 ::placeholder {
-  color: rgba(23, 23, 23, 0.4) !important;
+  color: var(--ink-3) !important;
 }
 
 /* ---- DESIGN.md §3: Typography ---- */
 .app-theme {
   min-height: 100%;
-  color: #171717;
+  color: var(--ink);
   font-weight: 400;
   letter-spacing: 0;
 }
@@ -111,8 +111,8 @@ textarea:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  background: #171717;
-  color: #ffffff !important;
+  background: var(--ink);
+  color: var(--page) !important;
   border: 0;
   border-radius: 14px;
   padding: 8px 16px;
@@ -125,7 +125,7 @@ textarea:focus-visible {
 }
 
 .rb-btn-dark:hover {
-  background: #000000;
+  background: var(--ink-2);
 }
 
 .rb-btn-dark:disabled {
@@ -139,8 +139,8 @@ textarea:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  background: #ffffff;
-  color: #171717 !important;
+  background: var(--surface);
+  color: var(--ink) !important;
   border: 0;
   border-radius: 6px;
   padding: 8px 16px;
@@ -172,8 +172,8 @@ textarea:focus-visible {
   gap: 0.35rem;
   height: 34px;
   padding: 0 12px;
-  background: #ffffff;
-  color: rgba(23, 23, 23, 0.75);
+  background: var(--surface);
+  color: var(--ink-2);
   border: 0;
   border-radius: 14px;
   font-size: 13px;
@@ -200,7 +200,7 @@ textarea:focus-visible {
 
 /* ---- Brand bar / topbar ---- */
 .app-theme .rb-brand-title {
-  color: #171717 !important;
+  color: var(--ink) !important;
   font-size: 17px;
   font-weight: 500;
   line-height: 1;
@@ -210,7 +210,7 @@ textarea:focus-visible {
 /* ---- DESIGN.md §4: Search input（无界：白底胶囊，无描边，聚焦仅轻投影） ---- */
 .app-theme .rb-search-pill {
   width: 100%;
-  background: #ffffff;
+  background: var(--surface);
   border-radius: 14px;
   transition: box-shadow 160ms ease;
 }
@@ -237,24 +237,24 @@ textarea:focus-visible {
 /* Search dropdown — white surface with card shadow stack */
 .rb-search-dropdown {
   border-radius: 12px;
-  background: #ffffff;
+  background: var(--surface);
   box-shadow:
-    rgba(0, 0, 0, 0.08) 0px 0px 0px 1px,
+    var(--line-strong) 0px 0px 0px 1px,
     rgba(0, 0, 0, 0.04) 0px 2px 2px,
     rgba(0, 0, 0, 0.04) 0px 8px 8px -8px,
-    #fafafa 0px 0px 0px 1px;
+    var(--surface) 0px 0px 0px 1px;
 }
 
 .rb-search-dropdown,
 .rb-search-dropdown * {
-  color: #171717;
+  color: var(--ink);
 }
 
 /* ---- DESIGN.md §4: Primary CTAs are Vercel Black #171717 ---- */
 .app-theme .bg-brand-600,
 .app-theme .bg-brand-500 {
-  background: #171717 !important;
-  color: #ffffff !important;
+  background: var(--ink) !important;
+  color: var(--page) !important;
 }
 
 /* ---- Icons: pure black on light surfaces ----
@@ -262,7 +262,7 @@ textarea:focus-visible {
    rule makes them #000 on white. Dark surfaces (dark panels, dark CTAs, white
    text contexts) restore the inherited (light) color. */
 .app-theme svg {
-  color: #000000;
+  color: var(--ink);
 }
 
 /* Dark panels (e.g. login brand panel). The Silk WebGL animation paints the
@@ -275,17 +275,17 @@ textarea:focus-visible {
 }
 
 .app-theme .hover\:bg-brand-700:hover {
-  background: #000000 !important;
-  color: #ffffff !important;
+  background: var(--ink-2) !important;
+  color: var(--page) !important;
 }
 
 .app-theme .rename-dialog-save {
-  background: #171717 !important;
-  color: #ffffff !important;
+  background: var(--ink) !important;
+  color: var(--page) !important;
 }
 
 .app-theme .sort-option--active {
-  color: #171717 !important;
+  color: var(--ink) !important;
 }
 
 /* ---- AI 生成中 loading（像素网格 + 微光文字） ---- */
@@ -416,10 +416,10 @@ textarea:focus-visible {
 .app-theme input,
 .app-theme textarea,
 .app-theme select {
-  background: #ffffff !important;
+  background: var(--surface) !important;
   border: 0 !important;
-  color: #171717 !important;
-  box-shadow: rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;
+  color: var(--ink) !important;
+  box-shadow: var(--line-strong) 0px 0px 0px 1px;
   border-radius: 6px;
 }
 
@@ -428,18 +428,24 @@ textarea:focus-visible {
 .app-theme select:focus {
   border: 0 !important;
   box-shadow:
-    rgba(0, 0, 0, 0.08) 0px 0px 0px 1px,
+    var(--line-strong) 0px 0px 0px 1px,
     hsla(212, 100%, 48%, 0.25) 0px 0px 0px 3px;
   outline: none;
 }
 
-/* 登录页输入框：贯彻无边理念——灰底、无边框细线，聚焦同样不加任何效果 */
+/* 登录页输入框：贯彻无边理念——灰底、无边框细线，聚焦同样不加任何效果。
+   登录页右栏固定白底深字（见 AuthPage），输入框同样固定浅色，不随暗色主题。 */
 .app-theme .rb-auth-input,
 .app-theme .rb-auth-input:focus {
   background: #f5f5f5 !important;
+  color: #171717 !important;
   box-shadow: none !important;
   border: 0 !important;
   outline: none;
+}
+
+.app-theme .rb-auth-input::placeholder {
+  color: rgba(23, 23, 23, 0.4) !important;
 }
 
 /* ChatComposer prompt — transparent and borderless inside its bg-field
@@ -465,7 +471,7 @@ textarea:focus-visible {
 /* ---- Misc neutral helpers ---- */
 .app-theme .rb-table-heading,
 .app-theme .rb-table-heading * {
-  color: #171717 !important;
+  color: var(--ink) !important;
 }
 
 /* Hide the sort control's horizontal scrollbar while keeping it scrollable
@@ -503,7 +509,7 @@ textarea:focus-visible {
 }
 .rb-side-scroll.is-scrolling,
 .rb-side-scroll:hover {
-  scrollbar-color: rgba(23, 23, 23, 0.28) transparent;
+  scrollbar-color: var(--line-strong) transparent;
   transition-delay: 0s;
 }
 .rb-side-scroll::-webkit-scrollbar {
@@ -521,11 +527,11 @@ textarea:focus-visible {
 }
 .rb-side-scroll.is-scrolling::-webkit-scrollbar-thumb,
 .rb-side-scroll:hover::-webkit-scrollbar-thumb {
-  background: rgba(23, 23, 23, 0.22);
+  background: var(--line-strong);
   transition-delay: 0s;
 }
 .rb-side-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(23, 23, 23, 0.38);
+  background: var(--ink-3);
   background-clip: padding-box;
 }
 
@@ -534,10 +540,10 @@ input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
 input:-webkit-autofill:active {
-  -webkit-text-fill-color: #171717 !important;
-  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
-  box-shadow: 0 0 0 1000px #ffffff inset !important;
-  caret-color: #171717 !important;
+  -webkit-text-fill-color: var(--ink) !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--surface) inset !important;
+  box-shadow: 0 0 0 1000px var(--surface) inset !important;
+  caret-color: var(--ink) !important;
   transition: background-color 9999s ease-in-out 0s !important;
 }
 
@@ -565,6 +571,7 @@ input:-webkit-autofill:active {
   --page: #f8f8f8;
   --surface: #ffffff;
   --inset: #f7f8f9;
+  --app-sidebar: #ececee;
   --field: #efefef;
   --hover: rgba(23, 23, 23, 0.05);
   --line: rgba(23, 23, 23, 0.08);
@@ -573,6 +580,26 @@ input:-webkit-autofill:active {
   --orange: #f68f3c;
   --red: #ee5c61;
   --green: #3fae6b;
+  /* 知识图谱标签描边：亮色白衬边，暗色透明（纯白字无描边）。 */
+  --kg-label-stroke: #ffffff;
+}
+
+/* 暗色主题 token（useTheme 给 <html> 设 data-theme='dark' 时生效）。
+   核心 token 反转，Tailwind 的 bg-page/text-ink/bg-surface/border-line 等
+   及所有用 var(--*) 的组件自动跟随；语义色（accent/orange/red/green）保留。 */
+[data-theme='dark'] {
+  --ink: #ededed;
+  --ink-2: rgba(237, 237, 237, 0.65);
+  --ink-3: rgba(237, 237, 237, 0.45);
+  --page: #161616;
+  --surface: #1e1e1e;
+  --inset: #222222;
+  --app-sidebar: #1a1a1a;
+  --field: #282828;
+  --hover: rgba(255, 255, 255, 0.06);
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --kg-label-stroke: transparent;
 }
 
 /* Chart stage + pointer-driven hover affordances (mirrors the InsightCards
@@ -681,4 +708,10 @@ input[type='password']::-ms-clear {
   background: rgba(255, 255, 255, 0.46);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
+}
+
+/* 暗色（手动或跟随系统）下遮罩加深，与菜单/弹窗的暗色背景协调。
+   统一在此处理，避免各组件重复写 prefers-color-scheme 或 data-theme 覆盖。 */
+[data-theme='dark'] .rb-frost-backdrop {
+  background: rgba(0, 0, 0, 0.46);
 }

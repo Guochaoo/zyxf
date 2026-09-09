@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Download } from 'lucide-react';
 
 /**
@@ -7,23 +8,24 @@ import { Download } from 'lucide-react';
  * overlay) only the notice is shown — the overlay's own download button works.
  */
 export default function PreviewUnavailable({ onDownload }) {
+  const { t } = useTranslation();
   return (
-    <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-3 p-8">
+    <div className="h-full flex flex-col items-center justify-center text-ink-2 gap-3 p-8">
       <div className="text-3xl">⚠️</div>
-      <div className="text-sm text-center text-slate-600">预览服务出错，暂时无法在线预览</div>
+      <div className="text-sm text-center text-ink-2">{t('preview.unavailable')}</div>
       {onDownload ? (
         <>
-          <div className="text-xs text-slate-400 text-center">请点击下方按钮直接下载文件查看</div>
+          <div className="text-xs text-ink-3 text-center">{t('preview.downloadDirect')}</div>
           <button
             onClick={onDownload}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors"
           >
             <Download className="w-4 h-4" />
-            下载文件
+            {t('preview.downloadFile')}
           </button>
         </>
       ) : (
-        <div className="text-xs text-slate-400 text-center">请点击右上角下载按钮保存文件</div>
+        <div className="text-xs text-ink-3 text-center">{t('preview.downloadTop')}</div>
       )}
     </div>
   );

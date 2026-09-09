@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
 import { refreshWebofficeToken } from '../../api.js';
 import PreviewUnavailable from './PreviewUnavailable.jsx';
@@ -43,6 +44,7 @@ function loadSdk() {
 }
 
 export default function OfficeViewer({ wbToken, fileId, name }) {
+  const { t } = useTranslation();
   const mountRef = useRef(null);
   const instanceRef = useRef(null);
   const tokenRef = useRef(null);
@@ -116,11 +118,11 @@ export default function OfficeViewer({ wbToken, fileId, name }) {
   }
 
   return (
-    <div className="relative h-full min-h-0 bg-white">
+    <div className="relative h-full min-h-0 bg-surface">
       {state === 'loading' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-white z-10 gap-3">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface z-10 gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
-          <div className="text-xs text-slate-400">文档加载中，首次加载可能需要较长时间…</div>
+          <div className="text-xs text-ink-3">{t('preview.officeLoading')}</div>
         </div>
       )}
       <div ref={mountRef} className="absolute inset-0 z-0" aria-label={name} />

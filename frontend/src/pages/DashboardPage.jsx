@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { getStats, getHeatmap } from '../api.js';
 import { errMsg, formatSize, timeAgo } from '../utils.js';
 import { folderTarget } from '../ui.js';
@@ -75,8 +76,6 @@ const HEAT_GAP = 5; // px between cells and label rows
 const heatLevel = (v, max) =>
   v <= 0 || max <= 0 ? 0 : Math.min(4, Math.ceil(Math.sqrt(v / max) * 4));
 
-const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
-
 const fmtFullDate = (ts) => {
   const d = new Date(ts);
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
@@ -111,6 +110,10 @@ function ActivityHeatmap({ rows }) {
   const scrollRef = useRef(null);
   const [hover, setHover] = useState(null);
   const [box, setBox] = useState(null); // measured grid viewport { w, h }
+  const { t } = useTranslation();
+  // dictionary weekdays is Sunday-first; rendered per row index (grid is built
+  // Monday-first in buildWeeks, so labels may not align perfectly)
+  const weekdays = useMemo(() => t('dashboard.weekdays', { returnObjects: true }), [t]);
 
   const { weeks, months, max } = useMemo(
     () => (rows?.length ? buildWeeks(rows) : { weeks: [], months: [], max: 0 }),
@@ -197,16 +200,15 @@ function ActivityHeatmap({ rows }) {
           <IconBadge className="bg-accent">
             <ArrowDown className="size-2" strokeWidth={3} />
           </IconBadge>
-          下载热力图
+          {t('dashboard.downloadHeatmap')}
         </span>
         <span className="flex shrink-0 items-center gap-1 text-[10px] text-ink-3">
-          少
+          {t('dashboard.heatmapLegendLow')}
           {HEAT_LEVELS.map((c) => (
             <span key={c} className="size-[9px] rounded-[2px]" style={{ background: c }} />
           ))}
-          多
-        </span>
-      </div>
+          {t('dashboard.heatmapLegendHigh')}
+        </span>      </div>
       {weeks.length ? (
         <div
           ref={scrollRef}
@@ -223,13 +225,13 @@ function ActivityHeatmap({ rows }) {
                   style={{ width: cell }}
                   className="whitespace-nowrap text-[10px] leading-none text-ink-3"
                 >
-                  {m != null ? `${m + 1}月` : ''}
+                  {m != null ? t('dashboard.monthLabel', { count: m + 1 }) : ''}
                 </span>
               ))}
             </div>
             <div className="flex" style={{ gap: HEAT_GAP }}>
               <div className="mr-1 flex flex-col" style={{ gap: HEAT_GAP }}>
-                {WEEKDAYS.map((name, i) => (
+                {weekdays.map((name, i) => (
                   <span
                     key={name}
                     style={{ height: cell, lineHeight: `${cell}px` }}
@@ -237,8 +239,7 @@ function ActivityHeatmap({ rows }) {
                   >
                     {i % 2 === 0 ? name : ''}
                   </span>
-                ))}
-              </div>
+                ))}              </div>
               {visWeeks.map((week, w) => (
                 <div key={w} className="flex flex-col" style={{ gap: HEAT_GAP }}>
                   {week.map((day) =>
@@ -268,7 +269,7 @@ function ActivityHeatmap({ rows }) {
                 <ChartTooltip
                   time={fmtFullDate(hover.cell.ts)}
                   rows={[
-                    { label: '下载', value: String(hover.cell.downloads), color: ACCENT },
+                    { label: t('dashboard.download'), value: String(hover.cell.downloads), color: ACCENT },
                   ]}
                 />
               </div>
@@ -277,7 +278,7 @@ function ActivityHeatmap({ rows }) {
         </div>
       ) : (
         <div className="py-16 text-center text-[12px] text-ink-3">
-          {rows ? '近一年暂无活动' : '加载中…'}
+          {rows ? t('dashboard.noData') : t('common.loading')}
         </div>
       )}
     </div>
@@ -287,7 +288,8 @@ function ActivityHeatmap({ rows }) {
 /* ---- List cards (top downloads / recent uploads / top folders) ---- */
 
 function TopDownloads({ items }) {
-  if (!items?.length) return <Empty>近期暂无下载记录</Empty>;
+  const { t } = useTranslation();
+  if (!items?.length) return <Empty>{t('dashboard.noData')}</Empty>;
   const max = items[0].count || 1;
   return (
     <ol className="mt-3 space-y-0.5">
@@ -321,7 +323,8 @@ function TopDownloads({ items }) {
 }
 
 function RecentUploads({ items }) {
-  if (!items?.length) return <Empty>暂无上传</Empty>;
+  const { t } = useTranslation();
+  if (!items?.length) return <Empty>{t('dashboard.noData')}</Empty>;
   return (
     <ul className="mt-3 grow space-y-0.5">
       {items.map((f) => (
@@ -346,7 +349,8 @@ function RecentUploads({ items }) {
 }
 
 function TopFolders({ items }) {
-  if (!items?.length) return <Empty>暂无目录</Empty>;
+  const { t } = useTranslation();
+  if (!items?.length) return <Empty>{t('dashboard.noData')}</Empty>;
   const max = items[0].size || 1;
   return (
     <ul className="mt-3 grow space-y-2.5">
@@ -362,7 +366,7 @@ function TopFolders({ items }) {
             </Link>
             <span className="tabular-nums text-ink-2">
               {formatSize(f.size)}
-              <span className="ml-2 text-ink-3">{f.file_count} 文件</span>
+              <span className="ml-2 text-ink-3">{t('dashboard.folderCount', { count: f.file_count })}</span>
             </span>
           </div>
           <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-field">
@@ -378,10 +382,11 @@ function TopFolders({ items }) {
 }
 
 function RangeSwitch({ value, onChange }) {
+  const { t } = useTranslation();
   const opts = [
-    { v: 7, label: '7日' },
-    { v: 30, label: '30日' },
-    { v: 90, label: '90日' },
+    { v: 7, label: t('dashboard.rangeDays.seven') },
+    { v: 30, label: t('dashboard.rangeDays.thirty') },
+    { v: 90, label: t('dashboard.rangeDays.ninety') },
   ];
   return (
     <div className="inline-flex rounded-full bg-field p-0.5">
@@ -411,6 +416,7 @@ function Empty({ children }) {
  * ============================================================ */
 
 export default function DashboardPage() {
+  const { t } = useTranslation();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -429,7 +435,7 @@ export default function DashboardPage() {
           setStats(d);
           setErr('');
         })
-        .catch((e) => setErr(errMsg(e, '加载失败')))
+        .catch((e) => setErr(errMsg(e, t('dashboard.noData'))))
         .finally(() => {
           setLoading(false);
           setRefreshing(false);
@@ -485,10 +491,10 @@ export default function DashboardPage() {
       badge: (r.ext || 'o').charAt(0).toUpperCase(),
       pct: total ? (r.count / total) * 100 : 0,
       amount: `${total ? ((r.count / total) * 100).toFixed(1) : 0}%`,
-      desc: `${r.count.toLocaleString()} 个文件 · 共 ${formatSize(r.size)}`,
+      desc: `${r.count.toLocaleString()} ${t('dashboard.files')} · 共 ${formatSize(r.size)}`,
       ...PALETTE[i % PALETTE.length],
     }));
-  }, [stats]);
+  }, [stats, t]);
 
   // memoized so AnomalyCard doesn't re-render on unrelated dashboard state
   // (e.g. refreshing toggles) when stats/insights are unchanged.
@@ -498,36 +504,36 @@ export default function DashboardPage() {
     return [
       {
         key: 'downloads',
-        label: '下载',
+        label: t('dashboard.download'),
         points: insights.dlPts,
         value: stats.today_downloads,
-        thresholdText: `峰值 ${insights.peakDl.downloads} 次`,
-        footer: `${stats.today_downloads.toLocaleString()} 次下载`,
+        thresholdText: t('dashboard.peak', { count: insights.peakDl.downloads }),
+        footer: t('dashboard.todayDl', { count: stats.today_downloads }),
         delta: dlDod,
-        vsText: 'vs 昨日',
-        formatValue: (v) => `${Math.round(v)} 次`,
+        vsText: t('dashboard.vsYesterday'),
+        formatValue: (v) => `${Math.round(v)} ${t('dashboard.times')}`,
         icon: <ArrowDown className="size-2" strokeWidth={3} />,
       },
       {
         key: 'uploads',
-        label: '上传',
+        label: t('dashboard.upload'),
         points: insights.upPts,
         value: insights.todayUp,
-        thresholdText: `峰值 ${insights.peakUp} 次`,
-        footer: `${insights.todayUp.toLocaleString()} 次上传`,
+        thresholdText: t('dashboard.peak', { count: insights.peakUp }),
+        footer: t('dashboard.todayUp', { count: insights.todayUp }),
         delta: insights.dodUp,
-        vsText: 'vs 昨日',
-        formatValue: (v) => `${Math.round(v)} 次`,
+        vsText: t('dashboard.vsYesterday'),
+        formatValue: (v) => `${Math.round(v)} ${t('dashboard.times')}`,
         icon: <ArrowUp className="size-2" strokeWidth={3} />,
       },
     ];
-  }, [insights, stats]);
+  }, [insights, stats, t]);
 
   if (loading) {
     return (
       <div className="py-24 text-center">
         <div className="mx-auto mb-3 h-5 w-5 animate-spin rounded-full border-2 border-line border-t-transparent" />
-        <p className="text-[13px] text-ink-3">加载中…</p>
+        <p className="text-[13px] text-ink-3">{t('common.loading')}</p>
       </div>
     );
   }
@@ -537,7 +543,7 @@ export default function DashboardPage() {
   }
 
   if (!stats) {
-    return <div className="py-24 text-center text-[14px] text-red">{'暂无数据'}</div>;
+    return <div className="py-24 text-center text-[14px] text-red">{t('dashboard.noData')}</div>;
   }
 
   const typeExtra =
@@ -560,7 +566,7 @@ export default function DashboardPage() {
               aria-hidden="true"
               className="h-7 w-7 rounded-full object-cover"
             />
-            <span className="rb-brand-title whitespace-nowrap">统计面板</span>
+            <span className="rb-brand-title whitespace-nowrap">{t('dashboard.title')}</span>
           </h1>
         </div>
         <div className="ml-auto flex items-center gap-3 max-[480px]:basis-full max-[480px]:justify-end">
@@ -575,7 +581,7 @@ export default function DashboardPage() {
             className="inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-[12px] text-ink shadow-btn transition-colors duration-100 hover:bg-hover disabled:opacity-50"
           >
             <BsArrowClockwise className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            刷新
+            {t('dashboard.refresh')}
           </button>
         </div>
       </header>
@@ -587,7 +593,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="lg:col-span-4">
-          <AllocationCard title="文件类型分布" segments={typeSegments} extra={typeExtra} />
+          <AllocationCard title={t('dashboard.typeDist')} segments={typeSegments} extra={typeExtra} />
         </div>
       </section>
 
@@ -601,7 +607,7 @@ export default function DashboardPage() {
 
         <Card className="lg:col-span-5">
           <CardHeader
-            title="下载排行"
+            title={t('dashboard.downloads')}
             icon={<BarChart3 className="size-2" strokeWidth={3} />}
             badgeClass="bg-accent"
           />
@@ -613,7 +619,7 @@ export default function DashboardPage() {
       <section className="grid grid-cols-1 gap-3 lg:grid-cols-12">
         <Card className="flex flex-col lg:col-span-6">
           <CardHeader
-            title="最近上传"
+            title={t('dashboard.recentUploads')}
             icon={<ArrowUp className="size-2" strokeWidth={3} />}
             badgeClass="bg-orange"
           />
@@ -622,7 +628,7 @@ export default function DashboardPage() {
 
         <Card className="flex flex-col lg:col-span-6">
           <CardHeader
-            title="占用排行"
+            title={t('dashboard.topFolders')}
             icon={<HardDrive className="size-2" strokeWidth={3} />}
             badgeClass="bg-green"
           />

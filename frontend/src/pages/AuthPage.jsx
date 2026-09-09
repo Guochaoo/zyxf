@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
+import { useTranslation } from 'react-i18next';
 import { requestRegisterCode } from '../api.js';
 import { Loader2 } from 'lucide-react';
 import { BsCaretLeftFill, BsEyeFill, BsEyeSlashFill } from 'react-icons/bs';
@@ -22,15 +23,19 @@ const LABEL_CLS = 'mb-2 block text-xs font-medium text-neutral-700';
 const SUBMIT_CLS =
   'mt-2 inline-flex w-full items-center justify-center gap-2 rounded-[14px] bg-brand-600 px-4 py-2.5 sm:py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60';
 
-const SubmitButton = ({ loading, idleText }) => (
-  <button type="submit" disabled={loading} className={SUBMIT_CLS}>
-    {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-    {loading ? `${idleText.slice(0, 2)}中…` : idleText}
-  </button>
-);
+const SubmitButton = ({ loading, idleText }) => {
+  const { t } = useTranslation();
+  return (
+    <button type="submit" disabled={loading} className={SUBMIT_CLS}>
+      {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+      {loading ? `${idleText.slice(0, 2)}${t('auth.loadingSuffix')}` : idleText}
+    </button>
+  );
+};
 
 // 密码输入框 + 显隐切换（登录/注册两表单共用，显隐状态各自独立）。
 function PasswordInput({ id, value, onChange, autoComplete }) {
+  const { t } = useTranslation();
   const [showPwd, setShowPwd] = useState(false);
   return (
     <div className="relative">
@@ -45,7 +50,7 @@ function PasswordInput({ id, value, onChange, autoComplete }) {
       <button
         type="button"
         onClick={() => setShowPwd((v) => !v)}
-        aria-label={showPwd ? '隐藏密码' : '显示密码'}
+        aria-label={showPwd ? t('auth.pwdHide') : t('auth.pwdShow')}
         className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex w-8 h-8 items-center justify-center text-neutral-400 transition-colors hover:text-neutral-700"
       >
         {showPwd ? <BsEyeSlashFill className="w-4 h-4" /> : <BsEyeFill className="w-4 h-4" />}
@@ -93,6 +98,7 @@ function useSubmit(setErr) {
 
 function LoginForm() {
   const { login } = useAuth();
+  const { t } = useTranslation();
   const nav = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -101,17 +107,17 @@ function LoginForm() {
 
   const onSubmit = (e) => {
     e.preventDefault();
-    run(() => login(username, password), '登录失败', () => nav('/'));
+    run(() => login(username, password), t('auth.loginFail'), () => nav('/'));
   };
 
   return (
     <div style={{ animation: FORM_ANIM }}>
-      <AuthHeading title="欢迎回来" sub="输入用户名或邮箱登录" />
+      <AuthHeading title={t('auth.welcome')} sub={t('auth.welcomeSub')} />
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
           <label className={LABEL_CLS} htmlFor="login-username">
-            用户名或邮箱
+            {t('auth.usernameOrEmail')}
           </label>
           <input
             id="login-username"
@@ -125,7 +131,7 @@ function LoginForm() {
 
         <div>
           <label className={LABEL_CLS} htmlFor="login-password">
-            密码
+            {t('auth.pwd')}
           </label>
           <PasswordInput
             id="login-password"
@@ -136,16 +142,17 @@ function LoginForm() {
         </div>
 
         {err && <Toast type="error" message={err} onClose={() => setErr('')} />}
-        <SubmitButton loading={loading} idleText="登录" />
+        <SubmitButton loading={loading} idleText={t('auth.login')} />
       </form>
 
-      <AuthSwapLink to="/register" prompt="还没有账号？" action="注册账号" />
+      <AuthSwapLink to="/register" prompt={t('auth.noAccount')} action={t('auth.goRegister')} />
     </div>
   );
 }
 
 function RegisterForm() {
   const { register } = useAuth();
+  const { t } = useTranslation();
   const nav = useNavigate();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -166,26 +173,26 @@ function RegisterForm() {
 
   const requestCode = () => {
     if (!email.trim() || resendIn > 0 || sending) return;
-    runRequest(() => requestRegisterCode(email.trim()), '验证码发送失败', () => setResendIn(RESEND_SECONDS));
+    runRequest(() => requestRegisterCode(email.trim()), t('auth.codeSendFail'), () => setResendIn(RESEND_SECONDS));
   };
 
   const onSubmit = (e) => {
     e.preventDefault();
     run(
       () => register({ username: username.trim(), email: email.trim(), password, code: code.trim() }),
-      '注册失败',
+      t('auth.registerFail'),
       () => nav('/')
     );
   };
 
   return (
     <div style={{ animation: FORM_ANIM }}>
-      <AuthHeading title="注册账号" sub="使用邮箱验证码注册普通用户账号" />
+      <AuthHeading title={t('auth.register')} sub={t('auth.registerSub')} />
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
           <label className={LABEL_CLS} htmlFor="register-username">
-            用户名
+            {t('auth.username')}
           </label>
           <input
             id="register-username"
@@ -199,7 +206,7 @@ function RegisterForm() {
 
         <div>
           <label className={LABEL_CLS} htmlFor="register-email">
-            邮箱
+            {t('auth.email')}
           </label>
           <input
             id="register-email"
@@ -213,7 +220,7 @@ function RegisterForm() {
 
         <div>
           <label className={LABEL_CLS} htmlFor="register-code">
-            邮箱验证码
+            {t('auth.emailCode')}
           </label>
           <div className="flex gap-2">
             <input
@@ -232,14 +239,14 @@ function RegisterForm() {
               className="inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[14px] bg-neutral-100 px-3.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {sending && <Loader2 className="w-4 h-4 animate-spin" />}
-              {resendIn > 0 ? `${resendIn}s 后重发` : '获取验证码'}
+              {resendIn > 0 ? t('auth.resend', { s: resendIn }) : t('auth.getCode')}
             </button>
           </div>
         </div>
 
         <div>
           <label className={LABEL_CLS} htmlFor="register-password">
-            密码
+            {t('auth.pwd')}
           </label>
           <PasswordInput
             id="register-password"
@@ -250,15 +257,16 @@ function RegisterForm() {
         </div>
 
         {err && <Toast type="error" message={err} onClose={() => setErr('')} />}
-        <SubmitButton loading={loading} idleText="注册" />
+        <SubmitButton loading={loading} idleText={t('auth.registerBtn')} />
       </form>
 
-      <AuthSwapLink to="/login" prompt="已有账号？" action="去登录" />
+      <AuthSwapLink to="/login" prompt={t('auth.haveAccount')} action={t('auth.goLogin')} />
     </div>
   );
 }
 
 export default function AuthPage() {
+  const { t } = useTranslation();
   const mode = useLocation().pathname === '/register' ? 'register' : 'login';
 
   return (
@@ -281,18 +289,18 @@ export default function AuthPage() {
           className="inline-flex w-fit items-center gap-1.5 text-sm text-white/60 transition-colors hover:text-white"
         >
           <BsCaretLeftFill className="w-4 h-4" />
-          返回首页
+          {t('auth.backHome')}
         </Link>
 
         <div className="text-white">
           <h2 className="text-[40px] font-semibold leading-[1.1] tracking-tight">
-            <span className="text-white/60">让</span>
-            <span className="text-white">知识</span>
+            <span className="text-white/60">{t('auth.brandTitle1')}</span>
+            <span className="text-white">{t('auth.brandTitle2')}</span>
             <br />
-            <span className="text-white/60">有序流动</span>
+            <span className="text-white/60">{t('auth.brandTitle3')}</span>
           </h2>
           <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/65">
-            整理学习资料，检索所需内容，与同学共享优质资源
+            {t('auth.brandSlogan')}
           </p>
         </div>
       </div>
@@ -305,24 +313,20 @@ export default function AuthPage() {
             className="mb-4 sm:mb-8 inline-flex items-center gap-1.5 text-sm text-neutral-500 transition-colors hover:text-neutral-900 sm:hidden"
           >
             <BsCaretLeftFill className="w-4 h-4" />
-            返回
+            {t('auth.back')}
           </Link>
 
           <div className="mb-4 sm:mb-8 flex items-center justify-center gap-2.5">
-            <img src="/favicon.png" alt="仲英学辅" className="h-9 w-9 rounded-full object-cover" />
+            <img src="/favicon.png" alt={t('auth.brandAlt')} className="h-9 w-9 rounded-full object-cover" />
             <span className="text-[22px] sm:text-[26px] font-bold tracking-tight text-neutral-900">
-              仲英学辅
+              {t('auth.brandAlt')}
             </span>
           </div>
 
           <div key={mode}>{mode === 'register' ? <RegisterForm /> : <LoginForm />}</div>
 
           <p className="absolute bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs text-neutral-400 sm:bottom-6">
-            由{' '}
-            <Link to="/about" className="text-neutral-400 transition-colors hover:text-neutral-600">
-              仲英书院学业辅导中心
-            </Link>{' '}
-            提供
+            {t('auth.providedBy')}
           </p>
         </div>
         </div>

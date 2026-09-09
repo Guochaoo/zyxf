@@ -1,29 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Route, Routes, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from './auth.jsx';
 import BrowsePage from './pages/BrowsePage.jsx';
 import AuthPage from './pages/AuthPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import AboutPage from './pages/AboutPage.jsx';
 import StaggeredMenu from './components/StaggeredMenu.jsx';
+import SettingsModal from './components/SettingsModal.jsx';
 import SearchBar from './components/SearchBar.jsx';
 import FolderTree from './components/FolderTree.jsx';
 import KnowledgeGraph from './components/KnowledgeGraph.jsx';
 import ChatComposer from './components/ChatComposer.jsx';
 import useMediaQuery from './hooks/useMediaQuery.js';
+import useTheme from './hooks/useTheme.js';
+import useLocale from './hooks/useLocale.js';
 import NoticeModal from './components/NoticeModal.jsx';
 import { EASE_COLLAPSE } from './components/ui.js';
 
-// Static menu items for the floating StaggeredMenu — hoisted out of the
-// component so they are allocated once per module load, not per render.
-const menuItems = [
-  { label: '资料库', ariaLabel: '浏览资料库', link: '/' },
-  { label: '统计面板', ariaLabel: '查看统计仪表盘', link: '/dashboard' },
-  { label: '关于我们', ariaLabel: '了解仲英书院学业辅导中心', link: '/about' },
-];
-
-// Social links shown in the menu footer, also static.
+// Social links shown in the menu footer, static (brand names are not translated).
 const socialItems = [
   { label: 'Bilibili', link: 'https://space.bilibili.com/549612395' },
   { label: 'Email', link: 'mailto:xjtuzyxf@163.com' },
@@ -31,14 +27,29 @@ const socialItems = [
 ];
 
 export default function App() {
+  const { t } = useTranslation();
+  const { locale } = useLocale();
   const { user, logout, ready } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const isLg = useMediaQuery('(min-width: 1024px)');
+  // 主题（亮/暗/跟随系统）：useTheme 内部写 <html> 的 data-theme 驱动 CSS 变量。
+  useTheme();
+  // Menus are language-reactive (labels come from the dictionary).
+  const menuItems = useMemo(
+    () => [
+      { label: t('menu.library'), ariaLabel: t('menu.libraryAria'), link: '/' },
+      { label: t('menu.dashboard'), ariaLabel: t('menu.dashboardAria'), link: '/dashboard' },
+      { label: t('menu.about'), ariaLabel: t('menu.aboutAria'), link: '/about' },
+    ],
+    [t]
+  );
   // Hide the floating menu button while the knowledge-graph dialog is open.
   const [graphFull, setGraphFull] = useState(false);
   // Collapsible left rail (docs layout) on wide screens. Defaults open.
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // 全局设置弹窗（账户卡片「设置」触发）。
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // 侧边栏开合的缓动曲线与时长（与 ChatComposer/KnowledgeGraph 的收缩动画一致）。
   const SIDEBAR_EASE = EASE_COLLAPSE;
@@ -58,13 +69,13 @@ export default function App() {
     () =>
       user
         ? {
-            name: user.username || '用户',
-            subtitle: user.role === 'admin' ? '管理员' : '普通用户',
-            avatarText: (user.username || '友').slice(0, 1).toUpperCase(),
+            name: user.username || t('app.account.defaultName'),
+            subtitle: user.role === 'admin' ? t('app.account.admin') : t('app.account.normalUser'),
+            avatarText: (user.username || t('app.account.guestName')).slice(0, 1).toUpperCase(),
             onLogout: logout,
           }
-        : { name: '未登录', subtitle: '游客', guest: true, avatarText: '', onLogin: () => navigate('/login') },
-    [user, logout, navigate]
+        : { name: t('app.account.guestName'), subtitle: t('app.account.guestSub'), guest: true, avatarText: '', onLogin: () => navigate('/login') },
+    [user, logout, navigate, t]
   );
 
   const brand = useMemo(
@@ -76,10 +87,10 @@ export default function App() {
           aria-hidden="true"
           className="w-7 h-7 rounded-full object-cover"
         />
-        <span className="rb-brand-title whitespace-nowrap">仲英学辅资料库</span>
+        <span className="rb-brand-title whitespace-nowrap">{t('app.brand')}</span>
       </Link>
     ),
-    []
+    [t]
   );
 
   // 资料库标题行右侧的侧边栏开关按钮。展开时常驻侧边栏内（显示 PanelLeftClose，
@@ -89,9 +100,9 @@ export default function App() {
     <button
       type="button"
       onClick={() => setSidebarOpen((v) => !v)}
-      aria-label={sidebarOpen ? '收起侧边栏' : '展开侧边栏'}
+      aria-label={sidebarOpen ? t('app.collapsedSidebar') : t('app.expandSidebar')}
       aria-pressed={sidebarOpen}
-      title={sidebarOpen ? '收起侧边栏' : '展开侧边栏'}
+      title={sidebarOpen ? t('app.collapsedSidebar') : t('app.expandSidebar')}
       className={`flex items-center justify-center rounded-[7px] text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700 ${className}`}
     >
       <PanelLeftClose className="h-[18px] w-[18px]" strokeWidth={1.7} />
@@ -115,11 +126,11 @@ export default function App() {
 
   // ---- Document title ----
   useEffect(() => {
-    document.title = '仲英学辅';
-  }, []);
+    document.title = t('app.title');
+  }, [t]);
 
   if (!ready) {
-    return <div className="h-full flex items-center justify-center text-slate-400">加载中...</div>;
+    return <div className="h-full flex items-center justify-center text-slate-400">{t('app.loading')}</div>;
   }
 
   return (
@@ -143,7 +154,7 @@ export default function App() {
           开合用 transform:translateX 滑入/滑出（非线性缓动），而非瞬间显隐。 */}
       {isBrowse && (
         <div
-          className={`hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-10 lg:flex lg:flex-col lg:gap-4 lg:overflow-hidden lg:bg-[#ECECEE] lg:px-4 lg:pt-[11px] lg:w-[250px] ${
+          className={`hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-10 lg:flex lg:flex-col lg:gap-4 lg:overflow-hidden lg:bg-[var(--app-sidebar)] lg:px-4 lg:pt-[11px] lg:w-[250px] ${
             sidebarOpen ? 'lg:translate-x-0' : 'lg:-translate-x-full'
           } transition-transform lg:duration-[${SIDEBAR_MS}ms] lg:ease-[${SIDEBAR_EASE}] will-change-transform ${
             sidebarOpen ? 'lg:pointer-events-auto' : 'lg:pointer-events-none'
@@ -230,8 +241,12 @@ export default function App() {
           accentColor="#5227FF"
           colors={['#B497CF', '#5227FF']}
           isFixed
+          onOpenSettings={() => setSettingsOpen(true)}
         />
       )}
+
+      {/* 全局设置弹窗：由账户卡片「设置」触发，覆盖所有页面 */}
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       {/* 首次访问的注意清单弹窗：同意后写入 localStorage 才放行站点操作 */}
       <NoticeModal />

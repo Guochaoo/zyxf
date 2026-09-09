@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Globe, Maximize, X } from 'lucide-react';
 import {
   forceCenter,
@@ -29,8 +30,8 @@ const nodeIdOf = (currentId) => (currentId ? `f${currentId}` : 'f0');
 // 取端点 id 前先归一化。
 const endpointId = (n) => (typeof n === 'object' ? n.id : n);
 
-function buildGraph(tree, rootFiles) {
-  const nodes = [{ id: 'f0', name: '首页', type: 'folder', isRoot: true }];
+function buildGraph(tree, rootFiles, rootName) {
+  const nodes = [{ id: 'f0', name: rootName, type: 'folder', isRoot: true }];
   const links = [];
   const walk = (folder, parentId) => {
     const fid = `f${folder.id}`;
@@ -75,6 +76,7 @@ function displayName(name) {
  * zoom reveals labels; pan/zoom/drag; full-library view in a modal.
  */
 export default function KnowledgeGraph({ currentId = 0, className = '', onFullChange }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   // Enlarged dialog mode: 'full' = whole library (globe), 'local' = current
   // folder neighborhood zoomed (maximize). null = dialog closed.
@@ -84,7 +86,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
 
   // Full graph only depends on the tree + root files: keep it stable across
   // folder navigation so browsing doesn't re-walk/re-allocate the whole library.
-  const fullGraph = useMemo(() => buildGraph(tree, rootFiles), [tree, rootFiles]);
+  const fullGraph = useMemo(() => buildGraph(tree, rootFiles, t('tree.home')), [tree, rootFiles, t]);
   const { localNodes, localLinks, fullNodes, fullLinks } = useMemo(() => {
     const local = localSubgraph(fullGraph.nodes, fullGraph.links, currentId);
     return {
@@ -116,11 +118,11 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
 
   return (
     <div
-      className={`relative flex shrink-0 flex-col bg-white rounded-[14px] overflow-hidden ${className}`.trim()}
+      className={`relative flex shrink-0 flex-col bg-surface rounded-[14px] overflow-hidden ${className}`.trim()}
     >
       {/* 头部栏 — 灰底标签行；收起后仅剩本栏（14px 圆角胶囊） */}
       <PanelHeader
-        title="知识图谱"
+        title={t('kg.title')}
         collapsed={collapsed}
         onToggleCollapsed={() =>
           setCollapsed((v) => {
@@ -128,16 +130,16 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
             return !v;
           })
         }
-        expandTitle="展开图谱"
-        collapseTitle="收起图谱"
+        expandTitle={t('kg.expand')}
+        collapseTitle={t('kg.collapse')}
       >
         {!empty && (
           <>
             <button
               type="button"
               onClick={() => setDialog('full')}
-              title="查看全库图谱"
-              aria-label="查看全库图谱"
+              title={t('kg.viewAll')}
+              aria-label={t('kg.viewAll')}
               className={ICON_BUTTON_CLASS}
             >
               <Globe className="h-[15px] w-[15px]" />
@@ -145,8 +147,8 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
             <button
               type="button"
               onClick={() => setDialog('local')}
-              title="放大当前图谱"
-              aria-label="放大当前图谱"
+              title={t('kg.zoomIn')}
+              aria-label={t('kg.zoomIn')}
               className={ICON_BUTTON_CLASS}
             >
               <Maximize className="h-[15px] w-[15px]" />
@@ -164,7 +166,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
       >
         {loading || empty ? (
           <div className="flex h-full items-center justify-center text-[12px] text-slate-500">
-            {loading ? '加载中…' : '暂无内容'}
+            {loading ? t('common.loading') : t('kg.empty')}
           </div>
         ) : (
           <GraphCanvas
@@ -183,14 +185,14 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
           onClick={() => setDialog(null)}
         >
           <div
-            className="relative h-full max-h-[85vh] w-full max-w-[1200px] overflow-hidden rounded-[14px] bg-white shadow-[rgba(0,0,0,0.12)_0_16px_48px]"
+            className="relative h-full max-h-[85vh] w-full max-w-[1200px] overflow-hidden rounded-[14px] bg-surface shadow-[rgba(0,0,0,0.12)_0_16px_48px]"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               type="button"
               onClick={() => setDialog(null)}
-              aria-label="关闭"
-              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-md bg-white text-slate-500 shadow-[rgba(23,23,23,0.12)_0_0_0_1px,rgba(23,23,23,0.06)_0_1px_2px] transition-colors hover:bg-black/5 hover:text-black"
+              aria-label={t('kg.close')}
+              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-md bg-surface text-slate-500 shadow-[rgba(23,23,23,0.12)_0_0_0_1px,rgba(23,23,23,0.06)_0_1px_2px] transition-colors hover:bg-black/5 hover:text-black"
             >
               <X className="h-5 w-5" />
             </button>
@@ -452,7 +454,7 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
                 y1={l.source.y}
                 x2={l.target.x}
                 y2={l.target.y}
-                stroke={hovered ? '#171717' : 'rgba(23,23,23,0.25)'}
+                stroke={hovered ? 'var(--ink)' : 'var(--line-strong)'}
                 strokeWidth={1}
                 opacity={dim ? 0.05 : hovered ? 0.7 : 0.5}
               />
@@ -475,12 +477,12 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
                 onMouseLeave={() => onHover(null)}
               >
                 {isCurrent && (
-                  <circle r={r + 3} fill="none" stroke="#171717" strokeWidth={1.2} opacity={0.5} />
+                  <circle r={r + 3} fill="none" stroke="var(--ink)" strokeWidth={1.2} opacity={0.5} />
                 )}
                 <circle
                   r={r}
-                  fill={isFolder ? '#171717' : '#ffffff'}
-                  stroke={isFolder ? '#171717' : 'rgba(23,23,23,0.45)'}
+                  fill={isFolder ? 'var(--ink)' : 'var(--surface)'}
+                  stroke={isFolder ? 'var(--ink)' : 'var(--line-strong)'}
                   strokeWidth={1}
                 />
                 {(hovered === n.id || showLabels) && (
@@ -488,11 +490,13 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
                     y={-r - 6}
                     textAnchor="middle"
                     fontSize={10}
-                    fill="#171717"
-                    stroke="#ffffff"
                     strokeWidth={3}
                     paintOrder="stroke"
-                    style={{ pointerEvents: 'none' }}
+                    style={{
+                      fill: 'var(--ink)',
+                      stroke: 'var(--kg-label-stroke)',
+                      pointerEvents: 'none',
+                    }}
                   >
                     {displayName(n.name)}
                   </text>

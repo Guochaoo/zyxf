@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Upload, X, Loader2 } from 'lucide-react';
 import { uploadFile } from '../api.js';
 import { errMsg, formatSize } from '../utils.js';
@@ -9,6 +10,7 @@ const CONCURRENCY = 3; // files upload in parallel; each is an independent OSS d
 const PROGRESS_BAR_COLOR = { error: 'bg-red', done: 'bg-[#1E8E3E]' };
 
 export default function UploadDialog({ folderId, onClose, onDone }) {
+  const { t } = useTranslation();
   const inputRef = useRef(null);
   const [files, setFiles] = useState([]); // {file, progress, status, error}
   const [busy, setBusy] = useState(false);
@@ -76,9 +78,9 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2 font-semibold">
             <Upload className="w-5 h-5" />
-            上传文件
+            {t('upload.title')}
           </div>
-          <button type="button" onClick={onClose} aria-label="关闭" className="p-1 rounded hover:bg-slate-100">
+          <button type="button" onClick={onClose} aria-label={t('upload.close')} className="p-1 rounded hover:bg-slate-100">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -90,7 +92,7 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
           className="border-2 border-dashed border-slate-300 rounded-[10px] px-4 py-10 flex flex-col items-center justify-center hover:bg-slate-100 cursor-pointer text-center text-sm"
         >
           <Upload className="w-7 h-7 mb-2" />
-          <div>点击选择文件，或拖拽到此处</div>
+          <div>{t('upload.hint')}</div>
           <input ref={inputRef} type="file" multiple hidden onChange={onPick} />
         </div>
 
@@ -121,7 +123,7 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
             onClick={onClose}
             className="text-sm px-3 py-1.5 rounded-[14px] hover:bg-slate-100"
           >
-            关闭
+            {t('common.close')}
           </button>
           <button
             onClick={start}
@@ -129,7 +131,7 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
             className="text-sm px-3 py-1.5 rounded-[14px] bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50 flex items-center gap-1"
           >
             {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-            开始上传
+            {t('upload.start')}
           </button>
         </div>
       </div>
