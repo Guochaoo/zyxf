@@ -36,7 +36,10 @@ if (isProd) {
     process.exit(1);
   }
   if (!process.env.CORS_ORIGIN || process.env.CORS_ORIGIN === '*') {
-    console.warn('[index] WARNING: CORS_ORIGIN is "*" in production. Restrict to your real origin.');
+    console.error(
+      '[index] FATAL: in production but CORS_ORIGIN is missing or "*". Refusing to start with an open CORS policy. Set it to your real origin.'
+    );
+    process.exit(1);
   }
 }
 
@@ -63,9 +66,11 @@ app.use(
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );
+// CORS 来源：优先环境变量；dev 默认显式允许 Vite 前端（5173），不回退到全开放 '*'。
+const devFrontendOrigin = process.env.ALLOWED_DEV_ORIGIN || 'http://localhost:5173';
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: process.env.CORS_ORIGIN || devFrontendOrigin,
   })
 );
 app.use(express.json({ limit: '1mb' }));
