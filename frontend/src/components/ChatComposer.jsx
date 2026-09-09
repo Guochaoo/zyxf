@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import { ArrowUp, ArrowUpRight, Settings, Square, Trash2 } from 'lucide-react';
 import { chatStream } from '../api.js';
 import { EASE_COLLAPSE, ICON_BUTTON_CLASS } from './ui.js';
 import PanelHeader from './PanelHeader.jsx';
-import { openFolderOrFile, storageGet, storageSet, storageRemove } from '../ui.js';
+import { openFolderOrFile } from '../ui.js';
+import { loadLlmCfg, saveLlmCfg, clearLlmCfg } from '../llmConfig.js';
 import { useClickOutside } from '../hooks/useClickOutside.js';
 
 /* ─────────────────────────────────────────────────────────
@@ -15,9 +17,6 @@ import { useClickOutside } from '../hooks/useClickOutside.js';
  * 回复经 SSE 流式渲染，检索推荐的文件以【文件N】引用映射为卡片。
  * ───────────────────────────────────────────────────────── */
 
-const SUGGESTIONS = ['高数往年题在哪', '有没有物理复习资料', '线代课件推荐一下'];
-const LLM_KEY = 'zyxf_llm';
-
 // 收起状态跨页面导航保留（右栏组件会随路由卸载重建），与知识图谱一致。
 let chatCollapsedPersistent = false;
 
@@ -26,23 +25,6 @@ let nextId = 1;
 const fmtTime = () => {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-};
-
-const loadLlmCfg = () => {
-  let raw = null;
-  try {
-    raw = JSON.parse(storageGet(LLM_KEY) ?? 'null');
-  } catch {
-    /* 存储值损坏时按未配置处理 */
-  }
-  if (raw && typeof raw === 'object') {
-    return {
-      apiKey: typeof raw.apiKey === 'string' ? raw.apiKey : '',
-      baseUrl: typeof raw.baseUrl === 'string' ? raw.baseUrl : '',
-      model: typeof raw.model === 'string' ? raw.model : '',
-    };
-  }
-  return { apiKey: '', baseUrl: '', model: '' };
 };
 
 // 像素网格波浪（Drive 变体）：3×3 格子按斜向相位依次点亮
@@ -137,6 +119,8 @@ function FileChip({ item }) {
 }
 
 export default function ChatComposer() {
+  const { t } = useTranslation();
+  const suggestions = useMemo(() => t('chat.suggestions', { returnObjects: true }), [t]);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -276,7 +260,7 @@ export default function ChatComposer() {
       if (err.name === 'AbortError') {
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === aiId ? { ...m, streaming: false, text: m.text || '已停止生成。' } : m
+            m.id === aiId ? { ...m, streaming: false, text: m.text || t('chat.stopped') } : m
           )
         );
       } else {
@@ -294,13 +278,7 @@ export default function ChatComposer() {
   };
 
   const saveSettings = () => {
-    const next = {
-      apiKey: cfgDraft.apiKey.trim(),
-      baseUrl: cfgDraft.baseUrl.trim(),
-      model: cfgDraft.model.trim(),
-    };
-    setLlmCfg(next);
-    storageSet(LLM_KEY, JSON.stringify(next));
+    setLlmCfg(saveLlmCfg(cfgDraft));
     setSettingsOpen(false);
   };
 
@@ -308,29 +286,29 @@ export default function ChatComposer() {
     const empty = { apiKey: '', baseUrl: '', model: '' };
     setLlmCfg(empty);
     setCfgDraft(empty);
-    storageRemove(LLM_KEY);
+    clearLlmCfg();
   };
 
   const canSend = draft.trim().length > 0 && !busy;
 
   return (
     <div
-      className={`relative flex w-full flex-col overflow-hidden rounded-[14px] bg-white ${
+      className={`relative flex w-full flex-col overflow-hidden rounded-[14px] bg-surface ${
         collapsed || snapping ? '' : 'min-h-[288px] max-w-95 flex-1'
       }`}
     >
       {/* header — 智能对话标签 + 清空会话 + 设置 + 收起（样式对齐知识图谱卡片头部） */}
       <PanelHeader
-        title="智能对话"
+        title={t('chat.title')}
         collapsed={collapsed}
         onToggleCollapsed={toggleCollapsed}
-        expandTitle="展开对话"
-        collapseTitle="收起对话"
+        expandTitle={t('chat.expand')}
+        collapseTitle={t('chat.collapse')}
       >
         <button
           type="button"
-          aria-label="清空会话历史"
-          title="清空会话历史"
+          aria-label={t('chat.clear')}
+          title={t('chat.clear')}
           disabled={busy || messages.length === 0}
           onClick={() => setMessages([])}
           className={ICON_BUTTON_CLASS}
@@ -340,8 +318,8 @@ export default function ChatComposer() {
         <button
           type="button"
           ref={settingsBtnRef}
-          aria-label="AI 设置"
-          title="AI 设置（API Key / 地址 / 模型）"
+          aria-label={t('chat.settingsAria')}
+          title={t('chat.settingsTitle')}
           aria-expanded={settingsOpen}
           onClick={openSettings}
           className={ICON_BUTTON_CLASS}
@@ -356,7 +334,7 @@ export default function ChatComposer() {
           收起后表单不可聚焦。 */}
       <div
         ref={settingsRef}
-        className="absolute inset-x-2 top-[40px] z-10 max-h-[calc(100%-52px)] overflow-y-auto rounded-[10px] bg-white p-2.5 shadow-[0_4px_10px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.12)]"
+        className="absolute inset-x-2 top-[40px] z-10 max-h-[calc(100%-52px)] overflow-y-auto rounded-[10px] bg-surface p-2.5 shadow-[0_4px_10px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.12)]"
         style={{
           visibility: settingsOpen ? 'visible' : 'hidden',
           opacity: settingsOpen ? 1 : 0,
@@ -368,9 +346,9 @@ export default function ChatComposer() {
       >
         <div className="flex flex-col gap-1.5">
           {[
-            { key: 'apiKey', label: 'API Key', placeholder: 'sk-…', type: 'password' },
-            { key: 'baseUrl', label: 'API 地址', placeholder: 'https://open.bigmodel.cn/api/paas/v4', type: 'text' },
-            { key: 'model', label: '模型', placeholder: 'glm-4.6 / deepseek-chat …', type: 'text' },
+            { key: 'apiKey', label: t('chat.cfg.apiKey'), placeholder: 'sk-…', type: 'password' },
+            { key: 'baseUrl', label: t('chat.cfg.baseUrl'), placeholder: 'https://open.bigmodel.cn/api/paas/v4', type: 'text' },
+            { key: 'model', label: t('chat.cfg.model'), placeholder: 'glm-4.6 / deepseek-chat …', type: 'text' },
           ].map(({ key, label, placeholder, type }) => (
             <label key={key} className="flex items-center gap-2 text-[11px] text-ink-2">
               <span className="w-12 shrink-0">{label}</span>
@@ -384,7 +362,7 @@ export default function ChatComposer() {
             </label>
           ))}
           <p className="text-[11px] leading-relaxed text-ink-3">
-            三项都填写后使用本浏览器配置；留空任意项则使用服务器配置。配置仅保存在本地浏览器。
+            {t('chat.cfg.hint')}
           </p>
           <div className="flex items-center justify-end gap-1.5">
             <button
@@ -392,14 +370,14 @@ export default function ChatComposer() {
               onClick={clearSettings}
               className="rounded-[6px] px-2 py-[3px] text-[12px] text-ink-2 transition-colors duration-100 hover:bg-hover hover:text-ink"
             >
-              恢复默认设置
+              {t('chat.cfg.restore')}
             </button>
             <button
               type="button"
               onClick={saveSettings}
               className="rounded-[6px] bg-field px-2 py-[3px] text-[12px] text-ink transition-colors duration-100 hover:bg-hover"
             >
-              保存
+              {t('chat.cfg.save')}
             </button>
           </div>
         </div>
@@ -429,9 +407,9 @@ export default function ChatComposer() {
       >
         {messages.length === 0 && (
           <div className="flex flex-1 flex-col items-start justify-center gap-2 py-4">
-            <p className="w-full text-center text-[12.5px] text-ink-2">问我资料在哪，我来帮你找：</p>
+            <p className="w-full text-center text-[12.5px] text-ink-2">{t('chat.askHint')}</p>
             <div className="flex flex-wrap gap-1.5 pl-4">
-              {SUGGESTIONS.map((s) => (
+              {suggestions.map((s) => (
                 <button
                   key={s}
                   type="button"
@@ -454,8 +432,8 @@ export default function ChatComposer() {
           ) : (
             <Section
               key={m.id}
-              sub={m.error ? '出错' : m.streaming ? (m.text ? '生成中' : '检索中') : '完成'}
-              body={m.text || '正在检索资料库…'}
+              sub={m.error ? t('chat.status.error') : m.streaming ? (m.text ? t('chat.status.generating') : t('chat.status.searching')) : t('chat.status.done')}
+              body={m.text || t('chat.status.searchingLibrary')}
               resolving={m.streaming}
               start={m.start}
             >
@@ -485,16 +463,16 @@ export default function ChatComposer() {
             onKeyDown={(event) => {
               if (event.key === 'Enter') send();
             }}
-            placeholder="输入问题…"
-            aria-label="Chat prompt"
+            placeholder={t('chat.promptPlaceholder')}
+            aria-label={t('chat.promptAria')}
             className="chat-prompt min-h-4.5 bg-transparent text-[13px] leading-[1.4] text-ink outline-none placeholder:text-ink-3"
           />
           <div className="flex items-center justify-end">
             {busy ? (
               <button
                 type="button"
-                aria-label="停止生成"
-                title="停止生成"
+                aria-label={t('chat.stopAria')}
+                title={t('chat.stopAria')}
                 onClick={stop}
                 className="flex size-7 items-center justify-center rounded-[8px] bg-field text-ink transition-[background-color,transform] duration-200 hover:bg-hover active:scale-[0.96]"
               >
@@ -503,7 +481,7 @@ export default function ChatComposer() {
             ) : (
               <button
                 type="button"
-                aria-label="Send"
+                aria-label={t('chat.sendAria')}
                 disabled={!canSend}
                 onClick={() => send()}
                 className="flex size-7 items-center justify-center rounded-[8px]

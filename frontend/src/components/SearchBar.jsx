@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Download, Loader2, Search, X } from 'lucide-react';
 import { BsFolder } from 'react-icons/bs';
 import { getFileUrl, search as searchApi } from '../api.js';
@@ -10,6 +11,7 @@ import { openFolderOrFile } from '../ui.js';
 import { useClickOutside } from '../hooks/useClickOutside.js';
 
 export default function SearchBar({ className = '' }) {
+  const { t } = useTranslation();
   const [q, setQ] = useState('');
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -122,14 +124,14 @@ export default function SearchBar({ className = '' }) {
           value={q}
           onChange={onChange}
           onFocus={() => results && setOpen(true)}
-          placeholder="搜索文字"
+          placeholder={t('search.placeholder')}
           className="w-full rounded-full border-0 bg-transparent py-[8px] pl-11 pr-10 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:outline-none focus:ring-0"
         />
         {q && (
           <button
             type="button"
             onClick={clear}
-            aria-label={loading ? '清除' : '清除搜索'}
+            aria-label={loading ? t('search.loadingAria') : t('search.clear')}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900"
           >
             {loading ? (
@@ -152,12 +154,12 @@ export default function SearchBar({ className = '' }) {
           }}
         >
           {total === 0 ? (
-            <div className="px-4 py-6 text-center text-sm text-slate-500">无匹配结果</div>
+            <div className="px-4 py-6 text-center text-sm text-slate-500">{t('search.noResult')}</div>
           ) : (
             <div className="max-h-80 overflow-y-auto">
               {results.folders.length > 0 && (
                 <div>
-                  <div className="px-4 py-2 text-xs text-slate-500 font-medium">文件夹</div>
+                  <div className="px-4 py-2 text-xs text-slate-500 font-medium">{t('search.folders')}</div>
                   {results.folders.map((f) => (
                     <button
                       key={`d-${f.id}`}
@@ -172,7 +174,7 @@ export default function SearchBar({ className = '' }) {
               )}
               {results.files.length > 0 && (
                 <div>
-                  <div className="px-4 py-2 text-xs text-slate-500 font-medium">文件</div>
+                  <div className="px-4 py-2 text-xs text-slate-500 font-medium">{t('search.files')}</div>
                   {results.files.map((f) => (
                     <div
                       key={`f-${f.id}`}
@@ -195,8 +197,8 @@ export default function SearchBar({ className = '' }) {
                         type="button"
                         onClick={(e) => handleDownload(e, f)}
                         className="mr-2 flex w-8 h-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-900"
-                        title="下载"
-                        aria-label={`下载 ${f.name}`}
+                        title={t('common.download')}
+                        aria-label={t('search.download', { name: f.name })}
                       >
                         <Download className="w-4 h-4" />
                       </button>
@@ -207,7 +209,7 @@ export default function SearchBar({ className = '' }) {
             </div>
           )}
           <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-400">
-            {total} 个结果
+            {t('search.resultsCount', { count: total })}
           </div>
         </div>,
         document.body

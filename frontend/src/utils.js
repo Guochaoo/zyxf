@@ -1,3 +1,5 @@
+import i18n from './i18n/index.js';
+
 export function formatSize(bytes) {
   if (bytes == null) return '-';
   if (bytes < 1024) return `${bytes} B`;
@@ -21,14 +23,14 @@ export function formatMonthDay(ts) {
 export function timeAgo(ts) {
   const diff = Date.now() - ts;
   const m = Math.floor(diff / 60000);
-  if (m < 1) return '刚刚';
-  if (m < 60) return `${m} 分钟前`;
+  if (m < 1) return i18n.t('common.justNow');
+  if (m < 60) return i18n.t('common.minutesAgo', { count: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前`;
+  if (h < 24) return i18n.t('common.hoursAgo', { count: h });
   const d = Math.floor(h / 24);
-  if (d < 30) return `${d} 天前`;
+  if (d < 30) return i18n.t('common.daysAgo', { count: d });
   const mo = Math.floor(d / 30);
-  return `${mo} 月前`;
+  return i18n.t('common.monthsAgo', { count: mo });
 }
 
 // ---- extension classification (mirrors backend extPolicy.js) ----
@@ -51,7 +53,9 @@ const OFFICE_EXT = new Set([
 const ARCHIVE_EXT = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2']);
 
 export const LARGE_FILE_THRESHOLD = 20 * 1024 * 1024; // 20 MB
-export const LARGE_FILE_HINT = '文件较大（>20MB），建议在 WiFi 下预览或直接下载';
+// Large-file hint is language-aware; resolve lazily at call time (not module
+// load) so the current locale is honored.
+export const largeFileHint = () => i18n.t('preview.largeFileHint');
 
 // ---- helpers ----
 

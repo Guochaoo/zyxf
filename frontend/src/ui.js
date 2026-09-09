@@ -66,3 +66,18 @@ export function setToken(token) {
 export function clearToken() {
   storageRemove(TOKEN_KEY);
 }
+
+// 界面主题的 localStorage key：light / dark / system（默认 system）。
+export const THEME_KEY = 'zyxf_theme';
+
+export function getTheme() {
+  return storageGet(THEME_KEY);
+}
+
+export function setTheme(value) {
+  storageSet(THEME_KEY, value);
+}
+
+export function clearTheme() {
+  storageRemove(THEME_KEY);
+}

@@ -19,8 +19,8 @@ function renderPanel() {
 }
 
 function typeAndSend(text) {
-  fireEvent.change(screen.getByLabelText('Chat prompt'), { target: { value: text } });
-  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  fireEvent.change(screen.getByLabelText('聊天输入'), { target: { value: text } });
+  fireEvent.click(screen.getByRole('button', { name: '发送' }));
 }
 
 beforeEach(() => {

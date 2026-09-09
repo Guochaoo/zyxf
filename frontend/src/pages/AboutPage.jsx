@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { motion, useInView } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth.jsx';
 import { ArrowUpRight } from 'lucide-react';
 import { LogoIcon } from '../components/icons';
@@ -12,44 +13,25 @@ import { LogoIcon } from '../components/icons';
 
 const EASE = [0.22, 1, 0.36, 1];
 
-/* Magnetic square positions per case study: (x%, y%, size px) */
-const CASE_STUDIES = [
+/* Non-translatable base per case study: (id, image).
+ * Title/category come from the about.caseStudies dictionary (language-reactive). */
+const CASE_BASE = [
   {
     id: 'fina',
-    title: '期末讲座',
-    category: '学业支持 · 期末辅导',
     image: '/images/final-lecture.jpeg',
   },
   {
     id: 'fresh',
-    title: '新生导航',
-    category: '入学指导 · 校园适应',
     image: '/images/freshman-guide.jpeg',
   },
   {
     id: 'peer',
-    title: '朋辈互助',
-    category: '学习互助 · 经验分享',
     image: '/images/peer-support.jpeg',
   },
   {
     id: 'lib',
-    title: '资料共建',
-    category: '资料库建设 · 知识沉淀',
     image: '/images/resource-sharing.png',
   },
-];
-
-/* Marquee logos: (name, icon key) */
-const MARQUEE_LOGOS = [
-  { name: '期末复习', icon: 'code' },
-  { name: '新生导航', icon: 'dots' },
-  { name: '朋辈互助', icon: 'circle-ring' },
-  { name: '资料共建', icon: 'arrow' },
-  { name: '答疑辅导', icon: 'wave-circle' },
-  { name: '专题分享', icon: 'lines' },
-  { name: '经验交流', icon: 'bolt' },
-  { name: '学业支持', icon: 'plus' },
 ];
 
 /* Case study card — pixel-dissolve hover + info plate */
@@ -98,12 +80,12 @@ function CaseCard({ study, index, isAdmin }) {
         </div>
       )}
       {/* info plate */}
-      <div className="absolute bottom-0 left-0 z-20 bg-white px-4 pb-3 pt-2.5" style={{ maxWidth: '70%' }}>
-        <div className="text-[clamp(1.4rem,2.2vw,2rem)] font-normal leading-tight text-black">
+      <div className="absolute bottom-0 left-0 z-20 bg-surface px-4 pb-3 pt-2.5" style={{ maxWidth: '70%' }}>
+        <div className="text-[clamp(1.4rem,2.2vw,2rem)] font-normal leading-tight text-ink">
           {study.title}
         </div>
         <div className="mt-1.5">
-          <span className="text-[12px] text-black/60">{study.category}</span>
+          <span className="text-[12px] text-ink-2">{study.category}</span>
         </div>
       </div>
     </motion.div>
@@ -112,12 +94,26 @@ function CaseCard({ study, index, isAdmin }) {
 
 export default function AboutPage() {
   const { isAdmin } = useAuth();
+  const { t } = useTranslation();
   const headerRef = useRef(null);
   const headerInView = useInView(headerRef, { once: true, margin: '-60px' });
 
+  /* Case studies: merge language-reactive title/category with static image/id */
+  const caseStudies = useMemo(() => {
+    const titles = t('about.caseStudies', { returnObjects: true, defaultValue: [] });
+    return CASE_BASE.map((base, i) => ({
+      ...base,
+      title: titles[i]?.title ?? '',
+      category: titles[i]?.category ?? '',
+    }));
+  }, [t]);
+
+  /* Marquee logos from dictionary */
+  const marqueeLogos = useMemo(() => t('about.marquee', { returnObjects: true, defaultValue: [] }), [t]);
+
   return (
     <section
-      className="relative text-black"
+      className="relative bg-page text-ink"
       style={{ fontFamily: "'DM Sans', sans-serif" }}
     >
       {/* marquee keyframes */}
@@ -142,13 +138,13 @@ export default function AboutPage() {
             animate={headerInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.7, ease: EASE }}
           >
-            <span className="mb-5 inline-block bg-black px-4 py-1.5 text-[13px] font-medium tracking-wide text-white">
-              仲英学辅
+            <span className="mb-5 inline-block bg-ink px-4 py-1.5 text-[13px] font-medium tracking-wide text-page">
+              {t('about.tag')}
             </span>
             <div className="text-[clamp(1.8rem,3.2vw,2.8rem)] font-light leading-[1.25] tracking-tight">
-              <span className="text-black">我们做了什么</span>
+              <span className="text-ink">{t('about.title')}</span>
               <br />
-              <span className="text-[clamp(1.1rem,1.8vw,1.5rem)] text-black/40">资料 · 讲座 · 答疑</span>
+              <span className="text-[clamp(1.1rem,1.8vw,1.5rem)] text-ink-3">{t('about.sub')}</span>
             </div>
           </motion.div>
         </div>
@@ -157,7 +153,7 @@ export default function AboutPage() {
       {/* Case study cards — 2x2 grid */}
       <div className="mx-auto max-w-7xl px-6 pb-16 sm:px-10 lg:px-16">
         <div className="grid gap-4 md:grid-cols-2">
-          {CASE_STUDIES.map((study, i) => (
+          {caseStudies.map((study, i) => (
             <CaseCard key={study.id} study={study} index={i} isAdmin={isAdmin} />
           ))}
         </div>
@@ -169,33 +165,33 @@ export default function AboutPage() {
           {/* left — pitch + CTA */}
           <div className="max-w-md">
             {isAdmin && (
-              <div className="mb-4 flex h-7 w-7 items-center justify-center border border-black/20 text-xs text-black">
+              <div className="mb-4 flex h-7 w-7 items-center justify-center border border-line-strong text-xs text-ink">
                 +
               </div>
             )}
-            <p className="text-[14px] leading-[1.7] text-black/60">
-              仲英书院学业辅导中心面向书院同学开展学业支持工作，把课程资料、朋辈经验和辅导方法沉淀为可持续的学习支持体系，让每一位同学都能获得更清晰、更持久的学习帮助。
+            <p className="text-[14px] leading-[1.7] text-ink-2">
+              {t('about.pitch')}
             </p>
             <button type="button" className="group mt-6 flex items-start">
-              <span className="inline-flex items-center gap-[10px] border border-black/20 bg-black px-3 py-2 text-base font-medium text-white transition-colors duration-200 group-hover:bg-black/85">
-                加入我们
+              <span className="inline-flex items-center gap-[10px] border border-line-strong bg-ink px-3 py-2 text-base font-medium text-page transition-colors duration-200 group-hover:bg-ink-2">
+                {t('about.joinUs')}
               </span>
-              <span className="flex h-6 w-6 items-center justify-center bg-black text-white transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-y-[18px]">
-                <ArrowUpRight size={16} strokeWidth={2} />
+              <span className="flex h-6 w-6 items-center justify-center bg-ink text-page transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-y-[18px]">
+                <ArrowUpRight size={16} strokeWidth={2} style={{ color: 'var(--page)' }} />
               </span>
             </button>
           </div>
 
           {/* right — logo marquee */}
-          <div className="mt-8 flex-1 overflow-hidden border-t border-black/10 md:ml-12 md:mt-0 md:border-t-0">
+          <div className="mt-8 flex-1 overflow-hidden border-t border-line md:ml-12 md:mt-0 md:border-t-0">
             <div className="overflow-hidden py-5">
               <div className="marquee-projects flex w-max">
-                {[...MARQUEE_LOGOS, ...MARQUEE_LOGOS].map((logo, i) => (
+                {[...marqueeLogos, ...marqueeLogos].map((logo, i) => (
                   <div key={i} className="flex shrink-0 items-center gap-2.5 px-8">
-                    <span className="text-black">
+                    <span className="text-ink">
                       <LogoIcon type={logo.icon} />
                     </span>
-                    <span className="whitespace-nowrap text-sm font-medium tracking-wide text-black/80">
+                    <span className="whitespace-nowrap text-sm font-medium tracking-wide text-ink">
                       {logo.name}
                     </span>
                   </div>

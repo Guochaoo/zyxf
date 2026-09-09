@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import './Toast.css';
 
 /* 顶部通知卡（Toast）：从页面上边缘滑入，停留 duration 后自动淡出，点 × 可提前关闭。
@@ -23,15 +24,16 @@ const ICON_PATHS = {
     'M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8ZM120,144V104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,180Z',
 };
 
-// 各类型默认副文案；调用方可通过 sub 覆盖。
-const DEFAULT_SUBS = {
-  error: '请检查后重试',
-  success: '操作已完成',
-  info: '供你了解',
-  warning: '请留意',
+// 各类型默认副文案；调用方可通过 sub 覆盖。文案从字典 toast.* 取。
+const DEFAULT_SUB_KEYS = {
+  error: 'toast.error',
+  success: 'toast.success',
+  info: 'toast.info',
+  warning: 'toast.warning',
 };
 
 export default function Toast({ type = 'info', message, sub, duration = 3500, onClose }) {
+  const { t } = useTranslation();
   const [closing, setClosing] = useState(false);
   const kind = ICON_PATHS[type] ? type : 'info';
 
@@ -56,11 +58,11 @@ export default function Toast({ type = 'info', message, sub, duration = 3500, on
       </div>
       <div className="toast-card__text">
         <p className="toast-card__message">{message}</p>
-        <p className="toast-card__sub">{sub ?? DEFAULT_SUBS[kind]}</p>
+        <p className="toast-card__sub">{sub ?? t(DEFAULT_SUB_KEYS[kind])}</p>
       </div>
       <button
         type="button"
-        aria-label="关闭提示"
+        aria-label={t('common.close')}
         className="toast-card__close"
         onClick={() => setClosing(true)}
       >

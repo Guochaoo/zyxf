@@ -1,8 +1,8 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { gsap } from 'gsap';
 import { Link } from 'react-router-dom';
-import { CircleUserRound, ChevronsUpDown, LogIn, LogOut, Settings } from 'lucide-react';
-import { EASE_COLLAPSE } from './ui.js';
+import { CircleUserRound, LogIn, LogOut, Settings } from 'lucide-react';
 import { useClickOutside } from '../hooks/useClickOutside.js';
 import './StaggeredMenu.css';
 
@@ -54,10 +54,12 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     closeOnClickAway = true,
     hideToggleButton = false,
     onMenuOpen,
-    onMenuClose
+    onMenuClose,
+    onOpenSettings
   },
   ref
 ) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const openRef = useRef(false);
   const panelRef = useRef(null);
@@ -67,10 +69,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   const plusVRef = useRef(null);
   const iconRef = useRef(null);
   const textInnerRef = useRef(null);
-  const [textLines, setTextLines] = useState(['菜单', '关闭']);
-  // 账号卡片的用户菜单（登录/退出/设置）展开状态；点击卡片外空白处收起。
-  const [acctOpen, setAcctOpen] = useState(false);
-  const acctRef = useRef(null);
+  const [textLines, setTextLines] = useState([t('menu.toggleOpen'), t('menu.toggleClose')]);
 
   const openTlRef = useRef(null);
   const closeTweenRef = useRef(null);
@@ -302,13 +301,15 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     if (!inner) return;
     textCycleAnimRef.current?.kill();
 
-    const currentLabel = opening ? '菜单' : '关闭';
-    const targetLabel = opening ? '关闭' : '菜单';
+    const openLabel = t('menu.toggleOpen');
+    const closeLabel = t('menu.toggleClose');
+    const currentLabel = opening ? openLabel : closeLabel;
+    const targetLabel = opening ? closeLabel : openLabel;
     const cycles = 3;
     const seq = [currentLabel];
     let last = currentLabel;
     for (let i = 0; i < cycles; i++) {
-      last = last === '菜单' ? '关闭' : '菜单';
+      last = last === openLabel ? closeLabel : openLabel;
       seq.push(last);
     }
     seq.push(targetLabel);
@@ -322,7 +323,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
       duration: 0.5 + lineCount * 0.07,
       ease: 'power4.out'
     });
-  }, []);
+  }, [t]);
 
   // 主菜单开/关共用的动画编排：面板滑动 + 图标/配色/文字三联动。
   const animateTo = useCallback(
@@ -360,14 +361,11 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     }
   }, [animateTo, onMenuClose]);
 
-  // 账号菜单项点击的统一编排：先收起弹出层，再执行动作，最后关主菜单。
+  // 账户动作（登录/退出）触发后关闭主菜单。
   const handleAccountAction = (action) => {
-    setAcctOpen(false);
     action?.();
     closeMenu();
   };
-
-  useClickOutside(acctOpen, () => setAcctOpen(false), acctRef);
 
   useClickOutside(closeOnClickAway && open, closeMenu, panelRef, toggleBtnRef);
 
@@ -401,7 +399,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
           <button
             ref={toggleBtnRef}
             className="sm-toggle"
-            aria-label={open ? '关闭菜单' : '打开菜单'}
+            aria-label={open ? t('menu.closeAria') : t('menu.openAria')}
             aria-expanded={open}
             aria-controls="staggered-menu-panel"
             onClick={toggleMenu}
@@ -448,15 +446,15 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
             ) : (
               <li className="sm-panel-itemWrap" aria-hidden="true">
                 <span className="sm-panel-item">
-                  <span className="sm-panel-itemLabel">No items</span>
+                  <span className="sm-panel-itemLabel">{t('menu.noItems')}</span>
                 </span>
               </li>
             )}
           </ul>
           <div className="sm-panel-bottom">
             {displaySocials && socialItems && socialItems.length > 0 && (
-              <div className="sm-socials" aria-label="Official Channels">
-                <h3 className="sm-socials-title">Official Channels</h3>
+              <div className="sm-socials" aria-label={t('menu.officialChannels')}>
+                <h3 className="sm-socials-title">{t('menu.officialChannels')}</h3>
                 <ul className="sm-socials-list" role="list">
                   {socialItems.map((s, i) => (
                     <li key={s.label + i} className="sm-socials-item">
@@ -469,80 +467,64 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
               </div>
             )}
             {account && (
-              <div className="sm-account-card" aria-label="当前账户">
-                <span
-                  className={`sm-account-avatar ${account.guest ? 'sm-account-avatar--guest' : ''}`}
-                  aria-hidden="true"
-                >
-                  {account.guest ? (
-                    <CircleUserRound className="h-5 w-5" strokeWidth={1.6} />
-                  ) : (
-                    account.avatarText
-                  )}
-                </span>
-                <span className="sm-account-meta">
-                  <span className="sm-account-name">{account.name}</span>
-                  {account.subtitle && (
-                    <span className="sm-account-sub">{account.subtitle}</span>
-                  )}
-                </span>
-                <span className="sm-account-menu" ref={acctRef}>
-                  {acctOpen && (
-                    <div className="sm-account-pop" role="menu" aria-label="账户操作">
-                      <div className="sm-account-pop-list">
-                        {account.guest ? (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="sm-account-pop-item"
-                            onClick={() => handleAccountAction(account.onLogin)}
-                          >
-                            <LogIn size={17} strokeWidth={1.8} aria-hidden="true" />
-                            <span>登录</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="sm-account-pop-item sm-account-pop-item--danger"
-                            onClick={() => handleAccountAction(account.onLogout)}
-                          >
-                            <LogOut size={17} strokeWidth={1.8} aria-hidden="true" />
-                            <span>退出登录</span>
-                          </button>
-                        )}
-                      </div>
-                      <div className="sm-account-pop-sep" />
-                      <div className="sm-account-pop-list">
-                        {/* 预留：设置入口，后续接入设置面板 */}
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="sm-account-pop-item"
-                          onClick={() => setAcctOpen(false)}
-                        >
-                          <Settings size={17} strokeWidth={1.8} aria-hidden="true" />
-                          <span>设置</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
+              <div className="sm-account-card" aria-label={t('menu.currentAccount')}>
+                {account.guest ? (
                   <button
                     type="button"
-                    className="sm-account-gear"
-                    aria-label={acctOpen ? '收起账户菜单' : '展开账户菜单'}
-                    aria-expanded={acctOpen}
-                    onClick={() => setAcctOpen((v) => !v)}
+                    className="sm-account-go"
+                    aria-label={t('menu.login')}
+                    title={t('menu.login')}
+                    onClick={() => handleAccountAction(account.onLogin)}
                   >
-                    <ChevronsUpDown
-                      size={18}
-                      strokeWidth={1.6}
-                      aria-hidden="true"
-                      style={{
-                        transform: acctOpen ? 'rotate(180deg)' : 'none',
-                        transition: `transform 240ms ${EASE_COLLAPSE}`,
-                      }}
-                    />
+                    <span className="sm-account-avatar sm-account-avatar--guest" aria-hidden="true">
+                      <CircleUserRound className="h-5 w-5" strokeWidth={1.6} />
+                    </span>
+                    <span className="sm-account-meta">
+                      <span className="sm-account-name">{account.name}</span>
+                      {account.subtitle && (
+                        <span className="sm-account-sub">{account.subtitle}</span>
+                      )}
+                    </span>
+                  </button>
+                ) : (
+                  <>
+                    <span className="sm-account-avatar" aria-hidden="true">
+                      {account.avatarText}
+                    </span>
+                    <span className="sm-account-meta">
+                      <span className="sm-account-name">{account.name}</span>
+                      {account.subtitle && (
+                        <span className="sm-account-sub">{account.subtitle}</span>
+                      )}
+                    </span>
+                  </>
+                )}
+                <span className="sm-account-actions">
+                  {/* 设置：打开全局设置弹窗 */}
+                  <button
+                    type="button"
+                    className="sm-account-action"
+                    aria-label={t('menu.settings')}
+                    title={t('menu.settings')}
+                    onClick={() => {
+                      onOpenSettings?.();
+                      closeMenu();
+                    }}
+                  >
+                    <Settings size={18} strokeWidth={1.6} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className={`sm-account-action ${account.guest ? 'sm-account-action--login' : 'sm-account-action--logout'}`}
+                    aria-label={account.guest ? t('menu.login') : t('menu.logout')}
+                    title={account.guest ? t('menu.login') : t('menu.logout')}
+                    onClick={() => handleAccountAction(account.guest ? account.onLogin : account.onLogout)}
+                  >
+                    {account.guest ? (
+                      <LogIn size={18} strokeWidth={1.6} aria-hidden="true" />
+                    ) : (
+                      <LogOut size={18} strokeWidth={1.6} aria-hidden="true" />
+                    )}
                   </button>
                 </span>
               </div>

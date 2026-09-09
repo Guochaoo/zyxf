@@ -15,7 +15,7 @@ export default function PanelHeader({
   children,
 }) {
   return (
-    <div className="flex shrink-0 items-center justify-between gap-1 bg-[#EFEFEF] p-1.5">
+    <div className="flex shrink-0 items-center justify-between gap-1 bg-field p-1.5">
       <span className="shrink-0 px-2 py-[3px] text-[13px] font-medium text-ink">{title}</span>
       <div className="flex shrink-0 items-center gap-1">
         {!collapsed && children}
