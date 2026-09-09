@@ -4,13 +4,13 @@
 > 编号体系：**`BUG-<n>`** 缺陷 · **`IMPROVE-<n>`** 改进。标题下第一行 = 分类（`layer · component`），第二行 = 受影响文件；正文为 现象 / 根因 / 影响 / 修法 / 验证。
 > 列出的条目均为**待处理**；已处理的归入文末「已归档」。
 
-**当前进度**：29 个缺陷 + 1 个改进；已修复 20 个，待处理 10 个。
+**当前进度**：31 个缺陷 + 2 个改进；已修复 22 个，待处理 11 个。
 
 ```yaml
-updated: 2026-08-30
-entries: 30
-fixed: 20
-pending: 10
+updated: 2026-09-09
+entries: 33
+fixed: 22
+pending: 11
 severity_levels:
   P0: 明确功能错误或崩溃风险，优先修复
   P1: 性能退化或逻辑隐患
@@ -101,6 +101,17 @@ severity_levels:
 - **建议**：以页面为边界拆出 `pages/<Page>/` 下的容器、数据 hook 与纯展示组件；先迁无状态展示，再迁副作用逻辑，确保 DOM 顺序与接口调用时序不变。
 - **验证**：每次拆分后跑前后端测试与生产构建，并补充对应组件行为测试。
 
+#### IMPROVE-02 · Mimosa 安全扫描剩余项：均为协议性要求/误报，需批量归类豁免
+`backend · 安全扫描`
+`files: [backend/src/routes/folders.js, backend/src/imm.js, frontend/src/test/*, backend/test/*]`
+
+- **现状**：生产已修复的三项真实问题（sync 权限、生产 CORS 拒绝 `'*'`、dev CORS 显式来源）之外，Mimosa 仍对以下做静态标记，经复核均为**误报或协议性要求**、无法在源码层面合法消除：
+  - `backend/src/routes/folders.js:207/244/266` — `mongo-sort-injection`。仓库使用 **SQLite**（`node:sqlite`），无 MongoDB；`cellCompare`/`sortByName` 是静态比较函数，无用户输入注入面。
+  - `backend/src/imm.js:32` — `hmacSha1`。阿里云 **OSS 签名协议强制固定用 HMAC-SHA1**，不可更换，否则无法调用 OSS。
+  - 前后端测试伪凭据（`test-key`/`secret123` 等）。均为单测断言虚构值，非真实凭据；改值会破坏 API 契约断言，且 Mimosa 对改名后的变量同样拦截。
+- **建议**：在 Mimosa 客户端为上述规则配置扫描豁免（按文件/路径/规则），以「生产严格校验 + 误报归类」为边界，避免每次提交被误拦截。
+- **验证**：豁免后重新跑 Mimosa 扫描，确认真实风险被拦截、误报不再阻塞提交。
+
 ---
 
 ## 已归档
@@ -132,6 +143,8 @@ severity_levels:
 | BUG-25 | P2 | 前端使用未配置的 slate-700 色阶 | `frontend/tailwind.config.js` | 2026-08-30 |
 | BUG-30 | P2 | 扩展名策略注释引用已不存在的实现 | `backend/src/extPolicy.js` | 2026-08-30 |
 | BUG-31 | P2 | Primary Dark CTA 的 CSS 注释与实际圆角不一致 | `frontend/src/index.css` | 2026-08-30 |
+| BUG-32 | P1 | 同步接口缺 admin 权限校验，匿名可触发库级改写 | `backend/src/routes/sync.js` | 2026-09-09 |
+| BUG-33 | P1 | 生产环境 CORS 默认全开放（`origin: '*'`） | `backend/src/index.js` | 2026-09-09 |
 
 ### 已关闭改进项
 

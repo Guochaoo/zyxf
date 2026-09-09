@@ -609,13 +609,14 @@ describe('stats', () => {
 
 describe('sync', () => {
   test('imports files and folders that exist in OSS but not locally', async () => {
+    const token = await adminLogin();
     ossObjectStore.keys = [
       'zyxf-test/\u8bfe\u7a0b/', // 课程/
       'zyxf-test/\u8bfe\u7a0b/\u9ad8\u6570.pdf', // 高数.pdf
       'zyxf-test/\u8bfe\u7a0b/\u56fe\u4e66/\u4f5c\u4e1a.pdf', // 图书/作业.pdf
       'zyxf-test/root-file.txt',
     ];
-    const { status, body } = await request('POST', '/api/sync');
+    const { status, body } = await request('POST', '/api/sync', { token });
     assert.equal(status, 200);
     assert.deepEqual(body.added, { folders: 2, files: 3 });
     assert.equal(body.removed.files, 0);
@@ -653,9 +654,10 @@ describe('sync', () => {
   });
 
   test('sync is idempotent — second run adds nothing', async () => {
+    const token = await adminLogin();
     ossObjectStore.keys = ['zyxf-test/a.pdf'];
-    await request('POST', '/api/sync');
-    const second = await request('POST', '/api/sync');
+    await request('POST', '/api/sync', { token });
+    const second = await request('POST', '/api/sync', { token });
     assert.deepEqual(second.body.added, { folders: 0, files: 0 });
   });
 
@@ -691,18 +693,11 @@ describe('sync', () => {
     }
   });
 
-  test('anonymous is rate limited to 5 syncs per minute per IP', async () => {
+  test('anonymous is rejected by sync (requires admin)', async () => {
     // Unique XFF IP so this test never shares quota with other tests.
     const xff = { 'x-forwarded-for': '203.0.113.99' };
-    let ok = 0;
-    let limited = 0;
-    for (let i = 0; i < 6; i++) {
-      const { status } = await request('POST', '/api/sync', { headers: xff });
-      if (status === 200) ok += 1;
-      else if (status === 429) limited += 1;
-    }
-    assert.equal(ok, 5);
-    assert.equal(limited, 1);
+    const { status } = await request('POST', '/api/sync', { headers: xff });
+    assert.equal(status, 401);
   });
 });
 

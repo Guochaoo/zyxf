@@ -2,6 +2,7 @@ import { Router } from 'express';
 import path from 'node:path';
 import { db, transaction } from '../db.js';
 import { listOssObjects } from '../oss.js';
+import { requireAdmin } from '../auth.js';
 import { buildFolderIndex, nextSortOrder } from '../dbHelpers.js';
 import { adminBypassLimiter } from '../limiter.js';
 import { cleanObjectSegment, ossPrefix, placeholderKeyForFolderFromMap } from '../storagePath.js';
@@ -35,7 +36,7 @@ function findFolderBySegment(segment, parentId) {
  *  - prunes folders that are empty and have no placeholder object
  * OSS is the source of truth; the empty-listing case never removes records.
  */
-router.post('/', syncLimiter, async (req, res, next) => {
+router.post('/', requireAdmin, syncLimiter, async (req, res, next) => {
   try {
     const objects = await listOssObjects();
     const keySet = new Set(objects.map((o) => o.key));
