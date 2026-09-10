@@ -14,9 +14,9 @@
 
 ```yaml
 updated: 2026-09-11
-entries: 107          # 缺陷 77 + 改进 30
+entries: 108          # 缺陷 78 + 改进 30
 pending: 31           # 缺陷 19 + 改进 12
-fixed: 76             # 已归档：缺陷 58 + 改进 18
+fixed: 77             # 已归档：缺陷 59 + 改进 18
 ```
 
 ---
@@ -320,7 +320,7 @@ fixed: 76             # 已归档：缺陷 58 + 改进 18
 
 > **类别**列为便于按区域速查的单一归类；`处置要点` 列记录该项的修法依据、踩坑与验证方式，无额外说明的填 `—`。
 
-### 2.1 已修复缺陷（58）
+### 2.1 已修复缺陷（59）
 
 | 编号 | 严重度 | 类别 | 标题 | 修复位置 | 关闭日期 | 处置要点 |
 |---|---|---|---|---|---|---|
@@ -383,6 +383,7 @@ fixed: 76             # 已归档：缺陷 58 + 改进 18
 | BUG-76 | P1 | 工程·CI | CI 只在 PR→main 触发，`dev` 上开发全程零校验（假绿） | `.github/workflows/ci.yml`, `README.md` | 2026-09-11 | 原 `on:` 只有 `pull_request: branches: [main]`，而 AGENTS.md §2.1 规定直接在 `dev` 上开发、仅在人类要求时才向 main 开 PR——等于所有日常推送都不跑测试与构建，「CI 通过」只在发布那一刻才有意义。修法：加 `push: branches: [dev]`（deploy 仍只挂 main/master，不会误部署），并同步 README 描述。验证：YAML 结构核对 + 本机等价命令（前后端测试与 build）全绿。 |
 | BUG-77 | P1 | 工程·部署 | 部署健康检查失败无回滚，线上停在新修订持续 502 | `.github/workflows/deploy.yml`, `docs/DEPLOY.md` | 2026-09-11 | 原脚本以 `curl -fsS /api/health` 收尾：此时新代码与前端 dist 都已覆盖，健康检查失败只让 workflow 变红，服务器仍跑坏修订，只能人工 SSH 救。修法：部署前记录 `PREV=$(git rev-parse HEAD)`，失败则 `cd /opt/zyxf && git reset --hard $PREV` → 重装依赖 → 重建前端 → 重启后端 → `exit 1`（仍判失败，不掩盖事故）。验证：内嵌脚本分支人工核对，回滚分支用绝对路径 `cd`，避免承接前一步的 cwd。 |
 | BUG-78 | P2 | 安全 | 生产 CSP 的 `style-src` 缺 `fonts.googleapis.com`，About 页字体样式表被静默拦掉 | `frontend/nginx.conf`, `docs/DEPLOY.md` | 2026-09-11 | `index.html` 引入 Google Fonts 的 DM Sans 样式表，`AboutPage` 又强制 `fontFamily: 'DM Sans'`，而 CSP 的 `style-src` 只有 `'self' 'unsafe-inline'`——样式表被拦，页面字体退回 sans-serif 且控制台持续报违规（IMPROVE-11 建立策略时漏掉这个 origin）。修法：`style-src` 补 `https://fonts.googleapis.com`（server 级与 `/assets/` 两处都要，子级 `add_header` 会屏蔽继承），DEPLOY.md 模板同步。验证：构建产物中确认 `index.html` 确实引用该 origin。 |
+| BUG-80 | P2 | 工程·本地开发 | nodemon 的 watcher 因同一类原子写临时文件 EBUSY 而退出，后端整站停服 | `backend/package.json` | 2026-09-11 | BUG-38 只修了 Vite 一侧。本轮继续编辑源码时后端也倒了，`run.err.log` 明确记下根因：`[nodemon] Internal watch failed: EBUSY: resource busy or locked, watch '...\backend\src\routes\files.js~RF85e5fa1.TMP'`——编辑器/agent 的「临时文件 + 原子替换」会在被改文件旁留下 `~RF*.TMP` / `*.tmpdir/`，nodemon 的 watcher 抢在删除前监听即抛 EBUSY，进程随之中止（端口 4000 关闭，Vite 代理返回 500）。修法：`package.json` 加 `nodemonConfig`——`watch: ["src"]` 收窄监听范围，`ignore` 排掉 `**/*.tmp`、`**/*.TMP`、`**/*.tmpdir/**`、`**/*~RF*`。验证：手工在 `backend/src/routes/` 下建 `files.js~RF*.TMP` 与 `.index.js.*.tmpdir/index.js.tmp` 再删除，后端保持 HTTP 200、日志无新重启、err 日志无 EBUSY。 |
 
 ### 2.2 已关闭改进项（18）
 
