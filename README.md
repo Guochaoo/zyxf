@@ -55,7 +55,7 @@ cd frontend && npm install && npm run dev
 
 | 变量 | 必填 | 说明 |
 |---|---|---|
-| `OSS_REGION` / `OSS_BUCKET` / `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET` | ✅ | 阿里云 OSS 凭证（专用 RAM 用户 + 单 bucket 最小权限，见[部署文档 §2.1](docs/DEPLOY.md)） |
+| `OSS_REGION` / `OSS_BUCKET` / `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET` | ✅ | 阿里云 OSS 凭证（专用 RAM 用户 + 单 bucket 最小权限，见[部署文档 §2.2](docs/DEPLOY.md)） |
 | `JWT_SECRET` | 生产必填 | ≥ 32 位随机串，生产环境强度不达标拒绝启动 |
 | `JWT_EXPIRES_IN` |  | JWT 有效期（默认 `7d`） |
 | `ADMIN_USER` / `ADMIN_PASSWORD` | 生产必填 | 管理员账号的唯一权威来源：每次启动同步密码/角色，改密后重启即生效；密码 ≥ 12 位 |

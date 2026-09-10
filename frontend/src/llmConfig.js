@@ -22,6 +22,22 @@ export const loadLlmCfg = () => {
   return { apiKey: '', baseUrl: '', model: '' };
 };
 
+// ---- 变更广播 ----
+// 设置弹窗与常驻右栏的 ChatComposer 共用这份存储，但各自持有 state 副本：保存后若不通知，
+// 聊天仍会按「挂载时读到的旧配置」发送（BUG-58），必须切页重挂载才生效。
+// 统一在两个写入点广播，消费方用 subscribeLlmCfg 订阅。
+const CHANGE_EVENT = 'llm-config-changed';
+
+function notifyChange() {
+  window.dispatchEvent(new Event(CHANGE_EVENT));
+}
+
+/** 订阅浏览器侧配置变更，返回取消订阅函数（可直接作为 useEffect 的清理函数）。 */
+export function subscribeLlmCfg(listener) {
+  window.addEventListener(CHANGE_EVENT, listener);
+  return () => window.removeEventListener(CHANGE_EVENT, listener);
+}
+
 // 持久化配置：trim 后写入 localStorage。
 export const saveLlmCfg = (cfg) => {
   const next = {
@@ -30,10 +46,12 @@ export const saveLlmCfg = (cfg) => {
     model: cfg.model.trim(),
   };
   storageSet(LLM_KEY, JSON.stringify(next));
+  notifyChange();
   return next;
 };
 
 // 清空配置（恢复默认）：移除存储项。
 export const clearLlmCfg = () => {
   storageRemove(LLM_KEY);
+  notifyChange();
 };

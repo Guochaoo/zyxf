@@ -111,7 +111,27 @@ openssl rand -hex 32
 
 > ⚠️ `ADMIN_USER`/`ADMIN_PASSWORD` 是管理员账号的**唯一权威来源**：每次启动都会与库内哈希比对，密码变了就同步（旧密码失效），同名普通用户会被提为 admin。因此改密码只需改 `.env` 再重启（BUG-34）。
 
-### 2.1 OSS 凭证：单独一个 RAM 用户 + 最小权限策略
+### 2.1 目录属主与权限（否则服务启动即退出）
+
+`deploy/zyxf.service` 以 `User=www` 运行，工作目录是 `/opt/zyxf/backend`，而 `db.js` 会在这个目录里创建并写入 `data.db`（连同 `-wal`/`-shm`）。若上传时用的是 root，`/opt/zyxf` 归 root 所有，`www` 对 `backend/` 没有写权限 → SQLite 打不开 → 进程启动即退出 → nginx 反代变成 502，日志里只有一行 `SQLITE_CANTOPEN`。
+
+```bash
+# 1) 建服务用户（若不存在）
+sudo useradd --system --home /opt/zyxf --shell /usr/sbin/nologin www 2>/dev/null || true
+# 2) 整棵树交给 www（nginx 只读 dist，用 755 即可）
+sudo chown -R www:www /opt/zyxf
+sudo chmod 755 /opt/zyxf /opt/zyxf/backend /opt/zyxf/frontend
+# 3) 数据库文件本身必须是 600，且不能是 root 所有
+sudo chmod 600 /opt/zyxf/backend/data.db 2>/dev/null || true
+# 4) 以服务身份验证可写（这条必须过；输出 "not writable" 就别急着起服务）
+sudo -u www test -w /opt/zyxf/backend && echo "backend writable" || echo "not writable"
+sudo -u www node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync('/opt/zyxf/backend/data.db').exec('PRAGMA journal_mode=WAL');console.log('db open ok')"
+```
+
+> ⚠️ `.env` 含密钥，属主交给 `www` 后建议 `chmod 600 /opt/zyxf/.env`（`www` 能读即可）。
+> ⚠️ 之后每次用 root 上传/解压代码（尤其 `tar` 带 `--same-owner` 或覆盖 `backend/`）都要**重跑第 2 步**，否则属主被改回 root，故障会在下次重启时复现。
+
+### 2.2 OSS 凭证：单独一个 RAM 用户 + 最小权限策略
 
 不要复用个人或其他业务的 RAM 用户（例如一把同时给个人网盘用的密钥），也不要给 `PowerUserAccess` 这类全产品权限。后端对 OSS 的实际操作面很窄，按下面建专用用户即可：
 
@@ -168,7 +188,7 @@ aliyun ram CreateAccessKey --UserName zyxf-oss --region cn-beijing
 
 验证：用新密钥访问**其他** bucket 应返回 `AccessDenied`（越权被拒），访问目标 bucket 正常——两者都满足才算最小权限生效。
 
-### 2.2 DirectMail 凭证（注册验证码）
+### 2.3 DirectMail 凭证（注册验证码）
 
 同理，`DM_ACCESS_KEY_ID`/`DM_ACCESS_KEY_SECRET` 应使用**专用 RAM 用户**，且只授予发信所需的单个动作——应用只调用 `SingleSendMail`，不需要 `dm:*`（域名/模板/收件人管理、IP 防护等都不需要）：
 
@@ -190,7 +210,7 @@ aliyun ram CreateAccessKey --UserName zyxf-mail --region cn-beijing
 
 验证：越权只读动作（如 `GetTrackList`，**必须传齐必填参数**，否则会先报参数错误而非权限错误）应返回 `Forbidden`；`SingleSendMail` 传一个格式非法的收件地址应返回地址校验错误（`InvalidToAddress`）而非权限错误。
 
-### 2.3 数据保留
+### 2.4 数据保留
 
 下载日志含访问者 `ip`/`ua`，属个人信息。后端启动时按 `DOWNLOAD_LOG_RETENTION_DAYS`（默认 400，略大于仪表盘热力图的近一年窗口）清理超期记录；无需保留访问明细时可调小。
 
@@ -300,6 +320,7 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 
 ## 6. 校验清单
 
+- [ ] 后端目录对服务用户可写（`sudo -u www test -w /opt/zyxf/backend`），`journalctl -u zyxf` 无 `SQLITE_CANTOPEN`
 - [ ] `https://zyxf.top` 能看到首页
 - [ ] 展开右侧菜单 → 底部账户卡右侧箭头展开菜单 → 「登录」 → 用 `.env` 账号密码能登录
 - [ ] 上传一个 PDF → 不报 CORS 错

@@ -120,4 +120,56 @@ describe('DashboardPage', () => {
     await waitFor(() => expect(screen.getByText('0 次下载')).toBeInTheDocument());
     expect(document.querySelector('.bg-red svg.lucide-arrow-down')).toBeTruthy();
   });
+
+  // BUG-57：快速切区间时，先发的慢响应后到不得覆盖新区间的数据。
+  test('过期响应不覆盖新区间统计', async () => {
+    const { getStats } = await import('../api.js');
+    getStats.mockReset();
+
+    const base = (range, today) => ({
+      range,
+      today_downloads: today,
+      yesterday_downloads: 0,
+      downloads_7d: 0,
+      downloads_prev_7d: 0,
+      total_files: 10,
+      total_folders: 2,
+      total_size: 100,
+      files_added_7d: 1,
+      size_added_7d: 1,
+      series: [],
+      type_breakdown: [],
+      top_downloads: [],
+      recent_uploads: [],
+      top_folders: [],
+    });
+
+    let resolveSeven;
+    let call = 0;
+    getStats.mockImplementation(() => {
+      call += 1;
+      // 1) 首屏 30 天：立即返回；2) 7 天：挂起（模拟慢响应）；3) 30 天：立即返回新值
+      if (call === 2) return new Promise((res) => { resolveSeven = res; });
+      if (call === 3) return Promise.resolve(base(30, 999));
+      return Promise.resolve(base(30, 111));
+    });
+
+    renderApp();
+    await waitFor(() => expect(screen.getByText('111 次下载')).toBeInTheDocument(), { timeout: 3000 });
+
+    fireEvent.click(screen.getByRole('button', { name: '近 7 日' }));
+    await waitFor(() => expect(call).toBe(2));
+
+    // 迟到的 7 天响应（切回 30 天必须等它落地，否则控件在切换中禁用）
+    resolveSeven(base(7, 111));
+    await waitFor(() => expect(screen.getByRole('button', { name: '近 30 日' })).not.toBeDisabled());
+
+    fireEvent.click(screen.getByRole('button', { name: '近 30 日' }));
+    await waitFor(() => expect(call).toBe(3), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByText('999 次下载')).toBeInTheDocument());
+
+    // 先到的旧响应不得回写数据；切换器高亮必须与展示的数据一致
+    expect(screen.queryByText('111 次下载')).toBeNull();
+    expect(screen.getByRole('button', { name: '近 30 日' })).toHaveAttribute('aria-pressed', 'true');
+  });
 });
