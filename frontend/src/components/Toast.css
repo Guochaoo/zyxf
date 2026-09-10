@@ -116,16 +116,18 @@
 .toast-card__sub {
   margin: 0;
   cursor: default;
+  /* 占满文字列宽：父级 .toast-card__text 是 align-items:flex-start 的纵向 flex，块级子项
+     默认按内容宽度收缩，换行时需显式撑满，否则长文案会被裁成一条。 */
+  width: 100%;
   max-width: 100%;
-  /* 最多两行后省略。原先 nowrap + ellipsis：卡片宽 330px、文字区约 200px，15px 字号下
-     只放得下十几个字，稍长的文案（如同步结果）就被截掉。允许换行后短文案仍占一行，
-     长文案有两种行可用；副行字号更小，能承载明细。 */
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
+  /* 正常换行（原先 white-space:nowrap + ellipsis 会把稍长文案截断：卡片 330px、
+     文字区仅约 209px，15px 字号下只放得下十几个字）。 */
   overflow-wrap: anywhere;
+  /* 兜住异常长的后端错误串；正常文案都远短于 4 行。
+     刻意不用 -webkit-line-clamp：它的 display:-webkit-box 在纵向 flex 子项上宽度会算成 0，
+     实测整段文字直接消失（比截断更糟）。 */
+  max-height: 6em;
+  overflow: hidden;
 }
 
 .toast-card--error .toast-card__message {
