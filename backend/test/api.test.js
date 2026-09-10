@@ -693,11 +693,25 @@ describe('sync', () => {
     }
   });
 
-  test('anonymous is rejected by sync (requires admin)', async () => {
-    // Unique XFF IP so this test never shares quota with other tests.
+  // 分层限流：游客 2 次/分钟 < 登录用户 5 次/分钟 < 管理员豁免。
+  // 各用例使用互不相同的 XFF 出口 IP（仅 sync 测试使用），避免共享配额。
+  test('guest may sync, capped at 2 per minute', async () => {
     const xff = { 'x-forwarded-for': '203.0.113.99' };
-    const { status } = await request('POST', '/api/sync', { headers: xff });
-    assert.equal(status, 401);
+    assert.equal((await request('POST', '/api/sync', { headers: xff })).status, 200);
+    assert.equal((await request('POST', '/api/sync', { headers: xff })).status, 200);
+    const third = await request('POST', '/api/sync', { headers: xff });
+    assert.equal(third.status, 429);
+  });
+
+  test('logged-in user may sync up to 5 per minute (wider than guest)', async () => {
+    // userToken() carries id 99; keyGenerator buckets logged-in callers by user id.
+    const token = userToken();
+    for (let i = 0; i < 5; i++) {
+      const { status } = await request('POST', '/api/sync', { token });
+      assert.equal(status, 200);
+    }
+    const sixth = await request('POST', '/api/sync', { token });
+    assert.equal(sixth.status, 429);
   });
 });
 
