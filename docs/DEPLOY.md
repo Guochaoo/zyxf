@@ -246,6 +246,15 @@ server {
     root /opt/zyxf/frontend/dist;
     index index.html;
 
+    # 安全响应头。CSP 必须由托管 HTML 的 nginx 下发——后端只服务 /api，那里的
+    # CSP 管不到页面。若某个 location 自己写了 add_header，会屏蔽本级继承，需重复声明。
+    # 策略含义：script-src 仅 self（构建产物无内联脚本）；style-src 需 unsafe-inline
+    # （React 内联 style）；connect-src https: 覆盖 OSS 与用户自带 LLM；frame-src https:
+    # 给 IMM WebOffice 预览；font-src 给 Google Fonts。建议先用 Report-Only 观察。
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
     location /api/ {
         proxy_pass http://127.0.0.1:4000;
         proxy_http_version 1.1;

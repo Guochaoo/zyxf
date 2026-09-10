@@ -94,6 +94,8 @@ router.get('/', (req, res) => {
   const series = dailySeries(range, todayStart);
 
   // ---- File type breakdown ----
+  // 返回前 8 类明细 + 真实总类型数：前端只展示前 6 类，需要 total 才能算出准确
+  // 的「其余 N 类」，否则类型超 8 时会低估（BUG-24）。
   const typeRows = db
     .prepare(
       `SELECT
@@ -108,6 +110,11 @@ router.get('/', (req, res) => {
        LIMIT 8`
     )
     .all();
+  const type_total = db
+    .prepare(
+      `SELECT COUNT(DISTINCT COALESCE(NULLIF(LOWER(ext), ''), 'other')) c FROM files`
+    )
+    .get().c;
 
   // ---- Top downloads (last 30 days) ----
   // 按 file_id 分组（而非 file_id + file_name）：窗口内文件被重命名时应只出现
@@ -188,6 +195,7 @@ router.get('/', (req, res) => {
     size_added_7d,
     series,
     type_breakdown: typeRows,
+    type_total,
     top_downloads,
     recent_uploads,
     top_folders,

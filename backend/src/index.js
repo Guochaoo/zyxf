@@ -68,7 +68,10 @@ app.set('trust proxy', 1);
 
 app.use(
   helmet({
-    contentSecurityPolicy: false, // keep off for now — Vite/HMR & inline styles
+    // CSP 关闭是有意的：后端只服务 /api（JSON），HTML 由 nginx 托管，而 CSP 必须
+    // 与页面同源下发才有效——策略配在 frontend/nginx.conf（IMPROVE-11）。
+    // 其余 helmet 头（nosniff / X-Frame-Options 等）对 API 响应仍生效。
+    contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })

@@ -232,8 +232,8 @@ export async function uploadFile({ file, folderId, onProgress }) {
       name: file.name,
       oss_key: policy.key,
       size: file.size,
-      mime_type: file.type,
       folder_id: folderId || null,
+      // 不上报 mime_type：服务端按扩展名派生为权威值（BUG-26）。
     });
     return data;
   } catch (e) {

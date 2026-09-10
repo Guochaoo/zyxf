@@ -321,10 +321,14 @@ export default function BrowsePage() {
 
   const buildReorder = (drag, target, position /* 'before'|'after' */) => {
     if (!data) return null;
-    const all = [
-      ...data.folders.map((f) => ({ type: 'folder', id: f.id })),
-      ...data.files.map((f) => ({ type: 'file', id: f.id })),
-    ];
+    // 顺序基准必须与渲染一致：manual 模式下用后端给的合并视图 items，
+    // 否则拖拽结果会与显示顺序不符（BUG-27）。
+    const all = (
+      data.items ?? [
+        ...data.folders.map((f) => ({ ...f, type: 'folder' })),
+        ...data.files.map((f) => ({ ...f, type: 'file' })),
+      ]
+    ).map((it) => ({ type: it.type, id: it.id }));
     const filtered = all.filter((it) => !(it.type === drag.type && it.id === drag.id));
     const idx = filtered.findIndex((it) => it.type === target.type && it.id === target.id);
     if (idx === -1) return null;
@@ -611,7 +615,8 @@ function ItemListWithRename({
   onRowDrop,
 }) {
   const { t } = useTranslation();
-  const total = (data?.folders?.length || 0) + (data?.files?.length || 0);
+  // data.items 存在（manual 模式）时它就是完整列表；否则 folders + files。
+  const total = data?.items?.length ?? ((data?.folders?.length || 0) + (data?.files?.length || 0));
   if (total === 0) {
     return <div className="py-16 text-center text-slate-500 text-sm">{t('browse.empty')}</div>;
   }
@@ -626,47 +631,51 @@ function ItemListWithRename({
       ),
     [data]
   );
-  // 文件夹在前、文件在后合成单一渲染流（两段 .map 结构一致，仅点击与操作不同）。
-  const rows = [
-    ...(data?.folders || []).map((f) => ({
-      key: `d-${f.id}`,
-      item: { ...f, type: 'folder' },
-      onClick: () => onEnterFolder(f),
-      actions:
+  // 手动排序下后端返回合并视图 items（文件夹与文件共享 sort_order 序列），
+  // 直接按它渲染才能保持拖拽出的交错顺序（BUG-27）；其余排序模式后端给不出
+  // 交错语义，仍按「文件夹在前、文件在后」渲染。
+  const ordered = data?.items ?? [
+    ...(data?.folders || []).map((f) => ({ ...f, type: 'folder' })),
+    ...(data?.files || []).map((f) => ({ ...f, type: 'file' })),
+  ];
+
+  // 两类的行内结构一致，仅点击目标与操作按钮不同——统一构造避免重复。
+  const rows = ordered.map((item) => {
+    const isFolder = item.type === 'folder';
+    return {
+      key: `${isFolder ? 'd' : 'f'}-${item.id}`,
+      item,
+      onClick: isFolder ? () => onEnterFolder(item) : () => onPreviewFile(item),
+      actions: isFolder ? (
         isAdmin && (
           <>
-          <RowAction title={t('browse.rename')} onClick={() => onRenameFolder(f)}>
+            <RowAction title={t('browse.rename')} onClick={() => onRenameFolder(item)}>
               <PenLine className="w-4 h-4" />
             </RowAction>
-            <RowAction title={t('common.delete')} onClick={() => onDeleteFolder(f)}>
+            <RowAction title={t('common.delete')} onClick={() => onDeleteFolder(item)}>
               <Trash className="w-4 h-4" />
             </RowAction>
           </>
-        ),
-    })),
-    ...(data?.files || []).map((f) => ({
-      key: `f-${f.id}`,
-      item: { ...f, type: 'file' },
-      onClick: () => onPreviewFile(f),
-      actions: (
+        )
+      ) : (
         <>
-          <RowAction title={t('browse.download')} onClick={() => onDownloadFile(f)}>
+          <RowAction title={t('browse.download')} onClick={() => onDownloadFile(item)}>
             <Download className="w-4 h-4" />
           </RowAction>
           {isAdmin && (
             <>
-              <RowAction title={t('browse.rename')} onClick={() => onRenameFile(f)}>
+              <RowAction title={t('browse.rename')} onClick={() => onRenameFile(item)}>
                 <PenLine className="w-4 h-4" />
               </RowAction>
-              <RowAction title={t('common.delete')} onClick={() => onDeleteFile(f)}>
+              <RowAction title={t('common.delete')} onClick={() => onDeleteFile(item)}>
                 <Trash className="w-4 h-4" />
               </RowAction>
             </>
           )}
         </>
       ),
-    })),
-  ];
+    };
+  });
   return (
     <GlideList as="ul" highlightClassName="bg-hover">
       <li className="rb-table-heading hidden sm:flex items-center gap-2 px-4 py-2 text-xs text-slate-500 bg-field">

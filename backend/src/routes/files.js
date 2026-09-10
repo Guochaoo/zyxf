@@ -100,7 +100,7 @@ router.post('/upload-url', requireAdmin, (req, res) => {
 
 // Step 2: after the browser uploads to OSS, register metadata
 router.post('/', requireAdmin, wrapAsync(async (req, res) => {
-  const { name, oss_key, size, mime_type, folder_id } = req.body || {};
+  const { name, oss_key, size, folder_id } = req.body || {};
   if (!oss_key || !Number.isFinite(size) || size < 0) {
     return res.status(400).json({ error: '缺少必要参数（name/oss_key/size）' });
   }
@@ -122,7 +122,9 @@ router.post('/', requireAdmin, wrapAsync(async (req, res) => {
         v.trimmed,
         oss_key,
         size,
-        mime_type || null,
+        // MIME 以服务端由扩展名派生值为准（BUG-26）：浏览器上报的 file.type 可能
+        // 为空或与实际不符，而下载/预览响应一律按扩展名派生，两处必须同源。
+        mimeOf(v.ext) || null,
         v.ext || null,
         req.user?.username || null,
         so,

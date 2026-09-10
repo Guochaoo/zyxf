@@ -5,17 +5,16 @@ import { getStats, getHeatmap } from '../api.js';
 import { errMsg, formatSize, timeAgo } from '../utils.js';
 import { folderTarget } from '../ui.js';
 import FileIcon from '../components/FileIcon.jsx';
-import { AnomalyCard, AllocationCard, ChartTooltip, IconBadge, densifyBySpline } from '../components/InsightCards.jsx';
+import { AnomalyCard, AllocationCard, densifyBySpline } from '../components/InsightCards.jsx';
 import { BsArrowClockwise, BsFolder2Open } from 'react-icons/bs';
 import { ArrowDown, ArrowUp, BarChart3, HardDrive } from 'lucide-react';
+// 页面级子模块（IMPROVE-01）：无状态展示已迁出，页面只保留数据编排。
+import ActivityHeatmap from './Dashboard/ActivityHeatmap.jsx';
+import { Card, CardHeader, Empty, RangeSwitch } from './Dashboard/primitives.jsx';
 
 /* ============================================================
  * Insight card design system — liveline-style cards
  * ============================================================ */
-
-const DAY_MS = 86400000;
-
-const ACCENT = '#3d9aff';
 
 /* daily series rows { date, ts, downloads, uploads } → Liveline points.
    Densified to hourly spline samples so liveline's linear hover interpolation
@@ -37,253 +36,6 @@ const PALETTE = [
   { cls: 'bg-[#8b5cf6]', tone: 'text-[#8b5cf6]', color: '#8b5cf6' },
   { cls: 'bg-[#14b8a6]', tone: 'text-[#14b8a6]', color: '#14b8a6' },
 ];
-
-function Card({ className = '', children }) {
-  return (
-    <div className={`rounded-card bg-surface p-3 ${className}`.trim()}>
-      {children}
-    </div>
-  );
-}
-
-function CardHeader({ title, sub, icon, badgeClass }) {
-  return (
-    <div>
-      <h2 className="flex items-center gap-1.5 text-[13px] font-semibold tracking-[-0.01em] text-ink">
-        {icon && <IconBadge className={badgeClass}>{icon}</IconBadge>}
-        {title}
-      </h2>
-      {sub && <p className="mt-0.5 text-[11px] text-ink-3">{sub}</p>}
-    </div>
-  );
-}
-
-/* ---- Activity heatmap: GitHub-style year grid ---- */
-
-/* accent ramp over the field token; level 0 is an empty day */
-const HEAT_LEVELS = [
-  'var(--field)',
-  'rgba(61, 154, 255, 0.35)',
-  'rgba(61, 154, 255, 0.55)',
-  'rgba(61, 154, 255, 0.78)',
-  'var(--accent)',
-];
-
-const HEAT_GAP = 5; // px between cells and label rows
-
-/* sqrt-of-max instead of linear so one huge spike (a bulk upload) doesn't
-   flatten every other active day into the lightest shade */
-const heatLevel = (v, max) =>
-  v <= 0 || max <= 0 ? 0 : Math.min(4, Math.ceil(Math.sqrt(v / max) * 4));
-
-const fmtFullDate = (ts) => {
-  const d = new Date(ts);
-  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
-};
-
-/* daily rows → week columns (Monday-first), padded with invisible cells to
-   full weeks on both ends so the grid always starts on a Monday */
-function buildWeeks(rows) {
-  const byTs = new Map(rows.map((r) => [r.ts, r]));
-  const first = rows[0].ts;
-  const last = rows.at(-1).ts;
-  const gridStart = first - ((new Date(first).getDay() + 6) % 7) * DAY_MS;
-  const total = Math.ceil((last - gridStart) / DAY_MS) + 1;
-  const padded = total + ((7 - (total % 7)) % 7);
-  const cells = Array.from({ length: padded }, (_, i) => {
-    const ts = gridStart + i * DAY_MS;
-    const r = byTs.get(ts);
-    return { ts, inRange: !!r, downloads: r?.downloads ?? 0, uploads: r?.uploads ?? 0 };
-  });
-  const weeks = [];
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
-  // label the week each month's 1st falls in (GitHub-style top axis)
-  const months = weeks.map((week) => {
-    const firstOfMonth = week.find((c) => new Date(c.ts).getDate() === 1);
-    return firstOfMonth ? new Date(firstOfMonth.ts).getMonth() : null;
-  });
-  const max = cells.reduce((m, c) => Math.max(m, c.downloads), 0);
-  return { weeks, months, max };
-}
-
-function ActivityHeatmap({ rows }) {
-  const scrollRef = useRef(null);
-  const [hover, setHover] = useState(null);
-  const [box, setBox] = useState(null); // measured grid viewport { w, h }
-  const { t } = useTranslation();
-  // dictionary weekdays is Sunday-first; rendered per row index (grid is built
-  // Monday-first in buildWeeks, so labels may not align perfectly)
-  const weekdays = useMemo(() => t('dashboard.weekdays', { returnObjects: true }), [t]);
-
-  const { weeks, months, max } = useMemo(
-    () => (rows?.length ? buildWeeks(rows) : { weeks: [], months: [], max: 0 }),
-    [rows]
-  );
-
-  /* the panel stretches to the grid row height (set by the neighbouring
-     allocation card), so the scroll area's own size tells us how big the
-     cells can get; re-measure on resize */
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el || !weeks.length || typeof ResizeObserver === 'undefined') return undefined;
-    const measure = () => setBox({ w: el.clientWidth, h: el.clientHeight });
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [weeks.length]);
-
-  const PADX = 24; // px-3 on both sides — matches the p-3 of the other cards
-  const PADY = 12; // pb-3 below; the header row provides the top spacing
-  const MONTH_H = 14; // month axis row + its mb-1
-  const WEEK_LBL = 18; // weekday label column + mr-1
-
-  /* cell size fits the available height first (enlarging beyond GitHub's
-     10px to fill the taller panel) but is capped by the width so 53 week
-     columns stop just short of overflowing */
-  const cell = useMemo(() => {
-    if (!box) return 12;
-    const byH = (box.h - PADY - MONTH_H - 6 * HEAT_GAP) / 7;
-    const byW = (box.w - PADX - WEEK_LBL - (weeks.length - 1) * HEAT_GAP) / weeks.length;
-    return Math.max(12, Math.min(22, Math.floor(Math.min(byH, byW))));
-  }, [box, weeks.length]);
-
-  /* when even 10px cells overflow the width, drop the oldest weeks from the
-     left instead of scrolling — the grid always fits, no scrollbar */
-  const { visWeeks, visMonths } = useMemo(() => {
-    if (!box || !weeks.length) {
-      return { visWeeks: weeks, visMonths: months };
-    }
-    const avail = box.w - PADX - WEEK_LBL;
-    const nFit = Math.min(
-      weeks.length,
-      Math.max(1, Math.floor((avail + HEAT_GAP) / (cell + HEAT_GAP)))
-    );
-    if (nFit >= weeks.length) {
-      return { visWeeks: weeks, visMonths: months };
-    }
-    const cutWeeks = weeks.slice(weeks.length - nFit);
-    const cutMonths = months.slice(months.length - nFit);
-    // the week holding a month's label may have been cut; relabel the first
-    // visible column so the axis never starts unannotated
-    if (cutMonths[0] == null) {
-      const d = cutWeeks[0].find((c) => c.inRange) ?? cutWeeks[0][0];
-      cutMonths[0] = new Date(d.ts).getMonth();
-    }
-    return { visWeeks: cutWeeks, visMonths: cutMonths };
-  }, [box, cell, weeks, months]);
-
-  /* tooltip x is clamped into the grid viewport so the ~150px tooltip never
-     spills past the panel edges; it sits above the hovered cell (6px gap)
-     and flips below it for the top rows, so the hovered cell itself is
-     never covered */
-  const onCellEnter = (e, day) => {
-    const el = e.currentTarget;
-    const scroll = scrollRef.current;
-    if (!scroll) return;
-    const left = Math.min(
-      Math.max(el.offsetLeft + cell / 2, 74),
-      scroll.clientWidth - 74
-    );
-    const above = el.offsetTop - 58;
-    setHover({
-      left,
-      top: above >= 0 ? above : el.offsetTop + cell + 6,
-      cell: day,
-    });
-  };
-
-  return (
-    <div className="flex h-full flex-col overflow-hidden rounded-control bg-surface">
-      <div className="flex items-center justify-between gap-3 px-3 pb-1.5 pt-3">
-        <span className="flex min-w-0 items-center gap-1.5 text-[12px] font-medium text-ink">
-          <IconBadge className="bg-accent">
-            <ArrowDown className="size-2" strokeWidth={3} />
-          </IconBadge>
-          {t('dashboard.downloadHeatmap')}
-        </span>
-        <span className="flex shrink-0 items-center gap-1 text-[10px] text-ink-3">
-          {t('dashboard.heatmapLegendLow')}
-          {HEAT_LEVELS.map((c) => (
-            <span key={c} className="size-[9px] rounded-[2px]" style={{ background: c }} />
-          ))}
-          {t('dashboard.heatmapLegendHigh')}
-        </span>      </div>
-      {weeks.length ? (
-        <div
-          ref={scrollRef}
-          className="flex min-h-0 flex-1 px-3 pb-3"
-          onMouseLeave={() => setHover(null)}
-        >
-          {/* the weeks already fit the viewport (overflow is dropped from the
-              left), so the grid just centers in whatever space is left */}
-          <div className="relative mx-auto my-auto w-max">
-            <div className="mb-1 flex" style={{ gap: HEAT_GAP }}>
-              {visMonths.map((m, w) => (
-                <span
-                  key={w}
-                  style={{ width: cell }}
-                  className="whitespace-nowrap text-[10px] leading-none text-ink-3"
-                >
-                  {m != null ? t('dashboard.monthLabel', { count: m + 1 }) : ''}
-                </span>
-              ))}
-            </div>
-            <div className="flex" style={{ gap: HEAT_GAP }}>
-              <div className="mr-1 flex flex-col" style={{ gap: HEAT_GAP }}>
-                {weekdays.map((name, i) => (
-                  <span
-                    key={name}
-                    style={{ height: cell, lineHeight: `${cell}px` }}
-                    className="text-[10px] text-ink-3"
-                  >
-                    {i % 2 === 0 ? name : ''}
-                  </span>
-                ))}              </div>
-              {visWeeks.map((week, w) => (
-                <div key={w} className="flex flex-col" style={{ gap: HEAT_GAP }}>
-                  {week.map((day) =>
-                    day.inRange ? (
-                      <span
-                        key={day.ts}
-                        style={{
-                          width: cell,
-                          height: cell,
-                          background: HEAT_LEVELS[heatLevel(day.downloads, max)],
-                        }}
-                        className="rounded-[2px] transition-shadow hover:ring-1 hover:ring-line-strong"
-                        onMouseEnter={(e) => onCellEnter(e, day)}
-                      />
-                    ) : (
-                      <span key={day.ts} style={{ width: cell, height: cell }} />
-                    )
-                  )}
-                </div>
-              ))}
-            </div>
-            {hover && (
-              <div
-                className="pointer-events-none absolute z-10 -translate-x-1/2"
-                style={{ left: `${hover.left}px`, top: `${hover.top}px` }}
-              >
-                <ChartTooltip
-                  time={fmtFullDate(hover.cell.ts)}
-                  rows={[
-                    { label: t('dashboard.download'), value: String(hover.cell.downloads), color: ACCENT },
-                  ]}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="py-16 text-center text-[12px] text-ink-3">
-          {rows ? t('dashboard.noData') : t('common.loading')}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* ---- List cards (top downloads / recent uploads / top folders) ---- */
 
@@ -381,35 +133,7 @@ function TopFolders({ items }) {
   );
 }
 
-function RangeSwitch({ value, onChange }) {
-  const { t } = useTranslation();
-  const opts = [
-    { v: 7, label: t('dashboard.rangeDays.seven') },
-    { v: 30, label: t('dashboard.rangeDays.thirty') },
-    { v: 90, label: t('dashboard.rangeDays.ninety') },
-  ];
-  return (
-    <div className="inline-flex rounded-full bg-field p-0.5">
-      {opts.map((o) => (
-        <button
-          key={o.v}
-          type="button"
-          aria-pressed={value === o.v}
-          onClick={() => onChange(o.v)}
-          className={`rounded-full px-3 py-1 text-[12px] transition-[background-color,color,box-shadow,transform] duration-150 active:scale-[0.96] ${
-            value === o.v ? 'bg-surface text-ink shadow-btn' : 'text-ink-3 hover:text-ink-2'
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function Empty({ children }) {
-  return <div className="mt-6 py-8 text-center text-[12px] text-ink-3">{children}</div>;
-}
+// RangeSwitch / Empty / Card / CardHeader 已迁至 ./Dashboard/primitives.jsx（IMPROVE-01）
 
 /* ============================================================
  * Page
@@ -546,10 +270,13 @@ export default function DashboardPage() {
     return <div className="py-24 text-center text-[14px] text-red">{t('dashboard.noData')}</div>;
   }
 
-  const typeExtra =
-    (stats.type_breakdown?.length ?? 0) > 6 ? (
-      <span className="pl-1 text-[10.5px] text-ink-3">+{(stats.type_breakdown?.length ?? 0) - 6} 类</span>
-    ) : null;
+  // 用后端返回的真实类型总数算「其余」：type_breakdown 只含前 8 类，
+  // 用它的长度推算会在类型超 8 时低估（BUG-24）。
+  const shownTypes = Math.min(stats.type_total ?? stats.type_breakdown?.length ?? 0, 6);
+  const hiddenTypes = Math.max((stats.type_total ?? 0) - shownTypes, 0);
+  const typeExtra = hiddenTypes > 0 ? (
+    <span className="pl-1 text-[10.5px] text-ink-3">+{hiddenTypes} 类</span>
+  ) : null;
 
   return (
     // Card rhythm: sections are spaced like the cards inside them (gap-3).
