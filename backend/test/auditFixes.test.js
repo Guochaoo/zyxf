@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
 import { app } from '../src/index.js';
 import { mimeOf } from '../src/mime.js';
-import { ALLOWED_EXTS } from '../src/extPolicy.js';
+import { ALLOWED_EXTS, isExtAllowed } from '../src/extPolicy.js';
 import { ossObjectStore } from './setup.js';
 
 let server;
@@ -223,5 +223,52 @@ describe('审计修复：MIME 表覆盖全部白名单扩展名', () => {
   test('ALLOWED_EXTS 中每个扩展名都能派生出 MIME', () => {
     const missing = [...ALLOWED_EXTS].filter((e) => mimeOf(e) === null);
     assert.deepEqual(missing, [], `缺 MIME 映射: ${missing.join(', ')}`);
+  });
+});
+
+describe('审计修复：宏格式扩展名一律拒绝', () => {
+  test('ppsm 及同族宏格式均不在白名单内', () => {
+    for (const ext of ['ppsm', 'pptm', 'potm', 'docm', 'dotm', 'xlsm', 'xltm', 'ppam']) {
+      assert.ok(!isExtAllowed(ext), `${ext} 是宏格式，必须被拒绝`);
+      assert.ok(!ALLOWED_EXTS.has(ext), `${ext} 不应出现在 ALLOWED_EXTS`);
+    }
+  });
+});
+
+describe('审计修复：reorder 条目数量上限', () => {
+  test('超长 order 返回 400，不再同步逐项校验/写库', async () => {
+    const token = await adminToken();
+    const order = Array.from({ length: 2001 }, (_, i) => ({ type: 'file', id: i + 1 }));
+    const r = await request('POST', '/api/folders/reorder', { token, body: { parent_folder_id: null, order } });
+    assert.equal(r.status, 400);
+    assert.match(r.body.error, /过长/);
+  });
+});
+
+describe('审计修复：保留文件夹名 .preview', () => {
+  test('创建与改名都不允许使用保留名', async () => {
+    const token = await adminToken();
+    const created = await request('POST', '/api/folders', { token, body: { name: '.preview' } });
+    assert.equal(created.status, 400);
+    assert.match(created.body.error, /保留名称/);
+
+    const fid = insertFolder('正常目录');
+    const renamed = await request('PATCH', `/api/folders/${fid}`, { token, body: { name: '.preview' } });
+    assert.equal(renamed.status, 400);
+
+    // 大小写不同也算保留名
+    const upper = await request('POST', '/api/folders', { token, body: { name: '.PREVIEW' } });
+    assert.equal(upper.status, 400);
+  });
+});
+
+describe('审计修复：统计接口的支撑索引已建立', () => {
+  test('files(created_at) 与 download_logs(file_id, downloaded_at) 索引存在', () => {
+    const names = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+      .all()
+      .map((r) => r.name);
+    assert.ok(names.includes('idx_files_created'), '缺 idx_files_created');
+    assert.ok(names.includes('idx_download_logs_file'), '缺 idx_download_logs_file');
   });
 });

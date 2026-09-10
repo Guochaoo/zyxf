@@ -46,6 +46,10 @@ CREATE TABLE IF NOT EXISTS files (
 
 CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id);
 CREATE INDEX IF NOT EXISTS idx_files_folder ON files(folder_id);
+-- 统计接口的支撑索引（IMPROVE-12）：stats 的 ORDER BY created_at DESC LIMIT 8、
+-- 两次 WHERE created_at >= ?、上传日序列都要扫 / 排序整张 files 表；node:sqlite 是
+-- 同步执行，全表扫描会直接占住事件循环。
+CREATE INDEX IF NOT EXISTS idx_files_created ON files(created_at);
 `);
 
 // --- migration: download_logs table ---
@@ -58,6 +62,9 @@ CREATE TABLE IF NOT EXISTS download_logs (
   FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_download_logs_at ON download_logs(downloaded_at);
+-- top_downloads 是 GROUP BY dl.file_id + 每组「取最近一次」相关子查询：只有
+-- downloaded_at 单列索引时，每组都要扫窗口内全部日志；复合索引让分组与取最近都走索引。
+CREATE INDEX IF NOT EXISTS idx_download_logs_file ON download_logs(file_id, downloaded_at DESC);
 `);
 
 // --- migration: add sort_order column for manual ordering ---
