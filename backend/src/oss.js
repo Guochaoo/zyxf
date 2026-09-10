@@ -68,9 +68,23 @@ export function buildPostPolicy({ key, maxSizeBytes = 200 * 1024 * 1024, expires
   };
 }
 
-/** Generate a signed GET url for previewing/downloading a file. */
-export function signedGetUrl(key, expiresSec = 1800) {
-  const url = ossClient().signatureUrl(key, { expires: expiresSec });
+/**
+ * Generate a signed GET url for previewing/downloading a file.
+ * forceDownload 让 OSS 按签名下发 `Content-Disposition: attachment` 与通用二进制
+ * 类型——桶绑定了站点自有域名时，内联 SVG/HTML 会在站点源上执行脚本，所以
+ * extPolicy.shouldForceDownload() 判为「不可内联」的对象必须走这条路径，
+ * 由服务端强制，而不是指望客户端遵守 force_download 字段。
+ */
+export function signedGetUrl(key, expiresSec = 1800, { forceDownload = false, filename } = {}) {
+  const options = { expires: expiresSec };
+  if (forceDownload) {
+    const name = encodeURIComponent(filename || key.split('/').pop() || 'download');
+    options.response = {
+      'content-disposition': `attachment; filename="${name}"`,
+      'content-type': 'application/octet-stream',
+    };
+  }
+  const url = ossClient().signatureUrl(key, options);
   return url.replace(/^http:/, 'https:');
 }
 

@@ -1,11 +1,16 @@
 import { Router } from 'express';
-import { searchLibrary } from '../searchService.js';
+import { searchLibrary, MAX_QUERY_LEN } from '../searchService.js';
 
 const router = Router();
 
 router.get('/', (req, res) => {
-  const q = (req.query.q || '').trim();
+  const q = String(req.query.q || '').trim();
   if (!q) return res.json({ folders: [], files: [] });
+  // 超长直接拒绝而不截断：匹配是全库同步扫描 + 拼音 DP，一条请求就能占住事件循环
+  // （实测 8000 字查询 ≈ 2.3 s）。截断则会让用户以为搜的是整串，语义更糟。
+  if (q.length > MAX_QUERY_LEN) {
+    return res.status(400).json({ error: `搜索关键词过长（最多 ${MAX_QUERY_LEN} 个字符）` });
+  }
   res.json(searchLibrary(q));
 });
 
