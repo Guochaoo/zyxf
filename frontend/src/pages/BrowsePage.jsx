@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../auth.jsx';
 import Preview from '../components/Preview/index.jsx';
 import UploadDialog from '../components/UploadDialog.jsx';
+import Toast from '../components/Toast.jsx';
 import { downloadAndAlert, errMsg, notifyFoldersChanged } from '../utils.js';
 import { useFolderContents } from './Browse/useFolderContents.js';
 import { useItemDragDrop } from './Browse/useItemDragDrop.js';
@@ -35,7 +36,7 @@ export default function BrowsePage() {
 
   const { data, loading, err, sort, order, setSort, refresh, toggleSort } =
     useFolderContents(folderId);
-  const { syncing, syncMsg, syncMsgOk, onSyncRefresh } = useOssSync(refresh);
+  const { syncing, syncNotice, clearSyncNotice, onSyncRefresh } = useOssSync(refresh);
   const {
     dragging,
     dropZone,
@@ -179,18 +180,15 @@ export default function BrowsePage() {
       {moveError && (
         <FloatingPill className="text-red bg-[#fef2f2] border border-[#fecaca]">{moveError}</FloatingPill>
       )}
-      {syncMsg && (
-        <FloatingPill
-          bottom="bottom-14"
-          role="status"
-          className={
-            syncMsgOk
-              ? 'text-black/70 bg-black/5 border border-black/10'
-              : 'text-red bg-[#fef2f2] border border-[#fecaca]'
-          }
-        >
-          {syncMsg}
-        </FloatingPill>
+      {/* 同步结果用顶部 Toast 通知卡（与登录/注册页同一个自定义组件）；
+          key 绑定通知 id，保证连续两次结果文本相同时也会重新计时。 */}
+      {syncNotice && (
+        <Toast
+          key={syncNotice.id}
+          type={syncNotice.ok ? 'success' : 'error'}
+          message={syncNotice.text}
+          onClose={clearSyncNotice}
+        />
       )}
 
       {/* Body: file list takes the full middle column width. The knowledge
