@@ -34,14 +34,14 @@ export function timeAgo(ts) {
 }
 
 // ---- extension classification (mirrors backend extPolicy.js) ----
-// Macro-enabled Office formats (docm/dotm/xlsm/xltm/pptm/potm) are rejected
+// Macro-enabled Office formats (docm/dotm/xlsm/xltm/pptm/potm/ppsm) are rejected
 // by the backend upload whitelist, so they are intentionally absent here too.
 
 const OFFICE_EXT = new Set([
   // Word
   'doc', 'dot', 'wps', 'wpt', 'docx', 'dotx', 'rtf',
   // PPT
-  'ppt', 'pptx', 'ppsx', 'ppsm', 'pps', 'potx', 'dpt', 'dps',
+  'ppt', 'pptx', 'ppsx', 'pps', 'potx', 'dpt', 'dps',
   // Excel
   'xls', 'xlt', 'et', 'xlsx', 'xltx', 'csv',
   // PDF
@@ -52,12 +52,9 @@ const OFFICE_EXT = new Set([
 
 const ARCHIVE_EXT = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2']);
 
+// 大文件提示阈值。文案里的数值由这个常量注入（见 Preview/index.jsx），
+// 两边不再各写一份——原先 i18n 字典里硬写着「>20MB」，改阈值就会说不一致。
 export const LARGE_FILE_THRESHOLD = 20 * 1024 * 1024; // 20 MB
-// Large-file hint is language-aware; resolve lazily at call time (not module
-// load) so the current locale is honored.
-export const largeFileHint = () => i18n.t('preview.largeFileHint');
-
-// ---- helpers ----
 
 // Strip the leading dot and lowercase an extension string (mirrors backend extPolicy.js).
 export function normalizeExt(ext) {

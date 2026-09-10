@@ -132,3 +132,30 @@ describe('uploadFile', () => {
     expect(instance.post).toHaveBeenCalledWith('/files/cleanup-upload', { oss_key: 'zyxf-test/a.pdf' });
   });
 });
+
+// chatStream 走原生 fetch，不经过 axios 拦截器——401 必须自己走同一套处理，
+// 否则 token 过期后聊天一直失败，而界面仍显示已登录。
+describe('chatStream 的 401 处理', () => {
+  test('清 token 并派发 auth:expired，且抛出后端文案', async () => {
+    const { chatStream } = await import('../api.js');
+    const { setToken, getToken } = await import('../ui.js');
+    setToken('expired-token');
+    const onExpired = vi.fn();
+    window.addEventListener('auth:expired', onExpired);
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({ error: '请先登录' }),
+    }));
+
+    try {
+      await expect(chatStream([{ role: 'user', content: 'hi' }])).rejects.toThrow('请先登录');
+      expect(getToken()).toBeNull();
+      expect(onExpired).toHaveBeenCalledTimes(1);
+    } finally {
+      global.fetch = prevFetch;
+      window.removeEventListener('auth:expired', onExpired);
+    }
+  });
+});

@@ -82,7 +82,7 @@ export default function BrowsePage() {
   const onCreateFolder = () => {
     const name = window.prompt(t('browse.newFolderName'));
     if (!name) return;
-    runAdmin(() => createFolder(name, folderId || null), t('browse.moveError'));
+    runAdmin(() => createFolder(name, folderId || null), t('browse.createError'));
   };
 
   const onDeleteFolder = (f) => {

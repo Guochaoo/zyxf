@@ -15,13 +15,20 @@ api.interceptors.response.use(
   (err) => {
     // Expired/invalid token: drop it so the user can log back in, and let the
     // AuthProvider clear the UI state.
-    if (err.response?.status === 401 && getToken()) {
-      clearToken();
-      window.dispatchEvent(new CustomEvent('auth:expired'));
-    }
+    handleUnauthorized(err.response?.status);
     return Promise.reject(err);
   }
 );
+
+// 统一的 401 处理：清 token 并通知 AuthProvider 复位登录态。
+// chatStream 走原生 fetch（不走 axios 拦截器），也必须调它——否则 token 过期后
+// 聊天一直失败，而账户卡片仍显示已登录，用户不知道该重新登录。
+function handleUnauthorized(status) {
+  if (status === 401 && getToken()) {
+    clearToken();
+    window.dispatchEvent(new CustomEvent('auth:expired'));
+  }
+}
 
 export default api;
 
@@ -55,6 +62,7 @@ export async function chatStream(messages, { onDelta, onFiles, signal, llm } = {
   });
 
   if (!res.ok) {
+    handleUnauthorized(res.status);
     let message = i18n.t('common.requestFailed', { status: res.status });
     try {
       const data = await res.json();
