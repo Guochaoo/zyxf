@@ -61,7 +61,19 @@ function isForbiddenIp(ip) {
       }
     }
     if (mapped) return isForbiddenIp(mapped);
-    return false;
+    // IPv4 兼容地址（::a.b.c.d，非 ::ffff: 前缀）同样映射回 IPv4 规则。
+    const compat = lower.match(/^::(\d+\.\d+\.\d+\.\d+)$/);
+    if (compat) return isForbiddenIp(compat[1]);
+    // 其余 IPv6 按首段判定内网/保留网段。必须拦：fc00::/7 唯一本地地址（阿里云内网
+    // 元数据在 IPv6 下就是 fd00:0:0:0::1）、fe80::/10 链路本地、fec0::/10 站点本地、
+    // ff00::/8 组播。只放行全局单播 2000::/3。
+    const firstHextet = parseInt(lower.split(':')[0] || '', 16);
+    if (Number.isNaN(firstHextet)) return true; // 解析不出来 → 保守拦截
+    if ((firstHextet & 0xfe00) === 0xfc00) return true; // fc00::/7
+    if ((firstHextet & 0xffc0) === 0xfe80) return true; // fe80::/10
+    if ((firstHextet & 0xffc0) === 0xfec0) return true; // fec0::/10（已废弃的站点本地）
+    if ((firstHextet & 0xff00) === 0xff00) return true; // ff00::/8
+    return (firstHextet & 0xe000) !== 0x2000; // 非 2000::/3（全局单播）一律拦
   }
   return false;
 }

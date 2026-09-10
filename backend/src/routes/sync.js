@@ -7,6 +7,7 @@ import { tieredLimiter } from '../limiter.js';
 import { cleanObjectSegment, ossPrefix, placeholderKeyForFolderFromMap } from '../storagePath.js';
 import { normalizeExt } from '../extPolicy.js';
 import { mimeOf } from '../mime.js';
+import { invalidateSearchCache } from '../searchService.js';
 
 // 游客亦可触发同步（用于共享 OSS 桶的多部署刷新），按身份分层限流：
 // 游客 2 次/分钟 < 登录用户 5 次/分钟 < 管理员豁免（同下载/对话的既有约定）。
@@ -122,11 +123,23 @@ router.post('/', syncLimiter, async (req, res, next) => {
       // Normalize the ext column from the file name — older imports stored the
       // whole filename there, which breaks mime/imm routing for previews.
       // 批量修复：先查出不一致行，再用 CASE 单条 SQL 批量 UPDATE，避免逐行 UPDATE。
+      // 本次会被删除的失联行先算出来：后面的 ext 修复与统计都要排除它们，否则
+      // 同一行会同时计入 repaired_files 与 removed_files，一次同步的汇总自相矛盾。
+      const staleIds = new Set(
+        objects.length > 0
+          ? db
+              .prepare('SELECT id, oss_key FROM files')
+              .all()
+              .filter((f) => !keySet.has(f.oss_key))
+              .map((f) => f.id)
+          : []
+      );
+
       const mismatched = db
         .prepare('SELECT id, name, ext FROM files')
         .all()
         .map((f) => ({ id: f.id, correct: normalizeExt(path.extname(f.name)) || null, cur: f.ext ?? null }))
-        .filter((x) => x.correct !== x.cur);
+        .filter((x) => x.correct !== x.cur && !staleIds.has(x.id));
       // fixExt 的批量 CASE：每条记录的 UPDATE 需要 2 个参数（WHEN id THEN correct），
       // WHERE id IN 需要 1 个参数/id。为了不触及参数上限并保持统计准确，分批执行。
       for (let i = 0; i < mismatched.length; i += FIX_EXT_BATCH) {
@@ -143,11 +156,7 @@ router.post('/', syncLimiter, async (req, res, next) => {
       // Drop local records whose OSS object is gone. Skip when the listing is
       // empty — an empty bucket must never wipe the library (misconfig guard).
       if (objects.length > 0) {
-        const staleFileIds = db
-          .prepare('SELECT id, oss_key FROM files')
-          .all()
-          .filter((f) => !keySet.has(f.oss_key))
-          .map((f) => f.id);
+        const staleFileIds = [...staleIds];
         // 批量删除：收集待删 id 后分批 IN 删除，避免逐行 DELETE（BUG-08）。
         for (let i = 0; i < staleFileIds.length; i += DELETE_BATCH) {
           const chunk = staleFileIds.slice(i, i + DELETE_BATCH);
@@ -192,6 +201,7 @@ router.post('/', syncLimiter, async (req, res, next) => {
       }
     });
     tx();
+    invalidateSearchCache();
 
     res.json({
       ok: true,

@@ -5,6 +5,7 @@ import { copyOssObject, deleteOssObjectIfExists, putEmptyOssObject } from '../os
 import { buildFolderIndex, findSibling, folderExists, groupByKey, isUniqueError, nextSortOrder } from '../dbHelpers.js';
 import { wrapAsync, serviceError } from '../http.js';
 import { objectKeyForFileFromMap, parseOptionalFolderId, placeholderKeyForFolder, placeholderKeyForFolderFromMap } from '../storagePath.js';
+import { invalidateSearchCache } from '../searchService.js';
 
 const router = Router();
 
@@ -224,7 +225,11 @@ router.get('/:id/contents', (req, res) => {
   const folder = getFolder(id);
   if (!folder) return res.status(404).json({ error: '文件夹不存在' });
 
-  const sort = SORT_FIELDS[req.query.sort] || SORT_FIELDS.name;
+  // 白名单查询必须用 hasOwn：SORT_FIELDS 是对象字面量，`SORT_FIELDS['constructor']`
+  // 会命中 Object.prototype 上的成员（真值），于是 `|| 默认值` 不生效，成员被当成
+  // sort 表达式拼进 SQL 并抛 `near "Object": syntax error` → 500。
+  const sortParam = String(req.query.sort || '');
+  const sort = Object.hasOwn(SORT_FIELDS, sortParam) ? SORT_FIELDS[sortParam] : SORT_FIELDS.name;
   const order = req.query.order === 'desc' ? 'DESC' : 'ASC';
 
   const parentClause = id === 0 ? 'parent_id IS NULL' : 'parent_id = ?';
@@ -316,6 +321,7 @@ router.post('/', requireAdmin, wrapAsync(async (req, res, next) => {
       db.prepare('DELETE FROM folders WHERE id = ?').run(info.lastInsertRowid);
       throw e;
     }
+    invalidateSearchCache();
     res.json({ id: info.lastInsertRowid, name: trimmed, parent_id: pid });
   } catch (e) {
     if (isUniqueError(e)) {
@@ -365,6 +371,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
       '同名文件夹已存在'
     );
     if (outcome.error) return res.status(409).json({ error: outcome.error });
+    invalidateSearchCache();
     return res.json({ ok: true, name: newName });
   }
 
@@ -401,6 +408,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
     '目标位置已存在同名文件夹'
   );
   if (outcome.error) return res.status(409).json({ error: outcome.error });
+  invalidateSearchCache();
   res.json({ ok: true });
 }));
 
@@ -447,10 +455,15 @@ router.post('/reorder', requireAdmin, (req, res) => {
 router.delete('/:id', requireAdmin, wrapAsync(async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ error: '无效的 ID' });
+  // 存在性校验（与 PATCH 同口径）：不校验的话，对不存在的 id 会返回 200 且
+  // removed_files 虚报，更糟的是 placeholderKeyForFolderFromMap 在 folderMap 里
+  // 查不到该 id 时会退化成「只剩前缀」，等于用桶里的 `<prefix>/` 这个伪键去调真实删除。
+  if (!getFolder(id)) return res.status(404).json({ error: '文件夹不存在' });
   // Gather all descendant keys to clean up OSS objects.
   const { folderIds, files, folderMap } = collectFolderTree(id);
   const keys = files.map((f) => f.oss_key);
   for (const fid of folderIds) {
+    if (!folderMap.has(fid)) continue; // 只处理真实存在的文件夹，绝不伪造前缀根键
     const placeholder = placeholderKeyForFolderFromMap(fid, folderMap);
     if (placeholder) keys.push(placeholder);
   }
@@ -463,6 +476,7 @@ router.delete('/:id', requireAdmin, wrapAsync(async (req, res) => {
   }
 
   db.prepare('DELETE FROM folders WHERE id = ?').run(id);
+  invalidateSearchCache();
   res.json({ ok: true, removed_files: keys.length });
 }));
 

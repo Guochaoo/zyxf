@@ -9,6 +9,11 @@ export const SCORES = {
   PINYIN: 45,
 };
 
+// 拼音层的查询长度上限：pinyin-pro 的 match() 是 DP 匹配，开销随 query 长度线性增长
+// （实测 2000 字 ≈ 0.5 s、8000 字 ≈ 2.3 s 跑完整库）。而任何真实文件名的拼音串都不会
+// 超过这个长度，超长查询必然不命中，直接跳过即可——否则一条匿名 GET 就能占满事件循环。
+export const MAX_PINYIN_QUERY_LEN = 32;
+
 const HANZI = /[\u4e00-\u9fff]/g;
 
 const countHanzi = (s) => (s.match(HANZI) || []).length;
@@ -55,7 +60,7 @@ export function matchScore(query, name) {
   }
 
   // 拼音层只对含拉丁字母的查询有意义；空格去掉，允许「gao shu」。
-  if (/[a-z]/.test(q)) {
+  if (q.length <= MAX_PINYIN_QUERY_LEN && /[a-z]/.test(q)) {
     const hits = matchPinyin(name, q.replace(/\s+/g, ''));
     if (hits && isCompact(hits)) return SCORES.PINYIN;
   }

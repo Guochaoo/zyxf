@@ -11,6 +11,10 @@ const PATH_PENALTY = 60;
 const SEARCH_CACHE_TTL_MS = 30 * 1000;
 let searchCache = { folders: null, files: null, expiresAt: 0 };
 
+// 查询长度上限。匹配是同步的、且会跑全库（拼音层还是 DP 匹配），所以超长查询既没有
+// 意义又会阻塞事件循环——路由层据此直接 400，服务层兜底截断（AI 工具调用走这里）。
+export const MAX_QUERY_LEN = 64;
+
 function searchCacheEnabled() {
   return process.env.NODE_ENV !== 'test';
 }
@@ -74,7 +78,7 @@ function rank(items, limit) {
  * 同时服务 /api/search 路由与 AI 聊天的 search_files 工具。
  */
 export function searchLibrary(q, { limit = 20 } = {}) {
-  const query = (q || '').trim().toLowerCase();
+  const query = (q || '').trim().toLowerCase().slice(0, MAX_QUERY_LEN);
   if (!query) return { folders: [], files: [] };
 
   const { folders, files } = getLibrarySnapshot();
