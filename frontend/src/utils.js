@@ -1,4 +1,10 @@
 import i18n from './i18n/index.js';
+// ---- extension classification ----
+// 表来自后端 extPolicy.js（IMPROVE-19）：白名单是后端上传校验的唯一权威，
+// 前端只做展示分类，两处合表后「后端加了类型、前端仍判 unknown → 预览退化成只能下载」
+// 这类漂移不会再有。extPolicy.js 是纯数据模块（不 import node 内建），可安全共享。
+// 路径别名见 vite.config.js（@backend → backend/src/）。
+import { ALLOWED_EXTS, ARCHIVE_EXTS } from '@backend/extPolicy.js';
 
 export function formatSize(bytes) {
   if (bytes == null) return '-';
@@ -33,24 +39,10 @@ export function timeAgo(ts) {
   return i18n.t('common.monthsAgo', { count: mo });
 }
 
-// ---- extension classification (mirrors backend extPolicy.js) ----
-// Macro-enabled Office formats (docm/dotm/xlsm/xltm/pptm/potm/ppsm) are rejected
-// by the backend upload whitelist, so they are intentionally absent here too.
-
-const OFFICE_EXT = new Set([
-  // Word
-  'doc', 'dot', 'wps', 'wpt', 'docx', 'dotx', 'rtf',
-  // PPT
-  'ppt', 'pptx', 'ppsx', 'pps', 'potx', 'dpt', 'dps',
-  // Excel
-  'xls', 'xlt', 'et', 'xlsx', 'xltx', 'csv',
-  // PDF
-  'pdf',
-  // 文本
-  'txt',
-]);
-
-const ARCHIVE_EXT = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2']);
+// ---- extension classification ----
+// 可预览 = 白名单里去掉压缩包（与后端 PREVIEWABLE_EXTS 的算式一致）。
+const OFFICE_EXT = new Set([...ALLOWED_EXTS].filter((e) => !ARCHIVE_EXTS.has(e)));
+const ARCHIVE_EXT = ARCHIVE_EXTS;
 
 // 大文件提示阈值。文案里的数值由这个常量注入（见 Preview/index.jsx），
 // 两边不再各写一份——原先 i18n 字典里硬写着「>20MB」，改阈值就会说不一致。

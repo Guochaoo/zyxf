@@ -27,12 +27,24 @@ const DELETE_BATCH = 500;
 const FIX_EXT_BATCH = 300;
 
 // Find a folder whose OSS segment (cleaned name) equals `segment`, under parentId.
-function findFolderBySegment(segment, parentId) {
-  const rows =
-    parentId === null
-      ? db.prepare('SELECT id, name FROM folders WHERE parent_id IS NULL').all()
-      : db.prepare('SELECT id, name FROM folders WHERE parent_id = ?').all(parentId);
-  return rows.find((r) => cleanObjectSegment(r.name) === segment) || null;
+// 旧实现对每个对象、每层路径都 `SELECT ... WHERE parent_id = ?` 拉全部兄弟再线性比对，
+// 复杂度 O(对象数 × 深度 × 兄弟数)，且循环中 folders 还在变长（IMPROVE-13）。
+// 现存实现改为在导入前一次性建内存索引：`parentId -> (cleanObjectSegment(name) -> id)`。
+// 索引在新建文件夹时就地登记，因此同一次 sync 内新建的中间层也能被后续对象命中。
+function buildChildNameIndex() {
+  const rows = db.prepare('SELECT id, name, parent_id FROM folders').all();
+  const index = new Map(); // parentId(NaN 表示根) -> Map(cleanedName -> id)
+  for (const r of rows) {
+    const pid = r.parent_id == null ? null : r.parent_id;
+    let bucket = index.get(pid);
+    if (!bucket) {
+      bucket = new Map();
+      index.set(pid, bucket);
+    }
+    const key = cleanObjectSegment(r.name);
+    if (!bucket.has(key)) bucket.set(key, r.id);
+  }
+  return index;
 }
 
 /**
@@ -57,12 +69,16 @@ router.post('/', syncLimiter, async (req, res, next) => {
     };
 
     const tx = transaction(() => {
+      const childNameIndex = buildChildNameIndex();
+      const findFolderBySegment = (segment, parentId) =>
+        childNameIndex.get(parentId === null ? null : parentId)?.get(segment) ?? null;
+
       const ensureFolderChain = (segments) => {
         let parentId = null;
         for (const seg of segments) {
           const hit = findFolderBySegment(seg, parentId);
-          if (hit) {
-            parentId = hit.id;
+          if (hit != null) {
+            parentId = hit;
             continue;
           }
           const so = nextSortOrder(db, 'folders', 'parent_id', parentId);
@@ -72,6 +88,14 @@ router.post('/', syncLimiter, async (req, res, next) => {
             )
             .run(seg, parentId, so, Date.now());
           counts.added_folders += 1;
+          // 登记进索引：同一批后续对象/占位符无需再查库就能命中这个新文件夹。
+          // 登记的键必须是**父级** id（而不是新行自己的 id），否则同一层会被反复新建。
+          let bucket = childNameIndex.get(parentId);
+          if (!bucket) {
+            bucket = new Map();
+            childNameIndex.set(parentId, bucket);
+          }
+          bucket.set(seg, info.lastInsertRowid);
           parentId = info.lastInsertRowid;
         }
         return parentId;

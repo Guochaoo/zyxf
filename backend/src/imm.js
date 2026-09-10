@@ -49,7 +49,7 @@ export function toImmTimeoutError(action, e) {
 const regionId = () => envOrThrow('OSS_REGION').replace(/^oss-/, '');
 
 /** IMM project bound to the bucket (OSS console → IMM binding). */
-export function immProject() {
+function immProject() {
   return process.env.IMM_PROJECT || 'zyxf';
 }
 
