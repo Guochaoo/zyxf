@@ -103,3 +103,10 @@ export function isLargeFile(size) {
 export function errMsg(e, fallback = i18n.t('common.actionFailed')) {
   return e?.response?.data?.error || e?.message || fallback;
 }
+
+// ---- 目录结构变更广播 ----
+// 管理操作（新建/重命名/移动/删除/重排/同步）后广播，让侧边栏 FolderTree 与知识图谱
+// 重新拉取目录树；监听方见 hooks/useFolderTree.js 与 components/FolderTree.jsx。
+export function notifyFoldersChanged() {
+  window.dispatchEvent(new Event('folders-changed'));
+}
