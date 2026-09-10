@@ -69,6 +69,23 @@ zyxf/
 - 完成改动后：提交到本地 `dev` → **push 到远程 `dev`**。
 - 仅当人类明确要求时，才从 `dev` 提交 PR 到 **`main`**，审核后合并进生产分支。
 
+### 2.4 外网访问与代理
+- 访问 GitHub（push / pull）、npm registry、外网 API 等出现**连接超时 / 连接被重置**时，先判断是否为网络可达性问题（如 `curl -sI https://github.com` 超时），再尝试走本地代理，而不是反复重试或直接判定失败。
+- 本机代理默认端口 **`7897`**（Clash 等）。PowerShell：
+
+  ```powershell
+  $env:HTTP_PROXY="http://127.0.0.1:7897"; $env:HTTPS_PROXY="http://127.0.0.1:7897"
+  ```
+
+  Git Bash / Bash（或仅给单条命令加前缀）：
+
+  ```bash
+  export HTTP_PROXY=http://127.0.0.1:7897 HTTPS_PROXY=http://127.0.0.1:7897
+  git push origin dev
+  ```
+
+- 注意：环境变量只对**当前 shell 会话**生效，新会话需重新设置；`git config` 里的 `http.proxy` 属持久配置，不要为临时故障写入。
+
 ## 3. 变更记录原则
 - 行为无关的改动（纯文档/注释/格式化）与行为改动分开表述，便于 review。
 - 只跑必要验证；文档改动不影响测试的，说明即可。
