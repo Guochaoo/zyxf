@@ -30,7 +30,8 @@ const socialItems = [
 
 export default function App() {
   const { t } = useTranslation();
-  const { locale } = useLocale();
+  // 语言切换（设置弹窗内的语言项）；页面标题由下方 effect 统一设置（IMPROVE-25）。
+  useLocale();
   const { user, logout, ready } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();

@@ -204,7 +204,9 @@ export async function getHeatmap() {
 }
 
 // Sync the local library with the shared OSS bucket (multi-deployment support).
-// Rate-limited server-side to 5/min per IP.
+// 服务端按身份分层限流（backend/src/limiter.js 的 tieredLimiter，见 routes/sync.js）：
+// 游客 2 次/分钟（按 IP，IPv6 归并到子网）、登录用户 5 次/分钟（按 user id，不占 IP 配额）、
+// 管理员豁免。注意不是「按 IP 一律 5 次/分钟」——评审时不要据此判断滥用面。
 export async function syncOss() {
   const { data } = await api.post('/sync');
   return data;

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { buildFolderIndex } from './dbHelpers.js';
 
 export function cleanObjectSegment(name) {
   return String(name || '')
@@ -12,42 +13,11 @@ export function ossPrefix() {
   return (process.env.OSS_KEY_PREFIX || '').replace(/^\/+|\/+$/g, '');
 }
 
-export function folderPathSegments(db, folderId, parentOverrides = new Map(), nameOverrides = new Map()) {
-  if (!folderId) return [];
-  const chain = [];
-  const seen = new Set();
-  let cur = db.prepare('SELECT id, name, parent_id FROM folders WHERE id = ?').get(folderId);
-  while (cur && !seen.has(cur.id)) {
-    seen.add(cur.id);
-    const name = nameOverrides.has(cur.id) ? nameOverrides.get(cur.id) : cur.name;
-    chain.unshift(cleanObjectSegment(name));
-    const parent = parentOverrides.has(cur.id) ? parentOverrides.get(cur.id) : cur.parent_id;
-    if (!parent) break;
-    cur = db.prepare('SELECT id, name, parent_id FROM folders WHERE id = ?').get(parent);
-  }
-  return chain.filter(Boolean);
-}
-
-export function objectKeyForFile(db, folderId, filename, parentOverrides = new Map(), nameOverrides = new Map()) {
-  const parts = [
-    ossPrefix(),
-    ...folderPathSegments(db, folderId, parentOverrides, nameOverrides),
-    cleanObjectSegment(filename || path.basename(filename || 'file')),
-  ].filter(Boolean);
-  return parts.join('/');
-}
-
-export function placeholderKeyForFolder(db, folderId, parentOverrides = new Map(), nameOverrides = new Map()) {
-  const parts = [ossPrefix(), ...folderPathSegments(db, folderId, parentOverrides, nameOverrides)].filter(Boolean);
-  if (!parts.length) return null;
-  return `${parts.join('/')}/`;
-}
-
-// ---- In-memory map variants (N+1 refactors) ----------------------------------
-// These mirror the pure functions above but derive ancestor path segments from a
-// preloaded `Map(id -> { name, parent_id })` instead of one query per ancestor.
-// The DB-taking functions above keep their exact signatures; the route layer
-// uses these variants to avoid re-querying per file/folder.
+// ---- 唯一实现：Map 版 --------------------------------------------------------
+// key 规则（前缀、分隔、清洗、去重）只在这里实现一次（IMPROVE-18）。下面三个 DB 版
+// 函数只是「现取一遍 folders 建索引」的薄封装，签名保持不变，调用方无需改动；
+// 两套实现曾在生产路径上并行存在，改一侧就会让上传落库的 key 与改名/移动算出的
+// key 不一致（copyOssObject 目标错位 → 重复对象或莫名 409）。
 
 export function folderPathSegmentsFromMap(folderId, folderMap, parentOverrides = new Map(), nameOverrides = new Map()) {
   if (!folderId) return [];
@@ -80,6 +50,24 @@ export function placeholderKeyForFolderFromMap(folderId, folderMap, parentOverri
   const parts = [ossPrefix(), ...folderPathSegmentsFromMap(folderId, folderMap, parentOverrides, nameOverrides)].filter(Boolean);
   if (!parts.length) return null;
   return `${parts.join('/')}/`;
+}
+
+// 现取一次 folders 表 → Map(id -> { name, parent_id })。
+function folderMapFor(db) {
+  const { folderMap } = buildFolderIndex(db.prepare('SELECT id, name, parent_id FROM folders').all());
+  return folderMap;
+}
+
+export function folderPathSegments(db, folderId, parentOverrides = new Map(), nameOverrides = new Map()) {
+  return folderPathSegmentsFromMap(folderId, folderMapFor(db), parentOverrides, nameOverrides);
+}
+
+export function objectKeyForFile(db, folderId, filename, parentOverrides = new Map(), nameOverrides = new Map()) {
+  return objectKeyForFileFromMap(folderId, filename, folderMapFor(db), parentOverrides, nameOverrides);
+}
+
+export function placeholderKeyForFolder(db, folderId, parentOverrides = new Map(), nameOverrides = new Map()) {
+  return placeholderKeyForFolderFromMap(folderId, folderMapFor(db), parentOverrides, nameOverrides);
 }
 
 export function parseOptionalFolderId(value) {

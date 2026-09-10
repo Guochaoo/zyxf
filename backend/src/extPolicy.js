@@ -20,7 +20,9 @@ export const BLOCKED_EXTS = new Set([
 
 // Archives are download-only (never previewed); unknown types are also forced
 // to download at serve time.
-const ARCHIVE_EXTS = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2']);
+// 导出供前端共享分类表（IMPROVE-19）：前端可预览集合 = ALLOWED_EXTS − ARCHIVE_EXTS，
+// 手抄副本会随白名单更新而漂移，故直接以本文件为唯一来源。
+export const ARCHIVE_EXTS = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2']);
 
 // Only these file types are allowed for upload.
 // All previewable files go through Alibaba Cloud WebOffice (IMM doc/preview).

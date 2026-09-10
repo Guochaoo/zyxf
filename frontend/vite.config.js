@@ -1,18 +1,33 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const backendSrc = fileURLToPath(new URL('../backend/src/', import.meta.url));
+
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    // IMPROVE-19：扩展名分类表以**后端白名单为唯一来源**。extPolicy.js 是纯数据模块
+    // （无 node 依赖），前端直接读它，不再手抄副本；改名后构建期即报错，不会静默漂移。
+    alias: { '@backend': backendSrc },
+  },
   build: {
     rollupOptions: {
       output: {
         // 把体积大且稳定的第三方库拆成独立 chunk（BUG-21）：既缩小首屏入口，
         // 也让这些不常变的库独立缓存，业务代码更新时不必重新下载。
-        manualChunks: {
-          three: ['three'],
-          motion: ['framer-motion', 'gsap'],
-          graph: ['d3-force'],
-          markdown: ['react-markdown'],
+        // gsap 与 framer-motion 分开（IMPROVE-23）：前者由 StaggeredMenu 动态 import，
+        // 合并进同一个 chunk 会让「打开页面」顺带预加载 gsap。
+        manualChunks(id) {
+          if (id.includes('node_modules/three') || id.includes('node_modules\\three')) return 'three';
+          if (id.includes('node_modules/d3-force')) return 'graph';
+          if (id.includes('node_modules/react-markdown') || id.includes('node_modules/remark')
+            || id.includes('node_modules/rehype') || id.includes('node_modules/mdast')
+            || id.includes('node_modules/micromark') || id.includes('node_modules/unified')
+            || id.includes('node_modules/hast')) return 'markdown';
+          if (id.includes('node_modules/framer-motion') || id.includes('node_modules\\framer-motion')) return 'motion';
+          if (id.includes('node_modules/gsap')) return 'gsap';
+          return undefined;
         },
       },
     },
