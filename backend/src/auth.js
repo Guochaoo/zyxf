@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { db } from './db.js';
 
 export const DEV_JWT_SECRET = 'dev-secret';
 
@@ -31,7 +32,18 @@ export function attachUser(req, _res, next) {
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (token) {
     const payload = verifyToken(token);
-    if (payload) req.user = payload;
+    if (payload) {
+      // 回查用户行（BUG-51/52）：只验签意味着「改密前签发的 token」「被删除或被降权的
+      // 账号」在 exp（默认 7d）之前仍是有效身份——运维按文档改 ADMIN_PASSWORD 也无法止损。
+      // 按主键取一行，顺带用库里的 role 覆盖 payload，使降权立即生效。
+      // epoch 缺省按 0 处理：升级前签发的 token 仍可用，一次改密（epoch+1）后即失效。
+      const row = db
+        .prepare('SELECT username, role, token_epoch FROM users WHERE id = ?')
+        .get(payload.id);
+      if (row && (payload.epoch ?? 0) === row.token_epoch) {
+        req.user = { id: payload.id, username: row.username, role: row.role, epoch: row.token_epoch };
+      }
+    }
   }
   next();
 }

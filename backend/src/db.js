@@ -146,6 +146,14 @@ CREATE TABLE IF NOT EXISTS email_codes (
 );
 `);
 
+// --- migration: email_codes.uses（验证码「已核验通过」次数，BUG-71）---
+// 与 attempts（输错次数）分开计数：合法用户输错几次再成功不应被算作滥用，但成功核验
+// 之后每用一次都要记账——否则一枚合法验证码能在 10 分钟 TTL 内被无限复用去探测
+// 用户名是否被占用（409 = 已占用），枚举速率比 /login 高两个数量级。
+if (!hasColumn('email_codes', 'uses')) {
+  db.exec(`ALTER TABLE email_codes ADD COLUMN uses INTEGER NOT NULL DEFAULT 0`);
+}
+
 export function ensureAdmin(username, password) {
   const existing = db
     .prepare('SELECT id, role, password_hash FROM users WHERE username = ?')
