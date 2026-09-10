@@ -149,20 +149,35 @@ export default function DashboardPage() {
   // trailing-year activity for the heatmap — intentionally NOT refetched when
   // `range` changes, so the year grid stays put while other cards re-range
   const [heat, setHeat] = useState(null);
+  // 区间切换与「已有数据的刷新」不能回到整页 loading：那会把区间切换器从 DOM 里摘掉，
+  // 用户在等待期间无法再点一次（BUG-57 的测试就是这样卡住的）。初次加载仍走整页 loading。
+  const [switching, setSwitching] = useState(false);
+  const loadReqIdRef = useRef(0);
 
   const load = useCallback(
     (silent = false, r = range) => {
+      // 请求序号守卫（BUG-57）：快速连点「7 天 → 30 天」时两个请求并发，若先发的后到，
+      // 卡片数据会被旧区间覆盖而切换器高亮新区间；两个 finally 也会让 loading 提前复位。
+      const reqId = (loadReqIdRef.current += 1);
       if (silent) setRefreshing(true);
-      else setLoading(true);
+      else {
+        setLoading(true);
+        setSwitching(true);
+      }
       return getStats(r)
         .then((d) => {
+          if (reqId !== loadReqIdRef.current) return;
           setStats(d);
           setErr('');
         })
-        .catch((e) => setErr(errMsg(e, t('dashboard.noData'))))
+        .catch((e) => {
+          if (reqId === loadReqIdRef.current) setErr(errMsg(e, t('dashboard.noData')));
+        })
         .finally(() => {
+          if (reqId !== loadReqIdRef.current) return;
           setLoading(false);
           setRefreshing(false);
+          setSwitching(false);
         });
     },
     [range]
@@ -253,7 +268,8 @@ export default function DashboardPage() {
     ];
   }, [insights, stats, t]);
 
-  if (loading) {
+  // 只有「首次加载」才整页转圈；后续请求（切换区间/刷新）保留现有卡片，避免布局跳空。
+  if (loading && !stats) {
     return (
       <div className="py-24 text-center">
         <div className="mx-auto mb-3 h-5 w-5 animate-spin rounded-full border-2 border-line border-t-transparent" />
@@ -282,7 +298,7 @@ export default function DashboardPage() {
     // Card rhythm: sections are spaced like the cards inside them (gap-3).
     // App.jsx gives the dashboard main a fixed pt-[11px] (no sm breakpoint), so
     // the top offset matches the browse page logo (14px) and never jumps.
-    <div className="space-y-3">
+    <div className={`space-y-3 transition-opacity duration-150 ${switching ? 'opacity-60' : ''}`}>
       {/* Header */}
       <header className="mb-5 flex min-h-[34px] flex-wrap items-center gap-4 pr-[110px] max-[480px]:pr-0">
         <div className="flex h-[34px] items-center">
@@ -297,14 +313,14 @@ export default function DashboardPage() {
           </h1>
         </div>
         <div className="ml-auto flex items-center gap-3 max-[480px]:basis-full max-[480px]:justify-end">
-          <RangeSwitch value={range} onChange={setRange} />
+          <RangeSwitch value={range} onChange={setRange} disabled={switching} />
           <button
             type="button"
             onClick={() => {
               load(true);
               loadHeat();
             }}
-            disabled={refreshing}
+            disabled={refreshing || switching}
             className="inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-[12px] text-ink shadow-btn transition-colors duration-100 hover:bg-hover disabled:opacity-50"
           >
             <BsArrowClockwise className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />

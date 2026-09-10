@@ -246,6 +246,9 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   const playClose = useCallback(() => {
     openTlRef.current?.kill();
     openTlRef.current = null;
+    // 被 kill 的打开时间线不会触发它的 onComplete，busyRef 会永久停在 true（BUG-59）：
+    // 之后所有 open/toggle 都在第一行 return，菜单再也打不开，只能刷新页面。
+    busyRef.current = false;
 
     const panel = panelRef.current;
     const layers = preLayerElsRef.current;

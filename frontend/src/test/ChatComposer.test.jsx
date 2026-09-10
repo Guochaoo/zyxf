@@ -194,6 +194,96 @@ describe('ChatComposer', () => {
     expect(chatStreamMock).not.toHaveBeenCalled();
   });
 
+  // BUG-58：设置弹窗保存后常驻右栏必须立刻改用新配置，而不是等切页重挂载。
+  test('设置弹窗保存新配置后，下一次提问按新配置下发', async () => {
+    chatStreamMock.mockImplementation(async () => {});
+    await renderPanelAuthed();
+
+    typeAndSend('你好');
+    await waitFor(() => expect(chatStreamMock).toHaveBeenCalledTimes(1));
+    expect(chatStreamMock.mock.calls[0][1].llm).toBeUndefined();
+
+    // 模拟 SettingsModal 保存：写存储 + 广播（与 saveLlmCfg 同路径）
+    const { saveLlmCfg } = await import('../llmConfig.js');
+    saveLlmCfg({ apiKey: 'k2', baseUrl: 'https://llm2.test/v1', model: 'glm-4.6' });
+
+    await waitFor(() => expect(screen.getByLabelText('聊天输入')).not.toBeDisabled());
+    typeAndSend('再问一次');
+    await waitFor(() => expect(chatStreamMock).toHaveBeenCalledTimes(2));
+    expect(chatStreamMock.mock.calls[1][1].llm).toEqual({
+      apiKey: 'k2',
+      baseUrl: 'https://llm2.test/v1',
+      model: 'glm-4.6',
+    });
+  });
+
+  // BUG-61：清空会话必须中止在途流式请求，否则 SSE 仍在消费、busy 要等流结束才复位。
+  test('清空会话时中止在途请求', async () => {
+    let seenSignal = null;
+    chatStreamMock.mockImplementation(
+      (_msgs, { signal }) =>
+        new Promise((_resolve, reject) => {
+          seenSignal = signal;
+          signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+        })
+    );
+    await renderPanelAuthed();
+    typeAndSend('你好');
+    await waitFor(() => expect(seenSignal).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText('聊天输入')).not.toBeDisabled());
+
+    // 流式期间垃圾桶保持可点（否则长回答生成中没有任何清空入口）
+    const trash = screen.getByRole('button', { name: '清空会话历史' });
+    await waitFor(() => expect(trash).not.toBeDisabled());
+    fireEvent.click(trash);
+
+    await waitFor(() => expect(seenSignal.aborted).toBe(true));
+    expect(screen.getByText('问我资料在哪，我来帮你找：')).toBeInTheDocument();
+    // busy 的复位不能依赖被中止的流：流结束后输入框必须可用（否则会话被锁死）
+    await waitFor(() => expect(screen.getByLabelText('聊天输入')).not.toBeDisabled());
+  });
+
+  // BUG-61：面板随路由卸载时同样要中止，否则后台仍跑完整轮生成。
+  test('组件卸载时中止在途请求', async () => {
+    let seenSignal = null;
+    chatStreamMock.mockImplementation(
+      (_msgs, { signal }) =>
+        new Promise((_resolve, reject) => {
+          seenSignal = signal;
+          signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+        })
+    );
+    const view = renderPanel();
+    typeAndSend('你好');
+    await waitFor(() => expect(seenSignal).toBeTruthy());
+
+    view.unmount();
+    expect(seenSignal.aborted).toBe(true);
+  });
+
+  // BUG-61 附带问题：中止后缓冲里已到达的 delta 不能再往「已停止」文案后追加。
+  test('中止后已到达的增量不再追加到已停止的消息上', async () => {
+    let seenSignal = null;
+    let seenDelta = null;
+    chatStreamMock.mockImplementation((_msgs, { signal, onDelta }) => {
+      seenSignal = signal;
+      seenDelta = onDelta;
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+      });
+    });
+    renderPanel();
+    typeAndSend('你好');
+    await waitFor(() => expect(seenDelta).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: '停止' }));
+    await waitFor(() => expect(seenSignal.aborted).toBe(true));
+    await waitFor(() => expect(screen.getByText('已停止生成。')).toBeInTheDocument());
+
+    seenDelta('迟到的增量');
+    await waitFor(() => expect(screen.queryByText(/迟到的增量/)).toBeNull());
+  });
+
   // 未登录但也没有自带 Key 时不拦：那种情况后端返回 503「AI 功能未配置」，
   // 让用户看到真实原因，比提示登录更准确。
   test('服务端未配置 + 未登录 + 无自带 Key：不提示登录', async () => {

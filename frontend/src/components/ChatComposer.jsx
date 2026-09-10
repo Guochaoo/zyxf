@@ -4,7 +4,7 @@ import { ArrowUp, Settings, Square, Trash2 } from 'lucide-react';
 import { chatStream, getChatStatus } from '../api.js';
 import { EASE_COLLAPSE, ICON_BUTTON_CLASS } from './ui.js';
 import PanelHeader from './PanelHeader.jsx';
-import { loadLlmCfg } from '../llmConfig.js';
+import { loadLlmCfg, subscribeLlmCfg } from '../llmConfig.js';
 import { useAuth } from '../auth.jsx';
 // 展示组件已迁至 ./Chat/parts.jsx（IMPROVE-01）。
 import { FileChip, Section } from './Chat/parts.jsx';
@@ -78,7 +78,20 @@ export default function ChatComposer({ onOpenSettings }) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  useEffect(() => () => clearTimeout(snapTimer.current), []);
+  // 卸载时中止在途的流式请求并清理动画计时器（BUG-61）：右栏组件随路由切换卸载，
+  // 不中止的话 fetch 仍继续消费 SSE、onDelta 对已卸载组件反复 setState，
+  // 服务端也要把整轮回答生成完（白烧配额）。
+  useEffect(
+    () => () => {
+      clearTimeout(snapTimer.current);
+      abortRef.current?.abort();
+    },
+    []
+  );
+
+  // 设置弹窗保存/清空配置后同步到本组件（BUG-58）：常驻右栏不会重挂载，
+  // 原先只在挂载时读一次，用户填好 Key 直接提问仍按旧配置发送。
+  useEffect(() => subscribeLlmCfg(() => setLlmCfg(loadLlmCfg())), []);
 
   // 动画结束（360ms 过渡 + 余量）后回到自然布局（高度交还给 flex）
   const endSnap = () => {
@@ -136,6 +149,13 @@ export default function ChatComposer({ onOpenSettings }) {
 
   const stop = () => abortRef.current?.abort();
 
+  // 清空会话同时中止在途请求（BUG-61）：只清数组的话，流式回答会继续往已清空的会话里
+  // 写入，且 busy 要到流结束才复位。
+  const clearConversation = () => {
+    abortRef.current?.abort();
+    setMessages([]);
+  };
+
   const send = async (text) => {
     const question = (text ?? draft).trim();
     if (!question || busy || loginRequired) return;
@@ -169,18 +189,28 @@ export default function ChatComposer({ onOpenSettings }) {
 
     const abort = new AbortController();
     abortRef.current = abort;
+    // 中止后的「迟到增量」不再入账（BUG-61）：fetch 的 signal 只能停止读取，已 resolve 的
+    // reader 回调（onDelta/onFiles）仍会在同一个 macro-task 之后各触发一次，
+    // 于是「已停止生成。」后面会被追加半截文本、或给失败消息挂上文件卡片。
+    const live = () => abortRef.current === abort && !abort.signal.aborted;
     try {
       await chatStream(history, {
         signal: abort.signal,
         llm,
-        onDelta: (t) =>
-          setMessages((prev) =>
-            prev.map((m) => (m.id === aiId ? { ...m, text: m.text + t } : m))
-          ),
-        onFiles: (files) => patchAi({ files }),
+        onDelta: (t) => {
+          if (!live()) return;
+          setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: m.text + t } : m)));
+        },
+        onFiles: (files) => {
+          if (!live()) return;
+          patchAi({ files });
+        },
       });
-      patchAi({ streaming: false });
+      if (live()) patchAi({ streaming: false });
     } catch (err) {
+      // 仍然处理本次请求的失败（用户点「停止」也走这里，要落「已停止生成。」）；
+      // 只有 abortRef 已被清空/换人（卸载、发起了下一轮）才彻底丢弃。
+      if (abortRef.current !== abort) return;
       if (err.name === 'AbortError') {
         setMessages((prev) =>
           prev.map((m) =>
@@ -218,8 +248,10 @@ export default function ChatComposer({ onOpenSettings }) {
           type="button"
           aria-label={t('chat.clear')}
           title={t('chat.clear')}
-          disabled={busy || messages.length === 0}
-          onClick={() => setMessages([])}
+          // 流式期间保持可点（BUG-61）：否则用户在长回答生成中既不能清空也不能重置会话；
+          // 点击时会先中止在途请求（见 clearConversation）。
+          disabled={messages.length === 0}
+          onClick={clearConversation}
           className={ICON_BUTTON_CLASS}
         >
           <Trash2 className="h-[15px] w-[15px]" />
