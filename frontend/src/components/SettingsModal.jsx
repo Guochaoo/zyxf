@@ -50,7 +50,7 @@ export default function SettingsModal({ open, onClose }) {
   // .settings-lang 容器上，故点击触发按钮本身仍走它自己的切换逻辑，不会被重复收起。
   const langRef = useRef(null);
   useClickOutside(langOpen, () => setLangOpen(false), langRef);
-  // AI 配置草稿与已提交值分离：保存前不覆盖已生效配置。
+  // 大模型配置草稿与已提交值分离：保存前不覆盖已生效配置。
   const [llmCfg, setLlmCfg] = useState(loadLlmCfg);
   const [cfgDraft, setCfgDraft] = useState(loadLlmCfg);
   const [query, setQuery] = useState('');
@@ -184,7 +184,8 @@ export default function SettingsModal({ open, onClose }) {
             <div className="settings-content-body">
               {section === 'ai' && (
                 <div className="settings-section">
-                  <div className="settings-fields">
+                  {/* 字段放在浅底色块里：站点用色块 + 留白分隔，不靠描边（DESIGN.md §2 无界理念） */}
+                  <div className="settings-form">
                     {llmFields.map(({ key, label, placeholder, type }) => (
                       <label key={key} className="settings-field">
                         <span className="settings-field-label">{label}</span>
@@ -194,16 +195,19 @@ export default function SettingsModal({ open, onClose }) {
                           onChange={(e) => setCfgDraft((d) => ({ ...d, [key]: e.target.value }))}
                           placeholder={placeholder}
                           className="settings-input"
+                          spellCheck={false}
+                          autoComplete={key === 'apiKey' ? 'off' : undefined}
                         />
                       </label>
                     ))}
                   </div>
                   <p className="settings-hint">{t('settings.ai.hint')}</p>
+                  {/* 按钮复用站点 CTA：深色 rb-btn-dark / 次级 rb-btn-ghost（与浏览页工具栏同款） */}
                   <div className="settings-actions">
-                    <button type="button" onClick={clearAi} className="settings-btn settings-btn--ghost">
+                    <button type="button" onClick={clearAi} className="rb-btn-ghost h-[34px] px-3 text-sm">
                       {t('settings.ai.restore')}
                     </button>
-                    <button type="button" onClick={saveAi} className="settings-btn settings-btn--primary">
+                    <button type="button" onClick={saveAi} className="rb-btn-dark h-[34px] px-4 text-sm">
                       {t('settings.ai.save')}
                     </button>
                   </div>
