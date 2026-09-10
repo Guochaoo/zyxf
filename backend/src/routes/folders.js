@@ -26,6 +26,9 @@ const SORT_FIELDS = {
 // fallback) regardless of direction.
 const nameCollator = new Intl.Collator('zh', { sensitivity: 'base' });
 const startsWithCjk = (s) => /^[\u3400-\u9fff]/.test(s || '');
+// IMPROVE-02（就地豁免）：sortByName / cellCompare 都是**静态比较函数**，不含任何用户输入，
+// 仓库用的是 SQLite（node:sqlite）而非 MongoDB，不存在 mongo-sort-injection 的注入面——
+// 扫描对这两个函数的标记为误报。
 const sortByName = (rows, desc) =>
   rows.sort((a, b) => {
     // Non-CJK names (English / digits / symbols) come before any pinyin name,
@@ -186,6 +189,7 @@ router.get('/tree', (_req, res) => {
 
   // Replicate SQL ORDER BY sort_order, name COLLATE NOCASE; id is a stable
   // tiebreak for rows equal on both (undefined order in the original SQL).
+  // IMPROVE-02（就地豁免）：同 sortByName，静态比较器、无查询对象拼接 → 扫描标记为误报。
   const cellCompare = (a, b) => {
     if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
     const an = String(a.name || '').toLowerCase();
