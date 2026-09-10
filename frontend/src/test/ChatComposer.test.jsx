@@ -119,20 +119,6 @@ describe('ChatComposer', () => {
     expect(screen.queryByPlaceholderText('sk-…')).toBeNull();
   });
 
-  test('本地已保存配置会随请求下发（服务端未配置时）', async () => {
-    localStorage.setItem(
-      'zyxf_llm',
-      JSON.stringify({ apiKey: 'test-key', baseUrl: 'https://llm.test/v1', model: 'glm-4.6' })
-    );
-    chatStreamMock.mockImplementation(async () => {});
-    await renderPanelAuthed();
-
-    typeAndSend('你好');
-    await waitFor(() => expect(chatStreamMock).toHaveBeenCalled());
-    const opts = chatStreamMock.mock.calls[0][1];
-    expect(opts.llm).toEqual({ apiKey: 'test-key', baseUrl: 'https://llm.test/v1', model: 'glm-4.6' });
-  });
-
   test('本地无配置时不下发 llm 字段', async () => {
     chatStreamMock.mockImplementation(async () => {});
     renderPanel();

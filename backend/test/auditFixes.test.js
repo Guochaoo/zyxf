@@ -83,8 +83,47 @@ describe('审计修复：搜索查询长度上限（匿名 DoS）', () => {
   });
 });
 
-describe('审计修复：contents 的 sort 白名单不再是原型链查找', () => {
-  test('sort=constructor 等原型键回退默认排序而不是 500', async () => {
+describe('审计修复：cleanup-upload 不得越出 OSS_KEY_PREFIX（`..` 段）', () => {
+  test('前缀内的正常 key 仍可清理（best-effort 行为不变）', async () => {
+    const token = await adminToken();
+    ossObjectStore.keys = ['zyxf-test/x/leaf.txt'];
+    const r = await request('POST', '/api/files/cleanup-upload', {
+      token,
+      body: { oss_key: 'zyxf-test/x/leaf.txt' },
+    });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.ok, true);
+  });
+
+  test('含 `..` / `.` 段的 key 一律 400（即使字符串层面以 prefix 开头）', async () => {
+    const token = await adminToken();
+    for (const key of [
+      'zyxf-test/../otherapp/secret.txt',
+      'zyxf-test/./a.txt',
+      'zyxf-test/a/../../b.txt',
+    ]) {
+      const r = await request('POST', '/api/files/cleanup-upload', { token, body: { oss_key: key } });
+      assert.equal(r.status, 400, `${key} 应被拒绝`);
+    }
+  });
+});
+
+describe('审计修复：文件夹名里的点段被清洗（不产生可越前缀的 key）', () => {
+  test('新建名为 `..` 的文件夹后，其下文件的 oss_key 仍在 prefix 内', async () => {
+    const token = await adminToken();
+    const dir = await request('POST', '/api/folders', { token, body: { name: '..', parent_id: null } });
+    assert.equal(dir.status, 200);
+    const up = await request('POST', '/api/files/upload-url', {
+      token,
+      body: { filename: 'x.pdf', folder_id: dir.body.id },
+    });
+    assert.equal(up.status, 200);
+    assert.ok(!up.body.key.split('/').includes('..'), `key 含点段: ${up.body.key}`);
+    assert.ok(up.body.key.startsWith('zyxf-test/'), up.body.key);
+  });
+});
+
+describe('审计修复：contents 的 sort 白名单不再是原型链查找', () => {  test('sort=constructor 等原型键回退默认排序而不是 500', async () => {
     insertFolder('甲乙');
     insertFolder('丙丁');
     for (const key of ['constructor', '__proto__', 'toString', 'valueOf', 'hasOwnProperty']) {

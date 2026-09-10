@@ -336,6 +336,12 @@ router.post('/cleanup-upload', requireAdmin, wrapAsync(async (req, res) => {
   if (!oss_key.startsWith(prefix + '/')) {
     return res.status(400).json({ error: 'OSS key 与配置的前缀不匹配' });
   }
+  // `zyxf/../other/x` 也能通过 startsWith（字符串层面确实以 `zyxf/` 开头），
+  // 但 OSS 端若按路径语义归一化就会删到前缀之外的对象。对象键里不存在合法的
+  // `.` / `..` 段（生成侧 cleanObjectSegment 已把它们换成 `_`），一律拒绝。
+  if (oss_key.split('/').some((seg) => seg === '.' || seg === '..')) {
+    return res.status(400).json({ error: 'OSS key 含非法路径段' });
+  }
   // 已被 files 行引用的对象不能删：注册失败后的清理不该动到已入库文件的对象
   // （并发或同名上传会让两者的 key 相同），否则等于把线上文件的存储对象删掉。
   if (db.prepare('SELECT id FROM files WHERE oss_key = ?').get(oss_key)) {

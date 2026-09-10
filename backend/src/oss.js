@@ -32,7 +32,7 @@ const _ossPublicHost = (() => {
   return `https://${envOrThrow('OSS_BUCKET')}.${envOrThrow('OSS_REGION')}.aliyuncs.com`;
 })();
 
-export function ossPublicHost() {
+function ossPublicHost() {
   return _ossPublicHost;
 }
 

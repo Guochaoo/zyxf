@@ -183,10 +183,21 @@ export default function DashboardPage() {
     [range]
   );
 
-  const loadHeat = () =>
-    getHeatmap()
-      .then(setHeat)
+  // 热力图请求序号 + 卸载守卫：它与统计走同一个「刷新」按钮，却漏了 BUG-57 加的守卫——
+  // 连点刷新时旧热力图响应后到会把新年份网格盖回去，卸载后还会 setState。
+  const heatReqIdRef = useRef(0);
+  const heatAliveRef = useRef(true);
+  useEffect(() => () => { heatAliveRef.current = false; }, []);
+
+  const loadHeat = () => {
+    const reqId = (heatReqIdRef.current += 1);
+    return getHeatmap()
+      .then((d) => {
+        if (!heatAliveRef.current || reqId !== heatReqIdRef.current) return;
+        setHeat(d);
+      })
       .catch(() => {}); // the heatmap panel renders its own empty state
+  };
 
   useEffect(() => {
     load(false, range);
@@ -196,7 +207,6 @@ export default function DashboardPage() {
     loadHeat();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
   /* ---- derived stats for the insight cards ---- */
   const insights = useMemo(() => {
     if (!stats) return null;

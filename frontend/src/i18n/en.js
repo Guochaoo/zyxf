@@ -246,6 +246,8 @@ const en = {
     download: 'Download {{name}}',
     clear: 'Clear search',
     loadingAria: 'Clear',
+    failed: 'Search failed, please retry',
+    retry: 'Retry',
   },
   tree: {
     title: 'Browse',
