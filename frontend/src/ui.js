@@ -77,7 +77,3 @@ export function getTheme() {
 export function setTheme(value) {
   storageSet(THEME_KEY, value);
 }
-
-export function clearTheme() {
-  storageRemove(THEME_KEY);
-}

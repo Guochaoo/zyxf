@@ -193,7 +193,19 @@ function Row({
       onDragOver={(e) => onRowDragOver(e, { type: item.type, id: item.id })}
       onDragLeave={() => onRowDragLeave({ type: item.type, id: item.id })}
       onDrop={(e) => onRowDrop(e, { type: item.type, id: item.id })}
-      className={`relative flex items-center gap-2 px-3 sm:px-4 py-3 sm:py-2.5 cursor-pointer transition-[background-color,transform] duration-150 active:scale-[0.98] ${
+      // 行内主操作（进入文件夹 / 预览文件）原先是裸 onClick 的 <li>：键盘用户完全够不到，
+      // 读屏也不知道这行可以打开（BUG-66）。补 role/tabIndex 与 Enter/Space 处理，
+      // 行内操作按钮仍是各自独立的 <button>（点它们不会冒泡到本行，见下方 stopPropagation）。
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return; // 行内按钮自行处理键盘
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault(); // 空格默认会滚屏
+          onClick();
+        }
+      }}
+      className={`relative flex items-center gap-2 px-3 sm:px-4 py-3 sm:py-2.5 cursor-pointer transition-[background-color,transform] duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink/30 ${
         isInto ? 'bg-black/5 ring-1 ring-inset ring-black/10' : ''
       } ${
         isBefore ? 'shadow-[inset_0_2px_0_0_rgba(0,0,0,0.6)]' : ''

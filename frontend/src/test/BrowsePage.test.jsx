@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, createEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { setToken } from '../ui.js';
 
 // IMPROVE-01：BrowsePage 拆成容器 + 数据/拖拽/同步 hook + 页面级展示件后，
@@ -178,6 +178,42 @@ describe('BrowsePage', () => {
     fireEvent.drop(folderRow, { dataTransfer: dt });
 
     await waitFor(() => expect(moveFileMock).toHaveBeenCalledWith(10, 1));
+  });
+
+  // BUG-66：行的主操作原先只有 onClick，键盘用户完全够不到。
+  // 主操作 = 进入文件夹（onEnterFolder → navigate(`/folder/<id>`）），
+  // 因此把渲染挂在带 `:id` 的路由上，直接断言路由跳到 /folder/1。
+  test('行是键盘可达的：Tab 到行后回车/空格可打开文件夹', async () => {
+    const loc = { path: null };
+    function LocationProbe() {
+      loc.path = useLocation().pathname;
+      return null;
+    }
+    listFolderMock.mockResolvedValue(MANUAL_PAYLOAD);
+    render(
+      <MemoryRouter
+        initialEntries={['/']}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={<BrowsePage />} />
+            <Route path="/folder/:id" element={<BrowsePage />} />
+          </Routes>
+          <LocationProbe />
+        </AuthProvider>
+      </MemoryRouter>
+    );
+    await screen.findByText('物理.pdf');
+    const folderRow = rows().find((r) => r.textContent.includes('高等数学'));
+    expect(folderRow).toHaveAttribute('role', 'button');
+    expect(folderRow).toHaveAttribute('tabindex', '0');
+
+    listFolderMock.mockClear();
+    fireEvent.keyDown(folderRow, { key: 'Enter' });
+    // 键盘 Enter 必须等价于点击：容器把行点击接到路由跳转上，跳转后再按 id=1 拉取目录
+    await waitFor(() => expect(listFolderMock).toHaveBeenCalledWith(1, 'manual', 'asc'));
+    expect(loc.path).toBe('/folder/1');
   });
 
   test('拖到行的上半区触发重排，且顺序基准取自 items（BUG-27）', async () => {

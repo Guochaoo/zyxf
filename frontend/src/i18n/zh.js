@@ -242,6 +242,8 @@ const zh = {
     download: '下载 {{name}}',
     clear: '清除搜索',
     loadingAria: '清除',
+    failed: '搜索失败，请重试',
+    retry: '重试',
   },
   tree: {
     title: '目录',

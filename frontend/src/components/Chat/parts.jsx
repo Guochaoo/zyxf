@@ -13,7 +13,7 @@ const CHEVRON = Array.from({ length: 9 }, (_, i) => {
   return (c + Math.abs(r - 1)) * 90;
 });
 
-export function PixelGrid({ active }) {
+function PixelGrid({ active }) {
   return (
     <span aria-hidden className="grid shrink-0 grid-cols-[repeat(3,4px)] gap-[1.5px]">
       {CHEVRON.map((delay, i) => (
@@ -32,7 +32,7 @@ export function PixelGrid({ active }) {
 }
 
 // 从发送时刻起实时计时；resolving 结束（消息完成）时定格，不再消失
-export function Elapsed({ start, resolving }) {
+function Elapsed({ start, resolving }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     setNow(Date.now());

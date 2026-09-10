@@ -6,6 +6,10 @@ export function cleanObjectSegment(name) {
     .normalize('NFC')
     .replace(/[\\/\u0000-\u001f\u007f]/g, '-')
     .trim()
+    // 纯点段统一换成 `_`：`.` 与 `..` 在 OSS/S3 语义里是「当前目录 / 上级目录」，
+    // 直接拼进 key 就能越出 OSS_KEY_PREFIX（`zyxf/../other/x`），而 cleanup-upload 的
+    // 前缀校验只是字符串 startsWith → 可删到其它部署（乃至桶根）的对象。
+    // 原 `^\.+$` 已包含 `..`，但只处理「整段全是点」；这里保留同义并把含义写清楚。
     .replace(/^\.+$/, '_');
 }
 
