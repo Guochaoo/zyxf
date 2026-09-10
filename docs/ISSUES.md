@@ -6,8 +6,8 @@
 
 - **编号**：`BUG-<n>` 缺陷 · `IMPROVE-<n>` 改进。编号一经分配永不复用，因此**不连续属正常**（如 `BUG-22`、`BUG-28` 为空号）。
 - **状态流转**：新条目先进「[1. 待处理](#1-待处理)」；处理完成后移入「[2. 已归档](#2-已归档)」并补记关闭日期。
-- **归档表是索引，不是文档**：只留编号 / 严重度 / 类别 / 标题 / 位置 / 日期。**为什么这样修、踩过什么坑**只在「不看注释就容易改错」的修复处留**一行**带编号的注释；其余细节看 commit message。`处置要点` 列已废弃，不再往归档表里补长说明，也不为历史条目批量回填注释。
-- **条目字段**（仅「待处理」需要展开）：现状 / 影响 / 修法 / 验证各一行，说清「能不能复现、改哪里、怎么算修好」即可，不写背景故事。
+- **归档表是索引，不是文档**：只留编号 / 严重度 / 类别 / 标题 / 位置 / 日期，一行一条。不显眼的「为什么」写成修复处的**一行**注释（`grep -rn "BUG-54" backend/src frontend/src`），其余细节看 commit message；不为历史条目批量回填注释，也不写多段式说明。
+- **待处理条目写全背景**（现状 / 影响 / 修法 / 验证）：这是给「以后接手的人」看的，保留具体数值、复现路径、约束与踩坑，**不为了短而丢信息**。
 - **严重度**：`P0` 功能错误或崩溃风险 · `P1` 性能退化或逻辑隐患 · `P2` 健壮性 / 规范 / 边缘 case / 轻微改进。
 
 ## 当前进度
@@ -34,54 +34,52 @@ fixed: 114            # 已归档：缺陷 87 + 改进 25
 
 ### 1.2 改进建议
 
-当前**无待处理改进建议**——IMPROVE-01/02/10 已全部处置（见 [2.2 已关闭改进项](#22-已关闭改进项)（25））；本轮审计新发现的改进项里已处置 7 条（13/14/18/19/22/23/25）见同一张表，剩余 6 条见下。
-
-#### IMPROVE-15 · `GET /folders/tree` 每次全量重建整库树，且前端每次变更请求两遍
-`backend · 性能` / `frontend · 重复`
-`files: [backend/src/routes/folders.js, frontend/src/hooks/useFolderTree.js]`
-
-- **改法**：接口侧复用 `searchService` 的全库快照缓存或加 ETag；前端把 tree 提升为模块级共享缓存/Provider（SWR 式）。
-- **验收**：同一变更只发一次请求（请求计数 mock）。
+当前**无待处理改进建议**——IMPROVE-01/02/10 已全部处置（见 [2.2 已关闭改进项](#22-已关闭改进项)（25））；本轮审计新发现的改进项里已处置 7 条（13/14/18/19/22/23/25）见同一张表，**剩余 5 条**见下（待处理条目写全背景，便于以后接手时不必重新调研）。
 
 #### IMPROVE-16 · 登录/注册用 bcryptjs 同步哈希，单次独占事件循环 40–50 ms
 `backend · 性能`
 `files: [backend/src/routes/auth.js, backend/package.json]`
 
-- **影响**：实测 `hashSync(10)` ≈47 ms、`compareSync` ≈42 ms，期间所有并发 API（health/下载/搜索）一并排队。
-- **改法**：改用 `await bcrypt.compare/hash`（bcryptjs 有 Promise 版）或换异步实现。
-- **验收**：登录用例全绿；登录期间的 health 延迟不再抖动。
+- **现状**：`bcrypt.compareSync` / `bcrypt.hashSync`（bcryptjs 是纯 JS 实现），本机实测 `hashSync(10)` ≈47 ms、`compareSync` ≈42 ms，且是在路由处理函数里同步执行的。
+- **影响**：每次登录/注册期间，事件循环被独占 40–50 ms，所有并发 API（`/api/health`、下载签名、搜索、上传）一并排队；配合「多出口 IP 叠加」的爆破脚本，可把这种抖动放大成持续的服务降级。`registerLimiter` 是 15 次/分钟/IP，量级不高，但登录路径本身是公开的。
+- **修法**：改用 `await bcrypt.compare/hash`（bcryptjs 提供 Promise 版，内部仍走同一套算法，只是让出事件循环）或换原生 bcrypt / argon2 异步实现。注意 login 的 DUMMY_HASH 时间对齐逻辑（BUG-70）必须保持：两条分支都要 await 一次比较。
+- **验证**：`test/authHardening.test.js` 全绿；本机压测「并发打 /api/health 的同时打 /login」，health 的 p95 不再随登录抖动。
 
 #### IMPROVE-17 · 文件夹改名/移动要逐个搬运整棵子树的 OSS 对象，无规模阈值
 `backend · 性能`
 `files: [backend/src/routes/folders.js]`
 
-- **影响**：1000 个文件的子目录改名 ≈ 400 次串行网络往返（并发固定 10），易超 nginx 默认 60 s 超时。
-- **改法**：设子树规模阈值（超限 409 并提示），或改后台迁移任务并落库迁移状态。
-- **验收**：用例「超过阈值的子树改名返回 409」。
+- **现状**：`planFolderSubtreeMove` 取整棵子树后对每个文件 `copy` → 再逐个 `delete`，`batchOss` 并发固定 10。
+- **影响**：含 1000 个文件的文件夹改名 ≈ 400 次串行网络往返（copy + delete 各一轮），请求易超 nginx 默认 60 s 超时；且 BUG-92 之后虽然不再可能产生环或「DB 指向不存在的对象」，但中途失败仍会留下新键孤儿对象（需要人工清理或后续补偿任务）。`sync` 会把孤儿对象当新文件导入。
+- **修法**：两条路线取其一——① 设定子树规模阈值（如 200 个对象），超限返回 409 并提示改用「批量/后台迁移」；② 改为后台迁移任务：请求只落一条迁移记录（`pending_moves`），由任务推进 copy → 改库 → 删旧，并在同步导入前跳过未完成迁移涉及的键。
+- **验证**：用例「超过阈值的子树改名返回 409」；若走 ② 则补「迁移中断后重跑不产生重复条目」。
 
 #### IMPROVE-20 · `/api/search` 每类截断 20 条，前端却把它当总数展示
-`frontend · 契约`
+`frontend · 契约` / `backend · 契约`
 `files: [backend/src/searchService.js, backend/src/routes/search.js, frontend/src/components/SearchBar.jsx]`
 
-- **影响**：`searchLibrary` 对 folders/files 各自 `slice(0, limit)`，前端用两者长度之和渲染「N 个结果」——命中超过 20 时写死「20 个结果」，用户以为只有 20 条（与 BUG-24 同类）。
-- **改法**：接口回传 `total` 或 `truncated`，前端显示「显示 20 / 共 N 条」。
-- **验收**：`SearchBar` 用例断言截断提示。
+- **现状**：`searchLibrary(q, { limit = 20 })` 对 folders 与 files 各自 `slice(0, limit)`，路由只回传两个数组；前端 `SearchBar` 用 `folders.length + files.length` 渲染 `search.resultsCount`（「N 个结果」）。实测命中超过 20 时界面写死「20 个结果」。
+- **影响**：用户以为库里只有 20 条匹配而漏掉资料；与 BUG-24（类型分布截断）属同一类「截断值与 UI 展示契约不一致」问题。
+- **修法**：路由回传命中总数（`total`）或至少一个 `truncated: true` 标志；前端在截断时显示「显示 20 / 共 N 条」，未截断保持现状。若担心多一次计数开销，可在 `rank()` 之后用「未 slice 的数组长度」得到总数（本来就已全量算完，无额外扫描）。
+- **验证**：`SearchBar` 用例断言截断提示文案与总数；后端用例断言响应结构（含 `total`）。
 
-#### IMPROVE-24 · `useFolderTree` 的文档承诺与实现不符（去重未生效）
+#### IMPROVE-24 · `useFolderTree` 的文档承诺与实现不符（同一变更仍发两次请求）
 `frontend · 重复`
 `files: [frontend/src/hooks/useFolderTree.js, frontend/src/components/FolderTree.jsx, frontend/src/components/KnowledgeGraph.jsx]`
 
-- **影响**：hook 注释声称已解决「同一变更发两次 GET」，实际只是把重复代码搬进 hook——两处各挂一个实例，重复请求依旧。
-- **改法**：模块级共享缓存/Provider（与 IMPROVE-15 同一改动）。
-- **验收**：请求计数断言只发一次。
+- **现状**：hook 注释声称它解决了「原来各自实现了一遍 fetch + alive 守卫 + 事件监听、同一变更触发两次相同 GET」，但实现只是把重复代码搬进 hook——侧边栏 `FolderTree` 与知识图谱 `KnowledgeGraph` 各挂一个 hook 实例、各持一份 state、各自监听 `folders-changed`，同一变更依旧发两次 `/api/folders/tree`（大库时是实打实的翻倍开销；后端自 IMPROVE-15 起有 30 s 快照，第二次请求命中缓存但**仍是一次完整 HTTP 往返**）。
+- **影响**：目录树相关的每次写操作都多一次请求；注释还会让后续维护者以为已经优化过。
+- **修法**：把 tree 提升为模块级共享存储（`useSyncExternalStore` + 模块级 cache/inflight/订阅集合，模块加载时监听一次 `folders-changed`），两个消费方只订阅；`loadFolderTree()` 共享同一个 in-flight Promise，同一变更只发一次请求。注意保留 BUG-82 的请求序号守卫，并让订阅者在变更后拿到同一份新快照。
+- **验证**：用例用请求计数 mock 断言「两个消费方同时挂载 + 触发一次 folders-changed 只发一次 GET」。
 
 #### IMPROVE-26 · sync 只回收「死根子树」，挂在活根下的空文件夹永不剪枝（**暂缓，改动有破坏性风险**）
 `backend · 同步`
 `files: [backend/src/routes/sync.js]`
 
-- **影响**：剪枝只遍历 `parent_id IS NULL` 的根，活根下的空文件夹会一直留着（与函数自述的 "prunes folders that are empty" 不符）。
-- **改法（暂缓原因）**：改成逐节点剪枝会把「没有 placeholder 又没有文件」的文件夹全删，而历史上存在未写 placeholder 的部署，会被整体清空。需先核对线上 placeholder 覆盖率，或改为「仅当文件夹已存在超过 N 天时剪枝」。
-- **验收**：若实施，先加干跑（只统计不删除）观察一轮同步结果。
+- **现状**：剪枝循环只遍历 `parent_id IS NULL` 的根；对「活根」（仍有 placeholder 或有文件）调用 `folderAlive` 时，不会把它内部已死的子文件夹收进待删集合，于是这类空文件夹一直留在库里（与函数自述的 "prunes folders that are empty" 不符）。
+- **影响**：库内缓慢积累空文件夹，侧边栏出现点进去什么都没有的节点；也会让 `/folders/tree` 的响应与目录树 UI 变脏。
+- **修法（暂缓原因）**：改成逐节点剪枝会把「既没有 placeholder 对象、又没有文件」的文件夹全部删除，而历史上存在「建库时未写 placeholder」的部署，会被整体清空（这是破坏性操作，无法从 DB 单独判定安全）。可行路线：先核对线上 placeholder 覆盖率（`sync` 加只统计不删除的干跑模式观察一轮），或改为「仅当文件夹已存在超过 N 天且为空时剪枝」。
+- **验证**：若实施，先加干跑（只统计不删除）观察一轮同步结果，再在测试库上验证「活根下的空文件夹被回收、有 placeholder 的保留」。
 
 ---
 
@@ -197,14 +195,13 @@ fixed: 114            # 已归档：缺陷 87 + 改进 25
 | IMPROVE-10 | P2 | 安全 | `/api/chat` 对匿名开放且允许客户端自带 baseUrl（受限公网代理面） | `backend/src/routes/chat.js`, `frontend/src/components/ChatComposer.jsx` · `frontend/src/i18n/zh.js` | 2026-09-11 |
 | IMPROVE-11 | P2 | 前端 | CSP 配置在 nginx 层（后端关闭有意为之）+ nosniff/Referrer-Policy | `frontend/nginx.conf`, `backend/src/index.js` · `docs/DEPLOY.md §4.2` | 2026-09-10 |
 | IMPROVE-12 | P1 | 性能 | 统计接口缺支撑索引：`files(created_at)` 与 `download_logs(file_id, downloaded_at)` | `backend/src/db.js`, `backend/src/routes/stats.js`, `backend/test/auditFixes.test.js` | 2026-09-11 |
-| IMPROVE-14 | P2 | 性能 | 循环内反复 `db.prepare`，且 reorder 的 `order` 无长度上限 | `backend/src/routes/folders.js`, `backend/test/auditFixes.test.js` | 2026-09-11 |
+| IMPROVE-14 | P2 | 性能 | 循环内反复 `db.prepare`（子树搬迁 / reorder / sync 批量导入），且 reorder 的 `order` 无长度上限 | `backend/src/routes/folders.js`, `backend/src/routes/sync.js`, `backend/src/dbHelpers.js`, `backend/test/auditFixes.test.js` | 2026-09-11 |
 | IMPROVE-21 | P2 | 冗余 | `largeFileHint` 导出零引用，且 20 MB 阈值以字面量硬写在两本字典 | `frontend/src/utils.js`, `frontend/src/i18n/zh.js`, `frontend/src/i18n/en.js`, `frontend/src/components/Preview/index.jsx` | 2026-09-11 |
 | IMPROVE-27 | P1 | 工程·CI | CI 对 lockfile 漏洞完全无感（`npm ci --no-audit` 且无 audit 步骤） | `.github/workflows/ci.yml` | 2026-09-11 |
 | IMPROVE-28 | P2 | 工程·CI | 前端 job 只跑 build、不校验产物，空 `dist` 也能绿 | `.github/workflows/ci.yml` | 2026-09-11 |
 | IMPROVE-29 | P2 | 安全 | 两个 workflow 未声明最小 `permissions` | `.github/workflows/ci.yml`, `.github/workflows/deploy.yml` | 2026-09-11 |
 | IMPROVE-30 | P2 | 工程·部署 | deploy 无 concurrency：两次 push 并发在同一台服务器互相覆盖 | `.github/workflows/deploy.yml` | 2026-09-11 |
 | IMPROVE-13 | P1 | 后端 | sync 的 `ensureFolderChain` 残留 N+1：每个对象、每一层都重查父级全部兄弟 | `backend/src/routes/sync.js`, `backend/test/syncBatch.test.js` | 2026-09-11 |
-| IMPROVE-14 | P2 | 性能 | sync 导入循环逐行 `nextSortOrder`（每次 prepare + MAX 查询）与 PATCH 空 body | `backend/src/dbHelpers.js`, `backend/src/routes/sync.js`, `backend/src/routes/folders.js`, `backend/test/dbHelpers.test.js` | 2026-09-11 |
 | IMPROVE-18 | P2 | 后端 | `storagePath.js` 同一套 OSS key 规则维护了两份实现（DB 版与 Map 版） | `backend/src/storagePath.js` | 2026-09-11 |
 | IMPROVE-19 | P2 | 前端 | 前端扩展名分类表有三份硬编码副本，后端白名单是第四份 | `frontend/vite.config.js`, `frontend/src/utils.js`, `frontend/src/components/FileIcon.jsx`, `frontend/src/components/Chat/parts.jsx`, `frontend/src/test/extPolicySync.test.js` | 2026-09-11 |
 | IMPROVE-22 | P2 | 前端 | `api.js` 注释仍描述已被替换掉的同步限流口径 | `frontend/src/api.js` | 2026-09-11 |
