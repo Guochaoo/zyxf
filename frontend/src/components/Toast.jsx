@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import './Toast.css';
@@ -42,11 +42,27 @@ export default function Toast({ type = 'info', message, sub, duration = 3500, on
     return () => clearTimeout(timer);
   }, [duration, message]);
 
+  // 关闭动画播完才算退场。但 animationend 并非必然到达：用户禁用了动画、被样式或扩展
+  // 覆盖时它不会触发，通知卡就会永久留在屏幕上。故再加一道兜底计时器（略长于 300ms 的
+  // 淡出动画），两条路径共用 closeOnce，避免重复回调。
+  const closedRef = useRef(false);
+  const closeOnce = () => {
+    if (closedRef.current) return;
+    closedRef.current = true;
+    onClose?.();
+  };
+  useEffect(() => {
+    if (!closing) return undefined;
+    const fallback = setTimeout(closeOnce, 500);
+    return () => clearTimeout(fallback);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closing]);
+
   return createPortal(
     <div
       role="alert"
       className={`toast-card toast-card--${kind} ${closing ? 'toast-card--closing' : ''}`}
-      onAnimationEnd={() => closing && onClose?.()}
+      onAnimationEnd={() => closing && closeOnce()}
     >
       <svg className="toast-card__wave" viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg" aria-hidden>
         <path d={WAVE_PATH} fillOpacity={1} />
