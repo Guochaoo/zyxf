@@ -1,8 +1,8 @@
 // English locale — mirrors zh.js key-for-key.
 const en = {
   app: {
-    title: 'GZYX Study Center',
-    brand: 'GZYX Study Resource Library',
+    title: 'ZYXF Study Center',
+    brand: 'ZYXF Library',
     loading: 'Loading...',
     collapsedSidebar: 'Collapse sidebar',
     expandSidebar: 'Expand sidebar',
@@ -20,7 +20,7 @@ const en = {
     dashboard: 'Dashboard',
     dashboardAria: 'View statistics dashboard',
     about: 'About',
-    aboutAria: 'Learn about the GZYX Study Center',
+    aboutAria: 'Learn about the ZYXF Study Center',
     open: 'Open menu',
     close: 'Close menu',
     toggleOpen: 'Menu',
@@ -99,8 +99,8 @@ const en = {
     brandTitle2: 'knowledge',
     brandTitle3: 'flow in order',
     brandSlogan: 'Organize study materials, retrieve what you need, and share quality resources with classmates.',
-    providedBy: 'Provided by GZYX Study Center',
-    brandAlt: 'GZYX Study Center',
+    providedBy: 'Provided by ZYXF Study Center',
+    brandAlt: 'ZYXF Study Center',
     code: 'Verification code',
   },
   dashboard: {
@@ -138,10 +138,10 @@ const en = {
     },
   },
   about: {
-    tag: 'GZYX Study Center',
+    tag: 'ZYXF Study Center',
     title: 'What we do',
     sub: 'Materials · Lectures · Q&A',
-    pitch: 'The GZYX Study Center supports students with academic coaching. Course materials, peer experience and coaching methods are distilled into a sustainable learning support system, helping every student study more clearly and more persistently.',
+    pitch: 'The ZYXF Study Center supports students with academic coaching. Course materials, peer experience and coaching methods are distilled into a sustainable learning support system, helping every student study more clearly and more persistently.',
     joinUs: 'Join us',
     caseTitle: 'Submit work',
     category: 'Category',
@@ -178,7 +178,7 @@ const en = {
       light: 'Light',
       system: 'System',
       dark: 'Dark',
-      brand: 'GZYX Study Center',
+      brand: 'ZYXF Study Center',
       langGroupTitle: 'Fonts and language',
       selectLang: 'Select language',
     },
