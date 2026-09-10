@@ -140,6 +140,17 @@ export function ensureAdmin(username, password) {
   }
 }
 
+// 下载日志保留期（天）。download_logs 含 ip/ua，属可定位到个人的访问记录，
+// 不应无限期留存；但仪表盘热力图需要近一年数据，故默认 400 天（略大于 1 年）。
+export const DOWNLOAD_LOG_RETENTION_DAYS =
+  Number(process.env.DOWNLOAD_LOG_RETENTION_DAYS) || 400;
+
+// 删除超过保留期的下载日志，返回删除行数（启动时调用一次即可）。
+export function pruneDownloadLogs(retentionDays = DOWNLOAD_LOG_RETENTION_DAYS) {
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  return db.prepare('DELETE FROM download_logs WHERE downloaded_at < ?').run(cutoff).changes;
+}
+
 // node:sqlite has no `db.transaction()`; wrap a synchronous fn in
 // BEGIN/COMMIT/ROLLBACK and keep the call-return-later shape routes rely on
 // (`const tx = transaction(() => ...); tx();`).

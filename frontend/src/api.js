@@ -27,6 +27,15 @@ export default api;
 // ---- helpers ----
 
 /**
+ * 服务端 AI 是否已配置（只读）。返回 { enabled: boolean }。
+ * 前端用它避免在服务端已配置时仍上传用户自带的 Key。
+ */
+export async function getChatStatus() {
+  const { data } = await api.get('/chat/status');
+  return data;
+}
+
+/**
  * AI 聊天（SSE 流式）。axios 不支持流式响应，用原生 fetch 逐行解析。
  * 事件回调：onDelta（文本增量）、onFiles（引用的文件列表）。
  * llm 为可选的客户端配置 { apiKey, baseUrl, model }（前端设置面板，自带 Key）。

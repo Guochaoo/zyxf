@@ -26,7 +26,7 @@
 | TCP | 80 | 0.0.0.0/0 | HTTP |
 | TCP | 443 | 0.0.0.0/0 | HTTPS |
 
-> 不要把 4000（后端）暴露公网：后端 `app.listen(PORT)` 默认绑定 `0.0.0.0`，需靠**安全组规则**限制 4000 端口仅本机可访问（nginx 在本机反代 `127.0.0.1:4000` 不受影响）。
+> 后端默认绑定 `127.0.0.1`（`HOST` 环境变量可覆盖），因此**不依赖安全组**也不会被公网直连。这同时是限流的前提：后端信任 `X-Forwarded-For` 取客户端 IP，只有不可直连时该信任才安全——否则外部可伪造 XFF 绕过所有限流（BUG-36）。安全组仍建议不开 4000，作为纵深防御。
 
 ### 0.2 OSS CORS 加白名单
 
@@ -63,6 +63,8 @@ OSS 控制台 → 你的 Bucket → **数据安全 → 跨域设置** → 添加
 
 ```env
 PORT=4000              # 后端内部端口，保持 4000
+# 后端监听地址，默认 127.0.0.1（只允许本机 nginx 反代）。确需其它主机直连才设 0.0.0.0。
+HOST=127.0.0.1
 
 # JWT_SECRET 必须 ≥32 位随机串，且不含弱口令词（password/secret/dev/admin123 等）
 JWT_SECRET=<用 openssl rand -hex 32 生成>
@@ -94,6 +96,9 @@ DM_ACCESS_KEY_ID=<AccessKey ID>
 DM_ACCESS_KEY_SECRET=<AccessKey Secret>
 DM_ACCOUNT_NAME=<发信地址，如 no-reply@zyxf.top>
 DM_FROM_ALIAS=
+
+# 可选：下载日志保留天数（含 ip/ua，默认 400 天）
+DOWNLOAD_LOG_RETENTION_DAYS=
 ```
 
 生成 JWT_SECRET：
@@ -162,6 +167,32 @@ aliyun ram CreateAccessKey --UserName zyxf-oss --region cn-beijing
 ```
 
 验证：用新密钥访问**其他** bucket 应返回 `AccessDenied`（越权被拒），访问目标 bucket 正常——两者都满足才算最小权限生效。
+
+### 2.2 DirectMail 凭证（注册验证码）
+
+同理，`DM_ACCESS_KEY_ID`/`DM_ACCESS_KEY_SECRET` 应使用**专用 RAM 用户**，且只授予发信所需的单个动作——应用只调用 `SingleSendMail`，不需要 `dm:*`（域名/模板/收件人管理、IP 防护等都不需要）：
+
+```json
+{
+  "Version": "1",
+  "Statement": [
+    { "Effect": "Allow", "Action": ["dm:SingleSendMail"], "Resource": ["acs:dm:*:*:*"] }
+  ]
+}
+```
+
+```bash
+aliyun ram CreatePolicy --PolicyName zyxf-dm-send --PolicyDocument "$(cat dm-policy.json)" --region cn-beijing
+aliyun ram CreateUser --UserName zyxf-mail --region cn-beijing
+aliyun ram AttachPolicyToUser --PolicyType Custom --PolicyName zyxf-dm-send --UserName zyxf-mail --region cn-beijing
+aliyun ram CreateAccessKey --UserName zyxf-mail --region cn-beijing
+```
+
+验证：越权只读动作（如 `GetTrackList`，**必须传齐必填参数**，否则会先报参数错误而非权限错误）应返回 `Forbidden`；`SingleSendMail` 传一个格式非法的收件地址应返回地址校验错误（`InvalidToAddress`）而非权限错误。
+
+### 2.3 数据保留
+
+下载日志含访问者 `ip`/`ua`，属个人信息。后端启动时按 `DOWNLOAD_LOG_RETENTION_DAYS`（默认 400，略大于仪表盘热力图的近一年窗口）清理超期记录；无需保留访问明细时可调小。
 
 ---
 
