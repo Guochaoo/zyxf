@@ -183,8 +183,8 @@ export default function App() {
         <button
           type="button"
           onClick={() => setSidebarOpen(true)}
-          aria-label="展开侧边栏"
-          title="展开侧边栏"
+          aria-label={t('app.expandSidebar')}
+          title={t('app.expandSidebar')}
           aria-hidden={sidebarOpen}
           tabIndex={sidebarOpen ? -1 : 0}
           className={`fixed left-[18px] top-[13px] z-20 hidden lg:flex h-7 w-7 items-center justify-center rounded-[7px] text-slate-400 transition-all duration-[${SIDEBAR_MS}ms] ease-[${SIDEBAR_EASE}] hover:bg-slate-100 hover:text-slate-700 ${

@@ -41,10 +41,10 @@ export default function Preview({ file, onClose }) {
       if (wb.status === 'fulfilled') setWbToken(wb.value);
       // A signed-URL failure is fatal; a WebOffice-token failure just falls
       // back to the native/iframe preview path.
-      if (urlMeta.status === 'rejected') setErr(errMsg(urlMeta.reason, '加载失败'));
+      if (urlMeta.status === 'rejected') setErr(errMsg(urlMeta.reason, t('common.loadFailed')));
     } catch (e) {
       if (token !== loadTokenRef.current) return;
-      if (e.name !== 'AbortError') setErr(errMsg(e, '加载失败'));
+      if (e.name !== 'AbortError') setErr(errMsg(e, t('common.loadFailed')));
     } finally {
       if (token === loadTokenRef.current) setLoading(false);
     }
@@ -70,7 +70,7 @@ export default function Preview({ file, onClose }) {
     try {
       await downloadFileById(file, getFileUrl);
     } catch (e) {
-      setDownloadErr(errMsg(e, '下载失败，请关闭后重新打开'));
+      setDownloadErr(errMsg(e, t('preview.downloadFailedHint')));
     } finally {
       setDownloading(false);
     }

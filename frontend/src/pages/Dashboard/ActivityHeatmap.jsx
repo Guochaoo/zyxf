@@ -60,6 +60,9 @@ export default function ActivityHeatmap({ rows }) {
   const [hover, setHover] = useState(null);
   const [box, setBox] = useState(null); // measured grid viewport { w, h }
   const { t } = useTranslation();
+  // 月份轴文案：按下标取用（1 月 = 下标 0）。用整份数组而非按 count 拼接，
+  // 以免英文出现 '9m' 这类易误读的写法。
+  const monthNames = useMemo(() => t('dashboard.monthShort', { returnObjects: true }), [t]);
   // dictionary weekdays is Sunday-first; rendered per row index (grid is built
   // Monday-first in buildWeeks, so labels may not align perfectly)
   const weekdays = useMemo(() => t('dashboard.weekdays', { returnObjects: true }), [t]);
@@ -172,7 +175,7 @@ export default function ActivityHeatmap({ rows }) {
                   style={{ width: cell }}
                   className="whitespace-nowrap text-[10px] leading-none text-ink-3"
                 >
-                  {m != null ? t('dashboard.monthLabel', { count: m + 1 }) : ''}
+                  {m != null ? monthNames[m] : ''}
                 </span>
               ))}
             </div>

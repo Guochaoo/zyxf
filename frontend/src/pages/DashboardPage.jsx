@@ -215,7 +215,7 @@ export default function DashboardPage() {
       badge: (r.ext || 'o').charAt(0).toUpperCase(),
       pct: total ? (r.count / total) * 100 : 0,
       amount: `${total ? ((r.count / total) * 100).toFixed(1) : 0}%`,
-      desc: `${r.count.toLocaleString()} ${t('dashboard.files')} · 共 ${formatSize(r.size)}`,
+      desc: `${r.count.toLocaleString()} ${t('dashboard.files')} · ${t('dashboard.sizeAndTotal', { size: formatSize(r.size) })}`,
       ...PALETTE[i % PALETTE.length],
     }));
   }, [stats, t]);
@@ -275,7 +275,7 @@ export default function DashboardPage() {
   const shownTypes = Math.min(stats.type_total ?? stats.type_breakdown?.length ?? 0, 6);
   const hiddenTypes = Math.max((stats.type_total ?? 0) - shownTypes, 0);
   const typeExtra = hiddenTypes > 0 ? (
-    <span className="pl-1 text-[10.5px] text-ink-3">+{hiddenTypes} 类</span>
+    <span className="pl-1 text-[10.5px] text-ink-3">{t('dashboard.moreTypes', { count: hiddenTypes })}</span>
   ) : null;
 
   return (
@@ -328,7 +328,7 @@ export default function DashboardPage() {
       <section className="grid grid-cols-1 gap-3 lg:grid-cols-12">
         <AnomalyCard
           className="lg:col-span-7"
-          title="今日"
+          title={t('common.today')}
           metrics={metrics}
         />
 
