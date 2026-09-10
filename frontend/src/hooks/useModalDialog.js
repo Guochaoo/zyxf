@@ -34,7 +34,7 @@ export function useModalDialog({ enabled = true, onClose } = {}) {
         panel?.querySelectorAll(
           'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
         ) || []
-      ).filter((el) => !el.hasAttribute('hidden') && el.offsetParent !== null);
+      ).filter((el) => !el.hasAttribute('hidden') && !el.closest('[inert]'));
 
     // 打开时把焦点移进浮层（内容里有 autoFocus 的元素时浏览器已先聚焦，这里只是兜底）
     if (panel && !panel.contains(document.activeElement)) {

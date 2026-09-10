@@ -268,6 +268,8 @@ export default function ChatComposer({ onOpenSettings }) {
       </PanelHeader>
 
       {/* 主体：height 像素过渡收起/展开；动画期间锁定高度、隐藏列表滚动条 */}
+      {/* 收起/动画期间设 inert：内容只是被 height:0 + overflow:hidden 裁掉，控件仍在
+          Tab 顺序里——键盘用户会聚焦到看不见的输入框，盲打回车真的会把问题发出去。 */}
       <div
         ref={bodyRef}
         className={`min-h-0 shrink overflow-hidden transition-[height] duration-[360ms] ${
@@ -277,6 +279,7 @@ export default function ChatComposer({ onOpenSettings }) {
           height: snapH ?? (collapsed ? '0px' : undefined),
           transitionTimingFunction: EASE_COLLAPSE,
         }}
+        inert={collapsed || snapping ? '' : undefined}
       >
         <div
           className={`flex min-h-0 flex-col overflow-hidden ${snapping ? '' : 'h-full'}`}

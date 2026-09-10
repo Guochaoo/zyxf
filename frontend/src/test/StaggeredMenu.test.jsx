@@ -66,3 +66,21 @@ describe('StaggeredMenu 菜单按钮随语言切换更新', () => {
     expect(lines.length).toBe(1);
   });
 });
+
+// 关闭态面板只是 opacity:0 + 平移出屏，子项仍在 Tab 顺序里；inert 让可聚焦性与
+// aria-hidden 一致（否则键盘能聚焦到完全看不见的「资料库 / 登录」并回车触发）。
+describe('StaggeredMenu 关闭态面板不可聚焦', () => {
+  test('关闭时 aside 带 inert，打开后移除', async () => {
+    renderMenu();
+    const panel = () => document.getElementById('staggered-menu-panel');
+    expect(panel().hasAttribute('inert')).toBe(true);
+    expect(panel().getAttribute('aria-hidden')).toBe('true');
+
+    document.querySelector('.sm-toggle').click();
+    await waitFor(() => expect(panel().hasAttribute('inert')).toBe(false));
+    expect(panel().getAttribute('aria-hidden')).toBe('false');
+
+    document.querySelector('.sm-toggle').click();
+    await waitFor(() => expect(panel().hasAttribute('inert')).toBe(true));
+  });
+});

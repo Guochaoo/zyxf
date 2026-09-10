@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { ArrowUpRight } from 'lucide-react';
 import { openFolderOrFile } from '../../ui.js';
+import { ARCHIVE_EXTS } from '@backend/extPolicy.js';
 
 // ChatComposer 的展示组件（IMPROVE-01：从 20KB+ 的单文件里迁出无状态展示）。
 // 均无数据请求，仅接收 props；流式状态由父组件通过 resolving/start 传入。
@@ -65,12 +66,23 @@ export function Section({ sub, body, resolving, start, children }) {
 }
 
 // 检索/推荐文件 → 小胶囊：彩色类型徽章 + 文件名 + 外链图标，整颗可点击打开/预览
-const EXT_TONE = {
+// 色调按「同族同色」派生，族别取自后端白名单（extPolicy.js，IMPROVE-19 的同源做法）：
+// 原先手抄 9 个扩展名，白名单里的 dot/rtf/wps/dps/dpt/et/ppsx/potx 一律掉到默认蓝色。
+const TONE_BY_FAMILY = {
+  word: 'bg-orange',
+  ppt: 'bg-orange',
+  excel: 'bg-green',
   pdf: 'bg-red',
-  csv: 'bg-green', xls: 'bg-green', xlsx: 'bg-green',
-  doc: 'bg-orange', docx: 'bg-orange', ppt: 'bg-orange', pptx: 'bg-orange',
-  txt: 'bg-orange', md: 'bg-orange',
+  txt: 'bg-orange',
+  archive: 'bg-[#808080]',
 };
+const EXT_FAMILY = new Map();
+for (const e of ['doc', 'dot', 'docx', 'dotx', 'rtf', 'wps', 'wpt']) EXT_FAMILY.set(e, 'word');
+for (const e of ['ppt', 'pptx', 'pps', 'ppsx', 'potx', 'dps', 'dpt']) EXT_FAMILY.set(e, 'ppt');
+for (const e of ['xls', 'xlt', 'xlsx', 'xltx', 'et', 'csv']) EXT_FAMILY.set(e, 'excel');
+for (const e of ['pdf']) EXT_FAMILY.set(e, 'pdf');
+for (const e of ['txt']) EXT_FAMILY.set(e, 'txt');
+for (const e of ARCHIVE_EXTS) EXT_FAMILY.set(e, 'archive');
 const DEFAULT_TONE = 'bg-brand-500';
 
 export function FileChip({ item }) {
@@ -78,8 +90,9 @@ export function FileChip({ item }) {
   const open = () => openFolderOrFile(item, navigate);
 
   const badge = item.type === 'folder' ? 'DIR' : (item.ext || '').toUpperCase().slice(0, 4);
+  const family = EXT_FAMILY.get((item.ext || '').toLowerCase());
   const tone =
-    item.type === 'folder' ? 'bg-[#808080]' : EXT_TONE[(item.ext || '').toLowerCase()] || DEFAULT_TONE;
+    item.type === 'folder' ? 'bg-[#808080]' : TONE_BY_FAMILY[family] || DEFAULT_TONE;
 
   return (
     <button

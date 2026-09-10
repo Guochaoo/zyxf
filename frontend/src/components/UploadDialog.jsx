@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Upload, X, Loader2 } from 'lucide-react';
 import { uploadFile } from '../api.js';
 import { errMsg, formatSize } from '../utils.js';
+import { useModalDialog } from '../hooks/useModalDialog.js';
 
 const CONCURRENCY = 3; // files upload in parallel; each is an independent OSS direct-upload
 
@@ -14,6 +15,9 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
   const inputRef = useRef(null);
   const [files, setFiles] = useState([]); // {file, progress, status, error}
   const [busy, setBusy] = useState(false);
+
+  // 上传中不允许 Esc 关闭（会中断在途上传）；空闲时 Esc 关闭 + Tab 循环 + 焦点归还。
+  const panelRef = useModalDialog({ enabled: !busy, onClose });
 
   const addFiles = (list) =>
     setFiles((prev) => [
@@ -72,6 +76,10 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
       onClick={onClose}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('upload.title')}
         className="w-full max-w-lg max-h-[88vh] overflow-y-auto rb-card rounded-lg border-0 bg-white p-4 sm:p-5"
         onClick={(e) => e.stopPropagation()}
       >
