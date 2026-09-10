@@ -204,17 +204,31 @@ describe('BrowsePage', () => {
     );
   });
 
-  test('刷新按钮同步远端并提示同步结果', async () => {
+  test('刷新按钮同步远端，并用 Toast 通知卡提示同步结果', async () => {
     syncOssMock.mockResolvedValue({ added: { folders: 1, files: 2 }, removed: { files: 3 } });
     renderPage();
     await screen.findByText('物理.pdf');
 
     fireEvent.click(screen.getByTitle('刷新（同步远端资料库）'));
 
-    expect(
-      await screen.findByText('同步完成：新增 1 个文件夹 / 2 个文件，清理 3 个失效文件')
-    ).toBeInTheDocument();
+    const msg = await screen.findByText('同步完成：新增 1 个文件夹 / 2 个文件，清理 3 个失效文件');
+    // 用的是登录/注册页同一个自定义组件（顶部 Toast 通知卡），不再是底部胶囊
+    const card = msg.closest('.toast-card');
+    expect(card).not.toBeNull();
+    expect(card.className).toContain('toast-card--success');
+    expect(card).toHaveAttribute('role', 'alert');
     // 同步完成后会重载当前文件夹
     await waitFor(() => expect(listFolderMock).toHaveBeenCalledTimes(2));
+  });
+
+  test('同步失败时同样走 Toast，但类型为 error', async () => {
+    syncOssMock.mockRejectedValue({ response: { data: { error: 'OSS 不可用' } } });
+    renderPage();
+    await screen.findByText('物理.pdf');
+
+    fireEvent.click(screen.getByTitle('刷新（同步远端资料库）'));
+
+    const msg = await screen.findByText('OSS 不可用');
+    expect(msg.closest('.toast-card').className).toContain('toast-card--error');
   });
 });
