@@ -27,7 +27,7 @@
 
 ### 前置条件
 
-- Node.js ≥ 20（项目 CI 使用 24）
+- Node.js ≥ 24（`node:sqlite` 内置模块与测试用的 module-mocks 均要求；CI/部署统一 24）
 - 一个阿里云 OSS Bucket（[CORS 规则](docs/DEPLOY.md)需允许你的来源域名，Methods 含 `GET, POST, PUT, HEAD`）
 
 ### 方式一：一键启动（Git Bash）

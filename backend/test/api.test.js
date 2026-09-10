@@ -265,10 +265,26 @@ describe('folders', () => {
     assert.equal(reordered.status, 200);
 
     const list = await request('GET', '/api/folders/0/contents?sort=manual');
-    const order = [...list.body.files, ...list.body.folders]
-      .sort((x, y) => x.sort_order - y.sort_order)
-      .map((x) => x.name);
-    assert.deepEqual(order, ['one.txt', 'folder-b', 'two.txt', 'folder-a']);
+    // BUG-27：manual 模式返回合并视图 items，交错顺序可直接还原，无需前端自行排序。
+    assert.deepEqual(
+      list.body.items.map((x) => x.name),
+      ['one.txt', 'folder-b', 'two.txt', 'folder-a']
+    );
+    // folders/files 仍按各自排序返回，保持向后兼容。
+    assert.deepEqual(
+      [...list.body.files, ...list.body.folders]
+        .sort((x, y) => x.sort_order - y.sort_order)
+        .map((x) => x.name),
+      ['one.txt', 'folder-b', 'two.txt', 'folder-a']
+    );
+  });
+
+  test('non-manual sort omits the merged items view', async () => {
+    const token = await adminLogin();
+    await createFolder(token, 'fsort');
+    await registerFile(token, { name: 'fsort.txt' });
+    const list = await request('GET', '/api/folders/0/contents?sort=name');
+    assert.equal(list.body.items, undefined);
   });
 
   test('reorder validates ownership', async () => {

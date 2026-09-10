@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Route, Routes, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './auth.jsx';
 import BrowsePage from './pages/BrowsePage.jsx';
-import AuthPage from './pages/AuthPage.jsx';
-import DashboardPage from './pages/DashboardPage.jsx';
-import AboutPage from './pages/AboutPage.jsx';
+// 非首屏路由按需加载（BUG-21）：AuthPage 依赖 three（最大依赖），DashboardPage 依赖
+// liveline，AboutPage 依赖 framer-motion——懒加载后这些都不进首屏 chunk。
+const AuthPage = lazy(() => import('./pages/AuthPage.jsx'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
+const AboutPage = lazy(() => import('./pages/AboutPage.jsx'));
 import StaggeredMenu from './components/StaggeredMenu.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import SearchBar from './components/SearchBar.jsx';
@@ -200,16 +202,24 @@ export default function App() {
           : 'px-3 pt-4 pb-2 sm:px-4 sm:pt-[10.5px] sm:pb-2'
         } ${mainLayout}`}
       >
-        <Routes>
-          <Route path="/" element={<BrowsePage />} />
-          <Route path="/folder/:id" element={<BrowsePage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/about" element={<AboutPage />} />
-          {/* /login 与 /register 渲染同一 AuthPage 实例：切换不重挂载，仅表单区过渡 */}
-          <Route path="/login" element={<AuthPage />} />
-          <Route path="/register" element={<AuthPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense
+          fallback={
+            <div className="h-full flex items-center justify-center text-slate-400 py-24">
+              {t('app.loading')}
+            </div>
+          }
+        >
+          <Routes>
+            <Route path="/" element={<BrowsePage />} />
+            <Route path="/folder/:id" element={<BrowsePage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            {/* /login 与 /register 渲染同一 AuthPage 实例：切换不重挂载，仅表单区过渡 */}
+            <Route path="/login" element={<AuthPage />} />
+            <Route path="/register" element={<AuthPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </main>
       {/* Right column — the original StaggeredMenu toggle button stays
           fixed at the top-right; the knowledge graph sits below it.

@@ -270,6 +270,16 @@ router.get('/:id/contents', (req, res) => {
     breadcrumb: getBreadcrumb(id),
     folders,
     files,
+    // 手动排序下文件夹与文件共享同一 sort_order 序列，但 folders/files 是两个
+    // 数组，前端无从还原用户拖拽出的交错顺序。额外给出合并视图（仅 manual 模式，
+    // 其余模式由前端按各自规则重排），使刷新后与持久化顺序一致（BUG-27）。
+    ...(sort === SORT_FIELDS.manual
+      ? {
+          items: [...folders, ...files].sort(
+            (a, b) => a.sort_order - b.sort_order || a.id - b.id
+          ),
+        }
+      : {}),
   });
 });
 

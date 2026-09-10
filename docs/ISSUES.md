@@ -15,8 +15,8 @@
 ```yaml
 updated: 2026-09-10
 entries: 46           # 缺陷 35 + 改进 11
-pending: 10           # 缺陷 6  + 改进 4
-fixed: 36             # 已归档：缺陷 29 + 改进 7
+pending: 3            # 缺陷 0  + 改进 3
+fixed: 43             # 已归档：缺陷 35 + 改进 8
 ```
 
 ---
@@ -25,75 +25,11 @@ fixed: 36             # 已归档：缺陷 29 + 改进 7
 
 ### 1.1 缺陷
 
-**P0**
-
-#### BUG-27 · 混合文件夹/文件的手工排序刷新后无法保持
-`frontend/backend · 资料库排序`
-`files: [frontend/src/pages/BrowsePage.jsx, backend/src/routes/folders.js]`
-
-- **现象**：跨类型拖拽排序成功后，刷新仍固定先显示全部文件夹、再显示全部文件，交错顺序无法保持。
-- **根因**：后端 `/reorder` 用单一交错索引同时给文件夹与文件赋 `sort_order`；`GET /:id/contents` 却分别返回 `folders`/`files` 两个数组，前端也固定先 folders 后 files，从不合并。
-- **影响**：排序操作成功但刷新失效，与持久化结果不一致。
-- **修法**：混排 → 后端合并返回按 `sort_order` 排序的 items，前端统一渲染；分组 → 禁止跨类型混排并分别提交排序。
-- **验证**：补充文件夹/文件交错排序的 API + UI 集成测试，覆盖提交、刷新、再次拖拽。
-
-**P1**
-
-#### BUG-24 · 统计面板的未展示类型数量可能被低估
-`frontend/backend · 统计面板`
-`files: [backend/src/routes/stats.js, frontend/src/pages/DashboardPage.jsx]`
-
-- **现象**：后端 `type_breakdown` 只返回前 8 类；前端只展示前 6 类，却用返回值长度减 6 计“其余”，真实类型超 8 时最多显示 `+2 类`。
-- **根因**：接口截断数量与 UI 展示数量不是同一契约，前端无从得知被截断的真实总数。
-- **影响**：类型覆盖范围统计失真，可能误导管理判断。
-- **修法**：后端返回总类型数或将剩余类型聚合为 `other`，前端按接口字段展示。
-- **验证**：用超过 8 种扩展名的统计 fixture 验证接口与面板文案。
-
-**P2**
-
-#### BUG-21 · 前端生产 JS 单块过大，缺少路由级代码分割
-`frontend · 构建产物`
-`files: [frontend/src/App.jsx, frontend/vite.config.js]`
-
-- **现象**：`vite build` 生成 `index-DedTrFFW.js` 约 1.18 MB（gzip 约 375 KB），并提示“chunks larger than 500 kB”。
-- **根因**：入口静态引入多个页面及重量级依赖，构建配置未设路由级 `import()` 或合理的 `manualChunks`。
-- **影响**：首屏下载并解析完整应用代码，弱网/移动设备上变慢（首屏性能优化，非功能阻塞）。
-- **修法**：对 `DashboardPage`/`BrowsePage`/`AboutPage` 等按路由懒加载，结合构建产物复核拆分，保持加载态与错误态可用。
-- **验证**：实施后运行 `npm run build`，记录各 chunk 体积，并覆盖懒加载路由的前端测试。
-
-#### BUG-23 · 前后端宏格式扩展名策略不一致
-`frontend/backend · 扩展名策略`
-`files: [frontend/src/utils.js, backend/src/extPolicy.js, backend/src/routes/files.js]`
-
-- **现象**：前端把 `docm`/`xlsm`/`pptm` 等宏格式归为可预览 office 文件；后端上传与 WebOffice token 校验明确拒绝并返回 415。
-- **根因**：前端展示用扩展名集合与后端安全准入集合分别维护，未共享能力契约。
-- **影响**：宏格式上传即被 415 拒绝，正常不入库；仅历史 OSS 同步对象会露出「前端想预览、后端 415」的矛盾，属边缘 case。
-- **修法**：以后端返回的 previewable 能力为展示依据，或移除前端宏格式预览分类；后端安全策略作唯一准入权威。
-- **验证**：补充宏格式上传、预览与前端分类契约测试。
-
-#### BUG-26 · 文件 MIME 元数据可能与扩展名派生值不一致
-`frontend/backend · 文件注册`
-`files: [frontend/src/api.js, backend/src/routes/files.js]`
-
-- **现象**：前端把浏览器提供的可空 `file.type` 原样提交，后端原样落库；文件 URL 响应却按扩展名重新派生 MIME。
-- **根因**：持久化 MIME 与响应 MIME 使用两套来源。
-- **影响**：库内元数据与下载响应类型可能不同；因响应始终按扩展名派生，不构成 Content-Type 矛盾，主要是元数据冗余/不一致。
-- **修法**：以服务端规范化扩展名派生的 MIME 为权威，客户端 MIME 仅作提示或不落库。
-- **验证**：覆盖空 MIME、错误 MIME、大小写扩展名的注册与 URL 响应测试。
-
-#### BUG-29 · README 声明的最低 Node 版本已过时
-`docs/deploy · 运行时版本`
-`files: [README.md, backend/src/db.js, docs/DEPLOY.md, .github/workflows/ci.yml]`
-
-- **现象**：README 写 Node.js ≥ 20，代码用 `node:sqlite`（Node 22.5+ 内置），部署文档与 CI 实际统一用 Node 24。
-- **根因**：数据库驱动迁移到 Node 内置模块后，README 环境要求未同步。
-- **影响**：按 README 用 Node 20 部署可能无法运行（`node:sqlite` 不存在），增加排查成本。
-- **修法**：统一文档与 CI 的最低 Node 版本为 24，并在 package manifest 声明 `engines.node`。
-- **验证**：用声明的最低版本执行依赖安装、测试与启动检查。
+当前**无待处理缺陷**——BUG-21/23/24/26/27/29 已全部处置（见 [2.1 已修复缺陷](#21-已修复缺陷35)）。
 
 ### 1.2 改进建议
 
-> 编号不连续（03–09 已关闭归档），按分配顺序排列即可。
+> 编号不连续（03–09、11 已关闭归档），按分配顺序排列即可。
 
 #### IMPROVE-01 · 页面与组件职责集中，目录结构缺少页面级子模块边界
 `frontend · 页面结构`
@@ -103,6 +39,7 @@ fixed: 36             # 已归档：缺陷 29 + 改进 7
 - **根因**：功能迭代持续追加到页面/复合组件文件，页面专属的列表、统计卡片、聊天消息等未按职责拆分。
 - **影响**：修改局部需理解较大上下文，复用与单测粒度受限，更易产生回归（技术债务，非功能缺陷）。
 - **建议**：以页面为边界拆出 `pages/<Page>/` 下的容器、数据 hook 与纯展示组件；先迁无状态展示，再迁副作用逻辑，确保 DOM 顺序与接口调用时序不变。
+- **进展**：已完成第一步（无状态展示迁移）——`DashboardPage` 640→367 行（抽出 `pages/Dashboard/ActivityHeatmap.jsx`、`pages/Dashboard/primitives.jsx`），`ChatComposer` 517→426 行（抽出 `components/Chat/parts.jsx`）。剩余：`BrowsePage`（仍 ≈28 KB）与各页面的数据 hook 抽取。
 - **验证**：每次拆分后跑前后端测试与生产构建，并补充对应组件行为测试。
 
 #### IMPROVE-02 · Mimosa 安全扫描剩余项：均为协议性要求/误报，需批量归类豁免
@@ -126,22 +63,13 @@ fixed: 36             # 已归档：缺陷 29 + 改进 7
 - **建议**：若不需要匿名 AI，给 `/api/chat` 叠加 `requireUser`；若保留匿名，可考虑只允许白名单内的 LLM 主机。
 - **验证**：改后覆盖「匿名被拒」与「登录用户可用」两例，并确认前端不再发送被忽略的 Key。
 
-#### IMPROVE-11 · helmet 的 CSP 处于关闭状态
-`backend · 响应头`
-`files: [backend/src/index.js]`
-
-- **现状**：`helmet({ contentSecurityPolicy: false })`。当前前端无 `dangerouslySetInnerHTML`/`innerHTML`，未发现注入面；但登录 token 存于 localStorage，一旦出现 XSS 即可被窃取，CSP 是那道纵深防御。
-- **根因**：早期为兼容 Vite/HMR 与内联样式而关闭，未再回补。
-- **建议**：先梳理 `script-src`/`style-src` 与 Vite 构建产物对齐（内联样式/脚本），生产可先上 `Content-Security-Policy-Report-Only` 观察，再切正式策略。
-- **验证**：开启后用浏览器控制台确认无 CSP 违规，且预览/图谱/聊天等重交互功能正常。
-
 ---
 
 ## 2. 已归档
 
 > `★` = 在「[3. 关键处置记录](#3-关键处置记录)」有说明；**类别**列为便于按区域速查的单一归类。
 
-### 2.1 已修复缺陷（29）
+### 2.1 已修复缺陷（35）
 
 | 编号 | 严重度 | 类别 | 标题 | 修复位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -174,8 +102,14 @@ fixed: 36             # 已归档：缺陷 29 + 改进 7
 | ★ BUG-35 | P2 | 安全 | `qs` override 锁在漏洞版本（6.15.3 恰为漏洞区间上界），CI 每轮带 DoS 漏洞 | `backend/package.json`, `backend/package-lock.json` | 2026-09-10 |
 | ★ BUG-36 | P1 | 安全 | 后端绑 `0.0.0.0`，伪造 `X-Forwarded-For` 可绕过全部限流（含登录爆破） | `backend/src/index.js` | 2026-09-10 |
 | ★ BUG-37 | P1 | 安全 | `.env` 的 `DM_ACCESS_KEY_ID` 单字符错误，注册发信功能实际不可用 | `.env`（云端 RAM `zyxf-mail` 新密钥） | 2026-09-10 |
+| BUG-21 | P2 | 前端 | 前端生产 JS 单块过大，缺少路由级代码分割 | `frontend/src/App.jsx`, `frontend/vite.config.js` | 2026-09-10 |
+| BUG-23 | P2 | 前端 | 前后端宏格式扩展名策略不一致 | `frontend/src/utils.js`（已对齐后端白名单，b549a73 已修） | 2026-09-10 |
+| BUG-24 | P2 | 后端 | 统计面板未展示类型数量被低估（截断与 UI 展示契约不一致） | `backend/src/routes/stats.js`, `frontend/src/pages/DashboardPage.jsx` | 2026-09-10 |
+| BUG-26 | P2 | 后端 | 文件 MIME 元数据与扩展名派生值不一致 | `backend/src/routes/files.js`, `backend/src/routes/sync.js`, `frontend/src/api.js` | 2026-09-10 |
+| ★ BUG-27 | P0 | 前后端 | 混合文件夹/文件的手工排序刷新后无法保持 | `backend/src/routes/folders.js`, `frontend/src/pages/BrowsePage.jsx` | 2026-09-10 |
+| BUG-29 | P2 | 文档 | README 声明的最低 Node 版本已过时 | `README.md`, `backend/package.json`, `frontend/package.json` | 2026-09-10 |
 
-### 2.2 已关闭改进项（7）
+### 2.2 已关闭改进项（8）
 
 | 编号 | 严重度 | 类别 | 标题 | 处理位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -186,12 +120,23 @@ fixed: 36             # 已归档：缺陷 29 + 改进 7
 | IMPROVE-07 | P2 | 文档 | `.env.example` 管理员描述过时，且漏列 `ALLOWED_DEV_ORIGIN` | `.env.example` | 2026-09-10 |
 | ★ IMPROVE-08 | P2 | 工程·CI | CI workflow 的 action 用可变 tag，未固定 commit SHA | `.github/workflows/ci.yml` | 2026-09-10 |
 | ★ IMPROVE-09 | P1 | 安全 | `zyxf-mail` 持 `AliyunDirectMailFullAccess`（`dm:*`），远超实际所需 | 云端 RAM 策略 `zyxf-dm-send` | 2026-09-10 |
+| ★ IMPROVE-11 | P2 | 前端 | CSP 配置在 nginx 层（后端关闭有意为之）+ nosniff/Referrer-Policy | `frontend/nginx.conf`, `backend/src/index.js` · `docs/DEPLOY.md §4.2` | 2026-09-10 |
 
 ---
 
 ## 3. 关键处置记录
 
 > 按**主题**组织（非编号顺序），记录「为什么这样做」与「怎么验证的」。归档表中带 `★` 的条目在此有对应说明。
+
+### 3.0 排序与数据契约
+
+涉及：★BUG-27（手工排序）、BUG-24（类型统计契约）、BUG-26（MIME 同源）
+
+**BUG-27**：`/reorder` 用单一交错索引同时给文件夹与文件赋 `sort_order`，但 `GET /:id/contents` 只返回 `folders`/`files` 两个数组，前端固定「文件夹在前、文件在后」渲染——交错顺序在刷新后丢失。修法取「合并视图」：manual 模式额外返回 `items`（按 `sort_order` 合并排序），前端优先用它渲染，非 manual 模式不返回（由前端按各自规则重排）。前端 `buildReorder` 的顺序基准也改用 `items`，否则拖拽结果会与显示顺序不符。验证：`backend/test/api.test.js` 断言 `items` 的交错序列，并覆盖「非 manual 不返回 items」。
+
+**BUG-24 / BUG-26（同源教训——契约两处维护就会漂移）**：
+- BUG-24：后端 `type_breakdown` 截断为 8 类，前端却用「返回长度 − 6」算其余，超 8 类时低估。修法是让接口返回真实总数 `type_total`，前端据此计算。
+- BUG-26：MIME 有两个来源（浏览器 `file.type` 落库、响应按扩展名派生），且落库值从不被读取。修法是**以扩展名派生为唯一权威**：上传注册与 sync 导入都写 `mimeOf(ext)`，前端不再上报 `mime_type`。
 
 ### 3.1 凭证与最小权限
 
@@ -229,6 +174,15 @@ fixed: 36             # 已归档：缺陷 29 + 改进 7
 
 `download_logs` 含访问者 `ip`/`ua`，属可定位到个人的访问记录，此前无任何清理逻辑（永久留存）。处置：启动时按 `DOWNLOAD_LOG_RETENTION_DAYS`（默认 400，略大于仪表盘热力图的近一年窗口）删除超期行；无需保留访问明细时可调小。验证：`backend/test/securityFixes.test.js` 覆盖边界（401 天前删除、窗口内保留）。
 
-### 3.5 外部变更观察（非本仓库改动）
+### 3.5 前端响应头与 CSP
+
+涉及：★IMPROVE-11、IMPROVE-01（页面级拆分）
+
+**IMPROVE-11**：CSP 必须由**托管 HTML 的那一层**下发——后端只服务 `/api`（JSON），在那儿配 CSP 对页面无效，所以后端 `contentSecurityPolicy: false` 是有意的（已加注释）。策略落在 `frontend/nginx.conf`：`script-src 'self'`（构建产物无内联脚本）、`style-src 'unsafe-inline'`（React 内联 style）、`connect-src https:`（API/OSS/用户自带 LLM）、`frame-src https:`（IMM 预览）、`font-src`（Google Fonts）。同时补 `nosniff` 与 `Referrer-Policy`。
+> ⚠️ **nginx 坑**：`add_header` 不会被子级 location 继承——凡自己写了 `add_header` 的 location（如 `/assets/` 的长缓存）都必须**重复声明**安全头，否则静默丢失。已在该 location 重复声明。
+
+**IMPROVE-01（进展）**：按「先迁无状态展示」完成第一步——`DashboardPage` 640→367 行（抽出 `pages/Dashboard/ActivityHeatmap.jsx`、`pages/Dashboard/primitives.jsx`），`ChatComposer` 517→426 行（抽出 `components/Chat/parts.jsx`）。`BrowsePage` 与数据 hook 抽取留待后续。
+
+### 3.6 外部变更观察（非本仓库改动）
 
 审计期间账号下的 RAM 用户由 4 个变为 2 个：`obsidian` 与 `power-application-user` 消失（`ListUsers` 仅余 `zyxf-oss`、`zyxf-mail`，`GetUser` 对二者返回 `EntityNotExist.User`）。**本次会话未执行任何删除用户的命令**，判定为外部在控制台完成的清理。影响：账号权限面显著收窄（两个 `PowerUserAccess` 持有者均已移除）；但若 `obsidian-aloha` bucket 或其个人用途仍需使用，应确认替代凭证已就位。
