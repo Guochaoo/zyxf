@@ -3,12 +3,19 @@ import path from 'node:path';
 import { db, transaction } from '../db.js';
 import { listOssObjects } from '../oss.js';
 import { buildFolderIndex, nextSortOrder } from '../dbHelpers.js';
-import { adminBypassLimiter } from '../limiter.js';
+import { tieredLimiter } from '../limiter.js';
 import { cleanObjectSegment, ossPrefix, placeholderKeyForFolderFromMap } from '../storagePath.js';
 import { normalizeExt } from '../extPolicy.js';
+import { mimeOf } from '../mime.js';
 
-// Every IP may sync at most 5 times per minute (admins bypass, like download limits).
-const syncLimiter = adminBypassLimiter(60 * 1000, 5, '同步过于频繁，请 1 分钟后再试');
+// 游客亦可触发同步（用于共享 OSS 桶的多部署刷新），按身份分层限流：
+// 游客 2 次/分钟 < 登录用户 5 次/分钟 < 管理员豁免（同下载/对话的既有约定）。
+const syncLimiter = tieredLimiter({
+  windowMs: 60 * 1000,
+  guest: 2,
+  user: 5,
+  message: '同步过于频繁，请 1 分钟后再试',
+});
 
 const router = Router();
 
@@ -96,13 +103,15 @@ router.post('/', syncLimiter, async (req, res, next) => {
         const fname = rel.pop();
         const folderId = rel.length ? ensureFolderChain(rel) : null;
         const so = nextSortOrder(db, 'files', 'folder_id', folderId);
+        const ext = normalizeExt(path.extname(fname)) || null;
         insertFile.run(
           folderId,
           fname,
           key,
           obj.size ?? 0,
-          null,
-          normalizeExt(path.extname(fname)) || null,
+          // 与上传注册保持一致：MIME 由扩展名派生（BUG-26）。
+          mimeOf(ext) || null,
+          ext,
           null,
           so,
           Date.now()

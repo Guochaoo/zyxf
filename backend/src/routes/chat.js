@@ -83,6 +83,12 @@ function runSearchTool(q, pool) {
   return lines.length ? lines.join('\n') : '没有找到相关内容';
 }
 
+// 服务端是否已配置 AI（只读布尔）。前端据此决定「服务端已配置时不再上传用户
+// 自带 Key」——避免把用户密钥无谓地发到服务端（后端本就会忽略它）。
+router.get('/status', (_req, res) => {
+  res.json({ enabled: isLlmEnabled() });
+});
+
 router.post('/', chatLimiterShort, chatLimiterLong, wrapAsync(async (req, res) => {
   // BUG-20 SSRF：服务端 env（LLM_BASE_URL）已配置时只用服务端配置，完全忽略客户端传入的 baseUrl；
   // 服务端未配置时才对前端浏览器端配置做严格校验（仅 https + 拒绝内网/回环/云元数据）。

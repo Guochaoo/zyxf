@@ -265,10 +265,26 @@ describe('folders', () => {
     assert.equal(reordered.status, 200);
 
     const list = await request('GET', '/api/folders/0/contents?sort=manual');
-    const order = [...list.body.files, ...list.body.folders]
-      .sort((x, y) => x.sort_order - y.sort_order)
-      .map((x) => x.name);
-    assert.deepEqual(order, ['one.txt', 'folder-b', 'two.txt', 'folder-a']);
+    // BUG-27：manual 模式返回合并视图 items，交错顺序可直接还原，无需前端自行排序。
+    assert.deepEqual(
+      list.body.items.map((x) => x.name),
+      ['one.txt', 'folder-b', 'two.txt', 'folder-a']
+    );
+    // folders/files 仍按各自排序返回，保持向后兼容。
+    assert.deepEqual(
+      [...list.body.files, ...list.body.folders]
+        .sort((x, y) => x.sort_order - y.sort_order)
+        .map((x) => x.name),
+      ['one.txt', 'folder-b', 'two.txt', 'folder-a']
+    );
+  });
+
+  test('non-manual sort omits the merged items view', async () => {
+    const token = await adminLogin();
+    await createFolder(token, 'fsort');
+    await registerFile(token, { name: 'fsort.txt' });
+    const list = await request('GET', '/api/folders/0/contents?sort=name');
+    assert.equal(list.body.items, undefined);
   });
 
   test('reorder validates ownership', async () => {
@@ -609,13 +625,14 @@ describe('stats', () => {
 
 describe('sync', () => {
   test('imports files and folders that exist in OSS but not locally', async () => {
+    const token = await adminLogin();
     ossObjectStore.keys = [
       'zyxf-test/\u8bfe\u7a0b/', // 课程/
       'zyxf-test/\u8bfe\u7a0b/\u9ad8\u6570.pdf', // 高数.pdf
       'zyxf-test/\u8bfe\u7a0b/\u56fe\u4e66/\u4f5c\u4e1a.pdf', // 图书/作业.pdf
       'zyxf-test/root-file.txt',
     ];
-    const { status, body } = await request('POST', '/api/sync');
+    const { status, body } = await request('POST', '/api/sync', { token });
     assert.equal(status, 200);
     assert.deepEqual(body.added, { folders: 2, files: 3 });
     assert.equal(body.removed.files, 0);
@@ -653,9 +670,10 @@ describe('sync', () => {
   });
 
   test('sync is idempotent — second run adds nothing', async () => {
+    const token = await adminLogin();
     ossObjectStore.keys = ['zyxf-test/a.pdf'];
-    await request('POST', '/api/sync');
-    const second = await request('POST', '/api/sync');
+    await request('POST', '/api/sync', { token });
+    const second = await request('POST', '/api/sync', { token });
     assert.deepEqual(second.body.added, { folders: 0, files: 0 });
   });
 
@@ -691,18 +709,25 @@ describe('sync', () => {
     }
   });
 
-  test('anonymous is rate limited to 5 syncs per minute per IP', async () => {
-    // Unique XFF IP so this test never shares quota with other tests.
+  // 分层限流：游客 2 次/分钟 < 登录用户 5 次/分钟 < 管理员豁免。
+  // 各用例使用互不相同的 XFF 出口 IP（仅 sync 测试使用），避免共享配额。
+  test('guest may sync, capped at 2 per minute', async () => {
     const xff = { 'x-forwarded-for': '203.0.113.99' };
-    let ok = 0;
-    let limited = 0;
-    for (let i = 0; i < 6; i++) {
-      const { status } = await request('POST', '/api/sync', { headers: xff });
-      if (status === 200) ok += 1;
-      else if (status === 429) limited += 1;
+    assert.equal((await request('POST', '/api/sync', { headers: xff })).status, 200);
+    assert.equal((await request('POST', '/api/sync', { headers: xff })).status, 200);
+    const third = await request('POST', '/api/sync', { headers: xff });
+    assert.equal(third.status, 429);
+  });
+
+  test('logged-in user may sync up to 5 per minute (wider than guest)', async () => {
+    // userToken() carries id 99; keyGenerator buckets logged-in callers by user id.
+    const token = userToken();
+    for (let i = 0; i < 5; i++) {
+      const { status } = await request('POST', '/api/sync', { token });
+      assert.equal(status, 200);
     }
-    assert.equal(ok, 5);
-    assert.equal(limited, 1);
+    const sixth = await request('POST', '/api/sync', { token });
+    assert.equal(sixth.status, 429);
   });
 });
 

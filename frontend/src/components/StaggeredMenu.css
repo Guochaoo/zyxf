@@ -51,10 +51,8 @@
   pointer-events: auto;
 }
 
-@media (prefers-color-scheme: dark) {
-  .sm-backdrop {
-    background: rgba(0, 0, 0, 0.46);
-  }
+[data-theme='dark'] .sm-backdrop {
+  background: rgba(0, 0, 0, 0.46);
 }
 
 .sm-toggle {
@@ -170,7 +168,7 @@
   right: 0;
   width: clamp(240px, 30vw, 340px);
   height: 100%;
-  background: white;
+  background: var(--surface);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   display: flex;
@@ -184,7 +182,7 @@
 
 #root .staggered-menu-panel,
 #root .staggered-menu-panel * {
-  color: #000 !important;
+  color: var(--ink) !important;
 }
 
 [data-position='left'] .staggered-menu-panel {
@@ -327,7 +325,36 @@
   padding: 0.3rem 0.9rem;
   border: none;
   border-radius: 999px;
-  background: #efefef;
+  background: var(--field);
+}
+
+/* 游客状态下，头像 + 名称区域可点击跳转登录（与右侧登录按钮一致）。 */
+.sm-account-go {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sm-account-go .sm-account-name,
+.sm-account-go .sm-account-sub {
+  color: inherit;
+}
+
+.sm-account-go:hover .sm-account-name {
+  color: var(--ink);
+}
+
+.sm-account-go:focus-visible {
+  outline: none;
 }
 
 .sm-account-avatar {
@@ -340,15 +367,15 @@
   justify-content: center;
   font-size: 13px;
   font-weight: 600;
-  color: #5f5f66;
-  background: #ebebee;
+  color: var(--ink-3);
+  background: var(--inset);
   user-select: none;
 }
 
 /* Guest avatar: same grey circle (no gradient) */
 .sm-account-avatar--guest {
-  background: #ebebee;
-  color: #8a8a8f;
+  background: var(--inset);
+  color: var(--ink-2);
 }
 
 .sm-account-meta {
@@ -362,7 +389,7 @@
 .sm-account-name {
   font-size: 0.95rem;
   font-weight: 600;
-  color: #171717;
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -371,128 +398,76 @@
 .sm-account-sub {
   font-size: 0.78rem;
   font-weight: 500;
-  color: #8a8a8f;
+  color: var(--ink-2);
 }
 
-.sm-account-gear {
+/* ---- account action buttons (设置 / 登录 / 退出登录) ----
+   并排两个无边框图标按钮，复用原 gear 槽位的视觉语言；登录项为语义绿，
+   退出登录项为语义红，hover 加深。 */
+.sm-account-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sm-account-action {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #9a9a9f;
-  transition: color 0.2s ease;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  color: var(--ink-3);
   cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
 }
 
-/* Account card chevron toggle reuses the gear slot; strip native button chrome. */
-button.sm-account-gear {
+/* Strip browser button chrome for the account action buttons. */
+button.sm-account-action {
   padding: 0;
   border: 0;
   background: transparent;
   font: inherit;
 }
 
-.sm-account-gear:hover {
-  color: #171717;
+.sm-account-action:hover {
+  color: var(--ink);
+  background: var(--hover);
 }
 
-.sm-account-gear:focus-visible {
+.sm-account-action:focus-visible {
   outline: none;
-  color: #171717;
+  color: var(--ink);
 }
 
-/* ---- account user menu (chevron popover) ----
-   无界：白色浮层 + 纯投影分层（无描边），行 hover 用浅灰 tint；
-   危险操作（退出登录）hover 浅红。锚定账号卡片上方展开。 */
-.sm-account-menu {
-  position: relative;
-  flex: 0 0 auto;
+/* 登录（游客时右侧按钮）：语义绿。
+   面板内全局 `#root .staggered-menu-panel *` 强制黑字，此处用带 ID 的
+   更高特异性 + important 覆盖，保证登录/退出图标显示语义色。 */
+#root .sm-account-action--login {
+  color: #3fae6b !important;
 }
 
-.sm-account-pop {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 10px);
-  z-index: 10;
-  width: 180px;
-  padding: 6px;
-  border-radius: 10px;
-  background: #ffffff;
-  box-shadow:
-    rgba(0, 0, 0, 0.06) 0 4px 10px,
-    rgba(0, 0, 0, 0.12) 0 12px 32px;
-  transform-origin: bottom right;
-  animation: sm-account-pop-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+#root .sm-account-action--login:hover {
+  color: #2f8d55 !important;
+  background: rgba(63, 174, 107, 0.12);
 }
 
-@keyframes sm-account-pop-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+/* 退出登录（已登录时右侧按钮）：语义红 */
+#root .sm-account-action--logout {
+  color: #d10d0d !important;
 }
 
-.sm-account-pop-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.sm-account-pop-sep {
-  height: 1px;
-  margin: 5px 4px;
-  background: #f0f0f0;
-}
-
-.sm-account-pop-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 7px 9px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  color: #525252;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background-color 150ms ease,
-    color 150ms ease;
-}
-
-.sm-account-pop-item svg {
-  color: #8a8a8f;
-  transition: color 150ms ease;
-}
-
-.sm-account-pop-item:hover {
-  background: #f5f5f5;
-  color: #171717;
-}
-
-.sm-account-pop-item:hover svg {
-  color: #171717;
-}
-
-.sm-account-pop-item--danger:hover {
-  background: #fef2f2;
-  color: #d10d0d;
-}
-
-.sm-account-pop-item--danger:hover svg {
-  color: #d10d0d;
-}
-
-.sm-account-pop-item:active {
-  transform: scale(0.99);
+#root .sm-account-action--logout:hover {
+  color: #a50c0c !important;
+  background: rgba(209, 13, 13, 0.1);
 }
 
 .sm-panel-item {

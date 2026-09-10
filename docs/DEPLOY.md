@@ -26,7 +26,7 @@
 | TCP | 80 | 0.0.0.0/0 | HTTP |
 | TCP | 443 | 0.0.0.0/0 | HTTPS |
 
-> 不要把 4000（后端）暴露公网：后端 `app.listen(PORT)` 默认绑定 `0.0.0.0`，需靠**安全组规则**限制 4000 端口仅本机可访问（nginx 在本机反代 `127.0.0.1:4000` 不受影响）。
+> 后端默认绑定 `127.0.0.1`（`HOST` 环境变量可覆盖），因此**不依赖安全组**也不会被公网直连。这同时是限流的前提：后端信任 `X-Forwarded-For` 取客户端 IP，只有不可直连时该信任才安全——否则外部可伪造 XFF 绕过所有限流（BUG-36）。安全组仍建议不开 4000，作为纵深防御。
 
 ### 0.2 OSS CORS 加白名单
 
@@ -63,6 +63,8 @@ OSS 控制台 → 你的 Bucket → **数据安全 → 跨域设置** → 添加
 
 ```env
 PORT=4000              # 后端内部端口，保持 4000
+# 后端监听地址，默认 127.0.0.1（只允许本机 nginx 反代）。确需其它主机直连才设 0.0.0.0。
+HOST=127.0.0.1
 
 # JWT_SECRET 必须 ≥32 位随机串，且不含弱口令词（password/secret/dev/admin123 等）
 JWT_SECRET=<用 openssl rand -hex 32 生成>
@@ -94,6 +96,9 @@ DM_ACCESS_KEY_ID=<AccessKey ID>
 DM_ACCESS_KEY_SECRET=<AccessKey Secret>
 DM_ACCOUNT_NAME=<发信地址，如 no-reply@zyxf.top>
 DM_FROM_ALIAS=
+
+# 可选：下载日志保留天数（含 ip/ua，默认 400 天）
+DOWNLOAD_LOG_RETENTION_DAYS=
 ```
 
 生成 JWT_SECRET：
@@ -103,6 +108,91 @@ openssl rand -hex 32
 ```
 
 > ⚠️ 后端在 `NODE_ENV=production` 下，`JWT_SECRET`/`ADMIN_PASSWORD` 不合规会**直接 `process.exit(1)` 拒绝启动**。
+
+> ⚠️ `ADMIN_USER`/`ADMIN_PASSWORD` 是管理员账号的**唯一权威来源**：每次启动都会与库内哈希比对，密码变了就同步（旧密码失效），同名普通用户会被提为 admin。因此改密码只需改 `.env` 再重启（BUG-34）。
+
+### 2.1 OSS 凭证：单独一个 RAM 用户 + 最小权限策略
+
+不要复用个人或其他业务的 RAM 用户（例如一把同时给个人网盘用的密钥），也不要给 `PowerUserAccess` 这类全产品权限。后端对 OSS 的实际操作面很窄，按下面建专用用户即可：
+
+| 后端调用 | 需要的动作 |
+|---|---|
+| `listOssObjects`（同步扫描） | `oss:ListObjects` |
+| `signedGetUrl`（下载/预览签名） | `oss:GetObject` |
+| `putEmptyOssObject`（文件夹占位符） | `oss:PutObject` |
+| 前端直传（PostObject） | `oss:PutObject` |
+| `copyOssObject`（改名/移动） | `oss:CopyObject` + `oss:PutObject` |
+| `deleteOssObjectIfExists`（删除） | `oss:DeleteObject` |
+
+> 注意：后端**只签名**、不代理文件流，上传流量走浏览器直传，所以后端不需要 `oss:GetObject` 之外的读权限；IMM 预览若启用，`GenerateWebofficeToken` 也需要能读该 bucket（IMM 由阿里云服务侧读取）。
+
+自定义策略（把 bucket 名替换成你自己的；`acs:oss:*:*:<bucket>/*` 用来覆盖对象级操作）：
+
+```json
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "oss:ListObjects",
+        "oss:GetObject",
+        "oss:PutObject",
+        "oss:DeleteObject",
+        "oss:CopyObject"
+      ],
+      "Resource": [
+        "acs:oss:*:*:<bucket>",
+        "acs:oss:*:*:<bucket>/*"
+      ]
+    }
+  ]
+}
+```
+
+用 CLI 落地（写入前先用只读 `list` 验证密钥确实只能访问目标 bucket）：
+
+```bash
+# 1) 建策略
+aliyun ram CreatePolicy --PolicyName zyxf-oss-app \
+  --PolicyDocument "$(cat oss-policy.json)" --region cn-beijing
+
+# 2) 建专用用户并授权
+aliyun ram CreateUser --UserName zyxf-oss --region cn-beijing
+aliyun ram AttachPolicyToUser --PolicyType Custom --PolicyName zyxf-oss-app \
+  --UserName zyxf-oss --region cn-beijing
+
+# 3) 建 AccessKey，把密钥填进 .env 的 OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET
+aliyun ram CreateAccessKey --UserName zyxf-oss --region cn-beijing
+```
+
+验证：用新密钥访问**其他** bucket 应返回 `AccessDenied`（越权被拒），访问目标 bucket 正常——两者都满足才算最小权限生效。
+
+### 2.2 DirectMail 凭证（注册验证码）
+
+同理，`DM_ACCESS_KEY_ID`/`DM_ACCESS_KEY_SECRET` 应使用**专用 RAM 用户**，且只授予发信所需的单个动作——应用只调用 `SingleSendMail`，不需要 `dm:*`（域名/模板/收件人管理、IP 防护等都不需要）：
+
+```json
+{
+  "Version": "1",
+  "Statement": [
+    { "Effect": "Allow", "Action": ["dm:SingleSendMail"], "Resource": ["acs:dm:*:*:*"] }
+  ]
+}
+```
+
+```bash
+aliyun ram CreatePolicy --PolicyName zyxf-dm-send --PolicyDocument "$(cat dm-policy.json)" --region cn-beijing
+aliyun ram CreateUser --UserName zyxf-mail --region cn-beijing
+aliyun ram AttachPolicyToUser --PolicyType Custom --PolicyName zyxf-dm-send --UserName zyxf-mail --region cn-beijing
+aliyun ram CreateAccessKey --UserName zyxf-mail --region cn-beijing
+```
+
+验证：越权只读动作（如 `GetTrackList`，**必须传齐必填参数**，否则会先报参数错误而非权限错误）应返回 `Forbidden`；`SingleSendMail` 传一个格式非法的收件地址应返回地址校验错误（`InvalidToAddress`）而非权限错误。
+
+### 2.3 数据保留
+
+下载日志含访问者 `ip`/`ua`，属个人信息。后端启动时按 `DOWNLOAD_LOG_RETENTION_DAYS`（默认 400，略大于仪表盘热力图的近一年窗口）清理超期记录；无需保留访问明细时可调小。
 
 ---
 
@@ -155,6 +245,15 @@ server {
 
     root /opt/zyxf/frontend/dist;
     index index.html;
+
+    # 安全响应头。CSP 必须由托管 HTML 的 nginx 下发——后端只服务 /api，那里的
+    # CSP 管不到页面。若某个 location 自己写了 add_header，会屏蔽本级继承，需重复声明。
+    # 策略含义：script-src 仅 self（构建产物无内联脚本）；style-src 需 unsafe-inline
+    # （React 内联 style）；connect-src https: 覆盖 OSS 与用户自带 LLM；frame-src https:
+    # 给 IMM WebOffice 预览；font-src 给 Google Fonts。建议先用 Report-Only 观察。
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
     location /api/ {
         proxy_pass http://127.0.0.1:4000;

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getToken, clearToken } from './ui.js';
+import i18n from './i18n/index.js';
 
 const api = axios.create({ baseURL: '/api' });
 
@@ -27,6 +28,15 @@ export default api;
 // ---- helpers ----
 
 /**
+ * 服务端 AI 是否已配置（只读）。返回 { enabled: boolean }。
+ * 前端用它避免在服务端已配置时仍上传用户自带的 Key。
+ */
+export async function getChatStatus() {
+  const { data } = await api.get('/chat/status');
+  return data;
+}
+
+/**
  * AI 聊天（SSE 流式）。axios 不支持流式响应，用原生 fetch 逐行解析。
  * 事件回调：onDelta（文本增量）、onFiles（引用的文件列表）。
  * llm 为可选的客户端配置 { apiKey, baseUrl, model }（前端设置面板，自带 Key）。
@@ -45,7 +55,7 @@ export async function chatStream(messages, { onDelta, onFiles, signal, llm } = {
   });
 
   if (!res.ok) {
-    let message = `请求失败（${res.status}）`;
+    let message = i18n.t('common.requestFailed', { status: res.status });
     try {
       const data = await res.json();
       if (data?.error) message = data.error;
@@ -75,7 +85,7 @@ export async function chatStream(messages, { onDelta, onFiles, signal, llm } = {
       }
       if (event.type === 'delta') onDelta?.(event.text);
       else if (event.type === 'files') onFiles?.(event.files);
-      else if (event.type === 'error') throw new Error(event.message || 'AI 服务出错');
+      else if (event.type === 'error') throw new Error(event.message || i18n.t('chat.err'));
     }
   }
 }
@@ -223,8 +233,8 @@ export async function uploadFile({ file, folderId, onProgress }) {
       name: file.name,
       oss_key: policy.key,
       size: file.size,
-      mime_type: file.type,
       folder_id: folderId || null,
+      // 不上报 mime_type：服务端按扩展名派生为权威值（BUG-26）。
     });
     return data;
   } catch (e) {
