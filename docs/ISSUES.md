@@ -15,8 +15,8 @@
 ```yaml
 updated: 2026-09-11
 entries: 108          # 缺陷 78 + 改进 30
-pending: 29           # 缺陷 17 + 改进 12
-fixed: 79             # 已归档：缺陷 61 + 改进 18
+pending: 23           # 缺陷 11 + 改进 12
+fixed: 85             # 已归档：缺陷 67 + 改进 18
 ```
 
 ---
@@ -25,27 +25,9 @@ fixed: 79             # 已归档：缺陷 61 + 改进 18
 
 ### 1.1 缺陷
 
-当前 **17 条待处理**（均为 2026-09-11 全仓审计新发现，已逐条人工复核；历史批次 BUG-21/23/24/26/27/29 已处置）。
+当前 **11 条待处理**（均为 2026-09-11 全仓审计新发现，已逐条人工复核；历史批次 BUG-21/23/24/26/27/29 已处置）。
 
 > 审计方式：9 路并行只读审计（安全/后端正确性/后端基础设施/性能/前端状态/前端组件/重复与死代码/工程配置与文档），再由人工逐条读码复核、剔除误报。下文每条都给出可核对的文件与行号证据。
-
-#### BUG-51 · JWT 无撤销机制：改密码 / 降权 / 删号后旧 token 在有效期内仍持有全权
-`backend · 认证`
-`files: [backend/src/auth.js, backend/src/db.js, backend/src/routes/auth.js, docs/DEPLOY.md]`
-
-- **现状**：`attachUser` 只验签就 `req.user = payload`，从不回查数据库；`ensureAdmin` 改密码只更新 `password_hash`，不使任何已签发 token 失效；`DEPLOY.md` 却把「改 ADMIN_PASSWORD 即轮换管理员」写成唯一权威来源。
-- **影响**：管理员 token 泄漏后，运维改密码并重启**不能止损**——攻击者手上那条 token 在 `exp`（默认 7d）之前仍是有效 admin，可继续调用全部写接口；被删除或降权的账号同样在过期前一路放行。
-- **修法**：`users` 加 `token_epoch`（沿用现有 `hasColumn` 迁移模式），改密码时自增；签发时把 epoch 写进 payload，`attachUser` 验签后按 `payload.id` 查一次 `role, token_epoch` 并比对，不符即丢弃 `req.user`。同时修正 DEPLOY.md 的表述。
-- **验证**：新增用例「改密码后旧 token 401 / 新 token 200」「删号后旧 token 401」。
-
-#### BUG-53 · 登录限流只按出口 IP 计数：NAT 下连坐封锁，对单账号又无上限
-`backend · 认证`
-`files: [backend/src/routes/auth.js, backend/src/limiter.js]`
-
-- **现状**：`loginLimiter = rateLimit({ ...limiterOptions(15*60*1000, 10, ...), skipSuccessfulRequests: true })` 没传 `keyGenerator`，用库默认的纯 IP 分桶。实测：同一来源打 10 次错密码后，用**正确**密码也得到 429。
-- **影响**：(1) 校园/办公 NAT 下众人共用一个出口 IP，任何人打 10 次错密码就把该出口所有人锁在登录页外 15 分钟——一台机器即可触发的定向拒绝服务；(2) 反向不设防：分布式来源可对 `admin` 单账号累计 N×10 次/15 分钟。
-- **修法**：`keyGenerator` 改为「IP + 提交的用户名/邮箱」（去掉同出口连坐），另叠一层纯 IP 的宽松洪泛桶（如 100 次/15 分钟）。
-- **验证**：新增用例「同 IP 不同用户名互不影响」与「同用户名多 IP 仍受限」。
 
 #### BUG-54 · `PATCH /api/folders/:id` 的环校验与写库之间隔了 OSS 往返：并发可写入 parent 环
 `backend · 文件夹`
@@ -136,42 +118,6 @@ fixed: 79             # 已归档：缺陷 61 + 改进 18
 - **影响**：节点集每次变化都残留一个 tick 闭包并持续触发无意义渲染；全库视图下逐帧成本明显。
 - **修法**：清理里补 `sim.on('tick', null)`。
 - **验证**：用例「切换节点集后旧 tick 不再触发」。
-
-#### BUG-69 · `/register/code` 先写库再发信：发送失败仍占用 60 秒冷却与当日额度，并作废用户手上的有效验证码
-`backend · 注册`
-`files: [backend/src/routes/auth.js]`
-
-- **现状**：先生成 code 并 `INSERT ... ON CONFLICT DO UPDATE`（`sent_count + 1`、重置 `expires_at`），再 `await sendVerificationCode(...)`；失败只返回 502，不回滚。实测：发送失败后库里已留下 `sent_count:1`，立刻重试得到 429「请一分钟后再试」。
-- **影响**：(1) 邮件服务抖动/凭据失效（正是 BUG-37 那类故障）时，用户重试 10 次即耗光 24 小时额度，而一封码都没收到——注册对特定邮箱硬锁一天；(2) 覆写会顶掉仍然有效的旧码，用户手上那封信里的码已作废；(3) 额度按邮箱计且无需认证，第三方可替别人的邮箱打满，使其当天无法注册。
-- **修法**：把落库挪到发送成功之后（失败直接返回 502，不消耗冷却/额度、保留旧码）；若要防重放先占位，则失败分支恢复原行。
-- **验证**：用例「发送失败不消耗冷却、不覆盖旧码、重试仍可成功」。
-
-#### BUG-70 · 登录响应时间可稳定区分账号是否存在（实测 1.3 ms vs 44.8 ms）
-`backend · 认证`
-`files: [backend/src/routes/auth.js]`
-
-- **现状**：`if (!user || !bcrypt.compareSync(...))` 短路——账号不存在时根本不跑 bcrypt，而 401 文案刻意不区分两种失败（说明设计意图就是不给枚举口子）。实测：不存在的用户名 1.3 ms，存在的 44.8 ms（bcryptjs cost-10 均价 41.9 ms，可直接对上）。
-- **影响**：稳定差值取几次样本即可判定任意用户名/邮箱是否已注册；枚举结果正是登录标识，可直接用于撞库、钓鱼。
-- **修法**：模块级预计算 `DUMMY_HASH`，两条分支都跑一次 `compareSync`（务必先 compare 再判 user，否则又短路）。
-- **验证**：用例断言「不存在账号与错密码账号的响应路径都经过 bcrypt」（可用耗时区间或注入的 spy 计数）。
-
-#### BUG-71 · `/register` 的用户名枚举 oracle：同一枚合法验证码可无限复用，且验证码不被消耗
-`backend · 注册`
-`files: [backend/src/routes/auth.js]`
-
-- **现状**：重名检查（409 `用户名已被使用`）在验证码校验通过之后、INSERT 之前；`DELETE FROM email_codes` 只在 INSERT 成功后才执行，失败分支既不删行也不加 `attempts`。实测：同一枚码连打 4 次 `username=takenuser`，全部 409 且 `attempts` 始终为 0。另外 `emailRegistered` 的 409 位于冷却/日限额检查**之前**，完全不触发这两道限流。
-- **影响**：`registerLimiter` 是 15 次/分钟/IP，攻击者用自己控制的一个邮箱拿一枚码即可批量探测任意候选用户名是否被占用——速率比 /login 高两个数量级且不产生失败日志；邮箱维度同样是一个存在性 oracle。
-- **修法**：验证码通过后无论是否重名都递增使用计数（超过 3–5 次即要求重新获取）；用户名冲突与邮箱冲突返回同一文案；把 `emailRegistered` 分支挪到冷却检查之后或单挂更紧的限流。
-- **验证**：用例「同一枚码第 4 次重名探测被拒」「两种冲突返回同构响应」。
-
-#### BUG-72 · bcrypt 静默截断到 72 字节，注册校验却按字符数：40 个汉字的密码只有前 24 个生效
-`backend · 认证`
-`files: [backend/src/routes/auth.js, frontend/src/pages/AuthPage.jsx]`
-
-- **现状**：校验用 `password.length`（UTF-16 码元，8–72），而 bcrypt 只用前 72 **字节**。实测：`hashSync('密'.repeat(40))`（120 字节，注册放行）之后，`compareSync('密'.repeat(24))` 与 `compareSync('密'.repeat(40) + 'ZZZ')` 都返回 true。
-- **影响**：用户以为设了 40 个汉字的密码，实际只有前 24 个字符参与校验——熵被静默削掉，且「任何掌握前 24 字符前缀的人」即使后缀完全不同也能登录同一账号。
-- **修法**：按字节校验（`Buffer.byteLength(pw, 'utf8')`）或先做定长摘要再交给 bcrypt；前端同步提示文案与 `maxLength`。
-- **验证**：用例「多字节超 72 字节的密码被拒」+「前缀相同后缀不同不得登录成功」。
 
 #### BUG-79 · `deploy/zyxf.service` 以 `User=www` 运行，但文档没有任何目录属主/权限步骤
 `工程·部署`
@@ -302,7 +248,7 @@ fixed: 79             # 已归档：缺陷 61 + 改进 18
 
 > **类别**列为便于按区域速查的单一归类；`处置要点` 列记录该项的修法依据、踩坑与验证方式，无额外说明的填 `—`。
 
-### 2.1 已修复缺陷（61）
+### 2.1 已修复缺陷（67）
 
 | 编号 | 严重度 | 类别 | 标题 | 修复位置 | 关闭日期 | 处置要点 |
 |---|---|---|---|---|---|---|
@@ -368,6 +314,12 @@ fixed: 79             # 已归档：缺陷 61 + 改进 18
 | BUG-80 | P2 | 工程·本地开发 | nodemon 的 watcher 因同一类原子写临时文件 EBUSY 而退出，后端整站停服 | `backend/package.json` | 2026-09-11 | BUG-38 只修了 Vite 一侧。本轮继续编辑源码时后端也倒了，`run.err.log` 明确记下根因：`[nodemon] Internal watch failed: EBUSY: resource busy or locked, watch '...\backend\src\routes\files.js~RF85e5fa1.TMP'`——编辑器/agent 的「临时文件 + 原子替换」会在被改文件旁留下 `~RF*.TMP` / `*.tmpdir/`，nodemon 的 watcher 抢在删除前监听即抛 EBUSY，进程随之中止（端口 4000 关闭，Vite 代理返回 500）。修法：`package.json` 加 `nodemonConfig`——`watch: ["src"]` 收窄监听范围，`ignore` 排掉 `**/*.tmp`、`**/*.TMP`、`**/*.tmpdir/**`、`**/*~RF*`。验证：手工在 `backend/src/routes/` 下建 `files.js~RF*.TMP` 与 `.index.js.*.tmpdir/index.js.tmp` 再删除，后端保持 HTTP 200、日志无新重启、err 日志无 EBUSY。 |
 | BUG-52 | P1 | 安全 | 改 `ADMIN_USER` 不回收既有管理员行：旧用户名 + 旧密码仍能登录为 admin | `backend/src/db.js`, `backend/test/ensureAdmin.test.js` | 2026-09-11 | `ensureAdmin` 原先只按当前 `ADMIN_USER` 定位那一行，全程不触碰其它 `role='admin'` 的行；而 `POST /api/auth/login` 只查 `users` 表、不看配置，应用内又没有用户管理入口——运维把 `admin` 改成不易猜的名字（常见加固动作）并重启后，旧行仍在、旧密码仍有效，若改名动机正是「怀疑凭据泄漏」，这一步等于没做。处置：`ensureAdmin` 同步完成后把其它管理员降权为 `user` 并自增其 `token_epoch`（立即踢掉旧 token），同时 `console.warn` 打印被降级账号。验证：`test/ensureAdmin.test.js` 新增「换 ADMIN_USER 后旧管理员被降权」，后端 181 例全绿。 |
 | BUG-73 | P2 | 安全 | `users.role` 列默认值是 `'admin'`（与「注册即普通用户」的授权模型相反） | `backend/src/db.js`, `backend/test/ensureAdmin.test.js` | 2026-09-11 | 建表时 `role TEXT NOT NULL DEFAULT 'admin'`，而注册流程特意写 `'user'`、只有 `ensureAdmin` 能给 admin——任何漏写 role 的写入（迁移/种子/修复脚本、测试夹具、以后新增的邀请路径）都会静默创建全站写权限账号，且 `requireAdmin` 只看 role 字段，等于直接放行。处置：SQLite 不支持只改列默认值，故按标准「建新表 → 迁数据 → 改名」重建 `users`（仅在 `PRAGMA table_info` 显示 dflt_value 仍是 `'admin'` 的老库执行一次）；`ensureAdmin` 本来就显式写 `'admin'`，不受影响。验证：**用真实 `db.js` 打开一个按老 schema 造出的库**——日志出现 `migrated users.role default: admin -> user`，默认值变为 `'user'`，两条账号（admin/user）与角色、以及新增的 `token_epoch` 列全部完好；`test/ensureAdmin.test.js` 另有「漏写 role 的插入得到普通用户」用例。 |
+| BUG-51 | P1 | 安全 | JWT 无撤销机制：改密码 / 降权 / 删号后旧 token 在有效期内仍持有全权 | `backend/src/auth.js`, `backend/src/db.js`, `backend/src/routes/auth.js`, `backend/test/auth.test.js` | 2026-09-11 | `attachUser` 原先只验签就 `req.user = payload`、从不回查数据库，`ensureAdmin` 改密码也只更新哈希——于是改密只让「用户名+密码」这条路失效，被盗 token 在 `exp`（默认 7d）之前仍是有效 admin；被删除或降权的账号同样一路放行。处置：`users` 加 `token_epoch`（改密/回收管理员时自增），签发 token 时带上当时的值，`attachUser` 按 `payload.id` 回查 `username/role/token_epoch` 并要求 epoch 相等，不符即不挂 `req.user`；role 一并取自库中，使降权立即生效。`payload.epoch ?? 0` 让升级前签发的 token 仍可用，一次改密后全部失效（无需强制全员重登）。验证：`test/auth.test.js` 新增 3 例（删号后 token 失效、改密后旧 token 失效而新 token 有效、payload 写 admin 但库里是 user 时不提权）；后端 190 例全绿。 |
+| BUG-53 | P1 | 安全 | 登录限流只按出口 IP 计数：NAT 下连坐封锁，对单账号又无上限 | `backend/src/routes/auth.js`, `backend/test/authHardening.test.js` | 2026-09-11 | 用库默认的纯 IP 分桶：校园/办公 NAT 下任何人（无需账号、无需知道用户名）打 10 次错密码，就把该出口所有人锁在登录页外 15 分钟（正确密码也拿 429，实测）；反向对「分布式爆破单个账号」又毫无约束。处置：`keyGenerator` 改为把「IPv6 归并后的出口 IP」与「提交账号的小写形式」拼成桶键（用库导出的 `ipKeyGenerator(req.ip)` 做归并），另叠一层纯 IP 的宽松洪泛桶（100 次/15 分钟）顶住随机用户名的脚本。验证：`test/authHardening.test.js` 用例——同一出口把 alice 打满限流后，bob 仍能 200 登录（改前此处为 429）。 |
+| BUG-69 | P2 | 安全 | `/register/code` 先写库再发信：发送失败仍占用 60 秒冷却与当日额度，并作废用户手上的有效码 | `backend/src/routes/auth.js`, `backend/test/authHardening.test.js` | 2026-09-11 | 原顺序是「生成 code → upsert（`sent_count+1`、刷新 `expires_at`）→ await 发信」，失败只返回 502 不回滚。后果：邮件服务抖动（正是 BUG-37 那类故障）时用户重试 10 次即耗光 24 小时额度而一封码都没收到；覆写还会顶掉用户手上仍有效的旧码；额度按邮箱计且无需认证，第三方可替他人邮箱打满。处置：先 `await sendVerificationCode`，成功后才落库（并把新码的 `uses` 归零）。验证：`test/authHardening.test.js` 用新增的 `mailState.failNext` 钩子模拟发信失败——502 后库里无记录、紧接着重试即 200、冷却只在该次成功后才生效。 |
+| BUG-70 | P2 | 安全 | 登录响应时间可稳定区分账号是否存在（实测 1.3ms vs 44.8ms） | `backend/src/routes/auth.js`, `backend/test/authHardening.test.js` | 2026-09-11 | `if (!user \|\| !bcrypt.compareSync(...))` 短路：账号不存在时根本不跑 bcrypt，而 401 文案刻意不区分两种失败（设计意图就是不给枚举口子）。处置：模块级预计算 `DUMMY_HASH`，两条分支都跑一次 `compareSync`（先 compare 再判 user，避免又短路）。验证：用例把 `bcrypt.compareSync` 换成计数包装，断言「账号不存在时也被调用一次」，避免用易抖动的耗时断言。 |
+| BUG-71 | P2 | 安全 | `/register` 的用户名枚举 oracle：同一枚合法验证码可无限复用 | `backend/src/routes/auth.js`, `backend/src/db.js`, `backend/test/authHardening.test.js` | 2026-09-11 | 重名检查在验证码校验通过之后，而 `DELETE FROM email_codes` 只在 INSERT 成功后执行——失败分支既不删行也不记账，实测同一枚码连打 4 次「已占用用户名」全部 409 且 `attempts` 始终为 0；`registerLimiter` 是 15 次/分钟/IP，枚举速率比 /login 高两个数量级且不产生失败日志。处置：`email_codes` 加 `uses` 列（与输错计数 `attempts` 分开，避免合法用户输错几次再成功被算作滥用），核验通过即 +1，超过 `MAX_CODE_USES=3` 要求重新获取；用户名与邮箱冲突改为同一句文案，不透露是哪个字段。验证：用例断言「同一枚码第 4 次提交被拒且提示使用次数过多」。 |
+| BUG-72 | P2 | 安全 | bcrypt 静默截断到 72 字节，注册校验却按字符数：40 个汉字的密码只有前 24 个生效 | `backend/src/routes/auth.js`, `backend/test/authHardening.test.js` | 2026-09-11 | 校验用 `password.length`（UTF-16 码元 8–72），而 bcrypt 只用前 72 **字节**。实测 `hashSync('密'.repeat(40))`（120 字节，注册放行）之后，`compareSync('密'.repeat(24))` 与 `compareSync('密'.repeat(40) + 'ZZZ')` 都返回 true——用户以为设了 40 个汉字，实际只有前 24 个参与校验，掌握该前缀的人即使后缀完全不同也能登录。处置：下限仍按字符数（8 位字符是用户能理解的口径），上限改按 `Buffer.byteLength(password, 'utf8') > 72` 拒绝，并给出「约 24 个汉字」的提示。验证：用例断言 40 个汉字（120 字节）被拒、24 个汉字（恰好 72 字节）放行。 |
 
 ### 2.2 已关闭改进项（18）
 
