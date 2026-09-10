@@ -228,14 +228,6 @@ const zh = {
       done: '完成',
       searchingLibrary: '正在检索资料库…',
     },
-    cfg: {
-      apiKey: 'API Key',
-      baseUrl: 'API 地址',
-      model: '模型',
-      hint: '三项都填写后使用本浏览器配置；留空任意项则使用服务器配置。配置仅保存在本地浏览器。',
-      restore: '恢复默认设置',
-      save: '保存',
-    },
   },
   kg: {
     title: '知识图谱',

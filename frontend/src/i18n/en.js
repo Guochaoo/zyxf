@@ -226,14 +226,6 @@ const en = {
       done: 'Done',
       searchingLibrary: 'Searching library…',
     },
-    cfg: {
-      apiKey: 'API Key',
-      baseUrl: 'API URL',
-      model: 'Model',
-      hint: 'Fill all three to use this browser config; leave any empty to use the server config. Config is saved locally in this browser only.',
-      restore: 'Restore defaults',
-      save: 'Save',
-    },
   },
   kg: {
     title: 'Knowledge Graph',

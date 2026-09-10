@@ -163,7 +163,7 @@ Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视�
 - 收起/展开同款交互；实现上以像素高度冻结内容（内容不重排，由外层容器从下往上裁剪），消息列表始终 `overflow-y-auto` + `scrollbar-gutter: stable`（滚动条槽位恒定），展开时卡片本体随容器一起平滑长高
 - 输入框：`bg-field` 圆角 10px、**无描边**、仅极浅投影（聚焦微调）；发送按钮深色圆角方块，流式生成中变为停止按钮
 - 消息区：用户消息右对齐灰底气泡；AI 回复带小节头（检索中 / 生成中 / 完成 / 出错）+ 时间，流式打字机渲染，【文件N】引用渲染为可点击文件行（跳转 / 预览）；空态显示三条建议 chip
-- AI 设置面板：头部下浮出的悬浮层（覆盖对话区，点击空白收起），配置存 localStorage，请求时随 body 下发覆盖服务端 env
+- AI 配置：头部齿轮**不就地展开表单**，而是打开全局设置弹窗（设置 → AI）；配置存 localStorage，请求时随 body 下发覆盖服务端 env（服务端已配置时不再下发用户 Key）
 
 ### File List (资料库中列)
 - Monochrome throughout (no accent colors): rows on white, dividers rgba(23,23,23,0.08)
@@ -286,7 +286,7 @@ Download Heatmap（下载热力图，`/dashboard` 首行左卡）
 | Flat (Level 0) | No shadow | Page background, text blocks, **heatmap panel** (deliberately borderless) |
 | Inset Panel (Level 1) | `#f7f8f9` tint, no shadow (`bg-inset`) | Chart stages, anomaly-card plot area |
 | Card (Level 2) | `.rb-card` (CSS 类): rgba(0,0,0,0.08) 0 0 0 1px, rgba(0,0,0,0.04) 0 2px 2px, rgba(0,0,0,0.04) 0 8px 8px -8px, inner #fafafa ring | Upload/rename dialogs (`rb-card`). Dashboard cards are `bg-surface` with **no shadow** (无界) |
-| Popover (Level 3) | 纯投影浮层，**无任何描边/光晕圈**（连 shadow-as-border ring 都不用）：rgba(0,0,0,0.06) 0 4px 10px + rgba(0,0,0,0.12) 0 12px 32px 双层柔和投影 | 卡片内悬浮层（如智能对话的 AI 设置浮层）与页面顶部 Toast（`Toast` 组件，error 红 / success 绿 / info 蓝 / warning 橙 四类型通知卡）；无界——浮层边界完全由投影海拔表达 |
+| Popover (Level 3) | 纯投影浮层，**无任何描边/光晕圈**（连 shadow-as-border ring 都不用）：rgba(0,0,0,0.06) 0 4px 10px + rgba(0,0,0,0.12) 0 12px 32px 双层柔和投影 | 设置弹窗内的下拉浮层（如右上角语言切换菜单 `.settings-lang-menu`）与页面顶部 Toast（`Toast` 组件，error 红 / success 绿 / info 蓝 / warning 橙 四类型通知卡）；无界——浮层边界完全由投影海拔表达 |
 | Raised Toggle (Level 2b) | `shadow-btn`: rgba(23,23,23,.12) 0 1px 2px, rgba(23,23,23,.06) 0 0 0 1px | Active pill toggles, refresh button |
 | Input Border (inline) | rgba(0,0,0,0.08) 0 0 0 1px; focus adds hsla(212,100%,48%,.25) 0 0 0 3px | All form inputs/selects (CSS, not a token) |
 | Focus (Accessibility) | 2px solid hsla(212, 100%, 48%, 1) outline | Keyboard focus on all interactive elements |
