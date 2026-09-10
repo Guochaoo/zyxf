@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
 import { app } from '../src/index.js';
 import { signToken } from '../src/auth.js';
-import { llmState } from './setup.js';
+import { llmState, ensureTestUser } from './setup.js';
 
 let server;
 let base;
@@ -38,9 +38,11 @@ async function request(method, path, { body, headers } = {}) {
 }
 
 // IMPROVE-10：自带 Key 的路径要求登录——用它模拟已登录用户（普通用户即可，无需 admin）。
-const userAuth = () => ({
-  authorization: `Bearer ${signToken({ id: 77, username: 'u', role: 'user' })}`,
-});
+// attachUser 会回查用户行（BUG-51/52），故先落一行真实账号。
+const userAuth = () => {
+  ensureTestUser({ id: 77, username: 'u', role: 'user' });
+  return { authorization: `Bearer ${signToken({ id: 77, username: 'u', role: 'user' })}` };
+};
 
 // 读完 SSE 响应并解析出事件数组
 async function readSse(res) {

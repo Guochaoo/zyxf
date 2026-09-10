@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
 import { signToken } from '../src/auth.js';
 import { app } from '../src/index.js';
-import { ossObjectStore, mailState } from './setup.js';
+import { ossObjectStore, mailState, ensureTestUser } from './setup.js';
 
 let server;
 let base;
@@ -53,6 +53,8 @@ async function adminLogin() {
 }
 
 function userToken() {
+  // attachUser 会回查用户行（BUG-51/52），普通用户 token 也必须对应真实账号
+  ensureTestUser({ id: 99, username: 'guest', role: 'user' });
   return signToken({ id: 99, username: 'guest', role: 'user' });
 }
 
@@ -829,7 +831,8 @@ describe('POST /api/auth/register (+ /register/code)', () => {
       headers: xff,
     });
     assert.equal(status, 409);
-    assert.equal(body.error, '该邮箱已被注册');
+    // 用户名/邮箱冲突统一文案（不透露是哪个字段，避免成为存在性 oracle）
+    assert.equal(body.error, '用户名或邮箱已被使用');
   });
 
   test('login works with either email or username after register', async () => {
@@ -858,6 +861,6 @@ describe('POST /api/auth/register (+ /register/code)', () => {
       headers: xff,
     });
     assert.equal(status, 400);
-    assert.equal(body.error, '密码需为 8-72 位');
+    assert.equal(body.error, '密码至少 8 位，且不超过 72 字节（约 24 个汉字）');
   });
 });
