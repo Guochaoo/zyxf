@@ -5,8 +5,11 @@ import ChatComposer from '../components/ChatComposer.jsx';
 
 // chatStream 由各用例注入实现
 const chatStreamMock = vi.fn();
+// 服务端 AI 状态：默认「未配置」，使既有用例保持「上传用户配置」的行为
+const getChatStatusMock = vi.fn();
 vi.mock('../api.js', () => ({
   getFileUrl: vi.fn(),
+  getChatStatus: (...args) => getChatStatusMock(...args),
   chatStream: (...args) => chatStreamMock(...args),
 }));
 
@@ -25,6 +28,8 @@ function typeAndSend(text) {
 
 beforeEach(() => {
   chatStreamMock.mockReset();
+  getChatStatusMock.mockReset();
+  getChatStatusMock.mockResolvedValue({ enabled: false });
   localStorage.clear();
 });
 
@@ -121,5 +126,41 @@ describe('ChatComposer', () => {
     typeAndSend('你好');
     await waitFor(() => expect(chatStreamMock).toHaveBeenCalled());
     expect(chatStreamMock.mock.calls[0][1].llm).toBeUndefined();
+  });
+
+  test('服务端已配置 AI 时不再上传用户自带 Key', async () => {
+    getChatStatusMock.mockResolvedValue({ enabled: true });
+    localStorage.setItem(
+      'zyxf_llm',
+      JSON.stringify({ apiKey: 'test-key', baseUrl: 'https://llm.test/v1', model: 'glm-4.6' })
+    );
+    chatStreamMock.mockImplementation(async () => {});
+    renderPanel();
+
+    // 等状态接口落定后再发送（真实场景下该请求毫秒级返回）
+    await waitFor(() => expect(getChatStatusMock).toHaveBeenCalled());
+    typeAndSend('你好');
+    await waitFor(() => expect(chatStreamMock).toHaveBeenCalled());
+    // 用户 Key 不应出现在请求中（后端已配置时会忽略它）
+    expect(chatStreamMock.mock.calls[0][1].llm).toBeUndefined();
+  });
+
+  test('服务端未配置 AI 时仍上传用户自带 Key', async () => {
+    getChatStatusMock.mockResolvedValue({ enabled: false });
+    localStorage.setItem(
+      'zyxf_llm',
+      JSON.stringify({ apiKey: 'test-key', baseUrl: 'https://llm.test/v1', model: 'glm-4.6' })
+    );
+    chatStreamMock.mockImplementation(async () => {});
+    renderPanel();
+
+    await waitFor(() => expect(getChatStatusMock).toHaveBeenCalled());
+    typeAndSend('你好');
+    await waitFor(() => expect(chatStreamMock).toHaveBeenCalled());
+    expect(chatStreamMock.mock.calls[0][1].llm).toEqual({
+      apiKey: 'test-key',
+      baseUrl: 'https://llm.test/v1',
+      model: 'glm-4.6',
+    });
   });
 });

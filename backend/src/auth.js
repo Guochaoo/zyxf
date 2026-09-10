@@ -9,13 +9,17 @@ if (!process.env.JWT_SECRET && process.env.NODE_ENV !== 'development') {
   console.warn('[auth] WARNING: JWT_SECRET not set in environment — using insecure default. Set it in .env.');
 }
 
+// 显式固定 HS256：对称密钥场景下 pin 算法可杜绝算法混淆类攻击，
+// 且不受 jsonwebtoken 默认算法变化的影响。
+const ALGORITHM = 'HS256';
+
 export function signToken(payload) {
-  return jwt.sign(payload, SECRET, { expiresIn: EXPIRES_IN });
+  return jwt.sign(payload, SECRET, { expiresIn: EXPIRES_IN, algorithm: ALGORITHM });
 }
 
 export function verifyToken(token) {
   try {
-    return jwt.verify(token, SECRET);
+    return jwt.verify(token, SECRET, { algorithms: [ALGORITHM] });
   } catch {
     return null;
   }

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import { ArrowUp, ArrowUpRight, Settings, Square, Trash2 } from 'lucide-react';
-import { chatStream } from '../api.js';
+import { chatStream, getChatStatus } from '../api.js';
 import { EASE_COLLAPSE, ICON_BUTTON_CLASS } from './ui.js';
 import PanelHeader from './PanelHeader.jsx';
 import { openFolderOrFile } from '../ui.js';
@@ -128,6 +128,18 @@ export default function ChatComposer() {
   const [collapsed, setCollapsed] = useState(chatCollapsedPersistent);
   const [llmCfg, setLlmCfg] = useState(loadLlmCfg);
   const [cfgDraft, setCfgDraft] = useState(loadLlmCfg);
+  // 服务端是否已配置 AI：null=未知（保持「发送用户配置」的既有行为）。
+  // 已知为 true 时不再上传用户自带 Key。
+  const [serverAiEnabled, setServerAiEnabled] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    getChatStatus()
+      .then((s) => alive && setServerAiEnabled(!!s?.enabled))
+      .catch(() => alive && setServerAiEnabled(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
   // 折叠动画：snapH 以像素高度驱动过渡（fr/auto 高度无法从当前值平滑过渡），
   // innerH 把内层冻结在固定高度——内容不重排，由外层容器从下往上裁剪（同知识图谱）；
   // 消息列表始终 overflow-y-auto + scrollbar-gutter: stable，滚动条槽位恒定，
@@ -234,9 +246,10 @@ export default function ChatComposer() {
     setDraft('');
     setBusy(true);
 
-    // 三项齐全才随请求下发，否则交给服务端 env 配置
+    // 服务端已配置 AI 时不再上传用户自带 Key（后端本就忽略它，避免密钥无谓外传）。
+    // serverAiEnabled 为 null（状态未知）时保持既有行为：带上用户配置。
     const llm =
-      llmCfg.apiKey && llmCfg.baseUrl && llmCfg.model
+      serverAiEnabled !== true && llmCfg.apiKey && llmCfg.baseUrl && llmCfg.model
         ? { apiKey: llmCfg.apiKey, baseUrl: llmCfg.baseUrl, model: llmCfg.model }
         : undefined;
 
