@@ -15,8 +15,8 @@
 ```yaml
 updated: 2026-09-11
 entries: 108          # 缺陷 78 + 改进 30
-pending: 31           # 缺陷 19 + 改进 12
-fixed: 77             # 已归档：缺陷 59 + 改进 18
+pending: 29           # 缺陷 17 + 改进 12
+fixed: 79             # 已归档：缺陷 61 + 改进 18
 ```
 
 ---
@@ -25,7 +25,7 @@ fixed: 77             # 已归档：缺陷 59 + 改进 18
 
 ### 1.1 缺陷
 
-当前 **19 条待处理**（均为 2026-09-11 全仓审计新发现，已逐条人工复核；历史批次 BUG-21/23/24/26/27/29 已处置）。
+当前 **17 条待处理**（均为 2026-09-11 全仓审计新发现，已逐条人工复核；历史批次 BUG-21/23/24/26/27/29 已处置）。
 
 > 审计方式：9 路并行只读审计（安全/后端正确性/后端基础设施/性能/前端状态/前端组件/重复与死代码/工程配置与文档），再由人工逐条读码复核、剔除误报。下文每条都给出可核对的文件与行号证据。
 
@@ -37,15 +37,6 @@ fixed: 77             # 已归档：缺陷 59 + 改进 18
 - **影响**：管理员 token 泄漏后，运维改密码并重启**不能止损**——攻击者手上那条 token 在 `exp`（默认 7d）之前仍是有效 admin，可继续调用全部写接口；被删除或降权的账号同样在过期前一路放行。
 - **修法**：`users` 加 `token_epoch`（沿用现有 `hasColumn` 迁移模式），改密码时自增；签发时把 epoch 写进 payload，`attachUser` 验签后按 `payload.id` 查一次 `role, token_epoch` 并比对，不符即丢弃 `req.user`。同时修正 DEPLOY.md 的表述。
 - **验证**：新增用例「改密码后旧 token 401 / 新 token 200」「删号后旧 token 401」。
-
-#### BUG-52 · 改 `ADMIN_USER` 不回收既有管理员行：旧用户名 + 旧密码仍能登录为 admin
-`backend · 认证`
-`files: [backend/src/db.js, backend/test/ensureAdmin.test.js, docs/DEPLOY.md]`
-
-- **现状**：`ensureAdmin` 只按当前 `ADMIN_USER` 定位那一行，不存在则新建、存在则改密码，全程不触碰其它 `role='admin'` 的行；而 `POST /api/auth/login` 只查 `users` 表、不看配置。
-- **影响**：运维把 `admin` 改成不易猜的名字（常见加固动作）并重启，以为旧管理员已下线；实际上旧行仍在、旧密码仍有效，可直接登录成 admin。若改名的动机正是「怀疑凭据泄漏」，这一步等于没做。
-- **修法**：同步完成后把其它 `role='admin'` 的行降级为 `user` 并 `console.warn` 打印被降级的账号（或在文档里明确改名语义）。
-- **验证**：`ensureAdmin.test.js` 增一例「改 ADMIN_USER 后旧行 role 不再是 admin」。
 
 #### BUG-53 · 登录限流只按出口 IP 计数：NAT 下连坐封锁，对单账号又无上限
 `backend · 认证`
@@ -182,15 +173,6 @@ fixed: 77             # 已归档：缺陷 59 + 改进 18
 - **修法**：按字节校验（`Buffer.byteLength(pw, 'utf8')`）或先做定长摘要再交给 bcrypt；前端同步提示文案与 `maxLength`。
 - **验证**：用例「多字节超 72 字节的密码被拒」+「前缀相同后缀不同不得登录成功」。
 
-#### BUG-73 · `users.role` 列默认值是 `'admin'`（与「注册即普通用户」的授权模型相反）
-`backend · 数据库`
-`files: [backend/src/db.js]`
-
-- **现状**：建表语句 `role TEXT NOT NULL DEFAULT 'admin'`。当前两条写入路径（`ensureAdmin` 与注册）都显式给值，所以暂无活跃利用路径。
-- **影响**：任何漏写 `role` 的写入（迁移脚本、种子/修复脚本、测试夹具、以后新增的邀请/注册路径）都会静默创建全站写权限账号，且没有任何日志或断言提示；`requireAdmin` 只看 role 字段，等于直接放行。属潜伏的提权默认值。
-- **修法**：默认值改 `'user'`（SQLite 不支持只改默认值，需按标准「建新表 → 迁数据 → 改名」迁移；或至少保证新库使用安全默认值）。
-- **验证**：用例「不带 role 的 INSERT 得到普通用户」。
-
 #### BUG-79 · `deploy/zyxf.service` 以 `User=www` 运行，但文档没有任何目录属主/权限步骤
 `工程·部署`
 `files: [deploy/zyxf.service, docs/DEPLOY.md, backend/src/db.js]`
@@ -320,7 +302,7 @@ fixed: 77             # 已归档：缺陷 59 + 改进 18
 
 > **类别**列为便于按区域速查的单一归类；`处置要点` 列记录该项的修法依据、踩坑与验证方式，无额外说明的填 `—`。
 
-### 2.1 已修复缺陷（59）
+### 2.1 已修复缺陷（61）
 
 | 编号 | 严重度 | 类别 | 标题 | 修复位置 | 关闭日期 | 处置要点 |
 |---|---|---|---|---|---|---|
@@ -384,6 +366,8 @@ fixed: 77             # 已归档：缺陷 59 + 改进 18
 | BUG-77 | P1 | 工程·部署 | 部署健康检查失败无回滚，线上停在新修订持续 502 | `.github/workflows/deploy.yml`, `docs/DEPLOY.md` | 2026-09-11 | 原脚本以 `curl -fsS /api/health` 收尾：此时新代码与前端 dist 都已覆盖，健康检查失败只让 workflow 变红，服务器仍跑坏修订，只能人工 SSH 救。修法：部署前记录 `PREV=$(git rev-parse HEAD)`，失败则 `cd /opt/zyxf && git reset --hard $PREV` → 重装依赖 → 重建前端 → 重启后端 → `exit 1`（仍判失败，不掩盖事故）。验证：内嵌脚本分支人工核对，回滚分支用绝对路径 `cd`，避免承接前一步的 cwd。 |
 | BUG-78 | P2 | 安全 | 生产 CSP 的 `style-src` 缺 `fonts.googleapis.com`，About 页字体样式表被静默拦掉 | `frontend/nginx.conf`, `docs/DEPLOY.md` | 2026-09-11 | `index.html` 引入 Google Fonts 的 DM Sans 样式表，`AboutPage` 又强制 `fontFamily: 'DM Sans'`，而 CSP 的 `style-src` 只有 `'self' 'unsafe-inline'`——样式表被拦，页面字体退回 sans-serif 且控制台持续报违规（IMPROVE-11 建立策略时漏掉这个 origin）。修法：`style-src` 补 `https://fonts.googleapis.com`（server 级与 `/assets/` 两处都要，子级 `add_header` 会屏蔽继承），DEPLOY.md 模板同步。验证：构建产物中确认 `index.html` 确实引用该 origin。 |
 | BUG-80 | P2 | 工程·本地开发 | nodemon 的 watcher 因同一类原子写临时文件 EBUSY 而退出，后端整站停服 | `backend/package.json` | 2026-09-11 | BUG-38 只修了 Vite 一侧。本轮继续编辑源码时后端也倒了，`run.err.log` 明确记下根因：`[nodemon] Internal watch failed: EBUSY: resource busy or locked, watch '...\backend\src\routes\files.js~RF85e5fa1.TMP'`——编辑器/agent 的「临时文件 + 原子替换」会在被改文件旁留下 `~RF*.TMP` / `*.tmpdir/`，nodemon 的 watcher 抢在删除前监听即抛 EBUSY，进程随之中止（端口 4000 关闭，Vite 代理返回 500）。修法：`package.json` 加 `nodemonConfig`——`watch: ["src"]` 收窄监听范围，`ignore` 排掉 `**/*.tmp`、`**/*.TMP`、`**/*.tmpdir/**`、`**/*~RF*`。验证：手工在 `backend/src/routes/` 下建 `files.js~RF*.TMP` 与 `.index.js.*.tmpdir/index.js.tmp` 再删除，后端保持 HTTP 200、日志无新重启、err 日志无 EBUSY。 |
+| BUG-52 | P1 | 安全 | 改 `ADMIN_USER` 不回收既有管理员行：旧用户名 + 旧密码仍能登录为 admin | `backend/src/db.js`, `backend/test/ensureAdmin.test.js` | 2026-09-11 | `ensureAdmin` 原先只按当前 `ADMIN_USER` 定位那一行，全程不触碰其它 `role='admin'` 的行；而 `POST /api/auth/login` 只查 `users` 表、不看配置，应用内又没有用户管理入口——运维把 `admin` 改成不易猜的名字（常见加固动作）并重启后，旧行仍在、旧密码仍有效，若改名动机正是「怀疑凭据泄漏」，这一步等于没做。处置：`ensureAdmin` 同步完成后把其它管理员降权为 `user` 并自增其 `token_epoch`（立即踢掉旧 token），同时 `console.warn` 打印被降级账号。验证：`test/ensureAdmin.test.js` 新增「换 ADMIN_USER 后旧管理员被降权」，后端 181 例全绿。 |
+| BUG-73 | P2 | 安全 | `users.role` 列默认值是 `'admin'`（与「注册即普通用户」的授权模型相反） | `backend/src/db.js`, `backend/test/ensureAdmin.test.js` | 2026-09-11 | 建表时 `role TEXT NOT NULL DEFAULT 'admin'`，而注册流程特意写 `'user'`、只有 `ensureAdmin` 能给 admin——任何漏写 role 的写入（迁移/种子/修复脚本、测试夹具、以后新增的邀请路径）都会静默创建全站写权限账号，且 `requireAdmin` 只看 role 字段，等于直接放行。处置：SQLite 不支持只改列默认值，故按标准「建新表 → 迁数据 → 改名」重建 `users`（仅在 `PRAGMA table_info` 显示 dflt_value 仍是 `'admin'` 的老库执行一次）；`ensureAdmin` 本来就显式写 `'admin'`，不受影响。验证：**用真实 `db.js` 打开一个按老 schema 造出的库**——日志出现 `migrated users.role default: admin -> user`，默认值变为 `'user'`，两条账号（admin/user）与角色、以及新增的 `token_epoch` 列全部完好；`test/ensureAdmin.test.js` 另有「漏写 role 的插入得到普通用户」用例。 |
 
 ### 2.2 已关闭改进项（18）
 
