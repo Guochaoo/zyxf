@@ -18,10 +18,8 @@ export function ossPrefix() {
 }
 
 // ---- 唯一实现：Map 版 --------------------------------------------------------
-// key 规则（前缀、分隔、清洗、去重）只在这里实现一次（IMPROVE-18）。下面三个 DB 版
-// 函数只是「现取一遍 folders 建索引」的薄封装，签名保持不变，调用方无需改动；
-// 两套实现曾在生产路径上并行存在，改一侧就会让上传落库的 key 与改名/移动算出的
-// key 不一致（copyOssObject 目标错位 → 重复对象或莫名 409）。
+// IMPROVE-18：key 规则只在这里实现一次，DB 版是「现取一遍 folders 建索引」的薄封装；
+// 两套实现并行过，改一侧就会让上传落库的 key 与改名/移动算出的 key 不一致。
 
 export function folderPathSegmentsFromMap(folderId, folderMap, parentOverrides = new Map(), nameOverrides = new Map()) {
   if (!folderId) return [];

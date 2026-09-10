@@ -19,10 +19,7 @@ export function useFolderContents(folderId) {
   sortRef.current = sort;
   const orderRef = useRef(order);
   orderRef.current = order;
-  // 请求序号：切换目录/排序会并发发请求且旧请求不取消，上传完成回调也可能带着
-  // 旧的 folderId 触发 refresh——没有守卫时旧响应会覆盖新目录的数据（列表显示上
-  // 一个目录的内容，用户可能在错误目录上删除/重命名/拖拽）。同 BUG-05 在 SearchBar
-  // 的修法：只接受最新一次请求的结果。
+  // BUG-56（同 BUG-05）：只接受最新一次请求的结果，否则切目录/排序时旧响应会覆盖新目录数据。
   const reqIdRef = useRef(0);
 
   const refresh = useCallback(() => {

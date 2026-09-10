@@ -1,8 +1,6 @@
 import i18n from './i18n/index.js';
-// 与后端 extPolicy.js 完全同源（IMPROVE-19）：白名单是后端上传校验的唯一权威，
-// 前端只做展示分类，直接复用同一份常量与函数，避免「后端加了类型、前端仍判 unknown
-// → 预览退化成只能下载」这类漂移。extPolicy.js 是纯数据模块（不 import node 内建）。
-// 路径别名见 vite.config.js（@backend → backend/src/）。
+// IMPROVE-19：扩展名分类直接复用后端 extPolicy（别名见 vite.config.js 的 @backend），
+// 手抄副本会让「后端加了类型、前端仍判 unknown → 预览退化成只能下载」。
 import { ARCHIVE_EXTS, PREVIEWABLE_EXTS, normalizeExt } from '@backend/extPolicy.js';
 
 export function formatSize(bytes) {

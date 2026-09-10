@@ -3,11 +3,8 @@ import { getFolderTree } from '../api.js';
 
 /**
  * 加载整棵文件夹树（含根级文件），并监听全局 'folders-changed' 事件刷新。
- * 侧边栏 FolderTree 与知识图谱 KnowledgeGraph 共用（原来各自实现了一遍 fetch +
- * alive 守卫 + 事件监听）。
- *
- * 两个实例各自持有一份 state，因此同一次变更仍会各发一次 GET（去重属于 IMPROVE-15/24，
- * 需要模块级缓存，见 docs/ISSUES.md）；这里只保证「同一实例内先发的旧响应不覆盖新响应」。
+ * 侧边栏与知识图谱共用；两个实例各有 state，同一次变更仍会各发一次 GET（IMPROVE-24），
+ * 这里只保证同一实例内「旧响应不覆盖新响应」。
  *
  * @returns {{ tree: Array|null, rootFiles: Array, loading: boolean }}
  */

@@ -149,15 +149,13 @@ export default function DashboardPage() {
   // trailing-year activity for the heatmap — intentionally NOT refetched when
   // `range` changes, so the year grid stays put while other cards re-range
   const [heat, setHeat] = useState(null);
-  // 区间切换与「已有数据的刷新」不能回到整页 loading：那会把区间切换器从 DOM 里摘掉，
-  // 用户在等待期间无法再点一次（BUG-57 的测试就是这样卡住的）。初次加载仍走整页 loading。
+  // BUG-57：切区间时不回到整页 loading（否则区间切换器被摘掉，等待期间无法再点）。
   const [switching, setSwitching] = useState(false);
   const loadReqIdRef = useRef(0);
 
   const load = useCallback(
     (silent = false, r = range) => {
-      // 请求序号守卫（BUG-57）：快速连点「7 天 → 30 天」时两个请求并发，若先发的后到，
-      // 卡片数据会被旧区间覆盖而切换器高亮新区间；两个 finally 也会让 loading 提前复位。
+      // BUG-57：只接受最新一次请求的结果（含 loading 复位），避免旧区间覆盖新区间。
       const reqId = (loadReqIdRef.current += 1);
       if (silent) setRefreshing(true);
       else {
@@ -183,8 +181,7 @@ export default function DashboardPage() {
     [range]
   );
 
-  // 热力图请求序号 + 卸载守卫：它与统计走同一个「刷新」按钮，却漏了 BUG-57 加的守卫——
-  // 连点刷新时旧热力图响应后到会把新年份网格盖回去，卸载后还会 setState。
+  // BUG-83：热力图与统计共用「刷新」按钮，同样需要请求序号 + 卸载守卫。
   const heatReqIdRef = useRef(0);
   const heatAliveRef = useRef(true);
   useEffect(() => () => { heatAliveRef.current = false; }, []);

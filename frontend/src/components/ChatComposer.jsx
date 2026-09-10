@@ -50,9 +50,7 @@ export default function ChatComposer({ onOpenSettings }) {
       alive = false;
     };
   }, []);
-  // IMPROVE-10：服务端未配置 AI 时，「自带 Key」是唯一可用的上游，而后端对这条路要求登录
-  // （否则匿名访客可让本站代理任意公网 https 上游）。前端据此提前禁用输入并说明原因，
-  // 而不是等发送后才收到 401。服务端已配置 AI、或未配置自带 Key 时都不受影响。
+  // IMPROVE-10：服务端未配置 AI + 自带 Key 时后端要求登录，前端提前禁用输入并说明原因。
   const hasClientCfg = Boolean(llmCfg.apiKey && llmCfg.baseUrl && llmCfg.model);
   const loginRequired = serverAiEnabled === false && !user && hasClientCfg;
 
@@ -78,9 +76,7 @@ export default function ChatComposer({ onOpenSettings }) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  // 卸载时中止在途的流式请求并清理动画计时器（BUG-61）：右栏组件随路由切换卸载，
-  // 不中止的话 fetch 仍继续消费 SSE、onDelta 对已卸载组件反复 setState，
-  // 服务端也要把整轮回答生成完（白烧配额）。
+  // BUG-61：卸载时中止在途流式请求并清计时器（否则 SSE 继续消费、对已卸载组件 setState）。
   useEffect(
     () => () => {
       clearTimeout(snapTimer.current);
@@ -89,8 +85,7 @@ export default function ChatComposer({ onOpenSettings }) {
     []
   );
 
-  // 设置弹窗保存/清空配置后同步到本组件（BUG-58）：常驻右栏不会重挂载，
-  // 原先只在挂载时读一次，用户填好 Key 直接提问仍按旧配置发送。
+  // BUG-58：设置弹窗保存后常驻右栏要立刻用新配置（原先只在挂载时读一次）。
   useEffect(() => subscribeLlmCfg(() => setLlmCfg(loadLlmCfg())), []);
 
   // 动画结束（360ms 过渡 + 余量）后回到自然布局（高度交还给 flex）
@@ -149,8 +144,7 @@ export default function ChatComposer({ onOpenSettings }) {
 
   const stop = () => abortRef.current?.abort();
 
-  // 清空会话同时中止在途请求（BUG-61）：只清数组的话，流式回答会继续往已清空的会话里
-  // 写入，且 busy 要到流结束才复位。
+  // BUG-61：清空时同时中止在途请求（否则流式回答会继续写进已清空的会话）。
   const clearConversation = () => {
     abortRef.current?.abort();
     setMessages([]);
@@ -189,9 +183,8 @@ export default function ChatComposer({ onOpenSettings }) {
 
     const abort = new AbortController();
     abortRef.current = abort;
-    // 中止后的「迟到增量」不再入账（BUG-61）：fetch 的 signal 只能停止读取，已 resolve 的
-    // reader 回调（onDelta/onFiles）仍会在同一个 macro-task 之后各触发一次，
-    // 于是「已停止生成。」后面会被追加半截文本、或给失败消息挂上文件卡片。
+    // BUG-61：signal 只能停止读取，已 resolve 的 reader 回调仍会各触发一次，
+    // 所以要自己判「这轮是否还有效」，否则「已停止生成。」后面会被追加半截文本。
     const live = () => abortRef.current === abort && !abort.signal.aborted;
     try {
       await chatStream(history, {
@@ -248,8 +241,7 @@ export default function ChatComposer({ onOpenSettings }) {
           type="button"
           aria-label={t('chat.clear')}
           title={t('chat.clear')}
-          // 流式期间保持可点（BUG-61）：否则用户在长回答生成中既不能清空也不能重置会话；
-          // 点击时会先中止在途请求（见 clearConversation）。
+          // BUG-61：流式期间也保持可点（点击会先中止在途请求）。
           disabled={messages.length === 0}
           onClick={clearConversation}
           className={ICON_BUTTON_CLASS}

@@ -21,16 +21,11 @@ const syncLimiter = tieredLimiter({
 const router = Router();
 
 // SQLite 绑定参数上限为 32766（Node 24 捆绑的 SQLite 编译值；999 是 3.32 前的旧默认）。
-// 分批 DELETE/FIX 每批远低于该上限，留足余量（BUG-08）。
-// DELETE 用 1 参数/行；fixExt 的 CASE 用 3 参数/行（WHEN id, THEN ext, WHERE id IN）。
+// BUG-08：每批远低于 SQLite 的绑定参数上限（DELETE 1 参数/行，fixExt 的 CASE 3 参数/行）。
 const DELETE_BATCH = 500;
 const FIX_EXT_BATCH = 300;
 
-// Find a folder whose OSS segment (cleaned name) equals `segment`, under parentId.
-// 旧实现对每个对象、每层路径都 `SELECT ... WHERE parent_id = ?` 拉全部兄弟再线性比对，
-// 复杂度 O(对象数 × 深度 × 兄弟数)，且循环中 folders 还在变长（IMPROVE-13）。
-// 现存实现改为在导入前一次性建内存索引：`parentId -> (cleanObjectSegment(name) -> id)`。
-// 索引在新建文件夹时就地登记，因此同一次 sync 内新建的中间层也能被后续对象命中。
+// IMPROVE-13：一次性建「parentId -> (清洗段名 -> id)」索引，新建时就地登记。
 function buildChildNameIndex() {
   const rows = db.prepare('SELECT id, name, parent_id FROM folders').all();
   const index = new Map(); // parentId(NaN 表示根) -> Map(cleanedName -> id)
@@ -70,9 +65,7 @@ router.post('/', syncLimiter, async (req, res, next) => {
 
     const tx = transaction(() => {
       const childNameIndex = buildChildNameIndex();
-      // 同父级连续插入复用游标（IMPROVE-14）：原实现每个新文件/文件夹都重新 prepare
-      // 并查一次 MAX(sort_order)，桶里几千个对象就是几千次 SELECT。
-      // 游标只在本事务内使用（事务里没有别处插入这两张表）。
+      // IMPROVE-14：游标只在本次事务内使用，避免每个新行都 prepare + 查一次 MAX(sort_order)。
       const nextSo = makeSortOrderCursor(db);
       const findFolderBySegment = (segment, parentId) =>
         childNameIndex.get(parentId === null ? null : parentId)?.get(segment) ?? null;

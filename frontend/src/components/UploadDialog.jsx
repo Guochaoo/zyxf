@@ -36,10 +36,8 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
   };
 
   const uploadOne = async (item) => {
-    // Compare by the stable `item.file` reference instead of the item object:
-    // the first setFiles below replaces the item object with a new reference
-    // ({...it, status}), so an `it === item` compare would never match again
-    // and progress/status would freeze at the initial state (BUG-01).
+    // BUG-01：按下方的 setFiles 会把 item 换成新对象，所以只能按 `item.file` 比对，
+    // 否则进度/状态永远停在初始态。
     const isItem = (it) => it.file === item.file;
     setFiles((prev) => prev.map((it) => (isItem(it) ? { ...it, status: 'uploading' } : it)));
     try {

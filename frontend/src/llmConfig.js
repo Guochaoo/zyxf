@@ -23,9 +23,8 @@ export const loadLlmCfg = () => {
 };
 
 // ---- 变更广播 ----
-// 设置弹窗与常驻右栏的 ChatComposer 共用这份存储，但各自持有 state 副本：保存后若不通知，
-// 聊天仍会按「挂载时读到的旧配置」发送（BUG-58），必须切页重挂载才生效。
-// 统一在两个写入点广播，消费方用 subscribeLlmCfg 订阅。
+// BUG-58：设置弹窗与常驻右栏共用这份存储但各持 state 副本，写入后必须通知，否则聊天
+// 仍按「挂载时读到的旧配置」发送。统一在两个写入点广播，消费方用 subscribeLlmCfg 订阅。
 const CHANGE_EVENT = 'llm-config-changed';
 
 function notifyChange() {

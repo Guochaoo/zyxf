@@ -193,9 +193,7 @@ function Row({
       onDragOver={(e) => onRowDragOver(e, { type: item.type, id: item.id })}
       onDragLeave={() => onRowDragLeave({ type: item.type, id: item.id })}
       onDrop={(e) => onRowDrop(e, { type: item.type, id: item.id })}
-      // 行内主操作（进入文件夹 / 预览文件）原先是裸 onClick 的 <li>：键盘用户完全够不到，
-      // 读屏也不知道这行可以打开（BUG-66）。补 role/tabIndex 与 Enter/Space 处理，
-      // 行内操作按钮仍是各自独立的 <button>（点它们不会冒泡到本行，见下方 stopPropagation）。
+      // BUG-66：行本身要能键盘打开（原先只有 onClick），行内按钮自行处理键盘。
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
