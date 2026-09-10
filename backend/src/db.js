@@ -98,6 +98,41 @@ if (!hasColumn('users', 'email')) {
 }
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL`);
 
+// --- migration: users.token_epoch（token 撤销支点，BUG-51）---
+// 改密码时自增；签发 token 时带上当时的值，attachUser 回查比对，不符即视为已撤销。
+// 老库补列，默认 0；升级前签发的 token 没有该声明，按 0 处理（一次改密后就全失效）。
+if (!hasColumn('users', 'token_epoch')) {
+  db.exec(`ALTER TABLE users ADD COLUMN token_epoch INTEGER NOT NULL DEFAULT 0`);
+}
+
+// --- migration: users.role 的默认值改回 'user'（BUG-73）---
+// 授权模型是「注册即普通用户、只有 ensureAdmin 能给 admin」，而建表时的
+// DEFAULT 'admin' 恰好相反：任何漏写 role 的写入都会静默创建全站写权限账号。
+// SQLite 不支持只改列默认值，只能重建表；仅在老库（dflt_value 仍是 'admin'）执行一次。
+const roleDefault = db
+  .prepare('PRAGMA table_info(users)')
+  .all()
+  .find((c) => c.name === 'role')?.dflt_value;
+if (roleDefault === "'admin'") {
+  db.exec(`
+    ALTER TABLE users RENAME TO users_old;
+    CREATE TABLE users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'user',
+      created_at INTEGER NOT NULL,
+      email TEXT,
+      token_epoch INTEGER NOT NULL DEFAULT 0
+    );
+    INSERT INTO users (id, username, password_hash, role, created_at, email, token_epoch)
+      SELECT id, username, password_hash, role, created_at, email,
+             COALESCE(token_epoch, 0) FROM users_old;
+    DROP TABLE users_old;
+  `);
+  console.log('[db] migrated users.role default: admin -> user');
+}
+
 // --- migration: email_codes（邮箱注册验证码）---
 db.exec(`
 CREATE TABLE IF NOT EXISTS email_codes (
@@ -122,27 +157,44 @@ export function ensureAdmin(username, password) {
       'INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)'
     ).run(username, hash, 'admin', Date.now());
     console.log(`[db] created default admin user: ${username}`);
-    return;
+  } else {
+    // 管理员账号由 .env 独占管理（应用内没有改密/提权入口），因此 .env 是唯一权威来源：
+    // 每次启动把密码/角色同步为配置值。否则改了 ADMIN_PASSWORD 也不会生效——库里已有
+    // 旧哈希，登录仍走旧密码（BUG-34）。密码未变时不重写哈希，避免每次启动产生无谓写入。
+    const passwordChanged = !bcrypt.compareSync(password, existing.password_hash);
+    const roleChanged = existing.role !== 'admin';
+    if (passwordChanged) {
+      // 同时自增 token_epoch：让用旧密码签发的 token 立刻失效（BUG-51）。否则改密只让
+      // 「用户名+密码」这条路失效，被盗 token 在 exp（默认 7d）之前仍持有全部写权限。
+      db.prepare(
+        'UPDATE users SET password_hash = ?, token_epoch = token_epoch + 1 WHERE id = ?'
+      ).run(bcrypt.hashSync(password, 10), existing.id);
+    }
+    if (roleChanged) {
+      db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(existing.id);
+    }
+    if (passwordChanged || roleChanged) {
+      console.log(
+        `[db] synced admin account from env: ${username}` +
+          (roleChanged ? ` (role ${existing.role} -> admin)` : '')
+      );
+    }
   }
 
-  // 管理员账号由 .env 独占管理（应用内没有改密/提权入口），因此 .env 是唯一权威来源：
-  // 每次启动把密码/角色同步为配置值。否则改了 ADMIN_PASSWORD 也不会生效——库里已有
-  // 旧哈希，登录仍走旧密码（BUG-34）。密码未变时不重写哈希，避免每次启动产生无谓写入。
-  const passwordChanged = !bcrypt.compareSync(password, existing.password_hash);
-  const roleChanged = existing.role !== 'admin';
-  if (passwordChanged) {
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(
-      bcrypt.hashSync(password, 10),
-      existing.id
-    );
-  }
-  if (roleChanged) {
-    db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(existing.id);
-  }
-  if (passwordChanged || roleChanged) {
-    console.log(
-      `[db] synced admin account from env: ${username}` +
-        (roleChanged ? ` (role ${existing.role} -> admin)` : '')
+  // 回收其它管理员行（BUG-52）：改 ADMIN_USER 等于「换管理员」，旧行若留着，旧用户名 +
+  // 旧密码仍能登录成 admin——登录只查 users 表、完全不看配置，而应用内没有用户管理入口，
+  // 这条残留行只能手改数据库才能清掉。降权为普通用户并自增 epoch（立即踢掉其 token）。
+  const stale = db
+    .prepare("SELECT id, username FROM users WHERE role = 'admin' AND username != ?")
+    .all(username);
+  if (stale.length) {
+    db.prepare(
+      "UPDATE users SET role = 'user', token_epoch = token_epoch + 1 WHERE role = 'admin' AND username != ?"
+    ).run(username);
+    console.warn(
+      `[db] demoted stale admin account(s) not matching ADMIN_USER: ${stale
+        .map((s) => s.username)
+        .join(', ')}`
     );
   }
 }
