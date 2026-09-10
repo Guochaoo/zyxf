@@ -1,5 +1,6 @@
 import { db } from './db.js';
 import { matchScore } from './searchMatch.js';
+import { invalidateTreeCache } from './treeCache.js';
 
 // 路径命中的减分。名称直接命中的文件永远排在「因所在文件夹命中」的文件之前：名称直接命中最低分
 // 为 PINYIN(45)，而路径命中最高分为 PREFIX(100) - PATH_PENALTY。要保证 100 - PATH_PENALTY < 45，
@@ -40,11 +41,21 @@ function getLibrarySnapshot() {
   return searchCache;
 }
 
-/** 数据变更（增删改文件/文件夹）后调用，使全库快照缓存失效（可选，供未来接入）。 */
+/** 数据变更（增删改文件/文件夹）后调用，使全库快照缓存失效。 */
 export function invalidateSearchCache() {
   searchCache.expiresAt = 0;
   searchCache.folders = null;
   searchCache.files = null;
+}
+
+/**
+ * 写路径统一入口：让所有「全库快照类」缓存失效。
+ * 搜索快照与目录树快照的失效条件是同一批（增删改文件/文件夹、sync 导入），
+ * 分开调用迟早会漏一处（树没失效 = 侧边栏显示已删除的节点）。
+ */
+export function invalidateLibraryCaches() {
+  invalidateSearchCache();
+  invalidateTreeCache();
 }
 
 // 文件夹 id → 不含根的完整路径（如「高数/第一章」）。visited 防御脏数据造成的父级环。

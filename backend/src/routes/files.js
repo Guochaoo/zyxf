@@ -8,7 +8,7 @@ import { mimeOf } from '../mime.js';
 import { findSibling, folderExists, isUniqueError, nextSortOrder } from '../dbHelpers.js';
 import { objectKeyForFile, ossPrefix, parseOptionalFolderId } from '../storagePath.js';
 import { isExtAllowed, normalizeExt, PREVIEWABLE_EXTS, shouldForceDownload } from '../extPolicy.js';
-import { invalidateSearchCache } from '../searchService.js';
+import { invalidateLibraryCaches } from '../searchService.js';
 import { adminBypassLimiter } from '../limiter.js';
 import { wrapAsync, serviceError } from '../http.js';
 
@@ -158,7 +158,7 @@ router.post('/', requireAdmin, wrapAsync(async (req, res) => {
         Date.now()
       );
     res.json({ id: info.lastInsertRowid });
-    invalidateSearchCache();
+    invalidateLibraryCaches();
   } catch (e) {
     if (isUniqueError(e)) {
       return res.status(409).json({ error: '此文件夹中已存在同名文件' });
@@ -296,7 +296,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
           ),
         file.oss_key !== newKey
       );
-      invalidateSearchCache();
+      invalidateLibraryCaches();
       return res.json({ ok: true, name: newName, oss_key: newKey });
     } catch (e) {
       return next(e);
@@ -329,7 +329,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
         id
       );
     });
-    invalidateSearchCache();
+    invalidateLibraryCaches();
     res.json({ ok: true });
   } catch (e) {
     return next(e);
@@ -346,7 +346,7 @@ router.delete('/:id', requireAdmin, wrapAsync(async (req, res) => {
     return serviceError(res, e, 'OSS 删除失败');
   }
   db.prepare('DELETE FROM files WHERE id = ?').run(file.id);
-  invalidateSearchCache();
+  invalidateLibraryCaches();
   res.json({ ok: true });
 }));
 
