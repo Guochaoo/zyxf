@@ -4,15 +4,15 @@ import { ArrowUp, Settings, Square, Trash2 } from 'lucide-react';
 import { chatStream, getChatStatus } from '../api.js';
 import { EASE_COLLAPSE, ICON_BUTTON_CLASS } from './ui.js';
 import PanelHeader from './PanelHeader.jsx';
-import { loadLlmCfg, saveLlmCfg, clearLlmCfg } from '../llmConfig.js';
-import { useClickOutside } from '../hooks/useClickOutside.js';
+import { loadLlmCfg } from '../llmConfig.js';
 // 展示组件已迁至 ./Chat/parts.jsx（IMPROVE-01）。
 import { FileChip, Section } from './Chat/parts.jsx';
 
 /* ─────────────────────────────────────────────────────────
  * CHAT — interactive panel with a header, replies, and composer.
- * 头部：智能对话标签 + 清空会话（垃圾桶）+ 设置（API Key / 地址 / 模型，
- * 存 localStorage，请求时随 body 下发给后端覆盖服务端 env 配置）。
+ * 头部：智能对话标签 + 清空会话 + 设置（齿轮）。齿轮不再就地展开表单，
+ * 而是交给上层打开全局设置弹窗（AI 配置项已在弹窗里有完整实现），
+ * 避免同一份 localStorage 配置在两处维护。
  * 回复经 SSE 流式渲染，检索推荐的文件以【文件N】引用映射为卡片。
  * ───────────────────────────────────────────────────────── */
 
@@ -27,16 +27,14 @@ const fmtTime = () => {
 };
 
 
-export default function ChatComposer() {
+export default function ChatComposer({ onOpenSettings }) {
   const { t } = useTranslation();
   const suggestions = useMemo(() => t('chat.suggestions', { returnObjects: true }), [t]);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(chatCollapsedPersistent);
   const [llmCfg, setLlmCfg] = useState(loadLlmCfg);
-  const [cfgDraft, setCfgDraft] = useState(loadLlmCfg);
   // 服务端是否已配置 AI：null=未知（保持「发送用户配置」的既有行为）。
   // 已知为 true 时不再上传用户自带 Key。
   const [serverAiEnabled, setServerAiEnabled] = useState(null);
@@ -62,8 +60,6 @@ export default function ChatComposer() {
   const bodyRef = useRef(null);
   const snapTimer = useRef(null);
   const snapSeq = useRef(0);
-  const settingsRef = useRef(null);
-  const settingsBtnRef = useRef(null);
   // 最近一次收起时的完整高度（px 数值）：展开动画的目标值——卡片本体跟着容器
   // 一起长高（而不是瞬间弹到全高再揭示内容），结束后无缝交还给 flex 布局。
   const fullHRef = useRef(null);
@@ -74,9 +70,6 @@ export default function ChatComposer() {
   }, [messages]);
 
   useEffect(() => () => clearTimeout(snapTimer.current), []);
-
-  // 设置浮层打开时，点击浮层与设置按钮之外的空白处收起。
-  useClickOutside(settingsOpen, () => setSettingsOpen(false), settingsRef, settingsBtnRef);
 
   // 动画结束（360ms 过渡 + 余量）后回到自然布局（高度交还给 flex）
   const endSnap = () => {
@@ -194,22 +187,7 @@ export default function ChatComposer() {
     }
   };
 
-  const openSettings = () => {
-    setCfgDraft(llmCfg);
-    setSettingsOpen((v) => !v);
-  };
-
-  const saveSettings = () => {
-    setLlmCfg(saveLlmCfg(cfgDraft));
-    setSettingsOpen(false);
-  };
-
-  const clearSettings = () => {
-    const empty = { apiKey: '', baseUrl: '', model: '' };
-    setLlmCfg(empty);
-    setCfgDraft(empty);
-    clearLlmCfg();
-  };
+  const openSettings = () => onOpenSettings?.();
 
   const canSend = draft.trim().length > 0 && !busy;
 
@@ -239,71 +217,14 @@ export default function ChatComposer() {
         </button>
         <button
           type="button"
-          ref={settingsBtnRef}
           aria-label={t('chat.settingsAria')}
           title={t('chat.settingsTitle')}
-          aria-expanded={settingsOpen}
           onClick={openSettings}
           className={ICON_BUTTON_CLASS}
         >
           <Settings className="h-[15px] w-[15px]" />
         </button>
       </PanelHeader>
-
-      {/* 设置浮层：客户端 LLM 配置（留空项回退服务器 env 配置）。
-          悬浮在对话区上方（不挤占布局），常驻挂载以保留淡入/淡出过渡；
-          点击浮层与设置按钮之外的空白处收起；visibility 随过渡翻转，
-          收起后表单不可聚焦。 */}
-      <div
-        ref={settingsRef}
-        className="absolute inset-x-2 top-[40px] z-10 max-h-[calc(100%-52px)] overflow-y-auto rounded-[10px] bg-surface p-2.5 shadow-[0_4px_10px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.12)]"
-        style={{
-          visibility: settingsOpen ? 'visible' : 'hidden',
-          opacity: settingsOpen ? 1 : 0,
-          transform: settingsOpen ? 'translateY(0)' : 'translateY(-4px)',
-          transitionProperty: 'visibility, opacity, transform',
-          transitionDuration: '240ms',
-          transitionTimingFunction: EASE_COLLAPSE,
-        }}
-      >
-        <div className="flex flex-col gap-1.5">
-          {[
-            { key: 'apiKey', label: t('chat.cfg.apiKey'), placeholder: 'sk-…', type: 'password' },
-            { key: 'baseUrl', label: t('chat.cfg.baseUrl'), placeholder: 'https://open.bigmodel.cn/api/paas/v4', type: 'text' },
-            { key: 'model', label: t('chat.cfg.model'), placeholder: 'glm-4.6 / deepseek-chat …', type: 'text' },
-          ].map(({ key, label, placeholder, type }) => (
-            <label key={key} className="flex items-center gap-2 text-[11px] text-ink-2">
-              <span className="w-12 shrink-0">{label}</span>
-              <input
-                type={type}
-                value={cfgDraft[key]}
-                onChange={(e) => setCfgDraft((d) => ({ ...d, [key]: e.target.value }))}
-                placeholder={placeholder}
-                className="min-w-0 flex-1 rounded-[6px] border border-line bg-field px-2 py-1 text-[12px] text-ink outline-none transition-colors placeholder:text-ink-3 focus:border-line-strong"
-              />
-            </label>
-          ))}
-          <p className="text-[11px] leading-relaxed text-ink-3">
-            {t('chat.cfg.hint')}
-          </p>
-          <div className="flex items-center justify-end gap-1.5">
-            <button
-              type="button"
-              onClick={clearSettings}
-              className="rounded-[6px] px-2 py-[3px] text-[12px] text-ink-2 transition-colors duration-100 hover:bg-hover hover:text-ink"
-            >
-              {t('chat.cfg.restore')}
-            </button>
-            <button
-              type="button"
-              onClick={saveSettings}
-              className="rounded-[6px] bg-field px-2 py-[3px] text-[12px] text-ink transition-colors duration-100 hover:bg-hover"
-            >
-              {t('chat.cfg.save')}
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* 主体：height 像素过渡收起/展开；动画期间锁定高度、隐藏列表滚动条 */}
       <div

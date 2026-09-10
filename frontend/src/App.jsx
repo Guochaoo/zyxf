@@ -231,7 +231,7 @@ export default function App() {
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
             <div className="flex min-h-0 flex-1 flex-col gap-[15px]">
               <KnowledgeGraph currentId={folderId} onFullChange={setGraphFull} />
-              <ChatComposer />
+              <ChatComposer onOpenSettings={() => setSettingsOpen(true)} />
             </div>
           </div>
         </div>

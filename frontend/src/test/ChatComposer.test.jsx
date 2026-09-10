@@ -13,10 +13,13 @@ vi.mock('../api.js', () => ({
   chatStream: (...args) => chatStreamMock(...args),
 }));
 
+// 设置入口改为打开全局设置弹窗，由上层传入回调。
+const onOpenSettingsMock = vi.fn();
+
 function renderPanel() {
   return render(
     <MemoryRouter>
-      <ChatComposer />
+      <ChatComposer onOpenSettings={onOpenSettingsMock} />
     </MemoryRouter>
   );
 }
@@ -30,6 +33,7 @@ beforeEach(() => {
   chatStreamMock.mockReset();
   getChatStatusMock.mockReset();
   getChatStatusMock.mockResolvedValue({ enabled: false });
+  onOpenSettingsMock.mockReset();
   localStorage.clear();
 });
 
@@ -84,26 +88,22 @@ describe('ChatComposer', () => {
     expect(screen.getByText('问我资料在哪，我来帮你找：')).toBeInTheDocument();
   });
 
-  test('settings panel saves config locally and sends it with chat requests', async () => {
+  // 齿轮不再就地展开表单，而是把设置交给上层弹窗（AI 配置项在弹窗内维护）。
+  test('齿轮按钮触发上层打开设置弹窗', () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'AI 设置' }));
+    expect(onOpenSettingsMock).toHaveBeenCalledTimes(1);
+    // 面板内不应出现就地编辑的配置表单
+    expect(screen.queryByPlaceholderText('sk-…')).toBeNull();
+  });
+
+  test('本地已保存配置会随请求下发（服务端未配置时）', async () => {
+    localStorage.setItem(
+      'zyxf_llm',
+      JSON.stringify({ apiKey: 'test-key', baseUrl: 'https://llm.test/v1', model: 'glm-4.6' })
+    );
     chatStreamMock.mockImplementation(async () => {});
     renderPanel();
-
-    fireEvent.click(screen.getByRole('button', { name: 'AI 设置' }));
-    fireEvent.change(screen.getByPlaceholderText('sk-…'), { target: { value: 'test-key' } });
-    fireEvent.change(
-      screen.getByPlaceholderText('https://open.bigmodel.cn/api/paas/v4'),
-      { target: { value: 'https://llm.test/v1' } }
-    );
-    fireEvent.change(screen.getByPlaceholderText('glm-4.6 / deepseek-chat …'), {
-      target: { value: 'glm-4.6' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
-
-    expect(JSON.parse(localStorage.getItem('zyxf_llm'))).toEqual({
-      apiKey: 'test-key',
-      baseUrl: 'https://llm.test/v1',
-      model: 'glm-4.6',
-    });
 
     typeAndSend('你好');
     await waitFor(() => expect(chatStreamMock).toHaveBeenCalled());
@@ -111,17 +111,9 @@ describe('ChatComposer', () => {
     expect(opts.llm).toEqual({ apiKey: 'test-key', baseUrl: 'https://llm.test/v1', model: 'glm-4.6' });
   });
 
-  test('clearing local config removes storage and stops sending llm', async () => {
-    localStorage.setItem(
-      'zyxf_llm',
-      JSON.stringify({ apiKey: 'k', baseUrl: 'https://x.test', model: 'm' })
-    );
+  test('本地无配置时不下发 llm 字段', async () => {
     chatStreamMock.mockImplementation(async () => {});
     renderPanel();
-
-    fireEvent.click(screen.getByRole('button', { name: 'AI 设置' }));
-    fireEvent.click(screen.getByRole('button', { name: '恢复默认设置' }));
-    expect(localStorage.getItem('zyxf_llm')).toBeNull();
 
     typeAndSend('你好');
     await waitFor(() => expect(chatStreamMock).toHaveBeenCalled());
