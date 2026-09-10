@@ -168,7 +168,7 @@ const en = {
     searchPlaceholder: 'Search settings',
     navAria: 'Settings sections',
     nav: {
-      ai: 'AI Config',
+      ai: 'Model Settings',
       account: 'Account',
       appearance: 'Appearance',
     },
@@ -206,8 +206,8 @@ const en = {
   chat: {
     title: 'AI Assistant',
     clear: 'Clear conversation',
-    settingsAria: 'AI Settings',
-    settingsTitle: 'AI Settings (API Key / URL / Model)',
+    settingsAria: 'Model Settings',
+    settingsTitle: 'Model Settings (API Key / URL / Model)',
     collapse: 'Collapse chat',
     expand: 'Expand chat',
     promptPlaceholder: 'Type your question…',

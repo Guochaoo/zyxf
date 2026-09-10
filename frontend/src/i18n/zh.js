@@ -166,7 +166,7 @@ const zh = {
     searchPlaceholder: '搜索设置',
     navAria: '设置板块',
     nav: {
-      ai: 'AI 配置',
+      ai: '大模型配置',
       account: '账户信息',
       appearance: '外观',
     },
@@ -203,8 +203,8 @@ const zh = {
   chat: {
     title: '智能对话',
     clear: '清空会话历史',
-    settingsAria: 'AI 设置',
-    settingsTitle: 'AI 设置（API Key / 地址 / 模型）',
+    settingsAria: '大模型配置',
+    settingsTitle: '大模型配置（API Key / 地址 / 模型）',
     collapse: '收起对话',
     expand: '展开对话',
     promptPlaceholder: '输入问题…',

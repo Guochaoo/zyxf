@@ -187,11 +187,15 @@
   gap: 14px;
 }
 
-/* ---- AI 配置 ---- */
-.settings-fields {
+/* ---- 大模型配置 ---- */
+/* 字段分组：浅底色块承载字段，靠色块与留白分隔（无界理念，不用描边） */
+.settings-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--field);
 }
 
 .settings-field {
@@ -201,32 +205,42 @@
 }
 
 .settings-field-label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--ink-2);
+  letter-spacing: 0.01em;
 }
 
+/* 站点统一做法：输入框用 shadow-as-border（rgba(23,23,23,.08) 0 0 0 1px），
+   聚焦时叠一圈品牌蓝光晕；不再用真实 CSS 边框。 */
 .settings-input {
   width: 100%;
-  padding: 9px 11px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
   background: var(--surface);
   font: inherit;
   font-size: 13px;
   color: var(--ink);
   outline: none;
+  box-shadow: var(--line) 0px 0px 0px 1px;
   transition:
-    border-color 150ms ease,
-    box-shadow 150ms ease;
+    box-shadow 150ms ease,
+    background-color 150ms ease;
 }
 
 .settings-input::placeholder {
   color: var(--ink-3);
 }
 
+.settings-input:hover {
+  box-shadow: var(--line-strong) 0px 0px 0px 1px;
+}
+
 .settings-input:focus {
-  border-color: var(--line-strong);
+  box-shadow:
+    var(--line-strong) 0px 0px 0px 1px,
+    hsla(212, 100%, 48%, 0.22) 0px 0px 0px 3px;
 }
 
 .settings-hint {
@@ -235,49 +249,12 @@
   color: var(--ink-3);
 }
 
-/* ---- 按钮组 ---- */
+/* ---- 按钮组（按钮本体复用站点 rb-btn-dark / rb-btn-ghost）---- */
 .settings-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-}
-
-.settings-btn {
-  padding: 8px 14px;
-  border: 0;
-  border-radius: 8px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background-color 150ms ease,
-    color 150ms ease,
-    transform 0.12s ease;
-}
-
-.settings-btn:active {
-  transform: scale(0.985);
-}
-
-.settings-btn--ghost {
-  background: transparent;
-  color: var(--ink-2);
-}
-
-.settings-btn--ghost:hover {
-  background: var(--hover);
-  color: var(--ink);
-}
-
-.settings-btn--primary {
-  background: var(--ink);
-  color: #ffffff;
-}
-
-.settings-btn--primary:hover {
-  background: rgba(23, 23, 23, 0.9);
 }
 
 /* ---- 账户信息 ---- */
