@@ -59,6 +59,20 @@ zyxf/
 
 > 本项目为个人维护的小项目，直接在 `dev` 上开发，不创建临时分支。
 
+### 2.0 提交署名（必须先确认）
+
+本仓库的提交必须署名到 GitHub 账号 **`Guochaoo`**，其对应邮箱为 **`2066803627@qq.com`**。
+
+- **易错点**：本机全局 `.gitconfig` 里的 `user.email` 是 `guochao@users.noreply.github.com`，该地址在 GitHub 上归属**另一个账号** `guochao`（非 `Guochaoo`），用它提交会导致署名、头像、贡献图全部记错人。
+- 由于 `.git/config` 是本地文件、不随仓库分发，**换机器或重新 clone 后要重新设置**：
+
+  ```bash
+  git config user.name "Xu Guochao"
+  git config user.email "2066803627@qq.com"
+  ```
+
+- 提交前可用 `git config user.email` 复核；发现署名错误时，先纠正配置，再决定是否重写历史（改写已推送/已合并的历史需人类明确同意）。
+
 ### 2.1 开发前
 - 新会话要开始改动时，**先** `git checkout dev && git pull origin dev`，确保基于最新远程 `dev`，然后直接在本地 `dev` 上改动。
 
