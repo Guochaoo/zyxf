@@ -28,6 +28,8 @@ export const percentEncodeForSign = (str) => encodeRfc3986(str);
 // 表单体（urlencoded）用：空格 → +（仍保持 `!` `'` `(` `)` `*` 的转义）
 export const percentEncodeUrlencoded = (str) => encodeRfc3986(str).replace(/%20/g, '+');
 
+// IMPROVE-02（就地豁免）：阿里云 OSS 签名协议**固定**要求 HMAC-SHA1，不是可替换的实现选择——
+// 换成 SHA-256 会直接导致签名校验失败、无法调用 OSS。此处非「弱算法」缺陷。
 const hmacSha1 = (secret, str) =>
   crypto.createHmac('sha1', secret).update(str).digest('base64');
 
