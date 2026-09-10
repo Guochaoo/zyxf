@@ -317,7 +317,8 @@ export default function ChatComposer({ onOpenSettings }) {
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') send();
+              // 中文输入法用回车选词：合成期间必须忽略，否则半截问题会被直接发出。
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing) send();
             }}
             placeholder={t('chat.promptPlaceholder')}
             disabled={loginRequired}
