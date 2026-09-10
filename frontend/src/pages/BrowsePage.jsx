@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowDown01,
   ArrowDown10,
@@ -41,14 +42,6 @@ import { downloadAndAlert, errMsg, formatDate, formatSize } from '../utils.js';
 import { useSlidingIndicator } from '../hooks/useSlidingIndicator.js';
 import { EASE_COLLAPSE } from '../components/ui.js';
 
-// Default = admin-controlled manual order. Comes first.
-const SORT_OPTIONS = [
-  { key: 'manual', label: '默认' },
-  { key: 'name', label: '名称' },
-  { key: 'created_at', label: '时间' },
-  { key: 'size', label: '大小' },
-];
-
 // Direction arrow per sort key ('manual' has none).
 const SORT_ARROWS = {
   name: { asc: ArrowDownAZ, desc: ArrowDownZA },
@@ -89,6 +82,7 @@ export default function BrowsePage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAdmin } = useAuth();
+  const { t } = useTranslation();
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -136,7 +130,7 @@ export default function BrowsePage() {
     setErr('');
     listFolder(folderId, sortRef.current, orderRef.current)
       .then(setData)
-      .catch((e) => setErr(errMsg(e, '加载失败')))
+      .catch((e) => setErr(errMsg(e, t('browse.moveError'))))
       .finally(() => setLoading(false));
   }, [folderId]);
 
@@ -151,13 +145,17 @@ export default function BrowsePage() {
       const rm = r.removed || {};
       if (a.files || a.folders || rm.files) {
         showSyncMsg(
-          `同步完成：新增 ${a.folders || 0} 个文件夹 / ${a.files || 0} 个文件，清理 ${rm.files || 0} 个失效文件`
+          t('browse.syncDone', {
+            folders: a.folders || 0,
+            files: a.files || 0,
+            removed: rm.files || 0,
+          })
         );
       } else {
-        showSyncMsg('已与远端同步，无变化');
+        showSyncMsg(t('browse.syncDone', { folders: 0, files: 0, removed: 0 }));
       }
     } catch (e) {
-      showSyncMsg(errMsg(e, '同步失败'), false);
+      showSyncMsg(errMsg(e, t('browse.moveError')), false);
     } finally {
       setSyncing(false);
       refresh();
@@ -195,19 +193,19 @@ export default function BrowsePage() {
   };
 
   const onCreateFolder = () => {
-    const name = window.prompt('新建文件夹名称');
+    const name = window.prompt(t('browse.newFolderName'));
     if (!name) return;
-    runAdmin(() => createFolder(name, folderId || null), '创建失败');
+    runAdmin(() => createFolder(name, folderId || null), t('browse.moveError'));
   };
 
   const onDeleteFolder = (f) => {
-    if (!confirm(`确认删除文件夹「${f.name}」及其所有内容？此操作不可恢复。`)) return;
-    runAdmin(() => deleteFolder(f.id), '删除失败');
+    if (!confirm(t('browse.confirmDeleteFolder', { name: f.name }))) return;
+    runAdmin(() => deleteFolder(f.id), t('browse.deleteError'));
   };
 
   const onDeleteFile = (f) => {
-    if (!confirm(`确认删除文件「${f.name}」？`)) return;
-    runAdmin(() => deleteFile(f.id), '删除失败', false);
+    if (!confirm(t('browse.confirmDeleteFile', { name: f.name }))) return;
+    runAdmin(() => deleteFile(f.id), t('browse.deleteError'), false);
   };
 
   const openRenameDialog = (item) => {
@@ -241,7 +239,7 @@ export default function BrowsePage() {
       setRenameValue('');
       refresh();
     } catch (err) {
-      alert(errMsg(err, '重命名失败'));
+      alert(errMsg(err, t('browse.renameError')));
     } finally {
       setRenaming(false);
     }
@@ -323,10 +321,14 @@ export default function BrowsePage() {
 
   const buildReorder = (drag, target, position /* 'before'|'after' */) => {
     if (!data) return null;
-    const all = [
-      ...data.folders.map((f) => ({ type: 'folder', id: f.id })),
-      ...data.files.map((f) => ({ type: 'file', id: f.id })),
-    ];
+    // 顺序基准必须与渲染一致：manual 模式下用后端给的合并视图 items，
+    // 否则拖拽结果会与显示顺序不符（BUG-27）。
+    const all = (
+      data.items ?? [
+        ...data.folders.map((f) => ({ ...f, type: 'folder' })),
+        ...data.files.map((f) => ({ ...f, type: 'file' })),
+      ]
+    ).map((it) => ({ type: it.type, id: it.id }));
     const filtered = all.filter((it) => !(it.type === drag.type && it.id === drag.id));
     const idx = filtered.findIndex((it) => it.type === target.type && it.id === target.id);
     if (idx === -1) return null;
@@ -371,7 +373,7 @@ export default function BrowsePage() {
         }
       }
     } catch (err) {
-      setMoveError(errMsg(err, '操作失败'));
+      setMoveError(errMsg(err, t('browse.moveError')));
       setTimeout(() => setMoveError(''), 4000);
     }
   };
@@ -383,11 +385,11 @@ export default function BrowsePage() {
       {/* Toolbar — sits above the file list */}
       <div className="flex w-full flex-wrap items-center justify-end gap-2">
         <SortControl sort={sort} order={order} onChange={toggleSort} />
-        <ToolbarIconButton title="刷新（同步远端资料库）" onClick={onSyncRefresh}>
+        <ToolbarIconButton title={t('browse.refresh')} onClick={onSyncRefresh}>
           <RotateCw className={`w-6 h-6 ${syncing ? 'animate-spin' : ''}`} />
         </ToolbarIconButton>
         {folderId !== 0 && (
-          <ToolbarIconButton title="返回上一级" onClick={onGoBack}>
+          <ToolbarIconButton title={t('browse.openFolder')} onClick={onGoBack}>
             <ArrowLeft className="w-6 h-6" />
           </ToolbarIconButton>
         )}
@@ -398,14 +400,14 @@ export default function BrowsePage() {
               className="rb-toolbar-btn"
             >
               <BsFolderPlus className="w-4 h-4" />
-              新建文件夹
+              {t('browse.createFolder')}
             </button>
             <button
               onClick={() => setUploadOpen(true)}
               className="rb-btn-dark h-[34px]"
             >
               <BsCloudArrowUp className="w-4 h-4" />
-              上传
+              {t('browse.upload')}
             </button>
           </>
         )}
@@ -414,10 +416,10 @@ export default function BrowsePage() {
       {/* Floating banners — fixed so they don't disrupt drag layout */}
       {isAdmin && dragging && (
         <FloatingPill className="pointer-events-none text-black/70 bg-black/5 border border-black/10">
-          正在移动「{dragging.name}」
+          {t('browse.moving', { name: dragging.name })}
           {sort === 'manual'
-            ? ' — 在行的上/下边缘可插入排序，拖到文件夹中部可移入'
-            : ' — 拖到左侧目录中的文件夹'}
+            ? t('browse.dragSortHint')
+            : t('browse.dragMoveHint')}
         </FloatingPill>
       )}
       {moveError && (
@@ -440,10 +442,10 @@ export default function BrowsePage() {
       {/* Body: file list takes the full middle column width. The knowledge
           graph renders in the App right column only on browse routes at the
           lg breakpoint (isBrowse && isLg); it is never inline below the list. */}
-      <div className="bg-white rounded-[14px] overflow-hidden">
+      <div className="bg-surface rounded-[14px] overflow-hidden">
         {loading ? (
           <div className="py-16 flex items-center justify-center text-slate-400">
-            <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-400" /> 加载中…
+            <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-400" /> {t('common.loading')}
           </div>
         ) : err ? (
           <div className="py-16 text-center text-red">{err}</div>
@@ -469,10 +471,17 @@ export default function BrowsePage() {
         )}
       </div>
 
-      {/* ICP 备案号：仅首页显示，文件夹页不展示 */}
+      {/* ICP 备案号：仅首页显示，文件夹页不展示；点击跳转工信部备案系统 */}
       {folderId === 0 && (
         <footer className="-mt-3.5 text-center text-xs leading-normal text-slate-400">
-          陕ICP备2026017448号
+          <a
+            href="https://beian.miit.gov.cn"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-slate-600"
+          >
+            陕ICP备2026017448号
+          </a>
         </footer>
       )}
 
@@ -482,9 +491,11 @@ export default function BrowsePage() {
             onSubmit={submitRenameDialog}
             className="w-full max-w-sm rb-card rounded-lg bg-white p-4 text-slate-900"
           >
-            <h2 className="text-base font-semibold">重命名</h2>
+            <h2 className="text-base font-semibold">{t('browse.rename')}</h2>
             <p className="mt-1 text-xs text-slate-400">
-              {renameTarget.type === 'folder' ? '文件夹名称' : '文件名'}
+              {renameTarget.type === 'folder'
+                ? t('browse.foldersLabel')
+                : t('browse.filesLabel')}
             </p>
             <input
               autoFocus
@@ -499,14 +510,14 @@ export default function BrowsePage() {
                 disabled={renaming}
                 className="rb-btn-ghost h-[34px] px-3 text-sm disabled:opacity-50"
               >
-                取消
+                {t('common.cancel')}
               </button>
               <button
                 type="submit"
                 disabled={renaming}
                 className="rename-dialog-save rb-btn-dark h-[34px] px-3 text-sm font-semibold disabled:opacity-50"
               >
-                {renaming ? '保存中...' : '保存'}
+                {renaming ? t('common.loading') : t('common.save')}
               </button>
             </div>
           </form>
@@ -529,12 +540,23 @@ function SortControl({ sort, order, onChange }) {
   const listRef = useRef(null);
   const buttonRefs = useRef({});
   const indicator = useSlidingIndicator(listRef, buttonRefs, sort);
+  const { t } = useTranslation();
+  // Default = admin-controlled manual order. Comes first.
+  const sortOptions = useMemo(
+    () => [
+      { key: 'manual', label: t('browse.defaultSort') },
+      { key: 'name', label: t('browse.name') },
+      { key: 'created_at', label: t('browse.time') },
+      { key: 'size', label: t('browse.size') },
+    ],
+    [t]
+  );
 
   return (
     <div className="rb-toolbar-btn max-w-full !px-0">
       <div ref={listRef} className="sort-scroll relative flex max-w-full items-center overflow-x-auto text-xs">
         <span
-          className="pointer-events-none absolute inset-y-0 rounded-[14px] bg-white shadow-[inset_0_0_0_1px_rgba(23,23,23,0.1)]"
+          className="pointer-events-none absolute inset-y-0 rounded-[14px] bg-surface shadow-[inset_0_0_0_1px_var(--line-strong)]"
           style={{
             width: indicator.width,
             transform: `translateX(${indicator.left}px)`,
@@ -542,7 +564,7 @@ function SortControl({ sort, order, onChange }) {
             transition: `transform 360ms ${EASE_COLLAPSE}, width 360ms ${EASE_COLLAPSE}, opacity 160ms ease`,
           }}
         />
-        {SORT_OPTIONS.map((opt) => {
+        {sortOptions.map((opt) => {
           const active = sort === opt.key;
           const ArrowIcon = SORT_ARROWS[opt.key]?.[order];
           return (
@@ -592,9 +614,11 @@ function ItemListWithRename({
   onRowDragLeave,
   onRowDrop,
 }) {
-  const total = (data?.folders?.length || 0) + (data?.files?.length || 0);
+  const { t } = useTranslation();
+  // data.items 存在（manual 模式）时它就是完整列表；否则 folders + files。
+  const total = data?.items?.length ?? ((data?.folders?.length || 0) + (data?.files?.length || 0));
   if (total === 0) {
-    return <div className="py-16 text-center text-slate-500 text-sm">此文件夹为空</div>;
+    return <div className="py-16 text-center text-slate-500 text-sm">{t('browse.empty')}</div>;
   }
   const actionWidthClass = isAdmin ? 'w-28' : 'w-16';
   // 按当前列表实际大小数量等分成 6 段，得到 5 个分位阈值
@@ -607,58 +631,62 @@ function ItemListWithRename({
       ),
     [data]
   );
-  // 文件夹在前、文件在后合成单一渲染流（两段 .map 结构一致，仅点击与操作不同）。
-  const rows = [
-    ...(data?.folders || []).map((f) => ({
-      key: `d-${f.id}`,
-      item: { ...f, type: 'folder' },
-      onClick: () => onEnterFolder(f),
-      actions:
+  // 手动排序下后端返回合并视图 items（文件夹与文件共享 sort_order 序列），
+  // 直接按它渲染才能保持拖拽出的交错顺序（BUG-27）；其余排序模式后端给不出
+  // 交错语义，仍按「文件夹在前、文件在后」渲染。
+  const ordered = data?.items ?? [
+    ...(data?.folders || []).map((f) => ({ ...f, type: 'folder' })),
+    ...(data?.files || []).map((f) => ({ ...f, type: 'file' })),
+  ];
+
+  // 两类的行内结构一致，仅点击目标与操作按钮不同——统一构造避免重复。
+  const rows = ordered.map((item) => {
+    const isFolder = item.type === 'folder';
+    return {
+      key: `${isFolder ? 'd' : 'f'}-${item.id}`,
+      item,
+      onClick: isFolder ? () => onEnterFolder(item) : () => onPreviewFile(item),
+      actions: isFolder ? (
         isAdmin && (
           <>
-            <RowAction title="重命名" onClick={() => onRenameFolder(f)}>
+            <RowAction title={t('browse.rename')} onClick={() => onRenameFolder(item)}>
               <PenLine className="w-4 h-4" />
             </RowAction>
-            <RowAction title="删除" onClick={() => onDeleteFolder(f)}>
+            <RowAction title={t('common.delete')} onClick={() => onDeleteFolder(item)}>
               <Trash className="w-4 h-4" />
             </RowAction>
           </>
-        ),
-    })),
-    ...(data?.files || []).map((f) => ({
-      key: `f-${f.id}`,
-      item: { ...f, type: 'file' },
-      onClick: () => onPreviewFile(f),
-      actions: (
+        )
+      ) : (
         <>
-          <RowAction title="下载" onClick={() => onDownloadFile(f)}>
+          <RowAction title={t('browse.download')} onClick={() => onDownloadFile(item)}>
             <Download className="w-4 h-4" />
           </RowAction>
           {isAdmin && (
             <>
-              <RowAction title="重命名" onClick={() => onRenameFile(f)}>
+              <RowAction title={t('browse.rename')} onClick={() => onRenameFile(item)}>
                 <PenLine className="w-4 h-4" />
               </RowAction>
-              <RowAction title="删除" onClick={() => onDeleteFile(f)}>
+              <RowAction title={t('common.delete')} onClick={() => onDeleteFile(item)}>
                 <Trash className="w-4 h-4" />
               </RowAction>
             </>
           )}
         </>
       ),
-    })),
-  ];
+    };
+  });
   return (
-    <GlideList as="ul" highlightClassName="bg-slate-50">
-      <li className="rb-table-heading hidden sm:flex items-center gap-2 px-4 py-2 text-xs text-slate-500 bg-[#EFEFEF]">
+    <GlideList as="ul" highlightClassName="bg-hover">
+      <li className="rb-table-heading hidden sm:flex items-center gap-2 px-4 py-2 text-xs text-slate-500 bg-field">
         {isAdmin && <span className="w-4 h-4 -ml-1 sm:mr-1 sm:-ml-2 shrink-0" />}
         <span className="flex-1 flex items-center gap-2 min-w-0">
           <span className="w-5 h-5 shrink-0" />
-          <span>名称</span>
+          <span>{t('browse.colName')}</span>
         </span>
-        <span className="w-24 text-right">大小</span>
-        <span className="w-28 text-right">修改时间</span>
-        <span className={`${actionWidthClass} text-right`}>操作</span>
+        <span className="w-24 text-right">{t('browse.colSize')}</span>
+        <span className="w-28 text-right">{t('browse.colModified')}</span>
+        <span className={`${actionWidthClass} text-right`}>{t('browse.colAction')}</span>
       </li>
       {rows.map(({ key, item, onClick, actions }) => (
         <Row

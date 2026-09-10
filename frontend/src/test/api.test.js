@@ -106,11 +106,11 @@ describe('uploadFile', () => {
       folder_id: 1,
     });
     expect(axios.post).toHaveBeenCalledWith('https://oss.test', expect.any(FormData), expect.anything());
+    // 不上报 mime_type：服务端按扩展名派生为权威值（BUG-26）。
     expect(instance.post).toHaveBeenNthCalledWith(2, '/files', {
       name: 'a.pdf',
       oss_key: 'zyxf-test/a.pdf',
       size: 1,
-      mime_type: 'application/pdf',
       folder_id: 1,
     });
     expect(result).toEqual({ id: 42 });

@@ -1,22 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
-import { ArrowUp, ArrowUpRight, Settings, Square, Trash2 } from 'lucide-react';
-import { chatStream } from '../api.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ArrowUp, Settings, Square, Trash2 } from 'lucide-react';
+import { chatStream, getChatStatus } from '../api.js';
 import { EASE_COLLAPSE, ICON_BUTTON_CLASS } from './ui.js';
 import PanelHeader from './PanelHeader.jsx';
-import { openFolderOrFile, storageGet, storageSet, storageRemove } from '../ui.js';
-import { useClickOutside } from '../hooks/useClickOutside.js';
+import { loadLlmCfg } from '../llmConfig.js';
+// 展示组件已迁至 ./Chat/parts.jsx（IMPROVE-01）。
+import { FileChip, Section } from './Chat/parts.jsx';
 
 /* ─────────────────────────────────────────────────────────
  * CHAT — interactive panel with a header, replies, and composer.
- * 头部：智能对话标签 + 清空会话（垃圾桶）+ 设置（API Key / 地址 / 模型，
- * 存 localStorage，请求时随 body 下发给后端覆盖服务端 env 配置）。
+ * 头部：智能对话标签 + 清空会话 + 设置（齿轮）。齿轮不再就地展开表单，
+ * 而是交给上层打开全局设置弹窗（AI 配置项已在弹窗里有完整实现），
+ * 避免同一份 localStorage 配置在两处维护。
  * 回复经 SSE 流式渲染，检索推荐的文件以【文件N】引用映射为卡片。
  * ───────────────────────────────────────────────────────── */
-
-const SUGGESTIONS = ['高数往年题在哪', '有没有物理复习资料', '线代课件推荐一下'];
-const LLM_KEY = 'zyxf_llm';
 
 // 收起状态跨页面导航保留（右栏组件会随路由卸载重建），与知识图谱一致。
 let chatCollapsedPersistent = false;
@@ -28,122 +26,27 @@ const fmtTime = () => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
-const loadLlmCfg = () => {
-  let raw = null;
-  try {
-    raw = JSON.parse(storageGet(LLM_KEY) ?? 'null');
-  } catch {
-    /* 存储值损坏时按未配置处理 */
-  }
-  if (raw && typeof raw === 'object') {
-    return {
-      apiKey: typeof raw.apiKey === 'string' ? raw.apiKey : '',
-      baseUrl: typeof raw.baseUrl === 'string' ? raw.baseUrl : '',
-      model: typeof raw.model === 'string' ? raw.model : '',
-    };
-  }
-  return { apiKey: '', baseUrl: '', model: '' };
-};
 
-// 像素网格波浪（Drive 变体）：3×3 格子按斜向相位依次点亮
-const CHEVRON = Array.from({ length: 9 }, (_, i) => {
-  const r = Math.floor(i / 3), c = i % 3;
-  return (c + Math.abs(r - 1)) * 90;
-});
-
-function PixelGrid({ active }) {
-  return (
-    <span aria-hidden className="grid shrink-0 grid-cols-[repeat(3,4px)] gap-[1.5px]">
-      {CHEVRON.map((delay, i) => (
-        <span
-          key={i}
-          className="size-[4px] rounded-[1px] bg-black"
-          style={
-            active
-              ? { opacity: 0.15, animation: `pixel-on 650ms ease-in-out ${delay}ms infinite` }
-              : { opacity: 1 }
-          }
-        />
-      ))}
-    </span>
-  );
-}
-
-// 从发送时刻起实时计时；resolving 结束（消息完成）时定格，不再消失
-function Elapsed({ start, resolving }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    setNow(Date.now());
-    if (!resolving) return;
-    const t = setInterval(() => setNow(Date.now()), 100);
-    return () => clearInterval(t);
-  }, [resolving, start]);
-  const sec = Math.max(0, now - (start || now)) / 1000;
-  const text = sec < 60 ? `${sec.toFixed(1)}s` : `${Math.floor(sec / 60)}m ${(sec % 60).toFixed(1)}s`;
-  return <span className="font-mono text-[12px] text-black tabular-nums">{text}</span>;
-}
-
-function Section({ sub, body, resolving, start, children }) {
-  return (
-    <div
-      className="flex w-full flex-col gap-1.5"
-      style={{ animation: 'fade-up 400ms cubic-bezier(0.23,1,0.32,1) both' }}
-    >
-      <div className="flex items-center gap-1 text-[12px] leading-[1.3]">
-        <PixelGrid active={!!resolving} />
-        <span className={resolving ? 'shimmer-label' : 'text-black'}>{sub}</span>
-        <Elapsed start={start} resolving={!!resolving} />
-      </div>
-      <div className="chat-md text-[13px] leading-normal text-ink">
-        <ReactMarkdown>{body}</ReactMarkdown>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-// 检索/推荐文件 → 小胶囊：彩色类型徽章 + 文件名 + 外链图标，整颗可点击打开/预览
-const EXT_TONE = {
-  pdf: 'bg-red',
-  csv: 'bg-green', xls: 'bg-green', xlsx: 'bg-green',
-  doc: 'bg-orange', docx: 'bg-orange', ppt: 'bg-orange', pptx: 'bg-orange',
-  txt: 'bg-orange', md: 'bg-orange',
-};
-const DEFAULT_TONE = 'bg-brand-500';
-
-function FileChip({ item }) {
-  const navigate = useNavigate();
-
-  const open = () => openFolderOrFile(item, navigate);
-
-  const badge = item.type === 'folder' ? 'DIR' : (item.ext || '').toUpperCase().slice(0, 4);
-  const tone =
-    item.type === 'folder' ? 'bg-[#808080]' : EXT_TONE[(item.ext || '').toLowerCase()] || DEFAULT_TONE;
-
-  return (
-    <button
-      type="button"
-      onClick={open}
-      title={item.name}
-      className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-full bg-inset px-2 text-[12px] font-medium text-ink-2 shadow-btn transition-colors duration-300 hover:bg-hover"
-    >
-      <span className={`flex size-3.5 shrink-0 items-center justify-center rounded-[4px] ${tone} text-[7px] font-bold text-white`}>
-        {badge}
-      </span>
-      <span className="min-w-0 truncate">{item.name}</span>
-      <ArrowUpRight className="shrink-0" size={9} strokeWidth={2.5} />
-    </button>
-  );
-}
-
-export default function ChatComposer() {
+export default function ChatComposer({ onOpenSettings }) {
+  const { t } = useTranslation();
+  const suggestions = useMemo(() => t('chat.suggestions', { returnObjects: true }), [t]);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(chatCollapsedPersistent);
   const [llmCfg, setLlmCfg] = useState(loadLlmCfg);
-  const [cfgDraft, setCfgDraft] = useState(loadLlmCfg);
+  // 服务端是否已配置 AI：null=未知（保持「发送用户配置」的既有行为）。
+  // 已知为 true 时不再上传用户自带 Key。
+  const [serverAiEnabled, setServerAiEnabled] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    getChatStatus()
+      .then((s) => alive && setServerAiEnabled(!!s?.enabled))
+      .catch(() => alive && setServerAiEnabled(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
   // 折叠动画：snapH 以像素高度驱动过渡（fr/auto 高度无法从当前值平滑过渡），
   // innerH 把内层冻结在固定高度——内容不重排，由外层容器从下往上裁剪（同知识图谱）；
   // 消息列表始终 overflow-y-auto + scrollbar-gutter: stable，滚动条槽位恒定，
@@ -157,8 +60,6 @@ export default function ChatComposer() {
   const bodyRef = useRef(null);
   const snapTimer = useRef(null);
   const snapSeq = useRef(0);
-  const settingsRef = useRef(null);
-  const settingsBtnRef = useRef(null);
   // 最近一次收起时的完整高度（px 数值）：展开动画的目标值——卡片本体跟着容器
   // 一起长高（而不是瞬间弹到全高再揭示内容），结束后无缝交还给 flex 布局。
   const fullHRef = useRef(null);
@@ -169,9 +70,6 @@ export default function ChatComposer() {
   }, [messages]);
 
   useEffect(() => () => clearTimeout(snapTimer.current), []);
-
-  // 设置浮层打开时，点击浮层与设置按钮之外的空白处收起。
-  useClickOutside(settingsOpen, () => setSettingsOpen(false), settingsRef, settingsBtnRef);
 
   // 动画结束（360ms 过渡 + 余量）后回到自然布局（高度交还给 flex）
   const endSnap = () => {
@@ -250,9 +148,10 @@ export default function ChatComposer() {
     setDraft('');
     setBusy(true);
 
-    // 三项齐全才随请求下发，否则交给服务端 env 配置
+    // 服务端已配置 AI 时不再上传用户自带 Key（后端本就忽略它，避免密钥无谓外传）。
+    // serverAiEnabled 为 null（状态未知）时保持既有行为：带上用户配置。
     const llm =
-      llmCfg.apiKey && llmCfg.baseUrl && llmCfg.model
+      serverAiEnabled !== true && llmCfg.apiKey && llmCfg.baseUrl && llmCfg.model
         ? { apiKey: llmCfg.apiKey, baseUrl: llmCfg.baseUrl, model: llmCfg.model }
         : undefined;
 
@@ -276,7 +175,7 @@ export default function ChatComposer() {
       if (err.name === 'AbortError') {
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === aiId ? { ...m, streaming: false, text: m.text || '已停止生成。' } : m
+            m.id === aiId ? { ...m, streaming: false, text: m.text || t('chat.stopped') } : m
           )
         );
       } else {
@@ -288,49 +187,28 @@ export default function ChatComposer() {
     }
   };
 
-  const openSettings = () => {
-    setCfgDraft(llmCfg);
-    setSettingsOpen((v) => !v);
-  };
-
-  const saveSettings = () => {
-    const next = {
-      apiKey: cfgDraft.apiKey.trim(),
-      baseUrl: cfgDraft.baseUrl.trim(),
-      model: cfgDraft.model.trim(),
-    };
-    setLlmCfg(next);
-    storageSet(LLM_KEY, JSON.stringify(next));
-    setSettingsOpen(false);
-  };
-
-  const clearSettings = () => {
-    const empty = { apiKey: '', baseUrl: '', model: '' };
-    setLlmCfg(empty);
-    setCfgDraft(empty);
-    storageRemove(LLM_KEY);
-  };
+  const openSettings = () => onOpenSettings?.();
 
   const canSend = draft.trim().length > 0 && !busy;
 
   return (
     <div
-      className={`relative flex w-full flex-col overflow-hidden rounded-[14px] bg-white ${
+      className={`relative flex w-full flex-col overflow-hidden rounded-[14px] bg-surface ${
         collapsed || snapping ? '' : 'min-h-[288px] max-w-95 flex-1'
       }`}
     >
       {/* header — 智能对话标签 + 清空会话 + 设置 + 收起（样式对齐知识图谱卡片头部） */}
       <PanelHeader
-        title="智能对话"
+        title={t('chat.title')}
         collapsed={collapsed}
         onToggleCollapsed={toggleCollapsed}
-        expandTitle="展开对话"
-        collapseTitle="收起对话"
+        expandTitle={t('chat.expand')}
+        collapseTitle={t('chat.collapse')}
       >
         <button
           type="button"
-          aria-label="清空会话历史"
-          title="清空会话历史"
+          aria-label={t('chat.clear')}
+          title={t('chat.clear')}
           disabled={busy || messages.length === 0}
           onClick={() => setMessages([])}
           className={ICON_BUTTON_CLASS}
@@ -339,71 +217,14 @@ export default function ChatComposer() {
         </button>
         <button
           type="button"
-          ref={settingsBtnRef}
-          aria-label="AI 设置"
-          title="AI 设置（API Key / 地址 / 模型）"
-          aria-expanded={settingsOpen}
+          aria-label={t('chat.settingsAria')}
+          title={t('chat.settingsTitle')}
           onClick={openSettings}
           className={ICON_BUTTON_CLASS}
         >
           <Settings className="h-[15px] w-[15px]" />
         </button>
       </PanelHeader>
-
-      {/* 设置浮层：客户端 LLM 配置（留空项回退服务器 env 配置）。
-          悬浮在对话区上方（不挤占布局），常驻挂载以保留淡入/淡出过渡；
-          点击浮层与设置按钮之外的空白处收起；visibility 随过渡翻转，
-          收起后表单不可聚焦。 */}
-      <div
-        ref={settingsRef}
-        className="absolute inset-x-2 top-[40px] z-10 max-h-[calc(100%-52px)] overflow-y-auto rounded-[10px] bg-white p-2.5 shadow-[0_4px_10px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.12)]"
-        style={{
-          visibility: settingsOpen ? 'visible' : 'hidden',
-          opacity: settingsOpen ? 1 : 0,
-          transform: settingsOpen ? 'translateY(0)' : 'translateY(-4px)',
-          transitionProperty: 'visibility, opacity, transform',
-          transitionDuration: '240ms',
-          transitionTimingFunction: EASE_COLLAPSE,
-        }}
-      >
-        <div className="flex flex-col gap-1.5">
-          {[
-            { key: 'apiKey', label: 'API Key', placeholder: 'sk-…', type: 'password' },
-            { key: 'baseUrl', label: 'API 地址', placeholder: 'https://open.bigmodel.cn/api/paas/v4', type: 'text' },
-            { key: 'model', label: '模型', placeholder: 'glm-4.6 / deepseek-chat …', type: 'text' },
-          ].map(({ key, label, placeholder, type }) => (
-            <label key={key} className="flex items-center gap-2 text-[11px] text-ink-2">
-              <span className="w-12 shrink-0">{label}</span>
-              <input
-                type={type}
-                value={cfgDraft[key]}
-                onChange={(e) => setCfgDraft((d) => ({ ...d, [key]: e.target.value }))}
-                placeholder={placeholder}
-                className="min-w-0 flex-1 rounded-[6px] border border-line bg-field px-2 py-1 text-[12px] text-ink outline-none transition-colors placeholder:text-ink-3 focus:border-line-strong"
-              />
-            </label>
-          ))}
-          <p className="text-[11px] leading-relaxed text-ink-3">
-            三项都填写后使用本浏览器配置；留空任意项则使用服务器配置。配置仅保存在本地浏览器。
-          </p>
-          <div className="flex items-center justify-end gap-1.5">
-            <button
-              type="button"
-              onClick={clearSettings}
-              className="rounded-[6px] px-2 py-[3px] text-[12px] text-ink-2 transition-colors duration-100 hover:bg-hover hover:text-ink"
-            >
-              恢复默认设置
-            </button>
-            <button
-              type="button"
-              onClick={saveSettings}
-              className="rounded-[6px] bg-field px-2 py-[3px] text-[12px] text-ink transition-colors duration-100 hover:bg-hover"
-            >
-              保存
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* 主体：height 像素过渡收起/展开；动画期间锁定高度、隐藏列表滚动条 */}
       <div
@@ -429,9 +250,9 @@ export default function ChatComposer() {
       >
         {messages.length === 0 && (
           <div className="flex flex-1 flex-col items-start justify-center gap-2 py-4">
-            <p className="w-full text-center text-[12.5px] text-ink-2">问我资料在哪，我来帮你找：</p>
+            <p className="w-full text-center text-[12.5px] text-ink-2">{t('chat.askHint')}</p>
             <div className="flex flex-wrap gap-1.5 pl-4">
-              {SUGGESTIONS.map((s) => (
+              {suggestions.map((s) => (
                 <button
                   key={s}
                   type="button"
@@ -454,8 +275,8 @@ export default function ChatComposer() {
           ) : (
             <Section
               key={m.id}
-              sub={m.error ? '出错' : m.streaming ? (m.text ? '生成中' : '检索中') : '完成'}
-              body={m.text || '正在检索资料库…'}
+              sub={m.error ? t('chat.status.error') : m.streaming ? (m.text ? t('chat.status.generating') : t('chat.status.searching')) : t('chat.status.done')}
+              body={m.text || t('chat.status.searchingLibrary')}
               resolving={m.streaming}
               start={m.start}
             >
@@ -485,16 +306,16 @@ export default function ChatComposer() {
             onKeyDown={(event) => {
               if (event.key === 'Enter') send();
             }}
-            placeholder="输入问题…"
-            aria-label="Chat prompt"
+            placeholder={t('chat.promptPlaceholder')}
+            aria-label={t('chat.promptAria')}
             className="chat-prompt min-h-4.5 bg-transparent text-[13px] leading-[1.4] text-ink outline-none placeholder:text-ink-3"
           />
           <div className="flex items-center justify-end">
             {busy ? (
               <button
                 type="button"
-                aria-label="停止生成"
-                title="停止生成"
+                aria-label={t('chat.stopAria')}
+                title={t('chat.stopAria')}
                 onClick={stop}
                 className="flex size-7 items-center justify-center rounded-[8px] bg-field text-ink transition-[background-color,transform] duration-200 hover:bg-hover active:scale-[0.96]"
               >
@@ -503,7 +324,7 @@ export default function ChatComposer() {
             ) : (
               <button
                 type="button"
-                aria-label="Send"
+                aria-label={t('chat.sendAria')}
                 disabled={!canSend}
                 onClick={() => send()}
                 className="flex size-7 items-center justify-center rounded-[8px]

@@ -12,10 +12,8 @@
   padding: 16px;
 }
 
-@media (prefers-color-scheme: dark) {
-  .notice-backdrop.rb-frost-backdrop {
-    background: rgba(0, 0, 0, 0.46);
-  }
+[data-theme='dark'] .notice-backdrop.rb-frost-backdrop {
+  background: rgba(0, 0, 0, 0.46);
 }
 
 /* ---- Card（无界：无描边、无分割线，仅靠柔光阴影浮起） ---- */

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ChevronRight } from 'lucide-react';
 import { BsFolder } from 'react-icons/bs';
 import FileIcon from './FileIcon.jsx';
@@ -15,6 +16,7 @@ import { openFilePreview } from '../ui.js';
  * - listens for the global 'folders-changed' event to refresh after admin ops
  */
 export default function FolderTree({ currentId = 0, className = '' }) {
+  const { t } = useTranslation();
   const { tree, rootFiles } = useFolderTree();
   const [expanded, setExpanded] = useState(() => new Set());
   const location = useLocation();
@@ -75,15 +77,15 @@ export default function FolderTree({ currentId = 0, className = '' }) {
 
   return (
     <aside className={`flex min-h-0 flex-1 flex-col ${className}`.trim()}>
-      <div className="px-2 pb-2 text-[12px] font-medium text-slate-500">目录</div>
+      <div className="px-2 pb-2 text-[12px] font-medium text-ink-3">{t('tree.title')}</div>
       <nav
-        aria-label="文件夹目录"
+        aria-label={t('tree.title')}
         className="rb-side-scroll -mx-1 min-h-0 flex-1 overflow-y-auto px-1"
         onScroll={handleTreeScroll}
       >
         <GlideList className="-mx-1 px-1">
           <TreeNode
-            node={{ id: 0, name: '首页', children: tree || [], files: rootFiles }}
+            node={{ id: 0, name: t('tree.home'), children: tree || [], files: rootFiles }}
             depth={0}
             currentId={rootId}
             expanded={expanded}
@@ -96,6 +98,7 @@ export default function FolderTree({ currentId = 0, className = '' }) {
 }
 
 function TreeNode({ node, depth, currentId, expanded, onToggle }) {
+  const { t } = useTranslation();
   const isCurrent = node.id === currentId;
   const hasChildren = node.children && node.children.length > 0;
   const hasFiles = node.files && node.files.length > 0;
@@ -107,8 +110,8 @@ function TreeNode({ node, depth, currentId, expanded, onToggle }) {
       data-glide-row
       className={`flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-[14px] leading-none transition-[color,transform] duration-150 active:scale-[0.98] ${
         isCurrent
-          ? 'bg-[#F5F5F5] font-medium text-[#171717]'
-          : 'text-[#4D4D4D] hover:text-[#171717]'
+          ? 'bg-inset font-medium text-ink'
+          : 'text-ink-2 hover:text-ink'
       }`}
       style={{ paddingLeft: `${8 + depth * 16}px` }}
     >
@@ -117,7 +120,7 @@ function TreeNode({ node, depth, currentId, expanded, onToggle }) {
           role="button"
           tabIndex={0}
           aria-expanded={open}
-          aria-label={open ? '收起' : '展开'}
+          aria-label={open ? t('tree.collapseAria', { name: node.name }) : t('tree.expandAria', { name: node.name })}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -130,7 +133,7 @@ function TreeNode({ node, depth, currentId, expanded, onToggle }) {
               onToggle(node.id);
             }
           }}
-          className="-ml-1 flex h-6 w-5 shrink-0 items-center justify-center text-slate-400"
+          className="-ml-1 flex h-6 w-5 shrink-0 items-center justify-center text-ink-3"
         >
           <ChevronRight
             className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
@@ -139,7 +142,7 @@ function TreeNode({ node, depth, currentId, expanded, onToggle }) {
       ) : (
         <span className="w-5 shrink-0" />
       )}
-      <BsFolder className="h-4 w-4 shrink-0 text-slate-500" />
+      <BsFolder className="h-4 w-4 shrink-0 text-ink-3" />
       <span className="min-w-0 flex-1 truncate">{node.name}</span>
     </span>
   );
@@ -186,7 +189,7 @@ function FileRow({ file, depth }) {
     >
       <span
         data-glide-row
-        className="flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-[14px] leading-none text-[#4D4D4D] transition-[color,transform] duration-150 active:scale-[0.98] hover:text-[#171717]"
+        className="flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-[14px] leading-none text-ink-2 transition-[color,transform] duration-150 active:scale-[0.98] hover:text-ink"
         style={{ paddingLeft: `${8 + depth * 16}px` }}
       >
         <span className="w-5 shrink-0" />
