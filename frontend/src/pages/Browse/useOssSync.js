@@ -12,10 +12,10 @@ import { errMsg, notifyFoldersChanged } from '../../utils.js';
 export function useOssSync(refresh) {
   const { t } = useTranslation();
   const [syncing, setSyncing] = useState(false);
-  const [syncNotice, setSyncNotice] = useState(null); // { id, ok, text }
+  const [syncNotice, setSyncNotice] = useState(null); // { id, ok, message, sub }
   const noticeIdRef = useRef(0);
-  const showSyncMsg = (text, ok = true) =>
-    setSyncNotice({ id: (noticeIdRef.current += 1), ok, text });
+  const showSyncMsg = ({ message, sub, ok = true }) =>
+    setSyncNotice({ id: (noticeIdRef.current += 1), ok, message, sub });
   const clearSyncNotice = () => setSyncNotice(null);
 
   const onSyncRefresh = async () => {
@@ -26,19 +26,21 @@ export function useOssSync(refresh) {
       notifyFoldersChanged();
       const a = r.added || {};
       const rm = r.removed || {};
-      if (a.files || a.folders || rm.files) {
-        showSyncMsg(
-          t('browse.syncDone', {
-            folders: a.folders || 0,
-            files: a.files || 0,
-            removed: rm.files || 0,
-          })
-        );
-      } else {
-        showSyncMsg(t('browse.syncDone', { folders: 0, files: 0, removed: 0 }));
-      }
+      const changed = Boolean(a.files || a.folders || rm.files);
+      // 主行只放「同步完成」这类短标题，明细交给副行——Toast 主行两行后即省略，
+      // 原先整句塞在主行会显示不全（卡片文字区仅约 200px）。
+      showSyncMsg({
+        message: t('browse.syncDone'),
+        sub: changed
+          ? t('browse.syncDetail', {
+              folders: a.folders || 0,
+              files: a.files || 0,
+              removed: rm.files || 0,
+            })
+          : t('browse.syncNone'),
+      });
     } catch (e) {
-      showSyncMsg(errMsg(e, t('browse.syncError')), false);
+      showSyncMsg({ message: errMsg(e, t('browse.syncError')), ok: false });
     } finally {
       setSyncing(false);
       refresh();

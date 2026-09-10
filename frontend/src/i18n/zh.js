@@ -48,7 +48,10 @@ const zh = {
     colAction: '操作',
     filesLabel: '文件',
     foldersLabel: '文件夹',
-    syncDone: '同步完成：新增 {{folders}} 个文件夹 / {{files}} 个文件，清理 {{removed}} 个失效文件',
+    syncDone: '同步完成',
+    // 明细放副行（13px，可两行），主行只留 4 个字，避免被单行省略号截断（见 Toast.css）
+    syncDetail: '新增 {{folders}} 个文件夹 / {{files}} 个文件，清理 {{removed}} 个失效文件',
+    syncNone: '无新增、无清理',
     confirmDeleteFolder: '确认删除文件夹「{{name}}」及其所有内容？此操作不可恢复。',
     confirmDeleteFile: '确认删除文件「{{name}}」？',
     moving: '正在移动「{{name}}」',
@@ -302,6 +305,8 @@ const zh = {
     // 以下为原先硬编码在各模块里的提示语，统一收进字典（英文界面不再露中文）。
     actionFailed: '操作失败',
     today: '今日',
+    // 启动期致命错误提示：中文文案必须走字典（源码里不得硬编码中文，见 i18n 测试）
+    bootError: '页面启动失败（前端错误，后端可能是正常的）：',
     loadFailed: '加载失败',
     requestFailed: '请求失败（{{status}}）',
     downloadFailed: '下载失败',

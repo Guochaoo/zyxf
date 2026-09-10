@@ -204,21 +204,34 @@ describe('BrowsePage', () => {
     );
   });
 
-  test('刷新按钮同步远端，并用 Toast 通知卡提示同步结果', async () => {
+  test('刷新按钮同步远端，并用 Toast 通知卡提示同步结果（主行短、明细在副行）', async () => {
     syncOssMock.mockResolvedValue({ added: { folders: 1, files: 2 }, removed: { files: 3 } });
     renderPage();
     await screen.findByText('物理.pdf');
 
     fireEvent.click(screen.getByTitle('刷新（同步远端资料库）'));
 
-    const msg = await screen.findByText('同步完成：新增 1 个文件夹 / 2 个文件，清理 3 个失效文件');
+    const msg = await screen.findByText('同步完成');
     // 用的是登录/注册页同一个自定义组件（顶部 Toast 通知卡），不再是底部胶囊
     const card = msg.closest('.toast-card');
     expect(card).not.toBeNull();
     expect(card.className).toContain('toast-card--success');
     expect(card).toHaveAttribute('role', 'alert');
+    // 明细放副行，主行不会被截断
+    expect(card.textContent).toContain('新增 1 个文件夹 / 2 个文件，清理 3 个失效文件');
     // 同步完成后会重载当前文件夹
     await waitFor(() => expect(listFolderMock).toHaveBeenCalledTimes(2));
+  });
+
+  test('同步无变化时副行给出「无新增、无清理」', async () => {
+    syncOssMock.mockResolvedValue({ added: {}, removed: {} });
+    renderPage();
+    await screen.findByText('物理.pdf');
+
+    fireEvent.click(screen.getByTitle('刷新（同步远端资料库）'));
+
+    const msg = await screen.findByText('同步完成');
+    expect(msg.closest('.toast-card').textContent).toContain('无新增、无清理');
   });
 
   test('同步失败时同样走 Toast，但类型为 error', async () => {
