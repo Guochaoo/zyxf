@@ -104,6 +104,7 @@ const en = {
     title: 'Dashboard',
     refresh: 'Refresh',
     downloadHeatmap: 'Download heatmap',
+    heatmapCell: '{{date}}: {{count}} downloads',
     topFolders: 'Top folders',
     recentUploads: 'Recent uploads',
     typeDist: 'Type distribution',
@@ -283,6 +284,7 @@ const en = {
     start: 'Start upload',
   },
   preview: {
+    aria: 'File preview',
     download: 'Download',
     close: 'Close',
     loading: 'Fetching file address…',

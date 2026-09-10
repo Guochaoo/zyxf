@@ -443,7 +443,6 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     }
     animateTo(target);
   }, [animateTo, onMenuOpen, onMenuClose]);
-
   const closeMenu = useCallback(() => {
     if (openRef.current) {
       openRef.current = false;
@@ -517,7 +516,16 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
         )}
       </header>
 
-      <aside id="staggered-menu-panel" ref={panelRef} className="staggered-menu-panel" aria-hidden={!open}>
+      <aside
+        id="staggered-menu-panel"
+        ref={panelRef}
+        className="staggered-menu-panel"
+        aria-hidden={!open}
+        // 关闭态的面板仍然常驻渲染（只是 opacity:0 + 平移出屏），子项因此还在 Tab 顺序里：
+        // 键盘用户会聚焦到完全看不见的「资料库 / 登录」并回车触发。关闭时把整块设为 inert，
+        // 使可聚焦性与 aria-hidden 一致。
+        inert={open ? undefined : ''}
+      >
         <div className="sm-panel-inner">
           <ul className="sm-panel-list" role="list" data-numbering={displayItemNumbering || undefined}>
             {items && items.length ? (

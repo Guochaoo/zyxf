@@ -141,7 +141,6 @@ export default function ActivityHeatmap({ rows }) {
       cell: day,
     });
   };
-
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-control bg-surface">
       <div className="flex items-center justify-between gap-3 px-3 pb-1.5 pt-3">
@@ -202,8 +201,19 @@ export default function ActivityHeatmap({ rows }) {
                           height: cell,
                           background: HEAT_LEVELS[heatLevel(day.downloads, max)],
                         }}
-                        className="rounded-[2px] transition-shadow hover:ring-1 hover:ring-line-strong"
+                        // 悬浮提示原先只有鼠标能触发，键盘/读屏完全拿不到每日数值（a11y）。
+                        // 单元格本身进 Tab 顺序，并用 aria-label 直接播报日期与下载数；
+                        // 焦点进入时复用同一个 tooltip（blur 收起）。
+                        tabIndex={0}
+                        role="img"
+                        aria-label={t('dashboard.heatmapCell', {
+                          date: fmtFullDate(day.ts),
+                          count: day.downloads,
+                        })}
+                        className="rounded-[2px] transition-shadow hover:ring-1 hover:ring-line-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
                         onMouseEnter={(e) => onCellEnter(e, day)}
+                        onFocus={(e) => onCellEnter(e, day)}
+                        onBlur={() => setHover(null)}
                       />
                     ) : (
                       <span key={day.ts} style={{ width: cell, height: cell }} />

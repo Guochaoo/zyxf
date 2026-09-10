@@ -108,6 +108,7 @@ const zh = {
     title: '统计面板',
     refresh: '刷新',
     downloadHeatmap: '下载热力图',
+    heatmapCell: '{{date}}：{{count}} 次下载',
     topFolders: '热门文件夹',
     recentUploads: '近期上传',
     typeDist: '类型分布',
@@ -279,6 +280,7 @@ const zh = {
     start: '开始上传',
   },
   preview: {
+    aria: '文件预览',
     download: '下载',
     close: '关闭',
     loading: '正在获取文件地址…',

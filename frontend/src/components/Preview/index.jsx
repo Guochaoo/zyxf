@@ -5,6 +5,7 @@ import { Download, X, Loader2 } from 'lucide-react';
 import { getFileUrl, getWebofficeToken } from '../../api.js';
 import { downloadFileById, errMsg, formatSize, getPreviewKind, isLargeFile, LARGE_FILE_THRESHOLD } from '../../utils.js';
 import useMediaQuery from '../../hooks/useMediaQuery.js';
+import { useModalDialog } from '../../hooks/useModalDialog.js';
 import PreviewBody from './Body.jsx';
 
 /**
@@ -77,6 +78,8 @@ export default function Preview({ file, onClose }) {
   }, [file, downloading]);
 
   const largeFileWarn = isMobile && isLargeFile(file.size);
+  // Esc 关闭 + Tab 在预览框内循环 + 关闭后焦点归还给列表行（原先 Esc 无效）
+  const panelRef = useModalDialog({ onClose });
 
   const overlay = (
     <div
@@ -84,6 +87,10 @@ export default function Preview({ file, onClose }) {
       onClick={onClose}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('preview.aria')}
         className="bg-surface w-full h-full min-h-[100dvh] flex flex-col overflow-hidden sm:h-[85vh] sm:min-h-0 sm:max-w-5xl sm:rounded-xl"
         onClick={(e) => e.stopPropagation()}
       >
