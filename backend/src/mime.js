@@ -32,7 +32,6 @@ const MIME = {
   dps: 'application/vnd.ms-powerpoint',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   ppsx: 'application/vnd.openxmlformats-officedocument.presentationml.slideshow',
-  ppsm: 'application/vnd.ms-powerpoint.slideshow.macroEnabled.12',
   potx: 'application/vnd.openxmlformats-officedocument.presentationml.template',
   // ---- Excel ----
   xls: 'application/vnd.ms-excel',

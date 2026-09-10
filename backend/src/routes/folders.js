@@ -14,6 +14,17 @@ const router = Router();
 // 'a-b' name. Reject them at the entry points so keys stay unambiguous.
 const containsPathSeparator = (name) => /[\/\\]/.test(name);
 
+// 保留段名：sync 为跳过历史 IMM 影子副本，会把 `<prefix>/.preview/` 下的对象整体
+// 过滤掉（见 oss.js listOssObjects）。若允许建同名文件夹，其文件永远不出现在同步
+// 列表里，于是下一次 sync 会把它们判为「桶里已不存在」而删记录（对象还在，成孤儿）。
+const RESERVED_FOLDER_NAMES = new Set(['.preview']);
+const isReservedFolderName = (name) =>
+  RESERVED_FOLDER_NAMES.has(String(name || '').trim().toLowerCase());
+
+// 重排请求的条目上限：order 直接来自 body（express.json 限 1mb，可达数万项），
+// 校验与写库都是同步逐项执行的，不限长等于给了一个阻塞事件循环的入口。
+const MAX_REORDER_ITEMS = 2000;
+
 const SORT_FIELDS = {
   name: 'name COLLATE NOCASE',
   size: 'size',
@@ -126,8 +137,10 @@ async function relocateFolderSubtree(folderId, { parentOverrides, nameOverrides,
     ...file,
     newKey: objectKeyForFileFromMap(file.folder_id, file.name, folderMap, parentOverrides, nameOverrides),
   }));
+  // 循环外 prepare 一次复用：原实现对子树里每个文件都重新解析一次 SQL。
+  const keyTakenByOther = db.prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?');
   for (const move of fileMoves) {
-    if (db.prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?').get(move.newKey, move.id)) {
+    if (keyTakenByOther.get(move.newKey, move.id)) {
       return { conflict: true };
     }
   }
@@ -308,6 +321,9 @@ router.post('/', requireAdmin, wrapAsync(async (req, res, next) => {
   if (containsPathSeparator(trimmed)) {
     return res.status(400).json({ error: '文件夹名不能包含斜杠' });
   }
+  if (isReservedFolderName(trimmed)) {
+    return res.status(400).json({ error: '.preview 是系统保留名称，请换一个' });
+  }
   try {
     const so = nextSortOrder(db, 'folders', 'parent_id', pid);
     const info = db
@@ -358,6 +374,9 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
     if (newName === folder.name) return res.json({ ok: true, unchanged: true });
     if (containsPathSeparator(newName)) {
       return res.status(400).json({ error: '文件夹名不能包含斜杠' });
+    }
+    if (isReservedFolderName(newName)) {
+      return res.status(400).json({ error: '.preview 是系统保留名称，请换一个' });
     }
     const parentId = folder.parent_id ?? null;
     if (findFolderInParent(newName, parentId, id)) {
@@ -417,6 +436,9 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
 router.post('/reorder', requireAdmin, (req, res) => {
   const { parent_folder_id, order } = req.body || {};
   if (!Array.isArray(order)) return res.status(400).json({ error: 'order 必须是数组' });
+  if (order.length > MAX_REORDER_ITEMS) {
+    return res.status(400).json({ error: `order 过长（最多 ${MAX_REORDER_ITEMS} 项）` });
+  }
   const pid = parseOptionalFolderId(parent_folder_id);
   if (Number.isNaN(pid)) return res.status(400).json({ error: '无效的父文件夹 ID' });
 
@@ -424,9 +446,13 @@ router.post('/reorder', requireAdmin, (req, res) => {
   const isReorderItem = (it) => !!it && (it.type === 'file' || it.type === 'folder') && !!it.id;
 
   // Validate every entry belongs to the claimed parent folder.
-  const parentCol = { file: 'folder_id', folder: 'parent_id' };
+  // 两条语句在循环外 prepare 一次复用（原实现逐项重新解析 SQL）。
+  const parentOf = {
+    file: db.prepare('SELECT folder_id p FROM files WHERE id = ?'),
+    folder: db.prepare('SELECT parent_id p FROM folders WHERE id = ?'),
+  };
   for (const it of order.filter(isReorderItem)) {
-    const f = db.prepare(`SELECT ${parentCol[it.type]} p FROM ${it.type}s WHERE id = ?`).get(Number(it.id));
+    const f = parentOf[it.type].get(Number(it.id));
     if (!f) return res.status(400).json({ error: `${it.type} ${it.id} not found` });
     if ((f.p ?? null) !== pid) {
       return res.status(400).json({ error: `${it.type} ${it.id} does not belong to this parent` });

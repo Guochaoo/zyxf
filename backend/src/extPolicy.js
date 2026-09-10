@@ -25,13 +25,15 @@ const ARCHIVE_EXTS = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2']);
 // Only these file types are allowed for upload.
 // All previewable files go through Alibaba Cloud WebOffice (IMM doc/preview).
 // Archives are download-only.
-// Macro-enabled Office formats (docm/dotm/xlsm/xltm/pptm/potm) are rejected:
-// they are the standard vector for distributing malware to students.
+// Macro-enabled Office formats (docm/dotm/xlsm/xltm/pptm/potm/ppsm/ppam) are
+// rejected: they are the standard vector for distributing malware to students.
+// ppsm 曾误列在表内（它是 PowerPoint Show with Macros，与 pptm 同族）——BUG-23
+// 把前端对齐到这份白名单时又把它固化了一轮，现一并移除。
 export const ALLOWED_EXTS = new Set([
   // Word
   'doc', 'dot', 'wps', 'wpt', 'docx', 'dotx', 'rtf',
   // PPT
-  'ppt', 'pptx', 'ppsx', 'ppsm', 'pps', 'potx', 'dpt', 'dps',
+  'ppt', 'pptx', 'ppsx', 'pps', 'potx', 'dpt', 'dps',
   // Excel
   'xls', 'xlt', 'et', 'xlsx', 'xltx', 'csv',
   // PDF
