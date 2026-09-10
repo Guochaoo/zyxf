@@ -71,6 +71,18 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   const textInnerRef = useRef(null);
   const [textLines, setTextLines] = useState([t('menu.toggleOpen'), t('menu.toggleClose')]);
 
+  // 语言切换后按钮文字要立刻跟上：textLines 的初值只在首次渲染取自 t()，之后仅由
+  // 开合动画重建，所以切语言时可见文字会停留在旧语言（同一按钮的 aria-label 是
+  // 响应式的，只有可见文字不动），要等点一下或刷新才更新。这里在 t 变化时把序列
+  // 收敛为一行当前文案并复位位移。
+  // 依赖里刻意不含 open：改用 openRef 读取当前开合态，否则开合时会把动画序列重置掉。
+  useEffect(() => {
+    const openLabel = t('menu.toggleOpen');
+    const closeLabel = t('menu.toggleClose');
+    setTextLines([openRef.current ? closeLabel : openLabel]);
+    if (textInnerRef.current) gsap.set(textInnerRef.current, { yPercent: 0 });
+  }, [t]);
+
   const openTlRef = useRef(null);
   const closeTweenRef = useRef(null);
   const spinTweenRef = useRef(null);
