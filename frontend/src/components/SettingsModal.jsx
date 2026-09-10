@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Bot, ChevronDown, CircleUserRound, Monitor, Moon, Palette, Search, Sun, X } from 'lucide-react';
@@ -6,6 +6,7 @@ import { loadLlmCfg, saveLlmCfg, clearLlmCfg } from '../llmConfig.js';
 import { useAuth } from '../auth.jsx';
 import useTheme from '../hooks/useTheme.js';
 import useLocale from '../hooks/useLocale.js';
+import { useClickOutside } from '../hooks/useClickOutside.js';
 import './SettingsModal.css';
 
 // 账户信息当前 user 对象里可展示的字段（后端 JWT 仅含 id/username/role）。
@@ -45,6 +46,10 @@ export default function SettingsModal({ open, onClose }) {
   const { locale, setLocale } = useLocale();
   const [section, setSection] = useState('ai');
   const [langOpen, setLangOpen] = useState(false);
+  // 语言下拉：点击「行 + 菜单」以外任意处收起（含弹窗内空白）。ref 挂在整个
+  // .settings-lang 容器上，故点击触发按钮本身仍走它自己的切换逻辑，不会被重复收起。
+  const langRef = useRef(null);
+  useClickOutside(langOpen, () => setLangOpen(false), langRef);
   // AI 配置草稿与已提交值分离：保存前不覆盖已生效配置。
   const [llmCfg, setLlmCfg] = useState(loadLlmCfg);
   const [cfgDraft, setCfgDraft] = useState(loadLlmCfg);
@@ -235,7 +240,7 @@ export default function SettingsModal({ open, onClose }) {
                     </div>
 
                     <div className="settings-group-title settings-lang-group-title">{t('settings.appearance.langGroupTitle')}</div>
-                    <div className="settings-lang">
+                    <div className="settings-lang" ref={langRef}>
                       <button
                         type="button"
                         className="settings-lang-row"
