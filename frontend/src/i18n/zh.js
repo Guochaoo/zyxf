@@ -58,6 +58,8 @@ const zh = {
     download: '下载',
     openFolder: '打开文件夹',
     deleteError: '删除失败',
+    createError: '新建失败',
+    syncError: '同步失败',
     renameError: '重命名失败',
     moveError: '移动失败',
     dragSortHint: ' — 在行的上/下边缘可插入排序，拖到文件夹中部可移入',
@@ -282,7 +284,7 @@ const zh = {
     downloadFile: '下载文件',
     unsupported: '该文件类型暂不支持在线预览',
     reload: '重新加载',
-    largeFileHint: '文件较大（>20MB），建议在 WiFi 下预览或直接下载',
+    largeFileHint: '文件较大（>{{size}}），建议在 WiFi 下预览或直接下载',
     downloadFailedHint: '下载失败，请关闭后重新打开',
   },
   common: {
@@ -304,8 +306,6 @@ const zh = {
     requestFailed: '请求失败（{{status}}）',
     downloadFailed: '下载失败',
     downloadFailedStatus: '下载失败（{{status}}）',
-    actionFailed: '操作失败',
-    today: '今日',
   },
 };
 

@@ -40,7 +40,7 @@ export function useOssSync(refresh) {
         showSyncMsg(t('browse.syncDone', { folders: 0, files: 0, removed: 0 }));
       }
     } catch (e) {
-      showSyncMsg(errMsg(e, t('browse.moveError')), false);
+      showSyncMsg(errMsg(e, t('browse.syncError')), false);
     } finally {
       setSyncing(false);
       refresh();

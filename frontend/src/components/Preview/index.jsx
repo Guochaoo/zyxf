@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { Download, X, Loader2 } from 'lucide-react';
 import { getFileUrl, getWebofficeToken } from '../../api.js';
-import { downloadFileById, errMsg, getPreviewKind, isLargeFile } from '../../utils.js';
+import { downloadFileById, errMsg, formatSize, getPreviewKind, isLargeFile, LARGE_FILE_THRESHOLD } from '../../utils.js';
 import useMediaQuery from '../../hooks/useMediaQuery.js';
 import PreviewBody from './Body.jsx';
 
@@ -123,7 +123,7 @@ export default function Preview({ file, onClose }) {
         <div className="min-h-0 flex-1 bg-inset overflow-auto">
           {largeFileWarn && !loading && !err && (
             <div className="mx-3 mt-2 sm:mx-4 sm:mt-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
-              {t('preview.largeFileHint')}
+              {t('preview.largeFileHint', { size: formatSize(LARGE_FILE_THRESHOLD) })}
             </div>
           )}
 

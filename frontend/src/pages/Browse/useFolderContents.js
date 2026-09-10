@@ -19,14 +19,26 @@ export function useFolderContents(folderId) {
   sortRef.current = sort;
   const orderRef = useRef(order);
   orderRef.current = order;
+  // 请求序号：切换目录/排序会并发发请求且旧请求不取消，上传完成回调也可能带着
+  // 旧的 folderId 触发 refresh——没有守卫时旧响应会覆盖新目录的数据（列表显示上
+  // 一个目录的内容，用户可能在错误目录上删除/重命名/拖拽）。同 BUG-05 在 SearchBar
+  // 的修法：只接受最新一次请求的结果。
+  const reqIdRef = useRef(0);
 
   const refresh = useCallback(() => {
+    const reqId = (reqIdRef.current += 1);
     setLoading(true);
     setErr('');
     listFolder(folderId, sortRef.current, orderRef.current)
-      .then(setData)
-      .catch((e) => setErr(errMsg(e, t('browse.moveError'))))
-      .finally(() => setLoading(false));
+      .then((d) => {
+        if (reqId === reqIdRef.current) setData(d);
+      })
+      .catch((e) => {
+        if (reqId === reqIdRef.current) setErr(errMsg(e, t('common.loadFailed')));
+      })
+      .finally(() => {
+        if (reqId === reqIdRef.current) setLoading(false);
+      });
   }, [folderId, t]);
 
   useEffect(() => {

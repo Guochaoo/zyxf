@@ -57,6 +57,8 @@ const en = {
     openFolder: 'Open folder',
     deleteError: 'Delete failed',
     renameError: 'Rename failed',
+    createError: 'Create failed',
+    syncError: 'Sync failed',
     moveError: 'Move failed',
     dragSortHint: ' — drop on a row edge to reorder, or on a folder to move in',
     dragMoveHint: ' — drop onto a folder in the left tree',
@@ -287,7 +289,7 @@ const en = {
     downloadFile: 'Download file',
     unsupported: 'This file type is not supported for preview',
     reload: 'Reload',
-    largeFileHint: 'This file is large (>20MB). Preview over WiFi or download it directly.',
+    largeFileHint: 'This file is large (>{{size}}). Preview over WiFi or download it directly.',
     downloadFailedHint: 'Download failed. Close and reopen the preview.',
   },
   common: {
