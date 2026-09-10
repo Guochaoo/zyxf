@@ -13,10 +13,10 @@
 ## 当前进度
 
 ```yaml
-updated: 2026-09-10
-entries: 46           # 缺陷 35 + 改进 11
-pending: 3            # 缺陷 0  + 改进 3
-fixed: 43             # 已归档：缺陷 35 + 改进 8
+updated: 2026-09-11
+entries: 47           # 缺陷 36 + 改进 11
+pending: 0            # 缺陷 0  + 改进 0
+fixed: 47             # 已归档：缺陷 36 + 改进 11
 ```
 
 ---
@@ -25,43 +25,11 @@ fixed: 43             # 已归档：缺陷 35 + 改进 8
 
 ### 1.1 缺陷
 
-当前**无待处理缺陷**——BUG-21/23/24/26/27/29 已全部处置（见 [2.1 已修复缺陷](#21-已修复缺陷35)）。
+当前**无待处理缺陷**——BUG-21/23/24/26/27/29 已全部处置（见 [2.1 已修复缺陷](#21-已修复缺陷36)）。
 
 ### 1.2 改进建议
 
-> 编号不连续（03–09、11 已关闭归档），按分配顺序排列即可。
-
-#### IMPROVE-01 · 页面与组件职责集中，目录结构缺少页面级子模块边界
-`frontend · 页面结构`
-`files: [frontend/src/pages/BrowsePage.jsx, frontend/src/pages/DashboardPage.jsx, frontend/src/components/ChatComposer.jsx]`
-
-- **现状**：三文件均超 20 KB（BrowsePage ≈ 27.7 KB、DashboardPage ≈ 23.9 KB、ChatComposer ≈ 20.5 KB），各自同时承载数据请求、状态编排、交互事件与大量展示；源码目录只有通用 `components`/`hooks`/`pages` 分层，无页面级子模块边界。
-- **根因**：功能迭代持续追加到页面/复合组件文件，页面专属的列表、统计卡片、聊天消息等未按职责拆分。
-- **影响**：修改局部需理解较大上下文，复用与单测粒度受限，更易产生回归（技术债务，非功能缺陷）。
-- **建议**：以页面为边界拆出 `pages/<Page>/` 下的容器、数据 hook 与纯展示组件；先迁无状态展示，再迁副作用逻辑，确保 DOM 顺序与接口调用时序不变。
-- **进展**：已完成第一步（无状态展示迁移）——`DashboardPage` 640→367 行（抽出 `pages/Dashboard/ActivityHeatmap.jsx`、`pages/Dashboard/primitives.jsx`），`ChatComposer` 517→426 行（抽出 `components/Chat/parts.jsx`）。剩余：`BrowsePage`（仍 ≈28 KB）与各页面的数据 hook 抽取。
-- **验证**：每次拆分后跑前后端测试与生产构建，并补充对应组件行为测试。
-
-#### IMPROVE-02 · Mimosa 安全扫描剩余项：均为协议性要求/误报，需批量归类豁免
-`backend · 安全扫描`
-`files: [backend/src/routes/folders.js, backend/src/imm.js, frontend/src/test/*, backend/test/*]`
-
-- **现状**：生产已修复的三项真实问题（sync 权限、生产 CORS 拒绝 `'*'`、dev CORS 显式来源）之外，Mimosa 仍对以下做静态标记，经复核均为**误报或协议性要求**、无法在源码层面合法消除：
-  - `backend/src/routes/folders.js:207/244/266` — `mongo-sort-injection`。仓库使用 **SQLite**（`node:sqlite`），无 MongoDB；`cellCompare`/`sortByName` 是静态比较函数，无用户输入注入面。
-  - `backend/src/imm.js:32` — `hmacSha1`。阿里云 **OSS 签名协议强制固定用 HMAC-SHA1**，不可更换，否则无法调用 OSS。
-  - 前后端测试伪凭据（`test-key`/`secret123` 等）。均为单测断言虚构值，非真实凭据；改值会破坏 API 契约断言，且 Mimosa 对改名后的变量同样拦截。
-- **建议**：在 Mimosa 客户端为上述规则配置扫描豁免（按文件/路径/规则），以「生产严格校验 + 误报归类」为边界，避免每次提交被误拦截。
-- **验证**：豁免后重新跑 Mimosa 扫描，确认真实风险被拦截、误报不再阻塞提交。
-
-#### IMPROVE-10 · `/api/chat` 对匿名开放且允许客户端自带 baseUrl（受限公网代理面）
-`backend · AI 对话`
-`files: [backend/src/routes/chat.js, backend/src/llm.js, frontend/src/components/ChatComposer.jsx]`
-
-- **现状**：服务端未配 `LLM_*` 时，任意匿名访客可让后端以自己指定的 `baseUrl` 发起请求并流式回传。
-- **已缓解**：SSRF 防护仅允许 https 且拒绝回环/私网/链路本地/云元数据（BUG-20）；对话有短/长双层限流；前端在**服务端已配置 AI 时不再上传用户自带 Key**（后端本就忽略，避免密钥无谓外传）。
-- **影响**：残余面是「受限公网 HTTPS 代理」——够不到内网，但可被用于以本站身份向公网发起请求。是否接受取决于产品对匿名 AI 的定位。
-- **建议**：若不需要匿名 AI，给 `/api/chat` 叠加 `requireUser`；若保留匿名，可考虑只允许白名单内的 LLM 主机。
-- **验证**：改后覆盖「匿名被拒」与「登录用户可用」两例，并确认前端不再发送被忽略的 Key。
+当前**无待处理改进建议**——IMPROVE-01/02/10 已全部处置（见 [2.2 已关闭改进项](#22-已关闭改进项11)）。
 
 ---
 
@@ -69,7 +37,7 @@ fixed: 43             # 已归档：缺陷 35 + 改进 8
 
 > **类别**列为便于按区域速查的单一归类；`处置要点` 列记录该项的修法依据、踩坑与验证方式，无额外说明的填 `—`。
 
-### 2.1 已修复缺陷（35）
+### 2.1 已修复缺陷（36）
 
 | 编号 | 严重度 | 类别 | 标题 | 修复位置 | 关闭日期 | 处置要点 |
 |---|---|---|---|---|---|---|
@@ -108,11 +76,14 @@ fixed: 43             # 已归档：缺陷 35 + 改进 8
 | BUG-26 | P2 | 后端 | 文件 MIME 元数据与扩展名派生值不一致 | `backend/src/routes/files.js`, `backend/src/routes/sync.js`, `frontend/src/api.js` | 2026-09-10 | MIME 有两个来源（浏览器 `file.type` 落库、响应按扩展名派生），且落库值从不被读取。修法：**以扩展名派生为唯一权威**——上传注册与 sync 导入都写 `mimeOf(ext)`，前端不再上报 `mime_type`。**同源教训**：契约两处维护就会漂移（同 BUG-24）。 |
 | BUG-27 | P0 | 前后端 | 混合文件夹/文件的手工排序刷新后无法保持 | `backend/src/routes/folders.js`, `frontend/src/pages/BrowsePage.jsx` | 2026-09-10 | `/reorder` 用单一交错索引同时给文件夹与文件赋 `sort_order`，但 `GET /:id/contents` 只返回 `folders`/`files` 两个数组，前端固定「文件夹在前、文件在后」渲染——交错顺序在刷新后丢失。修法取「合并视图」：manual 模式额外返回 `items`（按 `sort_order` 合并排序），前端优先用它渲染，非 manual 模式不返回（由前端按各自规则重排）。前端 `buildReorder` 的顺序基准也改用 `items`，否则拖拽结果会与显示顺序不符。验证：`backend/test/api.test.js` 断言 `items` 的交错序列，并覆盖「非 manual 不返回 items」。 |
 | BUG-29 | P2 | 文档 | README 声明的最低 Node 版本已过时 | `README.md`, `backend/package.json`, `frontend/package.json` | 2026-09-10 | — |
+| BUG-38 | P2 | 工程·本地开发 | Vite dev server 因源码目录出现临时文件而 EBUSY 崩溃 | `frontend/vite.config.js` | 2026-09-11 | 现象：写源码的工具（编辑器 / agent）常以「临时文件 + 原子替换」落盘，会在被改文件旁留下 `<file>.<pid>.<guid>.tmpdir/xxx.tmp`；这类路径只存活几毫秒，Vite 的 watcher 若抢在它被删除前监听就抛 `EBUSY: resource busy or locked`。根因：该错误是 `FSWatcher` 的 `error` 事件且无人接管，Node 以未捕获错误直接退出——**整个 dev server 挂掉**（实测一次编辑后 5173 端口消失、前端整站无法访问，backend 不受影响）。修法：`server.watch.ignored` 忽略 `**/*.tmpdir/**`、`**/*.tmp`。验证：手工在 `frontend/src/components/` 下建 `.X.jsx.<pid>.<guid>.tmpdir/X.jsx.tmp` 再删除，dev server 保持 HTTP 200 且 err 日志无 EBUSY。 |
 
-### 2.2 已关闭改进项（8）
+### 2.2 已关闭改进项（11）
 
 | 编号 | 严重度 | 类别 | 标题 | 处理位置 | 关闭日期 | 处置要点 |
 |---|---|---|---|---|---|---|
+| IMPROVE-01 | P2 | 前端 | 页面与组件职责集中，目录结构缺少页面级子模块边界 | `frontend/src/pages/BrowsePage.jsx`, `frontend/src/pages/Browse/*` | 2026-09-11 | 分两步落地。第一步（无状态展示迁移）：`DashboardPage` 640→367 行（抽出 `pages/Dashboard/ActivityHeatmap.jsx`、`pages/Dashboard/primitives.jsx`），`ChatComposer` 517→426 行（抽出 `components/Chat/parts.jsx`）。第二步（本次）：`BrowsePage` 821 行/28.6 KB → 容器 261 行/8.9 KB，`pages/Browse/` 下新增 `ItemList.jsx`(226)、`useItemDragDrop.js`(154)、`SortControl.jsx`(81)、`useOssSync.js`(51)、`useFolderContents.js`(49)、`RenameDialog.jsx`(44)、`primitives.jsx`(32)；`notifyFoldersChanged` 上收到 `utils.js` 供容器与拖拽 hook 共用。约束：DOM 顺序、class 名与请求时序保持不变（`refresh` 读 sort/order ref 的写法原样保留）。验证：新增 `frontend/src/test/BrowsePage.test.jsx` 10 例锁住拆分前行为，其中 2 例专测 BUG-27 的 `items` 合并视图（渲染顺序 + 拖拽重排基准）；前端 81 例、后端 160 例、`vite build` 全绿。 |
+| IMPROVE-02 | P2 | 安全 | Mimosa 安全扫描剩余项：均为协议性要求/误报，需批量归类豁免 | `backend/src/routes/folders.js`, `backend/src/imm.js`, `backend/test/env.js`, `frontend/src/test/setup.js` | 2026-09-11 | 三条标记经复核全部是**误报或协议性约束**：`cellCompare`/`sortByName` 是无用户输入的静态比较器，且仓库用 SQLite（`node:sqlite`）而非 MongoDB，不存在 `mongo-sort-injection` 注入面；`imm.js` 的 HMAC-SHA1 是阿里云 OSS 签名协议**固定要求**，换算法会直接签不过；测试里的 `test-key`/`secret123` 是虚构断言值，改名既消不掉标记、还会破坏契约断言。处置：不再依赖外部扫描客户端的豁免配置，改为**就地豁免**——在被标记的代码旁写明判定依据（两个比较器、`hmacSha1`），并在 `backend/test/env.js`、`frontend/src/test/setup.js` 顶部统一声明测试凭据为虚构值，后续任何扫描或人工复核都能直接看到依据。 |
 | IMPROVE-03 | P2 | 安全 | 同步接口权限由 admin-only 改为分层限流（游客/用户/管理员递增配额） | `backend/src/limiter.js`, `backend/src/routes/sync.js` | 2026-09-10 | 产品决策：游客与登录用户均可触发同步，滥用面由分层限流约束（补偿性控制）——游客 2 次/分钟 < 登录用户 5 次/分钟 < 管理员豁免；登录用户按 user id 计数（避免同一 NAT 出口共用 IP 配额），游客按 IP 计数（`ipKeyGenerator` 归并 IPv6 子网）。验证：`backend/test/api.test.js` 覆盖三档。安全评审如认为写操作不应向匿名开放，回退方式是给 `syncLimiter` 叠加 `requireUser`。 |
 | IMPROVE-04 | P1 | 安全 | OSS 凭证由 `PowerUserAccess` 改为专用 RAM 用户 + 单 bucket 最小权限 | `.env`（云端 RAM 策略 `zyxf-oss-app`）· `docs/DEPLOY.md §2.1` | 2026-09-10 | 原凭证复用个人 `obsidian` RAM 用户，该用户挂着 `PowerUserAccess`（全产品管理权限），一旦泄漏影响面远超本项目。处置为新建专用用户 `zyxf-oss` + 自定义策略 `zyxf-oss-app`，只授 `xjtu-zyxf` bucket 的 `ListObjects`/`GetObject`/`PutObject`/`DeleteObject`/`CopyObject`（按后端实际调用面推导）。验证：新密钥访问 `xjtu-zyxf` 正常、访问另一 bucket `obsidian-aloha` 返回 `AccessDenied`——两者都满足才算最小权限生效。 |
 | IMPROVE-05 | P2 | 安全 | 下载日志（含 ip/ua）无保留期，PII 无限期留存 | `backend/src/db.js`, `backend/src/index.js` | 2026-09-10 | `download_logs` 含访问者 `ip`/`ua`，属可定位到个人的访问记录，此前无任何清理逻辑（永久留存）。处置：启动时按 `DOWNLOAD_LOG_RETENTION_DAYS`（默认 400，略大于仪表盘热力图的近一年窗口）删除超期行；无需保留访问明细时可调小。验证：`backend/test/securityFixes.test.js` 覆盖边界（401 天前删除、窗口内保留）。 |
@@ -120,6 +91,7 @@ fixed: 43             # 已归档：缺陷 35 + 改进 8
 | IMPROVE-07 | P2 | 文档 | `.env.example` 管理员描述过时，且漏列 `ALLOWED_DEV_ORIGIN` | `.env.example` | 2026-09-10 | — |
 | IMPROVE-08 | P2 | 工程·CI | CI workflow 的 action 用可变 tag，未固定 commit SHA | `.github/workflows/ci.yml` | 2026-09-10 | `ci.yml` 的 `actions/*` 曾用可变 tag，现固定到 commit SHA，与 `deploy.yml` 同口径（BUG-19 的结论）。升级时用 `git ls-remote ... refs/tags/<tag>` 重新解析目标 SHA。 |
 | IMPROVE-09 | P1 | 安全 | `zyxf-mail` 持 `AliyunDirectMailFullAccess`（`dm:*`），远超实际所需 | 云端 RAM 策略 `zyxf-dm-send` | 2026-09-10 | `backend/src/mail.js` 只调用 `SingleSendMail`，却授予 `dm:*`（含域名/模板/收件人管理、IP 防护等）。处置为新建 `zyxf-dm-send`（仅 `dm:SingleSendMail`），挂到 `zyxf-mail` 后摘掉 `AliyunDirectMailFullAccess`。验证：以该用户凭证探测，越权只读动作 `GetTrackList`（**参数传齐**）返回 `Forbidden`，`DescAccountSummary`/`GetUser`/`GetIpfilterList` 均被拒；策略内 `SingleSendMail` 返回收件地址校验错误而非权限错误。⚠️ **探测坑**：`DescDomain`/`CreateTemplate`/`DeleteDomain` 返回的是**鉴权前的参数校验错误**，不能当作「策略放行」的证据——判定越权必须用参数完整、且能走到鉴权阶段的动作。 |
+| IMPROVE-10 | P2 | 安全 | `/api/chat` 对匿名开放且允许客户端自带 baseUrl（受限公网代理面） | `backend/src/routes/chat.js`, `frontend/src/components/ChatComposer.jsx` · `frontend/src/i18n/zh.js` | 2026-09-11 | 处置：`/api/chat` 在「服务端未配置 `LLM_*` + 请求带自带 `llm` 配置 + 未登录」时返回 401，且判断放在 `resolveClientLlmConfig` **之前**——匿名请求一律不做 DNS 解析，避免被当成匿名 DNS 探测器（SSRF 防护只挡内网，挡不住「以本站身份访问公网」）。不带 `llm` 字段的匿名请求仍走原 503「AI 功能未配置」（登录也解决不了，提示更准确）；服务端已配置 `LLM_*` 时完全不受影响（客户端配置本就被忽略），生产主场景零变化。前端 `ChatComposer` 用 `useAuth()?.user` + `/chat/status` 提前禁用输入并提示 `chat.loginRequired`，不再等发送后才报错；无自带 Key 时不拦。验证：后端新增「匿名自带配置 → 401 且未触达上游」「服务端已配置时匿名照旧可用」两例，原客户端配置用例改为登录态；前端新增「未登录 + 已存自带 Key → 禁用并提示」「未登录 + 无自带 Key → 不提示」两例。 |
 | IMPROVE-11 | P2 | 前端 | CSP 配置在 nginx 层（后端关闭有意为之）+ nosniff/Referrer-Policy | `frontend/nginx.conf`, `backend/src/index.js` · `docs/DEPLOY.md §4.2` | 2026-09-10 | CSP 必须由**托管 HTML 的那一层**下发——后端只服务 `/api`（JSON），在那儿配 CSP 对页面无效，所以后端 `contentSecurityPolicy: false` 是有意的（已加注释）。策略落在 `frontend/nginx.conf`：`script-src 'self'`（构建产物无内联脚本）、`style-src 'unsafe-inline'`（React 内联 style）、`connect-src https:`（API/OSS/用户自带 LLM）、`frame-src https:`（IMM 预览）、`font-src`（Google Fonts）；同时补 `nosniff` 与 `Referrer-Policy`。⚠️ **nginx 坑**：`add_header` 不会被子级 location 继承——凡自己写了 `add_header` 的 location（如 `/assets/` 的长缓存）都必须**重复声明**安全头，否则静默丢失（已在该 location 重复声明）。 |
 
 > **外部变更观察（非本仓库改动）**：审计期间账号下的 RAM 用户由 4 个变为 2 个——`obsidian` 与 `power-application-user` 消失（`ListUsers` 仅余 `zyxf-oss`、`zyxf-mail`，`GetUser` 对二者返回 `EntityNotExist.User`）。**本次会话未执行任何删除用户的命令**，判定为外部在控制台完成的清理。影响：账号权限面显著收窄（两个 `PowerUserAccess` 持有者均已移除）；但若 `obsidian-aloha` bucket 或其个人用途仍需使用，应确认替代凭证已就位。
