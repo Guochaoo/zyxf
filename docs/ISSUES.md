@@ -14,9 +14,9 @@
 
 ```yaml
 updated: 2026-09-11
-entries: 47           # 缺陷 36 + 改进 11
-pending: 0            # 缺陷 0  + 改进 0
-fixed: 47             # 已归档：缺陷 36 + 改进 11
+entries: 99           # 缺陷 73 + 改进 26
+pending: 40           # 缺陷 25 + 改进 15
+fixed: 59             # 已归档：缺陷 48 + 改进 11
 ```
 
 ---
@@ -25,11 +25,375 @@ fixed: 47             # 已归档：缺陷 36 + 改进 11
 
 ### 1.1 缺陷
 
-当前**无待处理缺陷**——BUG-21/23/24/26/27/29 已全部处置（见 [2.1 已修复缺陷](#21-已修复缺陷36)）。
+当前** 25 条待处理**（均为 2026-09-11 全仓审计新发现，已逐条人工复核；历史批次 BUG-21/23/24/26/27/29 已处置）。
+
+> 审计方式：9 路并行只读审计（安全/后端正确性/后端基础设施/性能/前端状态/前端组件/重复与死代码/工程配置与文档），再由人工逐条读码复核、剔除误报。下文每条都给出可核对的文件与行号证据。
+
+#### BUG-51 · JWT 无撤销机制：改密码 / 降权 / 删号后旧 token 在有效期内仍持有全权
+`backend · 认证`
+`files: [backend/src/auth.js, backend/src/db.js, backend/src/routes/auth.js, docs/DEPLOY.md]`
+
+- **现状**：`attachUser` 只验签就 `req.user = payload`，从不回查数据库；`ensureAdmin` 改密码只更新 `password_hash`，不使任何已签发 token 失效；`DEPLOY.md` 却把「改 ADMIN_PASSWORD 即轮换管理员」写成唯一权威来源。
+- **影响**：管理员 token 泄漏后，运维改密码并重启**不能止损**——攻击者手上那条 token 在 `exp`（默认 7d）之前仍是有效 admin，可继续调用全部写接口；被删除或降权的账号同样在过期前一路放行。
+- **修法**：`users` 加 `token_epoch`（沿用现有 `hasColumn` 迁移模式），改密码时自增；签发时把 epoch 写进 payload，`attachUser` 验签后按 `payload.id` 查一次 `role, token_epoch` 并比对，不符即丢弃 `req.user`。同时修正 DEPLOY.md 的表述。
+- **验证**：新增用例「改密码后旧 token 401 / 新 token 200」「删号后旧 token 401」。
+
+#### BUG-52 · 改 `ADMIN_USER` 不回收既有管理员行：旧用户名 + 旧密码仍能登录为 admin
+`backend · 认证`
+`files: [backend/src/db.js, backend/test/ensureAdmin.test.js, docs/DEPLOY.md]`
+
+- **现状**：`ensureAdmin` 只按当前 `ADMIN_USER` 定位那一行，不存在则新建、存在则改密码，全程不触碰其它 `role='admin'` 的行；而 `POST /api/auth/login` 只查 `users` 表、不看配置。
+- **影响**：运维把 `admin` 改成不易猜的名字（常见加固动作）并重启，以为旧管理员已下线；实际上旧行仍在、旧密码仍有效，可直接登录成 admin。若改名的动机正是「怀疑凭据泄漏」，这一步等于没做。
+- **修法**：同步完成后把其它 `role='admin'` 的行降级为 `user` 并 `console.warn` 打印被降级的账号（或在文档里明确改名语义）。
+- **验证**：`ensureAdmin.test.js` 增一例「改 ADMIN_USER 后旧行 role 不再是 admin」。
+
+#### BUG-53 · 登录限流只按出口 IP 计数：NAT 下连坐封锁，对单账号又无上限
+`backend · 认证`
+`files: [backend/src/routes/auth.js, backend/src/limiter.js]`
+
+- **现状**：`loginLimiter = rateLimit({ ...limiterOptions(15*60*1000, 10, ...), skipSuccessfulRequests: true })` 没传 `keyGenerator`，用库默认的纯 IP 分桶。实测：同一来源打 10 次错密码后，用**正确**密码也得到 429。
+- **影响**：(1) 校园/办公 NAT 下众人共用一个出口 IP，任何人打 10 次错密码就把该出口所有人锁在登录页外 15 分钟——一台机器即可触发的定向拒绝服务；(2) 反向不设防：分布式来源可对 `admin` 单账号累计 N×10 次/15 分钟。
+- **修法**：`keyGenerator` 改为「IP + 提交的用户名/邮箱」（去掉同出口连坐），另叠一层纯 IP 的宽松洪泛桶（如 100 次/15 分钟）。
+- **验证**：新增用例「同 IP 不同用户名互不影响」与「同用户名多 IP 仍受限」。
+
+#### BUG-54 · `PATCH /api/folders/:id` 的环校验与写库之间隔了 OSS 往返：并发可写入 parent 环
+`backend · 文件夹`
+`files: [backend/src/routes/folders.js]`
+
+- **现状**：改名/移动路径是「检查重名 → `await relocateFolderSubtree(...)`（内部逐对象 `copyOssObject`）→ UPDATE」，检查与写入不在同一事务内，中间有真实网络往返；`isUniqueError` 兜底对根目录 `parent_id IS NULL` 不生效（SQLite 中 NULL 互不相等）。
+- **影响**：两个并发请求都能通过检查后各自提交，可产生同父级同名文件夹；更严重的是把 A 移进自己的后代形成 parent 环——该子树从此不可达（`/folders/tree` 递归不到），且反向遍历也可能异常。
+- **修法**：把「祖先链校验 + 唯一性检查 + UPDATE」放进同一个 `transaction()`（`BEGIN IMMEDIATE`）内，OSS 复制挪到事务之后；并补根级部分唯一索引（见 IMPROVE-18 同类问题）。
+- **验证**：用例「并发两次移动到同一目标 → 后者 409」「移动到自己的子孙 → 400」。
+
+#### BUG-55 · 文件夹改名/移动的 OSS 复制无补偿：孤儿对象会被下一次 sync 当成新文件导入
+`backend · 文件夹`
+`files: [backend/src/routes/folders.js, backend/src/routes/sync.js]`
+
+- **现状**：`relocateFolderSubtree` 先批量 `copyOssObject` 到新 key，再更新 DB，最后删旧对象；若在「复制完成、事务未提交」之间失败（或进程被杀），新 key 已成孤兒而 DB 仍是旧 key。
+- **影响**：这些孤儿对象在下次 sync 时会被当作「桶里有、库里没有」的新文件导入，于是同一份资料在库里出现两条记录（不同路径），学生看到重复条目、下载统计被拆散。
+- **修法**：至少把「复制 → DB 更新 → 删旧」的顺序在失败路径上记录待清理键（或先写一张 `pending_moves` 表再逐步推进）；短期可在 sync 导入前对比 `oss_key` 的同名同大小文件并跳过。
+- **验证**：用例「复制成功后事务失败 → 不留重复导入」。
+
+#### BUG-56 · `useFolderContents` 无竞态/卸载守卫：过期响应覆盖新目录数据
+`frontend · 浏览页数据`
+`files: [frontend/src/pages/Browse/useFolderContents.js]`
+
+- **现状**：`refresh()` 内 `listFolder(...).then(setData)` 没有请求序号或 alive 守卫，而触发它的 effect 依赖 `[folderId, sort, order]`——每次切换都会并发新请求且不取消旧的（IMPROVE-01 拆分时新写的 hook；同款问题 BUG-05 在 SearchBar 已修过）。
+- **影响**：上传完成后回调（闭包持旧 `folderId`）或快速切目录时，旧目录的数据会写进已经切走的页面——列表显示上一个目录的内容，用户可能在错误目录上执行删除/重命名/拖拽。
+- **修法**：hook 内用 `reqIdRef` 递增，只在最新请求时 setData/setErr/setLoading（或 AbortController）。
+- **验证**：`BrowsePage.test.jsx` 增一例「先发慢请求再切目录，断言最终渲染后一个目录」。
+
+#### BUG-57 · 仪表盘切换时间区间时过期响应覆盖新区间统计
+`frontend · 仪表盘`
+`files: [frontend/src/pages/DashboardPage.jsx]`
+
+- **现状**：`load = useCallback((silent=false, r=range) => { getStats(r).then(...) }, [range])`，effect 依赖 `[load, range]`，无请求序号；两个 `finally` 都会 `setLoading(false)`。
+- **影响**：连点「7 天 → 30 天」时若 7 天的响应后到，卡片数据被 7 天覆盖而切换器高亮 30 天，分析页给出错误结论；刷新中的 loading 也会被先到的响应提前复位。
+- **修法**：同 BUG-56 的 `reqIdRef` 守卫。
+- **验证**：`Dashboard.test.jsx` 增一例「慢响应后到不得覆盖」。
+
+#### BUG-58 · 设置里保存 AI 配置后，ChatComposer 仍用挂载时读到的旧配置
+`frontend · 智能对话`
+`files: [frontend/src/components/ChatComposer.jsx, frontend/src/components/SettingsModal.jsx]`
+
+- **现状**：`ChatComposer` 用 `useState(loadLlmCfg)` 只在挂载时读一次 localStorage，`SettingsModal` 保存时只写 localStorage 与自己的 state，全仓没有 storage 事件或 context 通知；而 ChatComposer 在右栏常驻不卸载。
+- **影响**：用户填好自带 Key 后直接提问，仍按旧配置发送（或 `hasClientCfg` 为假、干脆不带 `llm`），后端回「AI 功能未配置」/401，必须切页重挂载才生效。
+- **修法**：保存后 `dispatchEvent(new Event('llm-config-changed'))`，ChatComposer 监听后 `setLlmCfg(loadLlmCfg())`。
+- **验证**：`ChatComposer.test.jsx` 增一例「保存事件后新配置随请求下发」。
+
+#### BUG-59 · StaggeredMenu 的 `busyRef` 被 kill 的补间永久锁死，之后菜单打不开
+`frontend · 导航菜单`
+`files: [frontend/src/components/StaggeredMenu.jsx]`
+
+- **现状**：`playOpen` 用 `busyRef.current` 做门闩，只在 open 时间线的 `onComplete` 里解锁；而 `playClose` 会 `openTlRef.current?.kill()`，被 kill 的时间线不会触发 `onComplete`，close 分支又没有兜底清零。
+- **影响**：在打开动画期间点关闭（或点遮罩、动画刚开始就 closeMenu），之后所有 open/toggle 直接 return——菜单再也打不开，只能刷新页面。
+- **修法**：`playClose` 入口与 `playOpen` 的早退分支都清零 `busyRef`，或改用时序无关的代际计数。
+- **验证**：`StaggeredMenu.test.jsx` 增一例「开→立即关→再开，菜单可见」。
+
+#### BUG-60 · OfficeViewer 的 SDK 加载失败被模块级 Promise 永久缓存，本次会话无法恢复
+`frontend · 预览`
+`files: [frontend/src/components/Preview/OfficeViewer.jsx]`
+
+- **现状**：模块级 `let sdkPromise = null` 在 `onerror` 时 `reject`，失败后该 Promise 永久保持 rejected；对「页面里已存在但已 load/error 过」的 script 标签重新 `addEventListener` 也不会再 settle。
+- **影响**：一次 CDN 抖动/断网（哪怕随后恢复）之后，本次会话所有 Office 预览都直接落到「预览服务出错」，只有整页刷新才能恢复。
+- **修法**：`catch` 里把 `sdkPromise = null` 并移除失败的 script 标签，同时给加载加超时兜底。
+- **验证**：用例「首次加载失败 → 重试成功渲染 WebOffice」。
+
+#### BUG-61 · 对话流式请求在「清空会话 / 组件卸载」时不中止，且清空后输入被锁死
+`frontend · 智能对话`
+`files: [frontend/src/components/ChatComposer.jsx]`
+
+- **现状**：清空按钮只 `setMessages([])` 不 abort；`abortRef` 仅在 `send()` 内赋值，唯一的 effect 清理只处理 `snapTimer`；`busy` 要到流结束才复位。
+- **影响**：流式回答期间点清空，垃圾桶与发送键双双禁用、用户没有任何中止入口（最长到 90 s 超时）；同时 SSE 仍在消费，`onDelta` 对已不存在的消息反复 setMessages；「停止」之后若缓冲里还有已到达的 delta，会继续在「已停止」文案后追加文本。
+- **修法**：清空与卸载都先 `abortRef.current?.abort()`；补 `useEffect(() => () => abortRef.current?.abort(), [])`。
+- **验证**：`ChatComposer.test.jsx` 增两例「清空即中止」「卸载即中止」。
+
+#### BUG-62 · 中文输入法选词回车被当成发送
+`frontend · 智能对话`
+`files: [frontend/src/components/ChatComposer.jsx]`
+
+- **现状**：`onKeyDown={(e) => { if (e.key === 'Enter') send(); }}` 未判 `e.nativeEvent.isComposing`。
+- **影响**：中文用户按回车选词时半截问题被直接发出，AI 按残缺输入回答，用户只能清空重来（本项目用户以中文为主，触发频率高）。
+- **修法**：条件改为 `e.key === 'Enter' && !e.nativeEvent.isComposing`。
+- **验证**：用例「isComposing 为真时不发送」。
+
+#### BUG-63 · `chatStream` 走原生 fetch，401 不清理 token（与 axios 路径行为不一致）
+`frontend · 鉴权`
+`files: [frontend/src/api.js, frontend/src/auth.jsx]`
+
+- **现状**：axios 拦截器在 401 时 `clearToken()` 并派发 `auth:expired`（auth.jsx 据此把 user 置空）；而 `chatStream` 用 `fetch`，非 2xx 只把后端文案塞进气泡。
+- **影响**：token 过期后聊天持续 401 失败，而账户卡片/管理入口仍显示已登录，用户不知道该重新登录（直到某次 axios 请求顺带同步状态）。
+- **修法**：抽出统一的 401 处理函数，`chatStream` 的 401 分支复用（clearToken + 派发事件）。
+- **验证**：`api.test.js` 增一例「chatStream 收到 401 时清 token 并派发 auth:expired」。
+
+#### BUG-64 · 打开全库知识图谱后组件卸载，`graphFull` 不复位 → 悬浮菜单永久消失
+`frontend · 知识图谱 / 导航`
+`files: [frontend/src/components/KnowledgeGraph.jsx, frontend/src/App.jsx]`
+
+- **现状**：`KnowledgeGraph` 只在 `dialog` 变化时上报 `onFullChange(!!dialog)`，卸载时没有复位；而 App 用 `{!graphFull && <StaggeredMenu/>}`，知识图谱外层条件是 `isBrowse && isLg`（`min-width:1024px`）。
+- **影响**：打开全库图谱后把窗口缩到 <1024px（或旋转设备），组件卸载但 `graphFull` 恒为 true，悬浮菜单不再渲染——用户失去站内导航入口，只能手动刷新。
+- **修法**：补卸载清理 `useEffect(() => () => onFullChange?.(false), [])`。
+- **验证**：`App.test.jsx`/新增用例「图谱组件卸载后菜单重新可见」。
+
+#### BUG-65 · 失败提示文案与操作不匹配：新建文件夹/列表加载/同步失败都提示「移动失败」
+`frontend · 浏览页`
+`files: [frontend/src/pages/BrowsePage.jsx, frontend/src/pages/Browse/useFolderContents.js, frontend/src/pages/Browse/useOssSync.js]`
+
+- **现状**：三处 `errMsg` 兜底都传 `t('browse.moveError')`（中文「移动失败」、英文 "Move failed"）。`errMsg` 仅在响应带 `data.error` 时掩盖它，网络错误/超时会露出。
+- **影响**：用户看到「移动失败」但实际是新建重名、列表加载失败或同步失败，排查方向完全错（英文界面统一显示 "Move failed"）。
+- **修法**：补 `browse.createError` / `common.loadFailed` / `browse.syncError` 语义键并替换这三处。
+- **验证**：`i18n.test.js` 键对齐 + BrowsePage 用例断言文案。
+
+#### BUG-66 · 文件/文件夹行只能鼠标操作，键盘完全不可达
+`frontend · 浏览页 · 可访问性`
+`files: [frontend/src/pages/Browse/ItemList.jsx]`
+
+- **现状**：行是 `<li draggable onClick>`，没有 `role`/`tabIndex`/`onKeyDown`；进入文件夹、预览文件、重命名、删除都只能点击（同项目 `FolderTree` 的 chevron 已有 role/tabIndex/onKeyDown，标准不一致）。
+- **影响**：键盘与读屏用户无法浏览或管理资料库，列表整体不可访问。
+- **修法**：行内主操作改为 `<button>`（拖拽手柄单独承担 DnD），或补 `tabIndex=0` + Enter/Space 处理。
+- **验证**：`BrowsePage.test.jsx` 增一例「Tab 到行后 Enter 进入文件夹」。
+
+#### BUG-67 · 知识图谱的 d3 模拟停掉后 `tick` 监听未解绑，卸载后仍触发 setState
+`frontend · 知识图谱`
+`files: [frontend/src/components/KnowledgeGraph.jsx]`
+
+- **现状**：`sim.on('tick', () => setTick(t => t + 1))`，清理里只 `sim.stop()`，没有 `sim.on('tick', null)`；GraphCanvas 在右栏与弹窗各挂一份并共享节点对象，宽度变化会重建 simulation。
+- **影响**：节点集每次变化都残留一个 tick 闭包并持续触发无意义渲染；全库视图下逐帧成本明显。
+- **修法**：清理里补 `sim.on('tick', null)`。
+- **验证**：用例「切换节点集后旧 tick 不再触发」。
+
+#### BUG-68 · `zh.js` 在同一个对象里重复定义 `actionFailed` 与 `today`
+`frontend · i18n`
+`files: [frontend/src/i18n/zh.js]`
+
+- **现状**：`common` 域内 `actionFailed: '操作失败'` 与 `today: '今日'` 各出现两次（后写者生效），而 `en.js` 各只有一份；`i18n.test.js` 对键集合做 Set 归一化，重复键不会让测试失败。
+- **影响**：修改靠前那一处完全不生效（静默走旧值），两处将来被改成不同值时无从定位——典型的「改了没反应」。
+- **修法**：删掉重复的两行；`i18n.test.js` 增加「同一文件内不得有重复键」的静态检查，防复发。
+- **验证**：新增重复键检测用例。
+
+#### BUG-69 · `/register/code` 先写库再发信：发送失败仍占用 60 秒冷却与当日额度，并作废用户手上的有效验证码
+`backend · 注册`
+`files: [backend/src/routes/auth.js]`
+
+- **现状**：先生成 code 并 `INSERT ... ON CONFLICT DO UPDATE`（`sent_count + 1`、重置 `expires_at`），再 `await sendVerificationCode(...)`；失败只返回 502，不回滚。实测：发送失败后库里已留下 `sent_count:1`，立刻重试得到 429「请一分钟后再试」。
+- **影响**：(1) 邮件服务抖动/凭据失效（正是 BUG-37 那类故障）时，用户重试 10 次即耗光 24 小时额度，而一封码都没收到——注册对特定邮箱硬锁一天；(2) 覆写会顶掉仍然有效的旧码，用户手上那封信里的码已作废；(3) 额度按邮箱计且无需认证，第三方可替别人的邮箱打满，使其当天无法注册。
+- **修法**：把落库挪到发送成功之后（失败直接返回 502，不消耗冷却/额度、保留旧码）；若要防重放先占位，则失败分支恢复原行。
+- **验证**：用例「发送失败不消耗冷却、不覆盖旧码、重试仍可成功」。
+
+#### BUG-70 · 登录响应时间可稳定区分账号是否存在（实测 1.3 ms vs 44.8 ms）
+`backend · 认证`
+`files: [backend/src/routes/auth.js]`
+
+- **现状**：`if (!user || !bcrypt.compareSync(...))` 短路——账号不存在时根本不跑 bcrypt，而 401 文案刻意不区分两种失败（说明设计意图就是不给枚举口子）。实测：不存在的用户名 1.3 ms，存在的 44.8 ms（bcryptjs cost-10 均价 41.9 ms，可直接对上）。
+- **影响**：稳定差值取几次样本即可判定任意用户名/邮箱是否已注册；枚举结果正是登录标识，可直接用于撞库、钓鱼。
+- **修法**：模块级预计算 `DUMMY_HASH`，两条分支都跑一次 `compareSync`（务必先 compare 再判 user，否则又短路）。
+- **验证**：用例断言「不存在账号与错密码账号的响应路径都经过 bcrypt」（可用耗时区间或注入的 spy 计数）。
+
+#### BUG-71 · `/register` 的用户名枚举 oracle：同一枚合法验证码可无限复用，且验证码不被消耗
+`backend · 注册`
+`files: [backend/src/routes/auth.js]`
+
+- **现状**：重名检查（409 `用户名已被使用`）在验证码校验通过之后、INSERT 之前；`DELETE FROM email_codes` 只在 INSERT 成功后才执行，失败分支既不删行也不加 `attempts`。实测：同一枚码连打 4 次 `username=takenuser`，全部 409 且 `attempts` 始终为 0。另外 `emailRegistered` 的 409 位于冷却/日限额检查**之前**，完全不触发这两道限流。
+- **影响**：`registerLimiter` 是 15 次/分钟/IP，攻击者用自己控制的一个邮箱拿一枚码即可批量探测任意候选用户名是否被占用——速率比 /login 高两个数量级且不产生失败日志；邮箱维度同样是一个存在性 oracle。
+- **修法**：验证码通过后无论是否重名都递增使用计数（超过 3–5 次即要求重新获取）；用户名冲突与邮箱冲突返回同一文案；把 `emailRegistered` 分支挪到冷却检查之后或单挂更紧的限流。
+- **验证**：用例「同一枚码第 4 次重名探测被拒」「两种冲突返回同构响应」。
+
+#### BUG-72 · bcrypt 静默截断到 72 字节，注册校验却按字符数：40 个汉字的密码只有前 24 个生效
+`backend · 认证`
+`files: [backend/src/routes/auth.js, frontend/src/pages/AuthPage.jsx]`
+
+- **现状**：校验用 `password.length`（UTF-16 码元，8–72），而 bcrypt 只用前 72 **字节**。实测：`hashSync('密'.repeat(40))`（120 字节，注册放行）之后，`compareSync('密'.repeat(24))` 与 `compareSync('密'.repeat(40) + 'ZZZ')` 都返回 true。
+- **影响**：用户以为设了 40 个汉字的密码，实际只有前 24 个字符参与校验——熵被静默削掉，且「任何掌握前 24 字符前缀的人」即使后缀完全不同也能登录同一账号。
+- **修法**：按字节校验（`Buffer.byteLength(pw, 'utf8')`）或先做定长摘要再交给 bcrypt；前端同步提示文案与 `maxLength`。
+- **验证**：用例「多字节超 72 字节的密码被拒」+「前缀相同后缀不同不得登录成功」。
+
+#### BUG-73 · `users.role` 列默认值是 `'admin'`（与「注册即普通用户」的授权模型相反）
+`backend · 数据库`
+`files: [backend/src/db.js]`
+
+- **现状**：建表语句 `role TEXT NOT NULL DEFAULT 'admin'`。当前两条写入路径（`ensureAdmin` 与注册）都显式给值，所以暂无活跃利用路径。
+- **影响**：任何漏写 `role` 的写入（迁移脚本、种子/修复脚本、测试夹具、以后新增的邀请/注册路径）都会静默创建全站写权限账号，且没有任何日志或断言提示；`requireAdmin` 只看 role 字段，等于直接放行。属潜伏的提权默认值。
+- **修法**：默认值改 `'user'`（SQLite 不支持只改默认值，需按标准「建新表 → 迁数据 → 改名」迁移；或至少保证新库使用安全默认值）。
+- **验证**：用例「不带 role 的 INSERT 得到普通用户」。
+
+#### BUG-74 · `DEPLOY.md` 的数据库备份命令在 WAL 模式下备份出空库
+`docs · 部署运维`
+`files: [docs/DEPLOY.md, backend/src/db.js]`
+
+- **现状**：`db.js` 启用 `PRAGMA journal_mode = WAL`，而 DEPLOY.md 的备份是 `cp /opt/zyxf/backend/data.db ~/data.db.bak-$(date)`——不停服、不带 `-wal`/`-shm`、也不 checkpoint。本仓库现状即为反例：`data.db` 只有 4096 字节，而 `data.db-wal` 有 609792 字节；单独拷贝该文件后打开，`SELECT COUNT(*) FROM files` 直接报 `no such table: files`。
+- **影响**：运维按文档备份，会在真正需要恢复时才发现备份是空的——文件夹树、文件记录、账号全部丢失（OSS 对象还在但已无从索引），属静默失效的备份。
+- **修法**：文档改用 WAL 安全写法（停服后 `cp -a data.db*`，或不停服用 `sqlite3 ".backup"` / `VACUUM INTO`），并注明原理。
+- **验证**：按新命令在本地实测能得到可打开的完整库。
+
+#### BUG-75 · 用户可创建名为 `.preview` 的文件夹，其内容会被下一次 sync 永久删除记录
+`backend · 同步`
+`files: [backend/src/routes/sync.js, backend/src/oss.js, backend/src/routes/folders.js]`
+
+- **现状**：`listOssObjects` 为跳过历史 IMM 影子副本，会把 `<prefix>/.preview/` 前缀下的对象全部过滤掉；而文件夹名校验只拦路径分隔符，`.preview` 是合法名字，`cleanObjectSegment('.preview')` 也原样保留。
+- **影响**：一旦有人建了名为 `.preview` 的文件夹并上传文件，这些对象永远不会出现在 sync 的 listing 里 → 其 DB 行被判为「桶里已不存在」而删除（桶里对象还在，成为孤儿）——表现为资料在列表中凭空消失，且每次同步都会重复发生。
+- **修法**：在文件夹创建/改名处把 `.preview` 列为保留名拒绝（与影子副本前缀对齐），或在 sync 里把「已跳过前缀下的既有记录」单独保护起来。
+- **验证**：用例「创建 .preview 文件夹被 400」「桶里存在 .preview/ 对象时不删除其它记录」。
+
+---
 
 ### 1.2 改进建议
 
-当前**无待处理改进建议**——IMPROVE-01/02/10 已全部处置（见 [2.2 已关闭改进项](#22-已关闭改进项11)）。
+当前**无待处理改进建议**——IMPROVE-01/02/10 已全部处置（见 [2.2 已关闭改进项](#22-已关闭改进项11)）；本轮审计新发现的 15 条改进项见下。
+
+#### IMPROVE-12 · 统计接口缺支撑索引：`files(created_at)` 与 `download_logs(file_id, downloaded_at)`
+`backend · 性能`
+`files: [backend/src/db.js, backend/src/routes/stats.js]`
+
+- **现状**：`db.js` 只建了 `folders(parent_id)`、`files(folder_id)`、`files(folder_id, sort_order)`、`download_logs(downloaded_at)`；而 stats 的 `ORDER BY created_at DESC LIMIT 8`、两次 `WHERE created_at >= ?`、上传日序列都要全表扫 `files`，`top_downloads` 的 `GROUP BY dl.file_id` + 每组相关子查询只能沿 `downloaded_at` 扫窗口内全部日志。
+- **影响**：每次打开仪表盘都要多次全表扫描/排序，随库与日志增长线性变慢；node:sqlite 是同步执行，直接表现在事件循环上。
+- **修法**：`CREATE INDEX IF NOT EXISTS idx_files_created ON files(created_at)` 与 `idx_download_logs_file ON download_logs(file_id, downloaded_at DESC)`（沿用 db.js 现有 `CREATE INDEX IF NOT EXISTS` 风格）。
+- **验证**：`node --test` 全绿；用 `EXPLAIN QUERY PLAN` 确认由 `SCAN` 变为索引查找。
+
+#### IMPROVE-13 · sync 的 `ensureFolderChain` 残留 N+1：每个对象、每一层都重查父级全部兄弟
+`backend · 性能`
+`files: [backend/src/routes/sync.js]`
+
+- **现状**：`findFolderBySegment` 每次 `SELECT id, name FROM folders WHERE parent_id = ?` 拉出全部兄弟再线性比对（含 NFC 归一化 + 正则替换），而它在每个 OSS 对象、每层路径上各调用一次（导入路径两处），循环中 folders 表还在变长。BUG-08 只优化了删除/剪枝段。
+- **影响**：复杂度 O(对象数 × 深度 × 兄弟数)——5000 对象 × 3 层 × 20 兄弟 ≈ 1.5 万次查询 + 30 万次归一化；游客配额（2 次/分钟）即可触发，单次 sync 阻塞事件循环数秒。
+- **修法**：循环外一次性加载 folders，按 `parent_id + cleanObjectSegment(name)` 建内存索引，链的查找与新建都在内存完成（与同文件已有的 `buildFolderIndex` 用法一致）。
+- **验证**：`syncBatch.test.js` 增一例 500+ 对象的同步耗时与正确性。
+
+#### IMPROVE-14 · 循环内反复 `db.prepare`，且 reorder 的 `order` 数组无长度上限
+`backend · 性能`
+`files: [backend/src/routes/folders.js]`
+
+- **现状**：子树搬迁里 `for (const move of fileMoves) { db.prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?') }` 每个文件重解析一次 SQL；reorder 校验里 `for (const it of order...) { db.prepare(...) }` 逐项 prepare + SELECT，`order` 直接取自 body（express.json 限 1mb，可达数万项），随后又逐项 UPDATE，全部在同步事务内。
+- **影响**：重命名含 k 个文件的文件夹做 k 次 SQL 编译；数万项的 reorder 请求在事件循环上同步跑数万次查询，期间整站无响应。
+- **修法**：两条语句移到循环外 prepare 一次复用；`order.length > 2000` 直接 400。
+- **验证**：用例「超长 order 返回 400」+ 现有 reorder 用例全绿。
+
+#### IMPROVE-15 · `GET /folders/tree` 每次全量重建整库树，且前端每次变更请求两遍
+`backend · 性能` / `frontend · 重复`
+`files: [backend/src/routes/folders.js, frontend/src/hooks/useFolderTree.js]`
+
+- **现状**：接口每次两条无 WHERE 的全表 SELECT，再在内存递归建整棵树（响应含全库每个文件），无缓存/ETag；前端 `useFolderTree` 被侧边栏 `FolderTree` 与 `KnowledgeGraph` 各实例化一次，各自 `load()` 并各自监听 `folders-changed`，同一变更发两次完全相同的请求（hook 注释自述「原来各自实现了一遍…」，但去重并未真正生效）。
+- **影响**：每次进站、每次上传/删除/拖拽排序都在事件循环上重建全库 JSON，且翻倍；大库时首屏明显变慢。
+- **修法**：接口侧复用 `searchService` 的全库快照缓存或加 ETag；前端把 tree 提升为模块级共享缓存/Provider（SWR 式）。
+- **验证**：断言同一变更只发一次请求（可用请求计数 mock）。
+
+#### IMPROVE-16 · 登录/注册用 bcryptjs 同步哈希，单次独占事件循环 40–50 ms
+`backend · 性能`
+`files: [backend/src/routes/auth.js, backend/package.json]`
+
+- **现状**：`bcrypt.compareSync` / `bcrypt.hashSync`（纯 JS 实现），实测 `hashSync(10)` ≈47 ms、`compareSync` ≈42 ms。
+- **影响**：每次登录/注册期间所有并发 API（health、下载、搜索）一并延迟；限流按 IP 10 次/15 分钟，多出口可叠加放大。
+- **修法**：改用 `await bcrypt.compare/hash`（bcryptjs 提供 Promise 版）或换原生 bcrypt/argon2 异步实现。
+- **验证**：登录用例全绿；并发压测下 health 延迟不再随登录抖动。
+
+#### IMPROVE-17 · 文件夹改名/移动要逐个搬运整棵子树的 OSS 对象，无规模阈值
+`backend · 性能`
+`files: [backend/src/routes/folders.js]`
+
+- **现状**：`relocateFolderSubtree` 取整棵子树后对每个文件 `copy` → 再逐个 `delete`，并发固定 10（`batchOss`）。
+- **影响**：含 1000 个文件的文件夹改名 ≈ 400 次串行网络往返，请求易超 nginx 默认 60 s 超时；若在 copy 完成、DB 事务提交前中断，OSS 留下新键孤儿对象，之后被 sync 导入成重复条目（与 BUG-55 同源）。
+- **修法**：设定子树规模阈值（超限返回 409 并提示改批量/后台任务），或改为后台迁移任务并落库迁移状态。
+- **验证**：用例「超过阈值的子树改名返回 409」。
+
+#### IMPROVE-18 · `storagePath.js` 同一套 OSS key 规则维护了两份实现（DB 版与 Map 版）
+`backend · 重复逻辑`
+`files: [backend/src/storagePath.js, backend/src/routes/files.js, backend/src/routes/folders.js]`
+
+- **现状**：`folderPathSegments` 与 `folderPathSegmentsFromMap` 逐行等价、只差父级取法；`objectKeyForFile` / `placeholderKeyForFolder` 同样各有一个 `*FromMap` 孪生，两组都在生产路径上被调用。
+- **影响**：改 key 规则（前缀、分隔、去重）只改一侧，上传落库的 key 与移动/改名算出的 key 就会不一致，`copyOssObject` 目标错位，产生重复对象或莫名 409。
+- **修法**：只保留 Map 版，DB 版降级成 `folderPathSegmentsFromMap(id, loadFolderMap(db))` 的薄封装。
+- **验证**：现有 `storagePath.test.js` 全绿（该文件已覆盖两组函数）。
+
+#### IMPROVE-19 · 前端扩展名分类表有三份硬编码副本，后端白名单是第四份
+`frontend · 重复逻辑`
+`files: [frontend/src/utils.js, frontend/src/components/FileIcon.jsx, frontend/src/components/Chat/parts.jsx, backend/src/extPolicy.js]`
+
+- **现状**：`utils.js` 的 `OFFICE_EXT`/`ARCHIVE_EXT` 手抄自后端白名单（注释自认 "mirrors backend extPolicy.js"），`FileIcon.jsx` 另有 `EXT_MAP`，`Chat/parts.jsx` 还有 `EXT_TONE`，四张表互不派生。
+- **影响**：后端白名单一加类型（xltx/et/wps/ppsx 等），前端 `getPreviewKind` 判为 unknown → 预览退化成「只能下载」，图标与徽章也退成默认色——后端本可签发 WebOffice token。BUG-23 就是其中一次漂移。
+- **修法**：由后端下发一份 ext→类别 映射，或构建期由 `extPolicy.js` 生成前端常量，三处共用。
+- **验证**：`utils.test.js` 断言前端分类与后端白名单一致（可加脚本化对比）。
+
+#### IMPROVE-20 · `/api/search` 每类截断 20 条，前端却把它当总数展示
+`frontend · 契约`
+`files: [backend/src/searchService.js, backend/src/routes/search.js, frontend/src/components/SearchBar.jsx]`
+
+- **现状**：`searchLibrary(q, { limit = 20 })` 对 folders/files 各自 `slice(0, limit)`，路由未回传命中总数；前端用两者长度之和渲染 `search.resultsCount`。实测命中超过 20 时界面写死「20 个结果」。
+- **影响**：用户以为只有 20 条匹配而漏掉资料（与 BUG-24 同类的截断契约问题）。
+- **修法**：接口回传 `total` 或在被截断时带 `truncated`，前端显示「显示 20 / 共 N 条」。
+- **验证**：`SearchBar` 用例断言截断提示。
+
+#### IMPROVE-21 · `largeFileHint` 导出零引用，且 20 MB 阈值以字面量硬写在两本字典里
+`frontend · 冗余`
+`files: [frontend/src/utils.js, frontend/src/i18n/zh.js, frontend/src/i18n/en.js, frontend/src/components/Preview/index.jsx]`
+
+- **现状**：`export const largeFileHint = () => i18n.t('preview.largeFileHint')` 全仓零引用（真正渲染处直接用 `t('preview.largeFileHint')`）；可用性由 `LARGE_FILE_THRESHOLD` 决定，文案却把「>20MB」写死在 zh/en 字典。
+- **影响**：调整阈值后提示仍宣称 20MB，与 `isLargeFile` 实际判定不符（两份阈值改一处即漂移）。
+- **修法**：删掉该导出；文案改 `{{size}}` 占位并由 `formatSize(LARGE_FILE_THRESHOLD)` 注入。
+- **验证**：`utils.test.js` 断言文案随阈值变化。
+
+#### IMPROVE-22 · `api.js` 注释仍描述已被 IMPROVE-03 替换掉的同步限流口径
+`frontend · 文档`
+`files: [frontend/src/api.js, backend/src/limiter.js, backend/src/routes/sync.js]`
+
+- **现状**：`syncOss()` 上方注释写 "Rate-limited server-side to 5/min per IP"，实际是 `tieredLimiter`：游客 2 次/分钟（按 IP）、登录用户 5 次/分钟（按 `u:${user.id}`）、管理员豁免。
+- **影响**：前后端评审据此把「5 次/分钟·按 IP」当契约，会误判滥用面（游客实际只有 2 次，登录用户还不占 IP 配额）。
+- **修法**：注释改为分层口径描述。
+- **验证**：纯注释改动，跑测试即可。
+
+#### IMPROVE-23 · `gsap` 以静态导入常驻首屏（菜单动画本可惰性加载）
+`frontend · 性能`
+`files: [frontend/src/components/StaggeredMenu.jsx, frontend/vite.config.js]`
+
+- **现状**：`StaggeredMenu` 在 App 层常驻，其 `import { gsap } from 'gsap'` 是模块级静态导入；vite 还把 gsap 与 framer-motion 合并进同一个 `motion` chunk。
+- **影响**：只想打开菜单也必须先下载整个 GSAP 运行时；懒加载路由（AboutPage 用 framer-motion）会连带拉 gsap 分包。BUG-21 已做路由级切分，但这条路径仍在首屏链上。
+- **修法**：首次开合时 `await import('gsap')`；并把 gsap 从 `motion` chunk 拆出单独 chunk。
+- **验证**：`vite build` 产物中首屏 chunk 不再包含 gsap。
+
+#### IMPROVE-24 · `useFolderTree` 的文档承诺与实现不符（去重未生效）
+`frontend · 重复`
+`files: [frontend/src/hooks/useFolderTree.js, frontend/src/components/FolderTree.jsx, frontend/src/components/KnowledgeGraph.jsx]`
+
+- **现状**：hook 注释声称「原来各自实现了一遍 fetch + alive 守卫 + 事件监听，同一变更会触发两次相同的 GET」是它要解决的问题，但实现只是把重复代码搬进 hook——两处各挂一次实例、各自监听，重复请求依旧。
+- **影响**：同一变更仍发两次 `/api/folders/tree`（大库时翻倍开销），注释还会误导后续维护者以为已优化。
+- **修法**：模块级共享缓存/Provider（与 IMPROVE-15 同一改动）。
+- **验证**：请求计数断言只发一次。
+
+#### IMPROVE-25 · 零引用导出与未使用解构（`useLocale().title`、`App.jsx` 的 `locale`、`imm.js` 的 `immProject`）
+`frontend · 冗余`
+`files: [frontend/src/hooks/useLocale.js, frontend/src/App.jsx, backend/src/imm.js]`
+
+- **现状**：`useLocale()` 返回的 `title` 全仓无人读取（`document.title` 在 App.jsx 里另设），`const { locale } = useLocale()` 解构后未使用，`immProject` 导出也仅模块内自用。
+- **影响**：死接口会让人误以为「改 title 就能改页面标题」，实际无效。
+- **修法**：删除零引用导出与未使用解构，或把 `document.title` 改为消费 `title`。
+- **验证**：lint/测试通过。
+
+#### IMPROVE-26 · sync 只回收「死根子树」，挂在活根下的空文件夹永不剪枝（**暂缓，改动有破坏性风险**）
+`backend · 同步`
+`files: [backend/src/routes/sync.js]`
+
+- **现状**：剪枝循环只遍历 `parent_id IS NULL` 的根，对活根调用 `folderAlive` 时不会把其中「已死」的子文件夹收进待删集合，于是这类空文件夹会一直留在库里（与函数文档自述的 "prunes folders that are empty" 不符）。
+- **影响**：库内会缓慢积累空文件夹，侧边栏出现点进去什么都没有的节点。
+- **修法（暂缓原因）**：改成逐节点剪枝会带来**破坏性风险**——凡是没有 placeholder 对象又没有文件的文件夹都会被删，而历史上存在「建库时未写 placeholder」的部署会因此被整体清空。故先只记录：需要先核对线上 placeholder 覆盖率，再决定是否放开，或改为「仅当该文件夹已存在超过 N 天时剪枝」。
+- **验证**：若实施，需先加干跑（只统计不删除）观察一轮同步结果。
 
 ---
 
@@ -37,7 +401,7 @@ fixed: 47             # 已归档：缺陷 36 + 改进 11
 
 > **类别**列为便于按区域速查的单一归类；`处置要点` 列记录该项的修法依据、踩坑与验证方式，无额外说明的填 `—`。
 
-### 2.1 已修复缺陷（36）
+### 2.1 已修复缺陷（48）
 
 | 编号 | 严重度 | 类别 | 标题 | 修复位置 | 关闭日期 | 处置要点 |
 |---|---|---|---|---|---|---|
@@ -77,6 +441,18 @@ fixed: 47             # 已归档：缺陷 36 + 改进 11
 | BUG-27 | P0 | 前后端 | 混合文件夹/文件的手工排序刷新后无法保持 | `backend/src/routes/folders.js`, `frontend/src/pages/BrowsePage.jsx` | 2026-09-10 | `/reorder` 用单一交错索引同时给文件夹与文件赋 `sort_order`，但 `GET /:id/contents` 只返回 `folders`/`files` 两个数组，前端固定「文件夹在前、文件在后」渲染——交错顺序在刷新后丢失。修法取「合并视图」：manual 模式额外返回 `items`（按 `sort_order` 合并排序），前端优先用它渲染，非 manual 模式不返回（由前端按各自规则重排）。前端 `buildReorder` 的顺序基准也改用 `items`，否则拖拽结果会与显示顺序不符。验证：`backend/test/api.test.js` 断言 `items` 的交错序列，并覆盖「非 manual 不返回 items」。 |
 | BUG-29 | P2 | 文档 | README 声明的最低 Node 版本已过时 | `README.md`, `backend/package.json`, `frontend/package.json` | 2026-09-10 | — |
 | BUG-38 | P2 | 工程·本地开发 | Vite dev server 因源码目录出现临时文件而 EBUSY 崩溃 | `frontend/vite.config.js` | 2026-09-11 | 现象：写源码的工具（编辑器 / agent）常以「临时文件 + 原子替换」落盘，会在被改文件旁留下 `<file>.<pid>.<guid>.tmpdir/xxx.tmp`；这类路径只存活几毫秒，Vite 的 watcher 若抢在它被删除前监听就抛 `EBUSY: resource busy or locked`。根因：该错误是 `FSWatcher` 的 `error` 事件且无人接管，Node 以未捕获错误直接退出——**整个 dev server 挂掉**（实测一次编辑后 5173 端口消失、前端整站无法访问，backend 不受影响）。修法：`server.watch.ignored` 忽略 `**/*.tmpdir/**`、`**/*.tmp`。验证：手工在 `frontend/src/components/` 下建 `.X.jsx.<pid>.<guid>.tmpdir/X.jsx.tmp` 再删除，dev server 保持 HTTP 200 且 err 日志无 EBUSY。 |
+| BUG-39 | P1 | 安全 | SSRF 白名单漏掉整个 IPv6 内网地址族，BUG-20 的防护可被绕过 | `backend/src/llm.js` | 2026-09-11 | 现状：`isForbiddenIp` 的 IPv6 分支只判 `::`/`::1`/`::ffff:`，`fc00::/7`（ULA）、`fe80::/10`（链路本地）、`fec0::/10`、`ff00::/8`（组播）全部返回 false。阿里云内网元数据在 IPv6 下正是 `fd00:0:0:0::1`，恰落在未拦截段。影响：任何已注册用户（门槛仅邮箱验证码）提交 `{llm:{baseUrl:'https://[fd00:0:0:0::1]/v1'}}` 即可让服务器以本站身份访问 IPv6 内网（盲 SSRF：请求固定为 POST /chat/completions）。修法：非全局单播 `2000::/3` 一律拒绝，并把 IPv4 兼容地址 `::a.b.c.d` 映射回 IPv4 规则、解析失败时保守拦截。验证：`test/ssrf.test.js` 新增 6 个内网 IPv6 字面量被拒 + 全局单播放行。 |
+| BUG-40 | P1 | 安全 | `/api/search` 的 q 无长度上限：一条匿名请求可占住事件循环数秒 | `backend/src/routes/search.js`, `backend/src/searchService.js`, `backend/src/searchMatch.js` | 2026-09-11 | 现状：路由对 q 无长度校验；`searchLibrary` 对全库每个名称跑 `matchScore`，而含拉丁字母的查询会进 pinyin-pro 的 DP 匹配，开销随查询长度线性增长（实测 2000 字 ≈0.5 s、8000 字 ≈2.3 s 跑完整库，而 `gaoshu` 只要 22 ms）。影响：匿名用户发一条 `?q=<8KB 字母>` 即可阻塞单线程 Node，期间 /api/health、登录、上传全部排队，属低成本拒绝服务（全局限流 300 次/分钟拦不住「单请求即卡死」）。修法：路由层超过 `MAX_QUERY_LEN=64` 直接 400（不截断，避免语义歧义），服务层兜底 `slice`（覆盖 AI 工具调用路径），拼音层再加 `MAX_PINYIN_QUERY_LEN=32` 短路。验证：`test/auditFixes.test.js` 覆盖 200 字 → 400、64 字放行、65 字拒绝。 |
+| BUG-41 | P1 | 后端 | 文件移动缺 oss_key 冲突检查：先覆盖目标对象、再以 500 失败（他人文件内容被替换） | `backend/src/routes/files.js` | 2026-09-11 | 现状：`PATCH /api/files/:id` 的改名分支有 `oss_key` 唯一性检查，**移动分支没有**；而文件名查重是按**原始 name** 比较（`findSibling`），OSS key 是按 `cleanObjectSegment` 归一化后比较，两者不等价（历史脏数据、Unicode 归一化差异都能让「同名不同 name」）。影响：把 `a/b.pdf`（key 归一化为 `a-b.pdf`）移进含 `a-b.pdf` 的目录时，`findFileByName` 放行 → `copyOssObject` 覆盖目标对象 → UPDATE 撞 `UNIQUE(oss_key)` 抛错 → 500；无辜文件的 DB 行还在，对象内容已被换掉。修法：移动分支补与改名分支同款的 key 冲突 409。验证：`test/auditFixes.test.js` 构造脏数据后断言 409 且原行未变。 |
+| BUG-42 | P1 | 后端 | 文件名可含路径分隔符：key 归一化碰撞导致「覆盖后失败」与静默数据丢失 | `backend/src/routes/files.js` | 2026-09-11 | 现状：`sanitizeName` 只删控制字符，不拦 `/`、`\`，而文件夹名那一半早有 `containsPathSeparator` 校验（BUG-11 只修了一半）。`cleanObjectSegment` 把分隔符归一化成 `-`，于是 `a/b.pdf` 与 `a-b.pdf` 落到同一个 key。影响：(1) 上传注册时 `findFileByName` 查重漏过 → INSERT 撞 UNIQUE → 409，前端随即调 cleanup-upload 把该 key **从 OSS 真删**，而该对象可能正被既有文件引用 → 下载/预览永久 404 且不可恢复；(2) 与 BUG-41 叠加可替换他人文件内容。修法：上传与改名入口统一校验分隔符并 400；cleanup-upload 另加「不得删除已被 files 行引用的对象」（见 BUG-43）。验证：`test/auditFixes.test.js` 断言 `a/b.pdf`、`a\b.pdf` 均在 upload-url 阶段被拒。 |
+| BUG-43 | P2 | 安全 | cleanup-upload 未配置前缀时可删除桶内任意对象，且不检查该对象是否已被引用 | `backend/src/routes/files.js` | 2026-09-11 | 现状：`oss_key` 只有在前缀**非空**时才做前缀校验——未配置 `OSS_KEY_PREFIX` 的部署里任何 key 都会被照删；且完全不检查该 key 是否已被 `files` 行引用。影响：一个本用于「注册失败后清理孤儿对象」的 best-effort 接口，实际可销毁桶内任意对象（含其它应用的对象、以及线上文件的存储对象）。修法：无前缀直接 400（放弃这次清理最多留个孤儿对象，比无边界删除安全）；被 `files` 行引用时 409。验证：`test/auditFixes.test.js` 覆盖前缀外 400、已引用 409、真孤儿 200。 |
+| BUG-44 | P2 | 安全 | 不可预览类型绕过后端 default-deny 内联策略：`force_download` 前端零消费，预览弹层直接导航 OSS 对象 | `backend/src/oss.js`, `backend/src/routes/files.js`, `frontend/src/components/Preview/Body.jsx`, `frontend/src/components/Preview/UnknownViewer.jsx` | 2026-09-11 | 现状：后端算好了 `force_download`（`shouldForceDownload`：svg/html/未知扩展名一律 true），但前端 grep 不到任何消费方；`UnknownViewer` 对这类文件渲染指向签名 URL 的 `<a target="_blank">`，等于让浏览器自行决定如何渲染 OSS 对象。桶绑定站点自有域名时内联 SVG/HTML 会在站点源上执行脚本，而 `sync` 导入 OSS 对象时不做扩展名过滤，这类文件可以合法存在。修法：`signedGetUrl` 支持 `forceDownload`（按签名下发 `Content-Disposition: attachment` + 通用二进制类型），路由对 `shouldForceDownload` 命中即启用；前端 `UnknownViewer` 改走已有的 `onDownload`（blob 下载），不再直接导航对象 URL。验证：前后端测试全绿；预览链路人工核对（PDF/图片仍内联，压缩包与未知类型转 attachment）。 |
+| BUG-45 | P2 | 后端 | `?sort=constructor` 命中原型链导致 500 | `backend/src/routes/folders.js` | 2026-09-11 | 现状：排序字段用「查表取不到就回退默认值」的短路写法，而 `SORT_FIELDS` 是对象字面量——`constructor`/`__proto__`/`toString` 都会命中 `Object.prototype` 上的成员（真值）使回退失效，成员被当成排序表达式拼进 SQL 并抛 `near "Object": syntax error` → 500 + 错误栈日志。修法：白名单改用 `Object.hasOwn()` 查询，未知键回退默认排序。验证：`test/auditFixes.test.js` 覆盖 5 个原型键均 200、未知字段回退名称排序。 |
+| BUG-46 | P2 | 后端 | `DELETE /api/folders/:id` 不校验存在性：返回 200、计数虚报，并会删除桶里「前缀根」这一伪键 | `backend/src/routes/folders.js` | 2026-09-11 | 现状：只判「id 为空」，随后直接 `collectFolderTree(id)`（PATCH 那边是有 404 校验的）；对不存在的 id，`folderIds=[id]` 而 `folderMap` 查不到 → `placeholderKeyForFolderFromMap` 退化成只剩前缀 → 得到一个 `<prefix>/` 这样的伪键，再交给 `deleteOssObjectIfExists` 真删。影响：`DELETE /api/folders/999999` 报 200 + `removed_files:1` 掩盖 id 错误；配置了前缀的部署会无 DB 依据地删除桶里那个键的对象。修法：补 `getFolder` 存在性校验返回 404，且只对 `folderMap` 里真实存在的 id 计算占位键。验证：`test/auditFixes.test.js` 覆盖 404 与「计数只含真实文件」。 |
+| BUG-47 | P2 | 后端 | 搜索快照缓存的失效函数从无调用方：增删改后 30 秒内搜索陈旧 | `backend/src/searchService.js`, `backend/src/routes/files.js`, `backend/src/routes/folders.js`, `backend/src/routes/sync.js` | 2026-09-11 | 现状：非 test 环境启用 30 s 全库 `folders`/`files` 快照缓存（BUG-07 的性能修复），但 `invalidateSearchCache()`（注释自述「可选，供未来接入」）只被测试引用——上传注册、改名、移动、删除、文件夹增删改、sync 导入全都没有失效。影响：管理员刚上传/改名/同步的资料 30 秒内搜不到（甚至 AI 助手回答「没有找到相关内容」），已删除的文件仍被搜出并推荐，点开即 404；同一请求内 prompt 用的是实时目录、结果用的是旧快照，口径不一致。修法：把失效接线到所有写路径（files 的注册/改名/移动/删除、folders 的新建/改名/移动/删除、sync 事务提交后）；reorder 只改 sort_order 而快照不含该字段，故不必失效。验证：`test/auditFixes.test.js` 临时把 NODE_ENV 切到 production 打开缓存，断言「注册后立刻可搜到」。 |
+| BUG-48 | P2 | 后端 | sync 先统计 repaired 再删失联行：同一批记录同时计入 repaired 与 removed | `backend/src/routes/sync.js` | 2026-09-11 | 现状：ext 批量修复（统计 `repaired_files += chunk.length`）跑在删除失联记录之前，所以「ext 不符且对象已不在桶里」的行会被两个计数各算一次，一次同步的 `repaired_files` / `removed.files` 无法自洽。影响：同步结果提示不可信——管理员看到「修复了 N 个文件类型」，其中一部分当次就被删掉了。修法：先把「本次将被删除的 id 集合」算出来，ext 修复与统计都排除它们（顺带复用同一个集合，去掉一次全表扫描）。验证：`test/auditFixes.test.js` 断言 removed=1、repaired=1 且烂 ext 归零。 |
+| BUG-49 | P2 | 后端 | `mimeOf` 覆盖不全：30 个白名单扩展名里 20 个派生为 null，与 BUG-26 的契约不一致 | `backend/src/mime.js` | 2026-09-11 | 现状：BUG-26 把 MIME 收敛为「扩展名派生是唯一权威」，但 MIME 表只覆盖了 10 个白名单类型；rtf/dotx/wps/et/dps 等 14 个**正式可预览类型**与 6 个压缩包全部派生为 null → 落库 `mime_type = NULL`、对外 `application/octet-stream`。影响：任何按 mime_type 判类型的客户端（以及后续 nginx/OSS 的 Content-Type 逻辑）会把这些正式资料当成未知二进制。修法：补齐白名单全部缺项，并加不变量测试锁住（以后加白名单类型必须同步补 MIME）。验证：`test/auditFixes.test.js` 断言 `ALLOWED_EXTS` 中每个扩展名都能派生出 MIME。 |
+| BUG-50 | P2 | 安全 | `ppsm`（宏格式）留在白名单内，与「拒绝宏格式」的自述策略矛盾 | `backend/src/extPolicy.js`, `frontend/src/utils.js` | 2026-09-11 | 现状：`extPolicy.js` 注释写明「Macro-enabled Office formats (docm/dotm/xlsm/xltm/pptm/potm) are rejected: they are the standard vector for distributing malware to students」，但 `ALLOWED_EXTS` 里同时有 `ppsm`（PowerPoint Show with Macros，正是宏格式家族成员），前端 `utils.js` 的 OFFICE_EXT 也抄了一份。BUG-23 当时是「让前端对齐后端白名单」，于是把这份不一致一起固化了。影响：宏格式课件可被上传并分发给学生，与策略声明的保护意图相悖（上传需管理员权限，故定 P2）。修法：从两侧白名单移除 `ppsm`，并核对同族的 `pptm/potm/ppam` 确实都不在表内。验证：`test/extPolicy.test.js` 增加宏格式家族全被拒的断言 + 前端 `utils.test.js` 同步。 |
 
 ### 2.2 已关闭改进项（11）
 
