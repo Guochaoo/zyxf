@@ -1,7 +1,7 @@
 # 部署到阿里云 ECS（systemd + nginx）
 
 > 后端用 **systemd** 托管（`deploy/zyxf.service`），前端构建产物由 **nginx** 托管并反代 `/api`，HTTPS 用 Let's Encrypt。
-> 部署不再依赖宝塔面板管理 Node 项目——SSH 上去 `git fetch + reset --hard`（对齐 origin/main）+ 装依赖 + 构建 + `systemctl restart zyxf` 即可，由 `.github/workflows/deploy.yml` 全自动完成。
+> 部署不再依赖宝塔面板管理 Node 项目——SSH 上去 `git fetch + reset --hard`（对齐 origin/main）+ 装依赖 + 构建 + `systemctl restart zyxf` 即可，由 `.github/workflows/deploy.yml` 全自动完成；部署后健康检查（`/api/health`）失败时，workflow 会自动把服务器退回部署前的修订并重建，避免线上持续 502。
 
 架构：
 
@@ -249,9 +249,10 @@ server {
     # 安全响应头。CSP 必须由托管 HTML 的 nginx 下发——后端只服务 /api，那里的
     # CSP 管不到页面。若某个 location 自己写了 add_header，会屏蔽本级继承，需重复声明。
     # 策略含义：script-src 仅 self（构建产物无内联脚本）；style-src 需 unsafe-inline
-    # （React 内联 style）；connect-src https: 覆盖 OSS 与用户自带 LLM；frame-src https:
+    # （React 内联 style）再加 fonts.googleapis.com（index.html 引入的 DM Sans 样式表，
+    # 缺它会被静默拦掉）；connect-src https: 覆盖 OSS 与用户自带 LLM；frame-src https:
     # 给 IMM WebOffice 预览；font-src 给 Google Fonts。建议先用 Report-Only 观察。
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
@@ -313,11 +314,26 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 - 后端重启：`systemctl restart zyxf`
 - 后端状态：`systemctl status zyxf`
 - 前端重构：`cd /opt/zyxf/frontend && npm install && npm run build`
-- 数据库备份（重要）：
+- 数据库备份（重要）：**注意后端启用了 WAL 模式**（`db.js` 的 `PRAGMA journal_mode = WAL`），
+  只 `cp data.db` 会得到一个**空库或严重陈旧的库**——已提交事务可能全在 `data.db-wal` 里。
+  本仓库开发库就是现成反例：`data.db` 仅 4 KB，而 `data.db-wal` 有 600 KB，单独拷贝后
+  `SELECT COUNT(*) FROM files` 直接报 `no such table: files`。
+
   ```bash
-  cp /opt/zyxf/backend/data.db ~/data.db.bak-$(date +%Y%m%d)
+  # 方式一：停服后整组拷贝（最稳）
+  systemctl stop zyxf
+  mkdir -p ~/db-backup-$(date +%F)
+  cp -a /opt/zyxf/backend/data.db* ~/db-backup-$(date +%F)/
+  systemctl start zyxf
+
+  # 方式二：不停服，用 SQLite 在线备份（需要 sqlite3 CLI）
+  sqlite3 /opt/zyxf/backend/data.db ".backup '/root/data.db.bak-$(date +%F)'"
+
+  # 方式二备选：机器上没有 sqlite3 CLI 时，用 Node 自带的 node:sqlite
+  node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync('/opt/zyxf/backend/data.db').exec(\"VACUUM INTO '/root/data.db.bak'\")"
   ```
-  建议加 crontab 每日备份。
+
+  建议加 crontab 每日备份，并**定期抽查**备份能打开（`sqlite3 ~/data.db.bak-xxxx '.tables'`）。
 
 ---
 

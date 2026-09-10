@@ -4,9 +4,17 @@ name: CI
 # （与 deploy.yml 同口径，见 BUG-19）。升级时用
 # `git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>` 重新解析 SHA。
 on:
+  # dev 是实际开发分支（AGENTS.md §2.1：直接在 dev 上开发，仅在人类要求时才向 main 开 PR）。
+  # 只监听 PR 到 main 的话，开发全程没有任何校验——破坏会在发布那一刻才暴露。
+  push:
+    branches: [dev]
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened]
+
+# 最小权限：CI 只需要读仓库（GITHUB_TOKEN 的默认权限可能包含写）。
+permissions:
+  contents: read
 
 jobs:
   backend-test:
@@ -23,6 +31,10 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci --no-audit --no-fund
+      # 漏洞门禁：`npm ci` 按 lockfile 严格安装，而此前的安装参数是 --no-audit，且没有任何
+      # audit 步骤——BUG-35（overrides 把 qs 锁在漏洞区间上界）正是靠人工审计才发现的，
+      # CI 对 lockfile 里的已知漏洞完全无感。只查会进入生产运行时的依赖（--omit=dev）。
+      - run: npm audit --omit=dev --audit-level=high
       # `npm test` relies on node:test's mock.module, which requires the
       # --experimental-test-module-mocks flag on Node 24. Do not remove the
       # flag from backend/package.json without re-verifying tests still pass,
@@ -43,5 +55,14 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm test
       - run: npm run build
+      # 构建产物断言：`npm run build` 退出码为 0 不代表产物可用（root/outDir/插件配置改错时
+      # vite 仍可能成功退出而产出空目录）。部署脚本把 dist/ 原样交给 nginx 托管，所以这里必须
+      # 确认入口 HTML 与带哈希的 JS/CSS 真的存在，否则会出现「CI 绿、线上白屏」。
+      - name: Verify build artifact
+        run: |
+          test -s dist/index.html
+          test "$(find dist/assets -name '*.js' | wc -l)" -gt 0
+          test "$(find dist/assets -name '*.css' | wc -l)" -gt 0
