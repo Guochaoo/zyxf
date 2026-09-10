@@ -67,7 +67,7 @@ export function normalizeExt(ext) {
 export async function downloadFileById(file, getFileUrl) {
   const meta = await getFileUrl(file.id, { download: true });
   const resp = await fetch(meta.url);
-  if (!resp.ok) throw new Error(`下载失败 (${resp.status})`);
+  if (!resp.ok) throw new Error(i18n.t('common.downloadFailedStatus', { status: resp.status }));
   const blob = await resp.blob();
   const href = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -84,7 +84,7 @@ export async function downloadAndAlert(file, getFileUrl) {
   try {
     await downloadFileById(file, getFileUrl);
   } catch (e) {
-    alert(e.message || '下载失败');
+    alert(e.message || i18n.t('common.downloadFailed'));
   }
 }
 
@@ -100,6 +100,6 @@ export function isLargeFile(size) {
 }
 
 // Pull the backend error message out of an axios error, with a fallback.
-export function errMsg(e, fallback = '操作失败') {
+export function errMsg(e, fallback = i18n.t('common.actionFailed')) {
   return e?.response?.data?.error || e?.message || fallback;
 }

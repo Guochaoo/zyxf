@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getToken, clearToken } from './ui.js';
+import i18n from './i18n/index.js';
 
 const api = axios.create({ baseURL: '/api' });
 
@@ -54,7 +55,7 @@ export async function chatStream(messages, { onDelta, onFiles, signal, llm } = {
   });
 
   if (!res.ok) {
-    let message = `请求失败（${res.status}）`;
+    let message = i18n.t('common.requestFailed', { status: res.status });
     try {
       const data = await res.json();
       if (data?.error) message = data.error;
@@ -84,7 +85,7 @@ export async function chatStream(messages, { onDelta, onFiles, signal, llm } = {
       }
       if (event.type === 'delta') onDelta?.(event.text);
       else if (event.type === 'files') onFiles?.(event.files);
-      else if (event.type === 'error') throw new Error(event.message || 'AI 服务出错');
+      else if (event.type === 'error') throw new Error(event.message || i18n.t('chat.err'));
     }
   }
 }

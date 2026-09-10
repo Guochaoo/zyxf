@@ -418,8 +418,8 @@ export default function BrowsePage() {
         <FloatingPill className="pointer-events-none text-black/70 bg-black/5 border border-black/10">
           {t('browse.moving', { name: dragging.name })}
           {sort === 'manual'
-            ? ' — 在行的上/下边缘可插入排序，拖到文件夹中部可移入'
-            : ' — 拖到左侧目录中的文件夹'}
+            ? t('browse.dragSortHint')
+            : t('browse.dragMoveHint')}
         </FloatingPill>
       )}
       {moveError && (

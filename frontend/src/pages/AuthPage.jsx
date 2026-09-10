@@ -23,15 +23,14 @@ const LABEL_CLS = 'mb-2 block text-xs font-medium text-neutral-700';
 const SUBMIT_CLS =
   'mt-2 inline-flex w-full items-center justify-center gap-2 rounded-[14px] bg-brand-600 px-4 py-2.5 sm:py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60';
 
-const SubmitButton = ({ loading, idleText }) => {
-  const { t } = useTranslation();
-  return (
-    <button type="submit" disabled={loading} className={SUBMIT_CLS}>
-      {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-      {loading ? `${idleText.slice(0, 2)}${t('auth.loadingSuffix')}` : idleText}
-    </button>
-  );
-};
+// 加载态文案由调用方以完整句子传入：中英构词不同（中文「X中…」/ 英文 -ing），
+// 不能用「取前两字 + 后缀」拼接——那会把英文拼成 “Siing…”（BUG）。
+const SubmitButton = ({ loading, idleText, loadingText }) => (
+  <button type="submit" disabled={loading} className={SUBMIT_CLS}>
+    {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+    {loading ? loadingText : idleText}
+  </button>
+);
 
 // 密码输入框 + 显隐切换（登录/注册两表单共用，显隐状态各自独立）。
 function PasswordInput({ id, value, onChange, autoComplete }) {
@@ -142,7 +141,11 @@ function LoginForm() {
         </div>
 
         {err && <Toast type="error" message={err} onClose={() => setErr('')} />}
-        <SubmitButton loading={loading} idleText={t('auth.login')} />
+        <SubmitButton
+          loading={loading}
+          idleText={t('auth.login')}
+          loadingText={t('auth.loginLoading')}
+        />
       </form>
 
       <AuthSwapLink to="/register" prompt={t('auth.noAccount')} action={t('auth.goRegister')} />
@@ -257,7 +260,11 @@ function RegisterForm() {
         </div>
 
         {err && <Toast type="error" message={err} onClose={() => setErr('')} />}
-        <SubmitButton loading={loading} idleText={t('auth.registerBtn')} />
+        <SubmitButton
+          loading={loading}
+          idleText={t('auth.registerBtn')}
+          loadingText={t('auth.registerLoading')}
+        />
       </form>
 
       <AuthSwapLink to="/login" prompt={t('auth.haveAccount')} action={t('auth.goLogin')} />

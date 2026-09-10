@@ -4,6 +4,10 @@ import { Loader2 } from 'lucide-react';
 import { refreshWebofficeToken } from '../../api.js';
 import PreviewUnavailable from './PreviewUnavailable.jsx';
 
+// SDK 加载失败时抛出的可辨识错误码：文案在组件内按当前语言翻译
+// （loadSdk 是模块级函数，取不到 hook 的 t）。
+const SDK_LOAD_FAILED = 'SDK_LOAD_FAILED';
+
 /**
  * OfficeViewer — renders WebOffice via the official IMM JS-SDK.
  *
@@ -29,7 +33,7 @@ function loadSdk() {
     const existing = document.querySelector('script[data-weboffice-sdk]');
     if (existing) {
       existing.addEventListener('load', () => resolve(window.aliyun), { once: true });
-      existing.addEventListener('error', () => reject(new Error('WebOffice SDK 加载失败')), { once: true });
+      existing.addEventListener('error', () => reject(new Error(SDK_LOAD_FAILED)), { once: true });
       return;
     }
     const s = document.createElement('script');
@@ -37,7 +41,7 @@ function loadSdk() {
     s.dataset.webofficeSdk = '1';
     s.async = true;
     s.onload = () => resolve(window.aliyun);
-    s.onerror = () => reject(new Error('WebOffice SDK 加载失败'));
+    s.onerror = () => reject(new Error(SDK_LOAD_FAILED));
     document.head.appendChild(s);
   });
   return sdkPromise;
