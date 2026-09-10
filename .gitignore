@@ -9,6 +9,7 @@ data.db-*
 certs/
 
 # local dev / scratch
+.npmrc
 .tmp-*
 page.html
 backend/run-backend-hidden.ps1
