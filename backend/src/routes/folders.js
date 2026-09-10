@@ -63,24 +63,31 @@ const findFolderInParent = (name, parentId, excludeId = null) =>
   findSibling(db, 'folders', { name, parentColumn: 'parent_id', parentId, excludeId });
 
 // Recursive total size of each given folder (sum of all descendant files).
+// 分批执行：`IN (${placeholders})` 的占位符数等于该层子项数，SQLite 的绑定参数上限是
+// 32766（BUG-08），单层超过它会让整个目录页 500 且没有降级路径。按 500 个 root 分批，
+// 各批结果累加到同一张 map（每次递归只覆盖自己那批 root，互不影响）。
+const FOLDER_SIZE_BATCH = 500;
 function computeFolderSizes(folderIds) {
   if (!folderIds.length) return {};
-  const placeholders = folderIds.map(() => '?').join(',');
-  const rows = db
-    .prepare(
-      `WITH RECURSIVE sub(root_id, id) AS (
-         SELECT id AS root_id, id FROM folders WHERE id IN (${placeholders})
-         UNION ALL
-         SELECT s.root_id, f.id FROM folders f JOIN sub s ON f.parent_id = s.id
-       )
-       SELECT s.root_id AS id, COALESCE(SUM(fl.size), 0) AS size
-       FROM sub s
-       LEFT JOIN files fl ON fl.folder_id = s.id
-       GROUP BY s.root_id`
-    )
-    .all(...folderIds);
   const map = {};
-  for (const r of rows) map[r.id] = r.size;
+  for (let i = 0; i < folderIds.length; i += FOLDER_SIZE_BATCH) {
+    const chunk = folderIds.slice(i, i + FOLDER_SIZE_BATCH);
+    const placeholders = chunk.map(() => '?').join(',');
+    const rows = db
+      .prepare(
+        `WITH RECURSIVE sub(root_id, id) AS (
+           SELECT id AS root_id, id FROM folders WHERE id IN (${placeholders})
+           UNION ALL
+           SELECT s.root_id, f.id FROM folders f JOIN sub s ON f.parent_id = s.id
+         )
+         SELECT s.root_id AS id, COALESCE(SUM(fl.size), 0) AS size
+         FROM sub s
+         LEFT JOIN files fl ON fl.folder_id = s.id
+         GROUP BY s.root_id`
+      )
+      .all(...chunk);
+    for (const r of rows) map[r.id] = r.size;
+  }
   return map;
 }
 
@@ -130,7 +137,29 @@ async function batchOss(items, op, size = 10) {
 // DB in one transaction, then delete the old objects. overrides tell
 // objectKeyForFile / placeholderKeyForFolder how the top folder moved.
 // Returns { conflict: true } when a target OSS path is already taken.
-async function relocateFolderSubtree(folderId, { parentOverrides, nameOverrides, updateFolder }) {
+//
+// BUG-54：**调用方必须先在一个 transaction() 内完成「环校验 + 唯一性 + UPDATE」**，
+// 再由这里的后半段执行 OSS 搬运。原实现把校验放在事务外、OSS 往返之后才写库，
+// 两个并发 PATCH 都能通过校验，于是能写出 parent 环（子树从此不可达）或同父同名。
+// 对象复制必须留在事务外（它是网络往返，放进去会长时间占住写锁），因此顺序是：
+//   ① 事务：校验 + 写库（旧键仍在，两边都还能读到内容）
+//   ② 复制新键（此处）
+//   ③ 删旧键
+// ②③ 之间失败只留下一次性的孤儿对象（IMPROVE-14 的补偿任务），不会再产生环或脏 DB。
+async function applySubtreeObjectMove(plan) {
+  const { filesToMove, placeholdersToMove } = plan;
+  // Copy first (both stores in sync), then delete the old objects.
+  await batchOss(filesToMove, (m) => copyOssObject(m.oss_key, m.newKey));
+  await batchOss(placeholdersToMove, (m) => putEmptyOssObject(m.newKey));
+
+  await batchOss(filesToMove, (m) => deleteOssObjectIfExists(m.oss_key));
+  await batchOss(placeholdersToMove, (m) => deleteOssObjectIfExists(m.oldKey));
+  return { ok: true };
+}
+
+// 计算搬迁计划（不触网、不写库）：把子树里需要换 key 的文件与占位对象列出来。
+// 与 DB 写入同在事务内执行，因此「目标键是否被别的文件占用」和「写库」是原子的。
+function planFolderSubtreeMove(folderId, { parentOverrides, nameOverrides } = {}) {
   const { folderIds, files, folderMap } = collectFolderTree(folderId);
 
   const fileMoves = files.map((file) => ({
@@ -153,23 +182,28 @@ async function relocateFolderSubtree(folderId, { parentOverrides, nameOverrides,
     .filter((move) => move.oldKey && move.newKey);
 
   // Only objects whose key actually changes need copying / deleting.
-  const filesToMove = fileMoves.filter((m) => m.oss_key !== m.newKey);
-  const placeholdersToMove = placeholderMoves.filter((m) => m.oldKey !== m.newKey);
+  return {
+    conflict: false,
+    folderIds,
+    filesToMove: fileMoves.filter((m) => m.oss_key !== m.newKey),
+    placeholdersToMove: placeholderMoves.filter((m) => m.oldKey !== m.newKey),
+    fileMoves,
+  };
+}
 
-  // Copy first (both stores in sync), then update DB, then delete old objects.
-  await batchOss(filesToMove, (m) => copyOssObject(m.oss_key, m.newKey));
-  await batchOss(placeholdersToMove, (m) => putEmptyOssObject(m.newKey));
+// 事务内执行：计划 + 更新 files.oss_key + 调用方给的文件夹 UPDATE。
+// 返回 { conflict: true } 表示目标键已被占用（调用方据此回 409，事务会回滚）。
+function relocateFolderSubtree(folderId, { parentOverrides, nameOverrides, updateFolder } = {}) {
+  const plan = planFolderSubtreeMove(folderId, { parentOverrides, nameOverrides });
+  if (plan.conflict) return { conflict: true };
 
   const updateFile = db.prepare('UPDATE files SET oss_key = ? WHERE id = ?');
   const tx = transaction(() => {
     updateFolder();
-    for (const move of fileMoves) updateFile.run(move.newKey, move.id);
+    for (const move of plan.fileMoves) updateFile.run(move.newKey, move.id);
   });
   tx();
-
-  await batchOss(filesToMove, (m) => deleteOssObjectIfExists(m.oss_key));
-  await batchOss(placeholdersToMove, (m) => deleteOssObjectIfExists(m.oldKey));
-  return { ok: true };
+  return { conflict: false, plan };
 }
 
 function getBreadcrumb(id) {
@@ -347,19 +381,10 @@ router.post('/', requireAdmin, wrapAsync(async (req, res, next) => {
   }
 }));
 
-// Shared call shell for folder rename/move: run relocateFolderSubtree and map
-// the "target OSS path taken" and UNIQUE-constraint outcomes to their 409s.
-// Throws through on any other error (caller's wrapAsync forwards it as 500).
-async function relocateOrConflict(id, overrides, updateFolder, uniqueMessage) {
-  try {
-    const result = await relocateFolderSubtree(id, { ...overrides, updateFolder });
-    if (result.conflict) return { error: '目标存储路径已存在同名文件' };
-    return { ok: true };
-  } catch (e) {
-    if (isUniqueError(e)) return { error: uniqueMessage };
-    throw e;
-  }
-}
+// 事务内的校验失败用这两个错误类型区分「重名（409）」与「目标非法（400）」，
+// 避免把 400 类问题也算成 409。
+class UniqueFolderNameError extends Error {}
+class MoveTargetError extends Error {}
 
 // Rename or move folder (parent_id = null means root)
 router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
@@ -368,8 +393,17 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
   const folder = getFolder(id);
   if (!folder) return res.status(404).json({ error: '资源不存在' });
 
-  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
-    const newName = String(req.body?.name || '').trim();
+  const body = req.body || {};
+  const hasName = Object.prototype.hasOwnProperty.call(body, 'name');
+  const hasParent = Object.prototype.hasOwnProperty.call(body, 'parent_id');
+  // 空 body / 全是未知字段时，原先会被当成「parent_id: undefined → 移动到根」，
+  // 于是一个拼错的请求就静默把整棵子树搬到根并复制所有对象。必须显式 400。
+  if (!hasName && !hasParent) {
+    return res.status(400).json({ error: '请求体必须包含 name 或 parent_id' });
+  }
+
+  if (hasName) {
+    const newName = String(body.name || '').trim();
     if (!newName) return res.status(400).json({ error: '名称不能为空' });
     if (newName === folder.name) return res.json({ ok: true, unchanged: true });
     if (containsPathSeparator(newName)) {
@@ -379,54 +413,72 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
       return res.status(400).json({ error: '.preview 是系统保留名称，请换一个' });
     }
     const parentId = folder.parent_id ?? null;
-    if (findFolderInParent(newName, parentId, id)) {
-      return res.status(409).json({ error: '同名文件夹已存在' });
-    }
 
-    const outcome = await relocateOrConflict(
-      id,
-      { nameOverrides: new Map([[id, newName]]) },
-      () => db.prepare('UPDATE folders SET name = ? WHERE id = ?').run(newName, id),
-      '同名文件夹已存在'
-    );
-    if (outcome.error) return res.status(409).json({ error: outcome.error });
+    // BUG-54：重名检查、环校验与 UPDATE 必须在同一个 BEGIN IMMEDIATE 事务里，
+    // 之后才做 OSS 搬运。原实现把检查放在事务外，两个并发改名/移动都能通过检查后提交。
+    let outcome;
+    try {
+      outcome = relocateFolderSubtree(id, {
+        nameOverrides: new Map([[id, newName]]),
+        updateFolder: () => {
+          if (findFolderInParent(newName, parentId, id)) throw new UniqueFolderNameError();
+          db.prepare('UPDATE folders SET name = ? WHERE id = ?').run(newName, id);
+        },
+      });
+    } catch (e) {
+      if (e instanceof UniqueFolderNameError || isUniqueError(e)) {
+        return res.status(409).json({ error: '同名文件夹已存在' });
+      }
+      throw e;
+    }
+    if (outcome.conflict) {
+      return res.status(409).json({ error: '目标存储路径已存在同名文件' });
+    }
+    await applySubtreeObjectMove(outcome.plan);
     invalidateSearchCache();
     return res.json({ ok: true, name: newName });
   }
 
-  const raw = req.body?.parent_id;
+  const raw = body.parent_id;
   const newParent = parseOptionalFolderId(raw);
   if (Number.isNaN(newParent)) return res.status(400).json({ error: '无效的父级 ID' });
 
   if (newParent === id) return res.status(400).json({ error: '不能移动到自己内部' });
-
-  if (newParent !== null) {
-    if (!folderExists(db, newParent)) return res.status(400).json({ error: '目标父文件夹不存在' });
-    // Walk up from newParent; if we hit id, it's a descendant => cycle.
-    let cur = newParent;
-    const seen = new Set();
-    while (cur != null && !seen.has(cur)) {
-      if (cur === id) return res.status(400).json({ error: '不能移动到自身的子文件夹中' });
-      seen.add(cur);
-      const row = db.prepare('SELECT parent_id FROM folders WHERE id = ?').get(cur);
-      cur = row?.parent_id ?? null;
-    }
-  }
-
   if (newParent === (folder.parent_id ?? null)) return res.json({ ok: true, unchanged: true });
-  if (findFolderInParent(folder.name, newParent, id)) {
-    return res.status(409).json({ error: '目标文件夹中已存在同名文件夹' });
-  }
 
-  const so = nextSortOrder(db, 'folders', 'parent_id', newParent);
-  const outcome = await relocateOrConflict(
-    id,
-    { parentOverrides: new Map([[id, newParent]]) },
-    () =>
-      db.prepare('UPDATE folders SET parent_id = ?, sort_order = ? WHERE id = ?').run(newParent, so, id),
-    '目标位置已存在同名文件夹'
-  );
-  if (outcome.error) return res.status(409).json({ error: outcome.error });
+  let outcome;
+  try {
+    outcome = relocateFolderSubtree(id, {
+      parentOverrides: new Map([[id, newParent]]),
+      updateFolder: () => {
+        // 事务内重做全部校验（事务外的前置检查只用于尽早给出友好文案）：
+        // 目标必须存在、不能是自己的子孙（环）、目标父级下不能已有同名文件夹。
+        if (newParent !== null && !folderExists(db, newParent)) throw new MoveTargetError('目标父文件夹不存在');
+        if (newParent !== null) {
+          let cur = newParent;
+          const seen = new Set();
+          while (cur != null && !seen.has(cur)) {
+            if (cur === id) throw new MoveTargetError('不能移动到自身的子文件夹中');
+            seen.add(cur);
+            cur = db.prepare('SELECT parent_id FROM folders WHERE id = ?').get(cur)?.parent_id ?? null;
+          }
+        }
+        if (findFolderInParent(folder.name, newParent, id)) throw new UniqueFolderNameError();
+        const so = nextSortOrder(db, 'folders', 'parent_id', newParent);
+        db.prepare('UPDATE folders SET parent_id = ?, sort_order = ? WHERE id = ?').run(newParent, so, id);
+      },
+    });
+  } catch (e) {
+    if (e instanceof UniqueFolderNameError || isUniqueError(e)) {
+      return res.status(409).json({ error: '目标位置已存在同名文件夹' });
+    }
+    if (e instanceof MoveTargetError) return res.status(400).json({ error: e.message });
+    throw e;
+  }
+  if (outcome.conflict) {
+    return res.status(409).json({ error: '目标存储路径已存在同名文件' });
+  }
+  await applySubtreeObjectMove(outcome.plan);
   invalidateSearchCache();
   res.json({ ok: true });
 }));

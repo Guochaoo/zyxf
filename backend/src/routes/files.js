@@ -63,10 +63,24 @@ const SEPARATOR_ERROR = '文件名不能包含路径分隔符（/ 或 \\）';
 const findFileByName = (name, folderId, excludeId) =>
   findSibling(db, 'files', { name, parentColumn: 'folder_id', parentId: folderId, excludeId });
 
+// 目标 OSS key 是否已被别的文件记录占用。**按 key 查重是必需的**：`cleanObjectSegment`
+// 不是单射——NFC/NFD 两种写法的 `café.pdf`、以及 `.`/`_` 这类段名都会映射到同一个 key，
+// 而按 name 查重的 SQL 是字节比较（NFD ≠ NFC），于是 upload-url 会放行并把已存在对象的
+// key 发回给浏览器，直传时**覆盖掉既有文件的内容**，之后 POST /files 才撞 UNIQUE(oss_key)
+// 报 409，前端 cleanup-upload 又因该 key 已被引用而拒绝清理 → 内容被换且不可恢复。
+const findFileByOssKey = (key, excludeId = null) =>
+  excludeId == null
+    ? db.prepare('SELECT id FROM files WHERE oss_key = ?').get(key)
+    : db.prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?').get(key, excludeId);
+
+const KEY_TAKEN_ERROR = '该存储路径已被占用（同名或等价名称的文件已存在）';
+
 // Shared validation for both upload steps: filename, parent folder, duplicate
 // name and extension whitelist. Returns { trimmed, pid, ext } or { error, status }.
 function validateUploadInput(name, folderId) {
-  const trimmed = sanitizeName(name);
+  // 文件名统一按 NFC 落库：OSS key 由 cleanObjectSegment 归一化，库里若保留 NFD 形式，
+  // 「按 name 查重」与「按 key 查重」就永远不等价（同一条目两种写法都能建）。
+  const trimmed = sanitizeName(name).normalize('NFC');
   if (!trimmed) return { error: '文件名不能为空' };
   if (containsPathSeparator(trimmed)) return { error: SEPARATOR_ERROR };
   const pid = parseOptionalFolderId(folderId);
@@ -76,6 +90,10 @@ function validateUploadInput(name, folderId) {
   }
   if (findFileByName(trimmed, pid)) {
     return { error: '此文件夹中已存在同名文件', status: 409 };
+  }
+  // 名称不同但 key 相同（归一化/清洗后等价）同样要拦，见 findFileByOssKey 的说明。
+  if (findFileByOssKey(objectKeyForFile(db, pid, trimmed))) {
+    return { error: KEY_TAKEN_ERROR, status: 409 };
   }
   const ext = normalizeExt(path.extname(trimmed));
   if (!isExtAllowed(ext)) {
@@ -236,8 +254,19 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
   if (!file) return;
   const id = file.id;
 
+  const patchBody = req.body || {};
+  if (
+    !Object.prototype.hasOwnProperty.call(patchBody, 'name') &&
+    !Object.prototype.hasOwnProperty.call(patchBody, 'folder_id')
+  ) {
+    // 空 body / 全是未知字段原先会被当成「folder_id: undefined → 移动到根」，
+    // 一个拼错的请求就静默移动文件（并复制一份 OSS 对象）。必须显式 400。
+    return res.status(400).json({ error: '请求体必须包含 name 或 folder_id' });
+  }
+
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
-    const newName = sanitizeName(req.body?.name);
+    // 与上传路径同款 NFC 归一化：否则同一条目能用 NFD 写法再建一份，而两者的 OSS key 相同。
+    const newName = sanitizeName(req.body?.name).normalize('NFC');
     if (!newName) return res.status(400).json({ error: '名称不能为空' });
     if (containsPathSeparator(newName)) return res.status(400).json({ error: SEPARATOR_ERROR });
     if (newName === file.name) return res.json({ ok: true, unchanged: true });
