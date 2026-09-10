@@ -181,12 +181,14 @@ export default function BrowsePage() {
         <FloatingPill className="text-red bg-[#fef2f2] border border-[#fecaca]">{moveError}</FloatingPill>
       )}
       {/* 同步结果用顶部 Toast 通知卡（与登录/注册页同一个自定义组件）；
-          key 绑定通知 id，保证连续两次结果文本相同时也会重新计时。 */}
+          key 绑定通知 id，保证连续两次结果文本相同时也会重新计时。
+          主行给短标题、副行给明细，避免长文案被单行省略号截断。 */}
       {syncNotice && (
         <Toast
           key={syncNotice.id}
           type={syncNotice.ok ? 'success' : 'error'}
-          message={syncNotice.text}
+          message={syncNotice.message}
+          sub={syncNotice.sub}
           onClose={clearSyncNotice}
         />
       )}
