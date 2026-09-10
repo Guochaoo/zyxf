@@ -3,8 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowDown } from 'lucide-react';
 import { ChartTooltip, IconBadge } from '../../components/InsightCards.jsx';
 
-// GitHub 式年度下载热力图。自包含：只依赖传入的 rows，内部管理 hover 与尺寸测量。
-// 从 DashboardPage 抽出（IMPROVE-01：先迁无状态展示）。
+// GitHub 式年度下载热力图（IMPROVE-01：从 DashboardPage 抽出）。自包含，只依赖传入的 rows。
 
 const DAY_MS = 86400000;
 const ACCENT = '#3d9aff';

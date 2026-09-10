@@ -66,8 +66,7 @@ export function Section({ sub, body, resolving, start, children }) {
 }
 
 // 检索/推荐文件 → 小胶囊：彩色类型徽章 + 文件名 + 外链图标，整颗可点击打开/预览
-// 色调按「同族同色」派生，族别取自后端白名单（extPolicy.js，IMPROVE-19 的同源做法）：
-// 原先手抄 9 个扩展名，白名单里的 dot/rtf/wps/dps/dpt/et/ppsx/potx 一律掉到默认蓝色。
+// IMPROVE-19：色调按族别派生（族别取自后端白名单），手抄的扩展名表会漏掉 wps/dps/et 等。
 const TONE_BY_FAMILY = {
   word: 'bg-orange',
   ppt: 'bg-orange',

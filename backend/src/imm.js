@@ -13,12 +13,8 @@ import { envOrThrow } from './env.js';
 // This module hand-rolls the Aliyun RPC signature (HMAC-SHA1) so we don't
 // need to pull in the full OpenAPI SDK dependency tree just for one call.
 
-// Aliyun RPC 签名规范与 form 表单体的空格编码不同：
-//  - 签名（stringToSign / canonical）用 RFC 3986，空格编码为 %20；
-//  - application/x-www-form-urlencoded 表单体用 HTML 表单规则，空格编码为 +。
-// 此外 `!` `'` `(` `)` `*` 都需要按 utf8 字节转义（RPC 规范要求）。
-// 若两者共用同一个编码器（把 %20 换成 +），含空格的文件名/oss_key 会导致
-// 签名串与实际发送的 body 不一致 → IMM 签名校验失败（BUG-03）。
+// BUG-03：签名用 RFC 3986（空格 → %20），form 体用 HTML 表单规则（空格 → +）。
+// 两者共用编码器会让含空格的文件名/oss_key 签名校验失败。
 const encodeRfc3986 = (str) =>
   encodeURIComponent(String(str)).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
 

@@ -20,17 +20,13 @@ export const BLOCKED_EXTS = new Set([
 
 // Archives are download-only (never previewed); unknown types are also forced
 // to download at serve time.
-// 导出供前端共享分类表（IMPROVE-19）：前端可预览集合 = ALLOWED_EXTS − ARCHIVE_EXTS，
-// 手抄副本会随白名单更新而漂移，故直接以本文件为唯一来源。
+// IMPROVE-19：导出给前端复用（前端可预览集合 = ALLOWED_EXTS − ARCHIVE_EXTS），避免手抄漂移。
 export const ARCHIVE_EXTS = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2']);
 
 // Only these file types are allowed for upload.
 // All previewable files go through Alibaba Cloud WebOffice (IMM doc/preview).
-// Archives are download-only.
-// Macro-enabled Office formats (docm/dotm/xlsm/xltm/pptm/potm/ppsm/ppam) are
-// rejected: they are the standard vector for distributing malware to students.
-// ppsm 曾误列在表内（它是 PowerPoint Show with Macros，与 pptm 同族）——BUG-23
-// 把前端对齐到这份白名单时又把它固化了一轮，现一并移除。
+// Archives are download-only. Macro-enabled Office formats (docm/dotm/xlsm/xltm/
+// pptm/potm/ppsm/ppam) are rejected: they are the standard malware vector (BUG-50)。
 export const ALLOWED_EXTS = new Set([
   // Word
   'doc', 'dot', 'wps', 'wpt', 'docx', 'dotx', 'rtf',

@@ -29,9 +29,7 @@ let sdkPromise = null;
 function loadSdk() {
   if (window.aliyun?.config) return Promise.resolve(window.aliyun);
   if (sdkPromise) return sdkPromise;
-  // 失败时必须清掉模块级缓存、并移除加载失败的 script（BUG-60）：否则本次会话里所有
-  // Office 预览都会立刻拿到同一个 rejected Promise——一次 CDN 抖动/断网就永久落到
-  // 「预览服务出错」，只有整页刷新才能恢复。移除后重试会重新插入 script 真正再请求一次。
+  // BUG-60：失败要清缓存并移除 script，否则本次会话所有 Office 预览都复用它、只能整页刷新。
   const onFail = (reject) => (err) => {
     sdkPromise = null;
     document.querySelector('script[data-weboffice-sdk]')?.remove();

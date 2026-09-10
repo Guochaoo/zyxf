@@ -64,9 +64,7 @@ const findFolderInParent = (name, parentId, excludeId = null) =>
   findSibling(db, 'folders', { name, parentColumn: 'parent_id', parentId, excludeId });
 
 // Recursive total size of each given folder (sum of all descendant files).
-// 分批执行：`IN (${placeholders})` 的占位符数等于该层子项数，SQLite 的绑定参数上限是
-// 32766（BUG-08），单层超过它会让整个目录页 500 且没有降级路径。按 500 个 root 分批，
-// 各批结果累加到同一张 map（每次递归只覆盖自己那批 root，互不影响）。
+// BUG-08：按 500 个 root 分批，避免单层子项数超过 SQLite 的绑定参数上限（32766）而 500。
 const FOLDER_SIZE_BATCH = 500;
 function computeFolderSizes(folderIds) {
   if (!folderIds.length) return {};
@@ -92,11 +90,8 @@ function computeFolderSizes(folderIds) {
   return map;
 }
 
-// Collect every descendant folder id and its files using two flat queries
-// (BUG-06: the old version ran one query per node = N+1). Contract: returns
-// { folderIds, files } where each file row carries { id, folder_id, name, oss_key }.
-// `folderMap` (id -> { name, parent_id }) is an add-on so callers can compute
-// OSS keys from memory instead of re-querying per file/folder.
+// Collect every descendant folder id and its files using two flat queries.
+// BUG-06：原先每个节点查一次（N+1）。返回 { folderIds, files, folderMap }。
 function collectFolderTree(folderId) {
   // Query 1: all folders once, then group children by parent in memory.
   const { folderMap, childrenOf } = buildFolderIndex(
@@ -134,19 +129,9 @@ async function batchOss(items, op, size = 10) {
   }
 }
 
-// Rename or move a folder subtree: copy objects to their new keys, update the
-// DB in one transaction, then delete the old objects. overrides tell
-// objectKeyForFile / placeholderKeyForFolder how the top folder moved.
+// BUG-54：校验必须和 UPDATE 在同一个事务里（原先隔着 OSS 往返，并发 PATCH 能写出 parent 环）；
+// 对象复制是网络往返，只能留在事务外，故拆成 applySubtreeObjectMove 的顺序。
 // Returns { conflict: true } when a target OSS path is already taken.
-//
-// BUG-54：**调用方必须先在一个 transaction() 内完成「环校验 + 唯一性 + UPDATE」**，
-// 再由这里的后半段执行 OSS 搬运。原实现把校验放在事务外、OSS 往返之后才写库，
-// 两个并发 PATCH 都能通过校验，于是能写出 parent 环（子树从此不可达）或同父同名。
-// 对象复制必须留在事务外（它是网络往返，放进去会长时间占住写锁），因此顺序是：
-//   ① 事务：校验 + 写库（旧键仍在，两边都还能读到内容）
-//   ② 复制新键（此处）
-//   ③ 删旧键
-// ②③ 之间失败只留下一次性的孤儿对象（IMPROVE-14 的补偿任务），不会再产生环或脏 DB。
 async function applySubtreeObjectMove(plan) {
   const { filesToMove, placeholdersToMove } = plan;
   // Copy first (both stores in sync), then delete the old objects.
@@ -233,8 +218,7 @@ function getBreadcrumb(id) {
 // BUG-06: loaded with two flat queries (one for folders, one for files), then
 // grouped in memory — the old version ran a query per node (N+1).
 router.get('/tree', (_req, res) => {
-  // IMPROVE-15：整树重建（两条全表 SELECT + 内存递归）按 30 s TTL 复用，
-  // 写路径统一调 invalidateTreeCache()。命中时直接回同一份 payload。
+  // IMPROVE-15：整树重建按 30 s TTL 复用，写路径统一调 invalidateLibraryCaches()。
   const cached = getCachedTree();
   if (cached) return res.json(cached);
 
@@ -404,8 +388,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
   const body = req.body || {};
   const hasName = Object.prototype.hasOwnProperty.call(body, 'name');
   const hasParent = Object.prototype.hasOwnProperty.call(body, 'parent_id');
-  // 空 body / 全是未知字段时，原先会被当成「parent_id: undefined → 移动到根」，
-  // 于是一个拼错的请求就静默把整棵子树搬到根并复制所有对象。必须显式 400。
+  // BUG-86：空 body / 未知字段不得被当成「移动到根」。必须显式 400。
   if (!hasName && !hasParent) {
     return res.status(400).json({ error: '请求体必须包含 name 或 parent_id' });
   }
@@ -422,8 +405,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
     }
     const parentId = folder.parent_id ?? null;
 
-    // BUG-54：重名检查、环校验与 UPDATE 必须在同一个 BEGIN IMMEDIATE 事务里，
-    // 之后才做 OSS 搬运。原实现把检查放在事务外，两个并发改名/移动都能通过检查后提交。
+    // BUG-54：重名检查与 UPDATE 必须同事务，否则并发改名能写出同父同名。
     let outcome;
     try {
       outcome = relocateFolderSubtree(id, {
@@ -459,8 +441,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
     outcome = relocateFolderSubtree(id, {
       parentOverrides: new Map([[id, newParent]]),
       updateFolder: () => {
-        // 事务内重做全部校验（事务外的前置检查只用于尽早给出友好文案）：
-        // 目标必须存在、不能是自己的子孙（环）、目标父级下不能已有同名文件夹。
+        // BUG-54：事务内重做全部校验（事务外的前置检查只为尽早给出友好文案）。
         if (newParent !== null && !folderExists(db, newParent)) throw new MoveTargetError('目标父文件夹不存在');
         if (newParent !== null) {
           let cur = newParent;

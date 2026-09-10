@@ -116,10 +116,8 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
     onFullChange?.(dialog !== null);
   }, [dialog, onFullChange]);
 
-  // 卸载时复位（BUG-64）：App 用 `{!graphFull && <StaggeredMenu/>}` 控制悬浮菜单，而本组件
-  // 的挂载条件是 isBrowse && isLg（≥1024px）。若在「全库弹窗已打开」时窗口缩到 <1024px，
-  // 组件卸载但 graphFull 恒为 true，导航菜单再也不渲染，只能手动刷新。
-  // 用 ref 持有最新回调，保证该清理只在真正卸载时执行（App 传的是稳定的 setState）。
+  // BUG-64：卸载时必须复位 graphFull（窄屏卸载时 App 的悬浮菜单会因此永久消失）。
+  // 用 ref 读最新回调，保证这个清理只在真正卸载时执行。
   const onFullChangeRef = useRef(onFullChange);
   onFullChangeRef.current = onFullChange;
   useEffect(() => () => onFullChangeRef.current?.(false), []);

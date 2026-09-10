@@ -5,12 +5,8 @@ import { CircleUserRound, LogIn, LogOut, Settings } from 'lucide-react';
 import { useClickOutside } from '../hooks/useClickOutside.js';
 import './StaggeredMenu.css';
 
-// 菜单动画库惰性加载（IMPROVE-23）：原先这里是 `import { gsap } from 'gsap'`，而本组件
-// 在 App 层常驻，于是「打开页面」就必须先下载整个 GSAP 运行时（manualChunks 里与
-// framer-motion 合成的 motion chunk 约 196 kB / 69 kB gzip，被 index.html modulepreload
-// 预加载）。改为动态 import 后该 chunk 退出首屏；节点/排序/抽屉都已在 CSS 里预置为
-// 隐藏（.staggered-menu-panel/.sm-prelayers/.sm-prelayer 的 opacity:0），因此等待期间
-// 是「什么都没出现」而不是闪烁；`window.onGdReady` 供部署侧在 CDN 场景下注入。
+// IMPROVE-23：gsap 改为动态 import，避免常驻首屏预加载整个动画库；等待期间面板由 CSS
+// 预置为不可见（opacity:0），所以是「还没出现」而不是闪烁。
 let gsapPromise = null;
 function loadGsap() {
   if (window.gsap) return Promise.resolve(window.gsap);
@@ -317,8 +313,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     openGenRef.current += 1;
     openTlRef.current?.kill();
     openTlRef.current = null;
-    // 被 kill 的打开时间线不会触发它的 onComplete，busyRef 会永久停在 true（BUG-59）：
-    // 之后所有 open/toggle 都在第一行 return，菜单再也打不开，只能刷新页面。
+    // BUG-59：被 kill 的打开时间线不会触发 onComplete，这里必须自己解锁 busyRef。
     busyRef.current = false;
 
     const panel = panelRef.current;
