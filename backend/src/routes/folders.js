@@ -5,7 +5,8 @@ import { copyOssObject, deleteOssObjectIfExists, putEmptyOssObject } from '../os
 import { buildFolderIndex, findSibling, folderExists, groupByKey, isUniqueError, nextSortOrder } from '../dbHelpers.js';
 import { wrapAsync, serviceError } from '../http.js';
 import { objectKeyForFileFromMap, parseOptionalFolderId, placeholderKeyForFolder, placeholderKeyForFolderFromMap } from '../storagePath.js';
-import { invalidateSearchCache } from '../searchService.js';
+import { invalidateLibraryCaches } from '../searchService.js';
+import { getCachedTree, setCachedTree, invalidateTreeCache } from '../treeCache.js';
 
 const router = Router();
 
@@ -232,6 +233,11 @@ function getBreadcrumb(id) {
 // BUG-06: loaded with two flat queries (one for folders, one for files), then
 // grouped in memory — the old version ran a query per node (N+1).
 router.get('/tree', (_req, res) => {
+  // IMPROVE-15：整树重建（两条全表 SELECT + 内存递归）按 30 s TTL 复用，
+  // 写路径统一调 invalidateTreeCache()。命中时直接回同一份 payload。
+  const cached = getCachedTree();
+  if (cached) return res.json(cached);
+
   const folders = db.prepare('SELECT id, name, parent_id, sort_order FROM folders').all();
   const files = db.prepare('SELECT id, name, ext, size, folder_id, sort_order FROM files').all();
 
@@ -262,7 +268,9 @@ router.get('/tree', (_req, res) => {
   };
 
   const rootFiles = (filesOf.get(null) || []).slice().sort(cellCompare).map(nodeFiles);
-  res.json({ tree: build(null), files: rootFiles });
+  const payload = { tree: build(null), files: rootFiles };
+  setCachedTree(payload);
+  res.json(payload);
 });
 
 // List the contents (subfolders + files) of a folder. id=0 means root.
@@ -371,7 +379,7 @@ router.post('/', requireAdmin, wrapAsync(async (req, res, next) => {
       db.prepare('DELETE FROM folders WHERE id = ?').run(info.lastInsertRowid);
       throw e;
     }
-    invalidateSearchCache();
+    invalidateLibraryCaches();
     res.json({ id: info.lastInsertRowid, name: trimmed, parent_id: pid });
   } catch (e) {
     if (isUniqueError(e)) {
@@ -435,7 +443,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
       return res.status(409).json({ error: '目标存储路径已存在同名文件' });
     }
     await applySubtreeObjectMove(outcome.plan);
-    invalidateSearchCache();
+    invalidateLibraryCaches();
     return res.json({ ok: true, name: newName });
   }
 
@@ -479,7 +487,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
     return res.status(409).json({ error: '目标存储路径已存在同名文件' });
   }
   await applySubtreeObjectMove(outcome.plan);
-  invalidateSearchCache();
+  invalidateLibraryCaches();
   res.json({ ok: true });
 }));
 
@@ -554,7 +562,7 @@ router.delete('/:id', requireAdmin, wrapAsync(async (req, res) => {
   }
 
   db.prepare('DELETE FROM folders WHERE id = ?').run(id);
-  invalidateSearchCache();
+  invalidateLibraryCaches();
   res.json({ ok: true, removed_files: keys.length });
 }));
 

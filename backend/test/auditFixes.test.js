@@ -336,6 +336,33 @@ describe('审计修复：搜索快照缓存的写路径失效', () => {
   });
 });
 
+describe('IMPROVE-15：目录树快照缓存与写路径失效', () => {
+  test('生产口径下命中缓存，但写操作后立刻反映新数据', async () => {
+    const token = await adminToken();
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production'; // 树缓存只在非 test 环境启用
+    try {
+      insertFolder('缓存前');
+      const first = await request('GET', '/api/folders/tree');
+      assert.deepEqual(first.body.tree.map((f) => f.name), ['缓存前']);
+
+      // 绕过路由直接改库：缓存未失效 → 仍返回旧快照（证明缓存确实生效）
+      insertFolder('直插不失效');
+      const cached = await request('GET', '/api/folders/tree');
+      assert.deepEqual(cached.body.tree.map((f) => f.name), ['缓存前']);
+
+      // 走路由创建 → 写路径调 invalidateLibraryCaches → 立刻可见
+      const created = await request('POST', '/api/folders', { token, body: { name: '新建', parent_id: null } });
+      assert.equal(created.status, 200);
+      const fresh = await request('GET', '/api/folders/tree');
+      assert.ok(fresh.body.tree.some((f) => f.name === '新建'), '新建的文件夹必须立刻出现在目录树里');
+      assert.ok(fresh.body.tree.some((f) => f.name === '直插不失效'), '缓存已整体失效，直插的行也应可见');
+    } finally {
+      process.env.NODE_ENV = prev;
+    }
+  });
+});
+
 describe('审计修复：sync 的 repaired 与 removed 不再指向同一批记录', () => {
   test('将被删除的失联行不计入 repaired_files', async () => {
     // 桶里只剩 keep.pdf；gone.pdf 的行会被清理
