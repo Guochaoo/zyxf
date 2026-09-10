@@ -4,12 +4,12 @@
 > 编号体系：**`BUG-<n>`** 缺陷 · **`IMPROVE-<n>`** 改进。标题下第一行 = 分类（`layer · component`），第二行 = 受影响文件；正文为 现象 / 根因 / 影响 / 修法 / 验证。
 > 列出的条目均为**待处理**；已处理的归入文末「已归档」。
 
-**当前进度**：31 个缺陷 + 3 个改进；已处理 23 个，待处理 11 个。
+**当前进度**：32 个缺陷 + 4 个改进；已处理 25 个，待处理 11 个。
 
 ```yaml
 updated: 2026-09-10
-entries: 34
-fixed: 23
+entries: 36
+fixed: 25
 pending: 11
 severity_levels:
   P0: 明确功能错误或崩溃风险，优先修复
@@ -145,11 +145,16 @@ severity_levels:
 | BUG-31 | P2 | Primary Dark CTA 的 CSS 注释与实际圆角不一致 | `frontend/src/index.css` | 2026-08-30 |
 | BUG-32 | P1 | 同步接口缺 admin 权限校验，匿名可触发库级改写 | `backend/src/routes/sync.js` | 2026-09-09 |
 | BUG-33 | P1 | 生产环境 CORS 默认全开放（`origin: '*'`） | `backend/src/index.js` | 2026-09-09 |
+| BUG-34 | P2 | 改 `ADMIN_PASSWORD` 后旧密码仍可登录（`ensureAdmin` 不更新已存在用户） | `backend/src/db.js` | 2026-09-10 |
 
 ### 已关闭改进项
 
 | 编号 | 严重度 | 标题 | 处理位置 | 关闭日期 |
 |---|---|---|---|---|
 | IMPROVE-03 | P2 | 同步接口权限由 admin-only 改为分层限流（游客/用户/管理员递增配额） | `backend/src/limiter.js`, `backend/src/routes/sync.js` | 2026-09-10 |
+| IMPROVE-04 | P1 | OSS 凭证由 `PowerUserAccess` 改为专用 RAM 用户 + 单 bucket 最小权限 | `.env`（云端 RAM 策略 `zyxf-oss-app`）· `docs/DEPLOY.md §2.1` | 2026-09-10 |
+
+> **IMPROVE-04 说明**：原 OSS 凭证复用个人 `obsidian` RAM 用户，且该用户挂着 `PowerUserAccess`（全产品管理权限）——一旦泄漏，影响面远超本项目。处置：新建专用用户 `obsidian`→`zyxf-oss`，只挂自定义策略 `zyxf-oss-app`（仅 `xjtu-zyxf` bucket 的 `ListObjects`/`GetObject`/`PutObject`/`DeleteObject`/`CopyObject`），`obsidian` 及其个人 bucket 原地不动。验证：新密钥访问 `xjtu-zyxf` 正常、访问另一 bucket `obsidian-aloha` 返回 `AccessDenied`，应用同步与下载均正常。落地步骤见 `docs/DEPLOY.md §2.1`。
+> 本次同时发现并修复一起配置事故：`.env` 的 `OSS_ACCESS_KEY_ID` 曾有一个字符错误（与真实值仅差第 14 位），导致后端所有 OSS 调用 `InvalidAccessKeyId`（表现为刷新同步 403）；`OSS_ACCESS_KEY_SECRET` 本身是正确的。教训是凭证从控制台复制后应先用只读 `list` 验证再落库。
 
 > **IMPROVE-03 说明（与 BUG-32 的关系）**：BUG-32 曾以「`/api/sync` 挂 `requireAdmin`」关闭匿名触发库级改写的风险；但浏览页「刷新」按钮对所有人可见，收紧后游客/普通用户点击必然 401/403，权限呈现与 UI 不一致。产品决策改为**游客与登录用户均可触发同步**，滥用面由分层限流约束（补偿性控制）：游客 2 次/分钟 < 登录用户 5 次/分钟 < 管理员豁免。实现新增 `tieredLimiter`，登录用户按 user id 计数（避免同一 NAT 出口共用 IP 配额），游客按 IP（`ipKeyGenerator` 归并 IPv6 子网）计数。验证：`backend/test/api.test.js` 覆盖三档——游客第 3 次 429、登录用户第 6 次 429、管理员连打 6 次全 200。安全评审如认为写操作不应向匿名开放，回退方式是给 `syncLimiter` 叠加 `requireUser`（禁止匿名、保留用户/管理员分档）。

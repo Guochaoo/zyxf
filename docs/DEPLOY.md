@@ -104,6 +104,65 @@ openssl rand -hex 32
 
 > ⚠️ 后端在 `NODE_ENV=production` 下，`JWT_SECRET`/`ADMIN_PASSWORD` 不合规会**直接 `process.exit(1)` 拒绝启动**。
 
+> ⚠️ `ADMIN_USER`/`ADMIN_PASSWORD` 是管理员账号的**唯一权威来源**：每次启动都会与库内哈希比对，密码变了就同步（旧密码失效），同名普通用户会被提为 admin。因此改密码只需改 `.env` 再重启（BUG-34）。
+
+### 2.1 OSS 凭证：单独一个 RAM 用户 + 最小权限策略
+
+不要复用个人或其他业务的 RAM 用户（例如一把同时给个人网盘用的密钥），也不要给 `PowerUserAccess` 这类全产品权限。后端对 OSS 的实际操作面很窄，按下面建专用用户即可：
+
+| 后端调用 | 需要的动作 |
+|---|---|
+| `listOssObjects`（同步扫描） | `oss:ListObjects` |
+| `signedGetUrl`（下载/预览签名） | `oss:GetObject` |
+| `putEmptyOssObject`（文件夹占位符） | `oss:PutObject` |
+| 前端直传（PostObject） | `oss:PutObject` |
+| `copyOssObject`（改名/移动） | `oss:CopyObject` + `oss:PutObject` |
+| `deleteOssObjectIfExists`（删除） | `oss:DeleteObject` |
+
+> 注意：后端**只签名**、不代理文件流，上传流量走浏览器直传，所以后端不需要 `oss:GetObject` 之外的读权限；IMM 预览若启用，`GenerateWebofficeToken` 也需要能读该 bucket（IMM 由阿里云服务侧读取）。
+
+自定义策略（把 bucket 名替换成你自己的；`acs:oss:*:*:<bucket>/*` 用来覆盖对象级操作）：
+
+```json
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "oss:ListObjects",
+        "oss:GetObject",
+        "oss:PutObject",
+        "oss:DeleteObject",
+        "oss:CopyObject"
+      ],
+      "Resource": [
+        "acs:oss:*:*:<bucket>",
+        "acs:oss:*:*:<bucket>/*"
+      ]
+    }
+  ]
+}
+```
+
+用 CLI 落地（写入前先用只读 `list` 验证密钥确实只能访问目标 bucket）：
+
+```bash
+# 1) 建策略
+aliyun ram CreatePolicy --PolicyName zyxf-oss-app \
+  --PolicyDocument "$(cat oss-policy.json)" --region cn-beijing
+
+# 2) 建专用用户并授权
+aliyun ram CreateUser --UserName zyxf-oss --region cn-beijing
+aliyun ram AttachPolicyToUser --PolicyType Custom --PolicyName zyxf-oss-app \
+  --UserName zyxf-oss --region cn-beijing
+
+# 3) 建 AccessKey，把密钥填进 .env 的 OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET
+aliyun ram CreateAccessKey --UserName zyxf-oss --region cn-beijing
+```
+
+验证：用新密钥访问**其他** bucket 应返回 `AccessDenied`（越权被拒），访问目标 bucket 正常——两者都满足才算最小权限生效。
+
 ---
 
 ## 3. 后端：systemd 服务

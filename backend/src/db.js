@@ -105,13 +105,39 @@ CREATE TABLE IF NOT EXISTS email_codes (
 `);
 
 export function ensureAdmin(username, password) {
-  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
-  if (existing) return;
-  const hash = bcrypt.hashSync(password, 10);
-  db.prepare(
-    'INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)'
-  ).run(username, hash, 'admin', Date.now());
-  console.log(`[db] created default admin user: ${username}`);
+  const existing = db
+    .prepare('SELECT id, role, password_hash FROM users WHERE username = ?')
+    .get(username);
+
+  if (!existing) {
+    const hash = bcrypt.hashSync(password, 10);
+    db.prepare(
+      'INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)'
+    ).run(username, hash, 'admin', Date.now());
+    console.log(`[db] created default admin user: ${username}`);
+    return;
+  }
+
+  // 管理员账号由 .env 独占管理（应用内没有改密/提权入口），因此 .env 是唯一权威来源：
+  // 每次启动把密码/角色同步为配置值。否则改了 ADMIN_PASSWORD 也不会生效——库里已有
+  // 旧哈希，登录仍走旧密码（BUG-34）。密码未变时不重写哈希，避免每次启动产生无谓写入。
+  const passwordChanged = !bcrypt.compareSync(password, existing.password_hash);
+  const roleChanged = existing.role !== 'admin';
+  if (passwordChanged) {
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(
+      bcrypt.hashSync(password, 10),
+      existing.id
+    );
+  }
+  if (roleChanged) {
+    db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(existing.id);
+  }
+  if (passwordChanged || roleChanged) {
+    console.log(
+      `[db] synced admin account from env: ${username}` +
+        (roleChanged ? ` (role ${existing.role} -> admin)` : '')
+    );
+  }
 }
 
 // node:sqlite has no `db.transaction()`; wrap a synchronous fn in
