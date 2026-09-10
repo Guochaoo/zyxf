@@ -209,6 +209,7 @@ const en = {
     promptPlaceholder: 'Type your question…',
     promptAria: 'Chat prompt',
     askHint: 'Ask where to find materials:',
+    loginRequired: 'Sign in to chat with your own API key',
     suggestions: ['Where are past calculus exams?', 'Any physics review materials?', 'Suggest linear algebra courseware'],
     sendAria: 'Send',
     stopAria: 'Stop',

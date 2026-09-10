@@ -2,6 +2,7 @@ import { describe, test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
 import { app } from '../src/index.js';
+import { signToken } from '../src/auth.js';
 import { llmState } from './setup.js';
 
 let server;
@@ -35,6 +36,11 @@ async function request(method, path, { body, headers } = {}) {
   });
   return res;
 }
+
+// IMPROVE-10：自带 Key 的路径要求登录——用它模拟已登录用户（普通用户即可，无需 admin）。
+const userAuth = () => ({
+  authorization: `Bearer ${signToken({ id: 77, username: 'u', role: 'user' })}`,
+});
 
 // 读完 SSE 响应并解析出事件数组
 async function readSse(res) {
@@ -179,13 +185,13 @@ describe('POST /api/chat', () => {
     assert.equal(limited, 1);
   });
 
-  test('client-provided LLM config works without server env config', async () => {
+  test('client-provided LLM config works for a signed-in user without server env config', async () => {
     llmState.enabled = false; // 服务端未配置
     llmState.script = [[{ type: 'delta', text: 'ok' }]];
     const xff = { 'x-forwarded-for': '203.0.113.130' };
 
     const res = await request('POST', '/api/chat', {
-      headers: xff,
+      headers: { ...xff, ...userAuth() },
       body: {
         messages: [{ role: 'user', content: 'hi' }],
         llm: { apiKey: 'client-key', baseUrl: 'https://llm.test/v1/', model: 'test-model' },
@@ -202,9 +208,42 @@ describe('POST /api/chat', () => {
     });
   });
 
+  // IMPROVE-10：服务端未配置时，自带 Key 的路径等于让本站代理任意公网 https 上游 → 必须登录。
+  test('anonymous client-config requests are rejected (401)', async () => {
+    llmState.enabled = false;
+    const xff = { 'x-forwarded-for': '203.0.113.132' };
+    const res = await request('POST', '/api/chat', {
+      headers: xff,
+      body: {
+        messages: [{ role: 'user', content: 'hi' }],
+        llm: { apiKey: 'client-key', baseUrl: 'https://llm.test/v1', model: 'test-model' },
+      },
+    });
+    assert.equal(res.status, 401);
+    const body = await res.json();
+    assert.match(body.error, /登录/);
+    // 在鉴权前就拒绝：既不解析客户端 baseUrl，也不触达上游
+    assert.equal(llmState.calls.length, 0);
+  });
+
+  // 生产主场景（服务端已配置 LLM_*）不受 IMPROVE-10 影响：匿名照旧可用，且客户端配置被忽略。
+  test('anonymous requests still work when the server has its own LLM config', async () => {
+    llmState.enabled = true;
+    llmState.script = [[{ type: 'delta', text: 'ok' }]];
+    const res = await request('POST', '/api/chat', {
+      headers: { 'x-forwarded-for': '203.0.113.133' },
+      body: {
+        messages: [{ role: 'user', content: 'hi' }],
+        llm: { apiKey: 'client-key', baseUrl: 'https://llm.test/v1', model: 'test-model' },
+      },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(llmState.calls[0].config, undefined);
+  });
+
   test('invalid client config falls back to none → 503', async () => {
     llmState.enabled = false;
-    const xff = { 'x-forwarded-for': '203.0.113.131' };
+    const xff = { 'x-forwarded-for': '203.0.113.131', ...userAuth() };
     const badProtocol = await request('POST', '/api/chat', {
       headers: xff,
       body: {
