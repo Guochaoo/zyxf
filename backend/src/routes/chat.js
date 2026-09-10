@@ -93,6 +93,13 @@ router.post('/', chatLimiterShort, chatLimiterLong, wrapAsync(async (req, res) =
   // BUG-20 SSRF：服务端 env（LLM_BASE_URL）已配置时只用服务端配置，完全忽略客户端传入的 baseUrl；
   // 服务端未配置时才对前端浏览器端配置做严格校验（仅 https + 拒绝内网/回环/云元数据）。
   const serverEnabled = isLlmEnabled();
+  // IMPROVE-10：服务端未配置 LLM 时，带自带 Key 的请求会以「本站身份」向任意公网 https
+  // 主机发起请求（SSRF 防护只挡内网，挡不住这条"受限公网代理"路径）→ 该路径要求登录。
+  // 放在 resolveClientLlmConfig 之前：匿名请求直接拒掉，不为其做 DNS 解析。
+  // 不含 llm 字段的匿名请求仍走下方 503（「AI 功能未配置」——登录也解决不了，提示更准确）。
+  if (!serverEnabled && req.body?.llm && !req.user) {
+    return res.status(401).json({ error: '服务端未配置 AI，使用自带 Key 需要先登录' });
+  }
   const clientConfig = serverEnabled ? null : await resolveClientLlmConfig(req.body?.llm);
   if (!clientConfig && !serverEnabled) {
     return res.status(503).json({ error: 'AI 功能未配置' });

@@ -205,6 +205,7 @@ const zh = {
     promptPlaceholder: '输入问题…',
     promptAria: '聊天输入',
     askHint: '问我资料在哪，我来帮你找：',
+    loginRequired: '登录后才能使用自带 Key 的 AI 对话',
     suggestions: ['高数往年题在哪', '有没有物理复习资料', '线代课件推荐一下'],
     sendAria: '发送',
     stopAria: '停止',

@@ -5,6 +5,7 @@ import { chatStream, getChatStatus } from '../api.js';
 import { EASE_COLLAPSE, ICON_BUTTON_CLASS } from './ui.js';
 import PanelHeader from './PanelHeader.jsx';
 import { loadLlmCfg } from '../llmConfig.js';
+import { useAuth } from '../auth.jsx';
 // 展示组件已迁至 ./Chat/parts.jsx（IMPROVE-01）。
 import { FileChip, Section } from './Chat/parts.jsx';
 
@@ -29,6 +30,8 @@ const fmtTime = () => {
 
 export default function ChatComposer({ onOpenSettings }) {
   const { t } = useTranslation();
+  // useAuth() 在无 Provider 的测试环境下返回 null —— 用可选链保持组件可独立渲染。
+  const user = useAuth()?.user;
   const suggestions = useMemo(() => t('chat.suggestions', { returnObjects: true }), [t]);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
@@ -47,6 +50,12 @@ export default function ChatComposer({ onOpenSettings }) {
       alive = false;
     };
   }, []);
+  // IMPROVE-10：服务端未配置 AI 时，「自带 Key」是唯一可用的上游，而后端对这条路要求登录
+  // （否则匿名访客可让本站代理任意公网 https 上游）。前端据此提前禁用输入并说明原因，
+  // 而不是等发送后才收到 401。服务端已配置 AI、或未配置自带 Key 时都不受影响。
+  const hasClientCfg = Boolean(llmCfg.apiKey && llmCfg.baseUrl && llmCfg.model);
+  const loginRequired = serverAiEnabled === false && !user && hasClientCfg;
+
   // 折叠动画：snapH 以像素高度驱动过渡（fr/auto 高度无法从当前值平滑过渡），
   // innerH 把内层冻结在固定高度——内容不重排，由外层容器从下往上裁剪（同知识图谱）；
   // 消息列表始终 overflow-y-auto + scrollbar-gutter: stable，滚动条槽位恒定，
@@ -129,7 +138,7 @@ export default function ChatComposer({ onOpenSettings }) {
 
   const send = async (text) => {
     const question = (text ?? draft).trim();
-    if (!question || busy) return;
+    if (!question || busy || loginRequired) return;
 
     const history = [
       ...messages.map((m) => ({
@@ -189,7 +198,7 @@ export default function ChatComposer({ onOpenSettings }) {
 
   const openSettings = () => onOpenSettings?.();
 
-  const canSend = draft.trim().length > 0 && !busy;
+  const canSend = draft.trim().length > 0 && !busy && !loginRequired;
 
   return (
     <div
@@ -250,19 +259,23 @@ export default function ChatComposer({ onOpenSettings }) {
       >
         {messages.length === 0 && (
           <div className="flex flex-1 flex-col items-start justify-center gap-2 py-4">
-            <p className="w-full text-center text-[12.5px] text-ink-2">{t('chat.askHint')}</p>
-            <div className="flex flex-wrap gap-1.5 pl-4">
-              {suggestions.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => send(s)}
-                  className="rounded-full bg-field px-2.5 py-1 text-[12px] text-ink-2 transition-colors duration-100 hover:text-ink"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
+            <p className="w-full text-center text-[12.5px] text-ink-2">
+              {loginRequired ? t('chat.loginRequired') : t('chat.askHint')}
+            </p>
+            {!loginRequired && (
+              <div className="flex flex-wrap gap-1.5 pl-4">
+                {suggestions.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => send(s)}
+                    className="rounded-full bg-field px-2.5 py-1 text-[12px] text-ink-2 transition-colors duration-100 hover:text-ink"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {messages.map((m) =>
@@ -307,6 +320,7 @@ export default function ChatComposer({ onOpenSettings }) {
               if (event.key === 'Enter') send();
             }}
             placeholder={t('chat.promptPlaceholder')}
+            disabled={loginRequired}
             aria-label={t('chat.promptAria')}
             className="chat-prompt min-h-4.5 bg-transparent text-[13px] leading-[1.4] text-ink outline-none placeholder:text-ink-3"
           />

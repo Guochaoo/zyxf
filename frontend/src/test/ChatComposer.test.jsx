@@ -1,17 +1,26 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { setToken } from '../ui.js';
 import ChatComposer from '../components/ChatComposer.jsx';
 
 // chatStream 由各用例注入实现
 const chatStreamMock = vi.fn();
 // 服务端 AI 状态：默认「未配置」，使既有用例保持「上传用户配置」的行为
 const getChatStatusMock = vi.fn();
+// AuthProvider 只在 localStorage 有 token 时调 /auth/me —— 用它模拟已登录用户
+const apiGetMock = vi.fn();
 vi.mock('../api.js', () => ({
+  default: { get: (...args) => apiGetMock(...args), post: vi.fn() },
+  TOKEN_KEY: 'zyxf_token',
+  login: vi.fn(),
+  register: vi.fn(),
   getFileUrl: vi.fn(),
   getChatStatus: (...args) => getChatStatusMock(...args),
   chatStream: (...args) => chatStreamMock(...args),
 }));
+
+const { AuthProvider } = await import('../auth.jsx');
 
 // 设置入口改为打开全局设置弹窗，由上层传入回调。
 const onOpenSettingsMock = vi.fn();
@@ -19,9 +28,21 @@ const onOpenSettingsMock = vi.fn();
 function renderPanel() {
   return render(
     <MemoryRouter>
-      <ChatComposer onOpenSettings={onOpenSettingsMock} />
+      <AuthProvider>
+        <ChatComposer onOpenSettings={onOpenSettingsMock} />
+      </AuthProvider>
     </MemoryRouter>
   );
+}
+
+// 已登录场景：写入 token 并让 /auth/me 返回用户，等鉴权落定再操作
+// （登录前「服务端未配置 + 已存自带 Key」会禁用输入，见 IMPROVE-10）。
+async function renderPanelAuthed() {
+  setToken('test-token');
+  apiGetMock.mockResolvedValue({ data: { user: { id: 1, username: 'u', role: 'user' } } });
+  const view = renderPanel();
+  await waitFor(() => expect(screen.getByLabelText('聊天输入')).not.toBeDisabled());
+  return view;
 }
 
 function typeAndSend(text) {
@@ -33,6 +54,7 @@ beforeEach(() => {
   chatStreamMock.mockReset();
   getChatStatusMock.mockReset();
   getChatStatusMock.mockResolvedValue({ enabled: false });
+  apiGetMock.mockReset();
   onOpenSettingsMock.mockReset();
   localStorage.clear();
 });
@@ -103,7 +125,7 @@ describe('ChatComposer', () => {
       JSON.stringify({ apiKey: 'test-key', baseUrl: 'https://llm.test/v1', model: 'glm-4.6' })
     );
     chatStreamMock.mockImplementation(async () => {});
-    renderPanel();
+    await renderPanelAuthed();
 
     typeAndSend('你好');
     await waitFor(() => expect(chatStreamMock).toHaveBeenCalled());
@@ -144,7 +166,7 @@ describe('ChatComposer', () => {
       JSON.stringify({ apiKey: 'test-key', baseUrl: 'https://llm.test/v1', model: 'glm-4.6' })
     );
     chatStreamMock.mockImplementation(async () => {});
-    renderPanel();
+    await renderPanelAuthed();
 
     await waitFor(() => expect(getChatStatusMock).toHaveBeenCalled());
     typeAndSend('你好');
@@ -154,5 +176,32 @@ describe('ChatComposer', () => {
       baseUrl: 'https://llm.test/v1',
       model: 'glm-4.6',
     });
+  });
+
+  // IMPROVE-10：服务端未配置 AI 时，自带 Key 的路由后端要求登录——前端提前禁用并说明原因。
+  test('服务端未配置 + 未登录 + 已存自带 Key：禁用输入并提示登录', async () => {
+    getChatStatusMock.mockResolvedValue({ enabled: false });
+    localStorage.setItem(
+      'zyxf_llm',
+      JSON.stringify({ apiKey: 'test-key', baseUrl: 'https://llm.test/v1', model: 'glm-4.6' })
+    );
+    renderPanel();
+
+    await waitFor(() => expect(screen.getByLabelText('聊天输入')).toBeDisabled());
+    expect(screen.getByText('登录后才能使用自带 Key 的 AI 对话')).toBeInTheDocument();
+    // 建议词条一并隐藏：否则点了不会有任何反应
+    expect(screen.queryByRole('button', { name: '高数往年题在哪' })).toBeNull();
+    expect(chatStreamMock).not.toHaveBeenCalled();
+  });
+
+  // 未登录但也没有自带 Key 时不拦：那种情况后端返回 503「AI 功能未配置」，
+  // 让用户看到真实原因，比提示登录更准确。
+  test('服务端未配置 + 未登录 + 无自带 Key：不提示登录', async () => {
+    getChatStatusMock.mockResolvedValue({ enabled: false });
+    renderPanel();
+
+    await waitFor(() => expect(getChatStatusMock).toHaveBeenCalled());
+    expect(screen.getByLabelText('聊天输入')).not.toBeDisabled();
+    expect(screen.queryByText('登录后才能使用自带 Key 的 AI 对话')).toBeNull();
   });
 });
