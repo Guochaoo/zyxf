@@ -172,6 +172,99 @@ describe('审计修复：文件名不允许路径分隔符', () => {
   });
 });
 
+describe('审计修复：upload-url 按 OSS key 预检同名（防覆盖既有对象内容）', () => {
+  test('NFC 已存在时，用 NFD 写法申请上传被 409 拒绝', async () => {
+    const token = await adminToken();
+    const nfc = 'caf\u00e9.pdf'; // é = U+00E9
+    const nfd = 'cafe\u0301.pdf'; // e + U+0301
+    assert.notEqual(nfc, nfd); // 字节层面确实不同，SQL 的 name 等值比较拦不住
+    insertFile({ name: nfc, ossKey: 'zyxf-test/caf\u00e9.pdf', ext: 'pdf' });
+
+    const r = await request('POST', '/api/files/upload-url', { token, body: { filename: nfd } });
+    assert.equal(r.status, 409);
+    // 关键：不能把既有对象的 key 发回给浏览器（否则直传会覆盖它的内容）
+    assert.equal(r.body.key, undefined);
+  });
+
+  test('清洗后等价的段名同样被拦（同级 `_` 与 `.` 都映射为 `_`）', async () => {
+    const token = await adminToken();
+    const fid = insertFolder('_');
+    insertFile({ name: 'x.pdf', folderId: fid, ossKey: 'zyxf-test/_/x.pdf', ext: 'pdf' });
+    const r = await request('POST', '/api/files/upload-url', {
+      token,
+      body: { filename: 'x.pdf', folder_id: fid },
+    });
+    assert.equal(r.status, 409);
+  });
+});
+
+describe('审计修复：PATCH 空 body 不得被当成「移动到根」', () => {
+  test('空 body / 全是未知字段时返回 400，且文件夹位置不变', async () => {
+    const token = await adminToken();
+    const parent = insertFolder('父级');
+    const child = insertFolder('子级', parent);
+
+    for (const body of [{}, { foo: 1 }]) {
+      const r = await request('PATCH', `/api/folders/${child}`, { token, body });
+      assert.equal(r.status, 400, `body=${JSON.stringify(body)} 应被拒绝`);
+    }
+    assert.equal(db.prepare('SELECT parent_id FROM folders WHERE id = ?').get(child).parent_id, parent);
+  });
+
+  test('文件 PATCH 空 body 同样 400', async () => {
+    const token = await adminToken();
+    const id = insertFile({ name: 'a.pdf', ossKey: 'zyxf-test/a.pdf', ext: 'pdf' });
+    const r = await request('PATCH', `/api/files/${id}`, { token, body: {} });
+    assert.equal(r.status, 400);
+  });
+});
+
+describe('审计修复：文件夹 PATCH 的校验与写库在同一事务内（BUG-54）', () => {
+  test('并发互相移动不会写出 parent 环', async () => {
+    const token = await adminToken();
+    const a = insertFolder('A');
+    const b = insertFolder('B');
+
+    // 两个请求都基于「A、B 都是根级」的同一快照，各自把对方设为自己的父级。
+    const [ra, rb] = await Promise.all([
+      request('PATCH', `/api/folders/${a}`, { token, body: { parent_id: b } }),
+      request('PATCH', `/api/folders/${b}`, { token, body: { parent_id: a } }),
+    ]);
+    // 至少一个必须失败（400/409），否则就成环
+    const failed = [ra, rb].filter((r) => r.status !== 200);
+    assert.ok(failed.length >= 1, `两个请求都成功了：${ra.status}/${rb.status}`);
+
+    // 断言树里不存在环：从任意节点向上走不会回到自己
+    for (const start of [a, b]) {
+      const seen = new Set();
+      let cur = start;
+      while (cur != null) {
+        assert.ok(!seen.has(cur), `节点 ${start} 向上遍历成环`);
+        seen.add(cur);
+        cur = db.prepare('SELECT parent_id FROM folders WHERE id = ?').get(cur)?.parent_id ?? null;
+      }
+    }
+  });
+
+  test('并发移动到同一根级位置时不会出现同名文件夹', async () => {
+    const token = await adminToken();
+    const p = insertFolder('父');
+    const x = insertFolder('X', p);
+    const y = insertFolder('Y', p);
+
+    const [rx, ry] = await Promise.all([
+      request('PATCH', `/api/folders/${x}`, { token, body: { name: '重名' } }),
+      request('PATCH', `/api/folders/${y}`, { token, body: { name: '重名' } }),
+    ]);
+    const okCount = [rx, ry].filter((r) => r.status === 200).length;
+    assert.equal(okCount, 1, `应只有一个成功：${rx.status}/${ry.status}`);
+    const dup = db
+      .prepare("SELECT COUNT(*) c FROM folders WHERE parent_id = ? AND name = '重名'")
+      .get(p).c;
+    assert.equal(dup, 1);
+  });
+});
+
 describe('审计修复：文件移动补 key 冲突检查（防覆盖他人对象）', () => {
   test('目标 key 已被别的文件占用时返回 409 而不是覆盖后 500', async () => {
     const token = await adminToken();

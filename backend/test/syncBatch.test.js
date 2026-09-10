@@ -129,4 +129,25 @@ describe('BUG-08: sync 批量删除（>999 文件场景）', () => {
     assert.equal(rows[1].parent_id, rows[0].id);
     assert.equal(rows[2].parent_id, rows[0].id);
   });
+
+  // IMPROVE-14：排序游标不能只对「同父级」正确——跨父级/跨表也要各自独立递增。
+  test('大目录导入后 sort_order 连续且不重复', async () => {
+    const token = await adminLogin();
+    const keys = [];
+    for (let i = 0; i < 600; i++) keys.push(`zyxf-test/big/f${i}.txt`);
+    ossObjectStore.keys = keys;
+
+    const { body } = await request('POST', '/api/sync', { token });
+    assert.equal(body.added.files, 600);
+
+    const fid = db.prepare("SELECT id FROM folders WHERE name = 'big'").get().id;
+    const orders = db
+      .prepare('SELECT sort_order FROM files WHERE folder_id = ? ORDER BY sort_order')
+      .all(fid)
+      .map((r) => r.sort_order);
+    assert.equal(orders.length, 600);
+    assert.deepEqual(orders, Array.from({ length: 600 }, (_, i) => i));
+    // 根级那条「big」文件夹的 sort_order 必须从 0 开始（不是接着文件的计数）
+    assert.equal(db.prepare("SELECT sort_order FROM folders WHERE name = 'big'").get().sort_order, 0);
+  });
 });

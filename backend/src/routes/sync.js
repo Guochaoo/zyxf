@@ -2,7 +2,7 @@ import { Router } from 'express';
 import path from 'node:path';
 import { db, transaction } from '../db.js';
 import { listOssObjects } from '../oss.js';
-import { buildFolderIndex, nextSortOrder } from '../dbHelpers.js';
+import { buildFolderIndex, makeSortOrderCursor } from '../dbHelpers.js';
 import { tieredLimiter } from '../limiter.js';
 import { cleanObjectSegment, ossPrefix, placeholderKeyForFolderFromMap } from '../storagePath.js';
 import { normalizeExt } from '../extPolicy.js';
@@ -70,6 +70,10 @@ router.post('/', syncLimiter, async (req, res, next) => {
 
     const tx = transaction(() => {
       const childNameIndex = buildChildNameIndex();
+      // 同父级连续插入复用游标（IMPROVE-14）：原实现每个新文件/文件夹都重新 prepare
+      // 并查一次 MAX(sort_order)，桶里几千个对象就是几千次 SELECT。
+      // 游标只在本事务内使用（事务里没有别处插入这两张表）。
+      const nextSo = makeSortOrderCursor(db);
       const findFolderBySegment = (segment, parentId) =>
         childNameIndex.get(parentId === null ? null : parentId)?.get(segment) ?? null;
 
@@ -81,7 +85,7 @@ router.post('/', syncLimiter, async (req, res, next) => {
             parentId = hit;
             continue;
           }
-          const so = nextSortOrder(db, 'folders', 'parent_id', parentId);
+          const so = nextSo('folders', 'parent_id', parentId);
           const info = db
             .prepare(
               'INSERT INTO folders (name, parent_id, sort_order, created_at) VALUES (?, ?, ?, ?)'
@@ -127,7 +131,7 @@ router.post('/', syncLimiter, async (req, res, next) => {
         if (fileByKey.get(key)) continue;
         const fname = rel.pop();
         const folderId = rel.length ? ensureFolderChain(rel) : null;
-        const so = nextSortOrder(db, 'files', 'folder_id', folderId);
+        const so = nextSo('files', 'folder_id', folderId);
         const ext = normalizeExt(path.extname(fname)) || null;
         insertFile.run(
           folderId,
