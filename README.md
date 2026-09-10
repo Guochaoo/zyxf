@@ -102,7 +102,7 @@ cd backend  && npm test    # node:test（API / 搜索 / 聊天路由）
 cd frontend && npm test    # vitest + Testing Library
 ```
 
-Pull Request 到 `main` 时 GitHub Actions 自动跑前后端测试；合并到 `main` 触发 SSH 部署到生产服务器。
+推送到 `dev`、或 Pull Request 到 `main` 时，GitHub Actions 自动跑前后端测试（另含依赖漏洞门禁 `npm audit` 与前端构建产物校验）；合并到 `main` 触发 SSH 部署到生产服务器，若部署后健康检查失败会自动回滚到部署前的修订。
 
 ## 部署
 
