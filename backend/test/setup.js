@@ -23,9 +23,8 @@ export function ensureTestUser({ id, username = `u${id}`, role = 'user' } = {}) 
 }
 
 // Controllable fake OSS object store — tests write ossObjectStore.keys to
-// simulate what the bucket contains (sync endpoint reads this) and
-// ossObjectStore.objects to provide downloadable bodies（内容索引流水线会 get 对象）。
-export const ossObjectStore = { keys: [], objects: new Map() };
+// simulate what the bucket contains (sync endpoint reads this).
+export const ossObjectStore = { keys: [] };
 
 // Stub the network calls to Aliyun OSS while keeping the pure signature
 // helpers (buildPostPolicy, signedGetUrl) intact.
@@ -37,16 +36,6 @@ mock.module('../src/oss.js', {
     copyOssObject: async () => {},
     putEmptyOssObject: async () => {},
     deleteOssObjectIfExists: async () => {},
-    ossClient: () => ({
-      get: async (key) => {
-        if (!ossObjectStore.objects.has(key)) {
-          const err = new Error('NoSuchKey');
-          err.code = 'NoSuchKey';
-          throw err;
-        }
-        return { content: ossObjectStore.objects.get(key) };
-      },
-    }),
   },
 });
 

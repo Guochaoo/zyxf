@@ -15,8 +15,6 @@ import searchRoutes from './routes/search.js';
 import chatRoutes from './routes/chat.js';
 import statsRoutes from './routes/stats.js';
 import syncRoutes from './routes/sync.js';
-import indexingRoutes from './routes/indexing.js';
-import { startIndexWorker } from './indexPipeline.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -97,7 +95,6 @@ app.use('/api/search', searchRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/sync', syncRoutes);
-app.use('/api/index', indexingRoutes);
 
 // Sanitize errors in production — never leak internals to clients.
 app.use((err, _req, res, _next) => {
@@ -108,8 +105,6 @@ app.use((err, _req, res, _next) => {
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 if (isMain) {
-  // 内容索引 worker：只在真正启动服务时跑（测试 import 这个模块不该起后台轮询）
-  startIndexWorker();
   app.listen(PORT, HOST, () => {
     console.log(`[zyxf-backend] listening on http://${HOST}:${PORT}`);
   });
