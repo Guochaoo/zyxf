@@ -583,9 +583,9 @@
   }
 
   /* 顶部条 + 导航：包在白卡片外的顶部区域，导航自己是一张白卡片。
-     标题行的上沿留白 = (行高 − 文字行高)/2，所以行高按文字本身定（24px）——这样标题才贴顶；
-     关闭按钮因此不画灰色圆底（图标 20px、点击区仍 36px 都不变），否则 36px 的圆盘会把行高顶回去。
-     行到列表卡片留 12px。index.html 没开 viewport-fit=cover，故不需要 env(safe-area-inset-*)。 */
+     标题行按圆形按钮的高度定高（36px），标题在行内居中 → 文字上沿约 9.5px（36px 圆盘 + 17px
+     文字居中的几何下限）；行到列表卡片留 12px。
+     index.html 没开 viewport-fit=cover，故不需要 env(safe-area-inset-*)。 */
   .settings-sidebar {
     flex-direction: row;
     flex-wrap: wrap;
@@ -599,7 +599,7 @@
     overflow-y: visible; /* 侧栏改成顶部条后不再单独滚动 */
   }
 
-  /* 整行：左侧关闭图标（透明点击区）+ 居中标题。
+  /* 整行：左侧圆形关闭按钮（绝对定位）+ 居中标题。
      必须清掉基类的 top/right —— 那是桌面端把关闭按钮钉到卡片右上角用的绝对定位偏移，
      这里 position 换成 relative 后它们会变成「相对偏移」，把整行推下 10px、拉左 10px。 */
   .settings-sidebar-top {
@@ -608,7 +608,7 @@
     right: auto;
     flex: 1 1 100%;
     justify-content: center;
-    min-height: 24px;
+    min-height: 36px;
     padding: 0;
   }
 
@@ -616,7 +616,7 @@
     display: block;
     font-size: 17px;
     font-weight: 600;
-    line-height: 1.2; /* 固定行高，避免跟随系统字体把行撑高、又冒出一段空白 */
+    line-height: 1.2; /* 固定行高，避免跟随系统字体把行撑高 */
     color: var(--ink);
   }
 
@@ -628,8 +628,13 @@
     height: 36px;
     margin-top: -18px;
     border-radius: 999px;
-    background: transparent; /* 无灰色圆底（点按时仍由 hover 态给出反馈） */
+    background: var(--hover);
     color: var(--ink);
+  }
+
+  /* Play 是右三角，水平镜像成「返回」左三角 */
+  .settings-close svg {
+    transform: scaleX(-1);
   }
 
   /* 导航：白卡片 + 列表行（图标 + 文案 + 右侧状态图标） */
