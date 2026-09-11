@@ -1,11 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import {
-  buildGraph,
-  localSubgraph,
-  buildDegrees,
-  nodeIdOf,
-  endpointId,
-} from '../components/KnowledgeGraph.jsx';
+import { buildGraph, localSubgraph, buildDegrees, nodeIdOf, endpointId } from '../components/KnowledgeGraph.jsx';
 
 // 线上现象：进入某个文件夹再返回主页（folderId=0）后，知识图谱只剩中间一个小点。
 // 根因：d3-force 会就地改写传给它的对象——forceLink 把 link.source/target 从字符串 id

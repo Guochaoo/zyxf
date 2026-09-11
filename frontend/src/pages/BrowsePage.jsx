@@ -253,12 +253,7 @@ export default function BrowsePage() {
         <UploadDialog
           folderId={folderId || null}
           onClose={() => setUploadOpen(false)}
-          // 上传成功要让知识图谱也收到通知：图谱按「文件夹变更」事件重拉内容分类，
-          // 只 refresh() 文件列表的话，图谱那边的分类缓存永远不会失效（新文件在图谱里看不见）。
-          onDone={() => {
-            notifyFoldersChanged();
-            refresh();
-          }}
+          onDone={refresh}
         />
       )}
     </div>

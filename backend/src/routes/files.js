@@ -9,7 +9,6 @@ import { findSibling, folderExists, isUniqueError, nextSortOrder } from '../dbHe
 import { objectKeyForFile, ossPrefix, parseOptionalFolderId } from '../storagePath.js';
 import { isExtAllowed, normalizeExt, PREVIEWABLE_EXTS, shouldForceDownload } from '../extPolicy.js';
 import { invalidateLibraryCaches } from '../searchService.js';
-import { enqueueFile } from '../indexPipeline.js';
 import { adminBypassLimiter } from '../limiter.js';
 import { wrapAsync, serviceError } from '../http.js';
 
@@ -160,8 +159,6 @@ router.post('/', requireAdmin, wrapAsync(async (req, res) => {
       );
     res.json({ id: info.lastInsertRowid });
     invalidateLibraryCaches();
-    // 内容索引：入队而不是同步抽（下载 + 解析是重活，放请求里会超时），由后台 worker 消化
-    enqueueFile(info.lastInsertRowid);
   } catch (e) {
     if (isUniqueError(e)) {
       return res.status(409).json({ error: '此文件夹中已存在同名文件' });
