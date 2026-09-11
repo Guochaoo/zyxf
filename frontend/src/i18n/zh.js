@@ -321,8 +321,12 @@ const zh = {
     // 以下为原先硬编码在各模块里的提示语，统一收进字典（英文界面不再露中文）。
     actionFailed: '操作失败',
     today: '今日',
-    // 启动期致命错误提示：中文文案必须走字典（源码里不得硬编码中文，见 i18n 测试）
-    bootError: '页面启动失败（前端错误，后端可能是正常的）：',
+    // 启动期致命错误（白屏兜底）：面向用户的三条走字典（源码里不得硬编码中文，见 i18n 测试）
+    bootErrorTitle: '页面出了点问题',
+    bootErrorHint: '刷新一下通常就能恢复。若一直打不开，请联系 xjtuzyxf@163.com。',
+    bootErrorReload: '刷新页面',
+    // 下面这条只在开发环境显示（给开发者看的排查提示，不给终端用户看）
+    bootError: '启动失败（前端错误，后端可能是正常的）：',
     loadFailed: '加载失败',
     requestFailed: '请求失败（{{status}}）',
     downloadFailed: '下载失败',
