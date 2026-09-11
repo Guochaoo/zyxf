@@ -87,9 +87,12 @@ OSS_ENDPOINT=
 
 # 可选：IMM 文档预览、AI 助手
 IMM_PROJECT=
+# AI 助手：三个变量齐备才启用（地址填到版本层，如 https://open.bigmodel.cn/api/paas/v4）
 LLM_API_KEY=
 LLM_BASE_URL=
 LLM_MODEL=
+# 上游协议，留空=openai（OpenAI 兼容）；Anthropic Messages API 填 anthropic
+LLM_PROTOCOL=
 
 # 可选：用户注册邮箱验证码（阿里云邮件推送 DirectMail，三项齐备才启用）
 DM_ACCESS_KEY_ID=<AccessKey ID>
