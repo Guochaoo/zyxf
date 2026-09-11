@@ -583,14 +583,14 @@
   }
 
   /* 顶部条 + 导航：包在白卡片外的顶部区域，导航自己是一张白卡片。
-     行高 36px + 标题在其中居中 → 文字上沿到页顶约 8px（框）/ 9.5px（字形）；
-     行与列表卡片之间**不留间距**，这样文字下边缘到列表顶端的距离与上边相等（各约 9.5px）。
+     行高 36px + 标题在其中居中 → 文字上沿到页顶 8px；
+     行与列表卡片之间留 6px，于是文字下边缘到列表顶端 14px。
      index.html 没开 viewport-fit=cover，故不需要 env(safe-area-inset-*)。 */
   .settings-sidebar {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0;
+    gap: 6px;
     width: auto;
     padding: 0 12px;
     background: transparent;
