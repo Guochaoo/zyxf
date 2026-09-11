@@ -15,6 +15,9 @@ import bcrypt from 'bcryptjs';
  *
  * 兼容：库里已有的 bcrypt 哈希（`$2a$/$2b$/$2y$`）仍能用来校验，校验通过后由调用方
  * 用新的 scrypt 哈希覆盖（见 routes/auth.js 的登录路径），存量账号会在首次登录时迁移。
+ *
+ * 为什么还留着 bcryptjs 依赖：只服务于上面这条兼容路径（`verifyPassword` 的 legacy 分支）。
+ * 存量账号全部迁移完之后可以删掉该依赖与这个分支；注册/登录的新哈希一律走 scrypt。
  */
 const SCRYPT_PARAMS = { N: 32768, r: 8, p: 1, maxmem: 256 * 1024 * 1024 };
 const KEY_LEN = 32;
