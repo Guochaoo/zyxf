@@ -15,9 +15,13 @@
 
 ```yaml
 更新日期: 2026-09-11
-条目总数: 136        # 缺陷 96 + 改进 40
-待处理: 8            # 缺陷 3 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；99 首屏 21.7 MB 字体，**受授权限制无法子集化**，待决策）
+条目总数: 137        # 缺陷 97 + 改进 40
+待处理: 9            # 缺陷 4 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；99 首屏 21.7 MB 字体，**受授权限制无法子集化**，待决策；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index）
 已归档: 128          # 缺陷 93 + 改进 35
+# 本批（一次部署事故复盘）：把内容索引那批合入 main 后 deploy workflow 失败——onnxruntime-node 的
+#   postinstall 要联网拉原生库，在服务器上 302 失败，npm install 中断，服务器被留在「新代码 + 缺依赖」
+#   状态（旧进程还在跑所以站点没挂，但一重启就会 require 失败）。已把整批移出 dev/main、另存
+#   feature/content-index，并把「怎么让它在服务器上装上」记为 BUG-102，避免下次重蹈。
 # 本批（线上首屏性能实测与修复）：对 https://zyxf.top 做实测，首屏关键路径（不含字体）约 313 KB，
 #   其中 favicon 独占 107 KB、关于页 4 张图 1.17 MB；另有一个**渲染阻塞**的 Google Fonts 外链只服务
 #   关于页一行标题，以及 react-markdown / d3-force 被 App 静态 import 进首屏关键路径。均当轮修复，
@@ -83,6 +87,22 @@
 - **修法（均已排除子集化）**：① **换一款授权允许修改的中文字体再做子集化**（首选）：Noto Sans SC / 思源黑体（SIL OFL 1.1）、HarmonyOS Sans（可商用且允许修改）整包同样几十 MB，但**允许子集**，按「常用汉字 + 拉丁 + 数字 + 标点」子集后约 **1~2 MB**，能保住现在「自定义中文字体」的观感。⚠️ 子集必须覆盖站内实际出现的字，**漏字会显示成缺字方块**；资源库文件名是用户输入，罕见字回退系统字体是可接受的代价，但要知情。② **直接删掉这两个 @font-face**：回退链里的 `-apple-system / PingFang SC / Microsoft YaHei` 已覆盖 macOS / Windows / 移动端，收益整整 21.7 MB，代价只是中文字形随平台不同。③ **只给英文与数字做子集**（站内主要视觉是标题和数字），中文交给系统字体，体积可压到几十 KB——同样需要换一款允许修改的字体。
 - **顺带**：`index.css:17-23` 把 `'SF Mono'` 也指向同一个 TTF（为了让 liveline 图表的 canvas 文字不变样）。浏览器按 URL 去重不会多下一次，但它让「等宽」字样实际渲染成非等宽——附带的语义问题，不是性能问题。
 - **验证**：`npm run build` 后目标字体应 < 2 MB；`curl -o NUL -w '%{size_download}'` 复核线上首屏各资源之和应 < 500 KB；手机 4G 实测首屏应回到 1~2 秒量级；子集化后通读一遍站内中文（含文件名列表、图谱节点名、设置弹窗）确认无缺字方块。
+
+#### BUG-102 · `onnxruntime-node` 的 postinstall 在生产服务器上装不上，导致部署中断在 `npm install`
+**影响范围**：`backend/package.json` · `.github/workflows/deploy.yml` · `docs/DEPLOY.md` · 分支 `feature/content-index`（后端 · 部署 / 依赖）
+
+- **现状**：内容索引那批（见 `feature/content-index`）给 `backend/package.json` 加了 `onnxruntime-node@^1.29.0`。该包的 `postinstall` 会**联网下载**对应平台的原生库（`script/install-utils.js` 用 `https.get` 拉 build list，**不跟随重定向**）。在本机（走代理）能装，但在生产服务器上失败：
+  ```
+  npm error path /opt/zyxf/backend/node_modules/onnxruntime-node
+  npm error command sh -c node ./script/install
+  npm error Error: Failed to download build list. HTTP status code = 302
+  ```
+  `302` 说明请求被重定向到了 CDN，而脚本把非 200 一律当失败。
+- **影响（这是个 P0 级的部署陷阱，不只是装不上）**：deploy workflow 的脚本是 `set -e` + 顺序执行，`npm install` 一失败就**停在原地**——此时 `git reset --hard origin/main` **已经执行过**了，于是服务器处于「**新代码 + 缺依赖**」的中间态：旧进程还在跑所以站点看起来正常，但**任何一次重启都会因 `require('onnxruntime-node')` 失败而起不来**，且 workflow 的自动回滚分支也不会触发（它只在**健康检查失败**时才回滚，这次是更早的 `npm install` 挂掉）。这次是人工介入把整批 revert 掉才恢复的（见下方处置）。
+- **修法（供 `feature/content-index` 合入前解决）**：① **让二进制走镜像**——`onnxruntime-node` 支持用环境变量指定下载源，或改用 npmmirror 的二进制镜像（服务器已配 `registry.npmmirror.com`，但 npm 的 `registry` 配置**不影响** postinstall 自己发起的 HTTP 下载）；② **把它降级成可选依赖**：`optionalDependencies` + 代码里 try/catch 住 `require`，装不上就自动回落成「只抽正文不出向量」（这条降级链本来就有，见 IMPROVE-39），则部署永远不会因它失败；③ **本地预编译**：在能装通的机器上装好后把 `node_modules/onnxruntime-node` 打进去（体积大，且要匹配 Node ABI）。**推荐 ②**——它把「装不上」从部署阻断降级为功能缺失，与既有的 `isEmbeddingEnabled()` 降级设计一致。
+- **另一条独立改进**：deploy workflow 的 `set -e` 在 `npm install` 这类**早于健康检查**的步骤失败时不会回滚，会把服务器留在半成品状态。应把「构建/安装阶段」也纳入回滚（例如把 `git reset --hard` 之后的所有步骤包成 `if ! ...; then rollback; fi`）。
+- **处置（2026-09-11）**：按人类要求把内容索引 / 知识图谱整批**移出 dev 与 main**（revert 提交 `0d30475`），原 9 个提交完整保存在分支 **`feature/content-index`**（tip `d6e3f34`）。本批的纯前端性能修复与 nginx 修复不依赖它，保留并已重新部署成功（线上 `/api/index/status` 返回 404，确认内容索引未上线）。**⚠️ 下次合并 `feature/content-index` 前必须先解掉本条**，否则会重演这次事故。
+- **验证**：在服务器上（无代理、`registry.npmmirror.com`）跑 `npm install` 应成功；随后 `systemctl restart zyxf` 能起来且 `/api/health` 返回 200；若走方案 ②，故意让 onnxruntime 装不上时后端仍能启动，且 `/api/index/status` 的 `embedding.enabled` 为 false 并给出原因。
 
 ---
 
