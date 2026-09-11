@@ -225,7 +225,10 @@ export default function BrowsePage() {
         )}
       </div>
 
-      {/* ICP 备案号：仅首页显示，文件夹页不展示；点击跳转工信部备案系统 */}
+      {/* 页脚法务条：仅首页显示，文件夹页不展示。
+          ICP 备案号跳工信部备案系统；字体署名是 OPPO Sans 授权的硬性要求
+          （条件 1「prominent notice」+ 条件 4「随附协议原文」），链接指向仓库里
+          保留的那份授权协议 public/licenses/。见 docs/ISSUES.md BUG-99。 */}
       {folderId === 0 && (
         <footer className="-mt-3.5 text-center text-xs leading-normal text-slate-400">
           <a
@@ -235,6 +238,16 @@ export default function BrowsePage() {
             className="hover:text-slate-600"
           >
             陕ICP备2026017448号
+          </a>
+          <span aria-hidden="true"> · </span>
+          <span>{t('footer.font')}</span>{' '}
+          <a
+            href="/licenses/OPPO-Sans-4.0-License.txt"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-slate-600"
+          >
+            OPPO Sans
           </a>
         </footer>
       )}

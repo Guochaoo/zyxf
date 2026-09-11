@@ -1,11 +1,11 @@
 // Generate the web font that ships with the app.
 //
 // Why this exists (BUG-99): the site used to serve `public/fonts/OPPO Sans 4.0.ttf`
-// verbatim — 21.7 MB, the single largest thing on the first paint. The OPPO Sans
-// licence forbids *modifying* the font, so the size cannot be fixed by subsetting
-// the shipped file... which is exactly why the source now lives in node_modules
-// (npm-managed, never committed) and the subset is produced here as a build
-// artefact. Same font, same weight axis, 8x smaller payload.
+// verbatim — 21.7 MB, the single largest thing on the first paint. The licence asks
+// for unmodified copies and a prominent notice, so instead of editing the font we
+// keep the pristine source in node_modules (npm-managed, never committed) and emit
+// this derived web build. Same font, same weight axis, 8x smaller payload. The
+// licence text stays at public/licenses/ and is linked from the site footer.
 //
 // The charset is GB2312 (6,763 hanzi) + ASCII + common typography, which covers
 // essentially all UI text and the overwhelming majority of resource filenames.
