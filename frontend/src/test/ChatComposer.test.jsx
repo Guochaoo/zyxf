@@ -110,10 +110,10 @@ describe('ChatComposer', () => {
     expect(screen.getByText('问我资料在哪，我来帮你找：')).toBeInTheDocument();
   });
 
-  // 齿轮不再就地展开表单，而是把设置交给上层弹窗（大模型配置项在弹窗内维护）。
+  // 齿轮不再就地展开表单，而是把设置交给上层弹窗（智能对话配置项在弹窗内维护）。
   test('齿轮按钮触发上层打开设置弹窗', () => {
     renderPanel();
-    fireEvent.click(screen.getByRole('button', { name: '大模型配置' }));
+    fireEvent.click(screen.getByRole('button', { name: '智能对话配置' }));
     expect(onOpenSettingsMock).toHaveBeenCalledTimes(1);
     // 面板内不应出现就地编辑的配置表单
     expect(screen.queryByPlaceholderText('sk-…')).toBeNull();

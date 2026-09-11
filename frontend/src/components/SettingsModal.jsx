@@ -9,6 +9,11 @@ import useLocale from '../hooks/useLocale.js';
 import { useClickOutside } from '../hooks/useClickOutside.js';
 import './SettingsModal.css';
 
+// 配置来源由「存储里是否已有一份三项齐全的配置」推导：ChatComposer 也只在三项
+// 齐全时才下发用户配置（否则回落到服务端），两边口径必须一致。
+const EMPTY_CFG = { apiKey: '', baseUrl: '', model: '' };
+const modeOf = (cfg) => (cfg.apiKey && cfg.baseUrl && cfg.model ? 'custom' : 'server');
+
 // 账户信息当前 user 对象里可展示的字段（后端 JWT 仅含 id/username/role）。
 function AccountInfo({ t }) {
   const { user } = useAuth();
@@ -50,9 +55,10 @@ export default function SettingsModal({ open, onClose }) {
   // .settings-lang 容器上，故点击触发按钮本身仍走它自己的切换逻辑，不会被重复收起。
   const langRef = useRef(null);
   useClickOutside(langOpen, () => setLangOpen(false), langRef);
-  // 大模型配置草稿与已提交值分离：保存前不覆盖已生效配置。
+  // 智能对话配置草稿与已提交值分离：保存前不覆盖已生效配置。
   const [llmCfg, setLlmCfg] = useState(loadLlmCfg);
   const [cfgDraft, setCfgDraft] = useState(loadLlmCfg);
+  const [cfgMode, setCfgMode] = useState(() => modeOf(loadLlmCfg()));
   const [query, setQuery] = useState('');
 
   // 语言响应式的常量数组（切换语言时随 t 刷新）。
@@ -97,6 +103,7 @@ export default function SettingsModal({ open, onClose }) {
     if (open) {
       setLlmCfg(loadLlmCfg());
       setCfgDraft(loadLlmCfg());
+      setCfgMode(modeOf(loadLlmCfg()));
       setQuery('');
       setLangOpen(false);
     }
@@ -124,13 +131,19 @@ export default function SettingsModal({ open, onClose }) {
   if (!open) return null;
 
   const saveAi = () => {
+    // 选「使用服务器配置」= 主动放弃自带配置：清掉存储，聊天侧随即回落到服务端。
+    if (cfgMode === 'server') {
+      setLlmCfg(EMPTY_CFG);
+      clearLlmCfg();
+      return;
+    }
     setLlmCfg(saveLlmCfg(cfgDraft));
   };
 
   const clearAi = () => {
-    const empty = { apiKey: '', baseUrl: '', model: '' };
-    setLlmCfg(empty);
-    setCfgDraft(empty);
+    setCfgMode('server');
+    setLlmCfg(EMPTY_CFG);
+    setCfgDraft(EMPTY_CFG);
     clearLlmCfg();
   };
 
@@ -184,24 +197,48 @@ export default function SettingsModal({ open, onClose }) {
             <div className="settings-content-body">
               {section === 'ai' && (
                 <div className="settings-section">
-                  {/* 字段放在浅底色块里：站点用色块 + 留白分隔，不靠描边（DESIGN.md §2 无界理念） */}
-                  <div className="settings-form">
-                    {llmFields.map(({ key, label, placeholder, type }) => (
-                      <label key={key} className="settings-field">
-                        <span className="settings-field-label">{label}</span>
+                  {/* 配置来源：二选一。选「服务器配置」时整块隐藏，避免看起来像已生效的输入。 */}
+                  <div className="settings-modes" role="radiogroup" aria-label={t('settings.ai.modeAria')}>
+                    {[
+                      { id: 'server', label: t('settings.ai.modeServer') },
+                      { id: 'custom', label: t('settings.ai.modeCustom') },
+                    ].map(({ id, label }) => (
+                      <label key={id} className={`settings-mode ${cfgMode === id ? 'settings-mode--active' : ''}`}>
                         <input
-                          type={type}
-                          value={cfgDraft[key]}
-                          onChange={(e) => setCfgDraft((d) => ({ ...d, [key]: e.target.value }))}
-                          placeholder={placeholder}
-                          className="settings-input"
-                          spellCheck={false}
-                          autoComplete={key === 'apiKey' ? 'off' : undefined}
+                          type="radio"
+                          name="llm-cfg-mode"
+                          className="settings-mode-input"
+                          value={id}
+                          checked={cfgMode === id}
+                          onChange={() => setCfgMode(id)}
                         />
+                        <span className="settings-mode-label">{label}</span>
                       </label>
                     ))}
                   </div>
-                  <p className="settings-hint">{t('settings.ai.hint')}</p>
+
+                  {cfgMode === 'custom' && (
+                    /* 字段放在浅底色块里：站点用色块 + 留白分隔，不靠描边（DESIGN.md §2 无界理念） */
+                    <div className="settings-form">
+                      {llmFields.map(({ key, label, placeholder, type }) => (
+                        <label key={key} className="settings-field">
+                          <span className="settings-field-label">{label}</span>
+                          <input
+                            type={type}
+                            value={cfgDraft[key]}
+                            onChange={(e) => setCfgDraft((d) => ({ ...d, [key]: e.target.value }))}
+                            placeholder={placeholder}
+                            className="settings-input"
+                            spellCheck={false}
+                            autoComplete={key === 'apiKey' ? 'off' : undefined}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <p className="settings-hint">
+                    {t(cfgMode === 'custom' ? 'settings.ai.hint' : 'settings.ai.hintServer')}
+                  </p>
                   {/* 按钮复用站点 CTA：深色 rb-btn-dark / 次级 rb-btn-ghost（与浏览页工具栏同款） */}
                   <div className="settings-actions">
                     <button type="button" onClick={clearAi} className="rb-btn-ghost h-[34px] px-3 text-sm">

@@ -73,3 +73,79 @@ describe('SettingsModal 语言下拉：点击空白收起', () => {
     localStorage.setItem('zyxf_lang', 'zh');
   });
 });
+
+// 智能对话配置：来源二选一（服务器 / 自定义），只有自定义才显示三个字段。
+describe('SettingsModal 智能对话配置：配置来源切换', () => {
+  const radio = (name) => screen.getByRole('radio', { name });
+  const savedCfg = () => {
+    const raw = localStorage.getItem('zyxf_llm');
+    return raw ? JSON.parse(raw) : null;
+  };
+
+  test('本地无配置时默认选中「使用服务器配置」，且不显示自定义字段', () => {
+    renderModal();
+
+    expect(radio('使用服务器配置')).toBeChecked();
+    expect(radio('使用自定义配置')).not.toBeChecked();
+    expect(screen.queryByPlaceholderText('sk-…')).toBeNull();
+    expect(screen.queryByPlaceholderText('glm-4.6 / deepseek-chat …')).toBeNull();
+  });
+
+  test('选「使用自定义配置」才显示三个输入框，保存后写入本地存储', async () => {
+    renderModal();
+    fireEvent.click(radio('使用自定义配置'));
+
+    const key = screen.getByPlaceholderText('sk-…');
+    const url = screen.getByPlaceholderText('https://open.bigmodel.cn/api/paas/v4');
+    const model = screen.getByPlaceholderText('glm-4.6 / deepseek-chat …');
+    fireEvent.change(key, { target: { value: 'sk-test' } });
+    fireEvent.change(url, { target: { value: 'https://llm.test/v1' } });
+    fireEvent.change(model, { target: { value: 'glm-4.6' } });
+
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() =>
+      expect(savedCfg()).toEqual({ apiKey: 'sk-test', baseUrl: 'https://llm.test/v1', model: 'glm-4.6' })
+    );
+  });
+
+  test('已有完整本地配置时默认进入「使用自定义配置」并回填', () => {
+    localStorage.setItem(
+      'zyxf_llm',
+      JSON.stringify({ apiKey: 'sk-old', baseUrl: 'https://llm.old/v1', model: 'glm-4.6' })
+    );
+    renderModal();
+
+    expect(radio('使用自定义配置')).toBeChecked();
+    expect(screen.getByPlaceholderText('sk-…').value).toBe('sk-old');
+  });
+
+  test('切回「使用服务器配置」并保存会清掉本地配置，且字段随之隐藏', async () => {
+    localStorage.setItem(
+      'zyxf_llm',
+      JSON.stringify({ apiKey: 'sk-old', baseUrl: 'https://llm.old/v1', model: 'glm-4.6' })
+    );
+    renderModal();
+    expect(screen.getByPlaceholderText('sk-…')).toBeInTheDocument();
+
+    fireEvent.click(radio('使用服务器配置'));
+    expect(screen.queryByPlaceholderText('sk-…')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => expect(savedCfg()).toBeNull());
+  });
+
+  test('「恢复默认设置」回到服务器配置并清掉本地配置', async () => {
+    localStorage.setItem(
+      'zyxf_llm',
+      JSON.stringify({ apiKey: 'sk-old', baseUrl: 'https://llm.old/v1', model: 'glm-4.6' })
+    );
+    renderModal();
+
+    fireEvent.click(screen.getByRole('button', { name: '恢复默认设置' }));
+
+    await waitFor(() => expect(savedCfg()).toBeNull());
+    expect(radio('使用服务器配置')).toBeChecked();
+    expect(screen.queryByPlaceholderText('sk-…')).toBeNull();
+  });
+});
