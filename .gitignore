@@ -18,3 +18,6 @@ backend/run-backend-hidden.ps1
 .zcode/
 .mimosa/
 gui-test-screenshots/
+
+# DSH 本地技能（如 alibabacloud-workbench-cli）——按需 clone 后本地生效，不入库
+.dsh/
