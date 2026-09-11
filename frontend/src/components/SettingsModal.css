@@ -583,14 +583,14 @@
   }
 
   /* 顶部条 + 导航：包在白卡片外的顶部区域，导航自己是一张白卡片。
-     标题行**不加上内边距**（行高 40px 自会把文字与圆按钮居中），标题行到列表卡片留 14px。
-     index.html 没开 viewport-fit=cover，故不需要 env(safe-area-inset-*)：常规浏览与 iOS
-     独立窗口下，浏览器本来就把布局视口排在状态栏/刘海之下。 */
+     标题行的上沿留白 = (行高 − 文字行高)/2，所以行高按文字本身定（24px）——这样标题才贴顶；
+     关闭按钮因此不画灰色圆底（图标 20px、点击区仍 36px 都不变），否则 36px 的圆盘会把行高顶回去。
+     行到列表卡片留 12px。index.html 没开 viewport-fit=cover，故不需要 env(safe-area-inset-*)。 */
   .settings-sidebar {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     width: auto;
     padding: 0 12px;
     background: transparent;
@@ -599,12 +599,16 @@
     overflow-y: visible; /* 侧栏改成顶部条后不再单独滚动 */
   }
 
-  /* 整行：左侧圆形关闭按钮（绝对定位）+ 居中标题 */
+  /* 整行：左侧关闭图标（透明点击区）+ 居中标题。
+     必须清掉基类的 top/right —— 那是桌面端把关闭按钮钉到卡片右上角用的绝对定位偏移，
+     这里 position 换成 relative 后它们会变成「相对偏移」，把整行推下 10px、拉左 10px。 */
   .settings-sidebar-top {
     position: relative;
+    top: auto;
+    right: auto;
     flex: 1 1 100%;
     justify-content: center;
-    min-height: 40px;
+    min-height: 24px;
     padding: 0;
   }
 
@@ -612,6 +616,7 @@
     display: block;
     font-size: 17px;
     font-weight: 600;
+    line-height: 1.2; /* 固定行高，避免跟随系统字体把行撑高、又冒出一段空白 */
     color: var(--ink);
   }
 
@@ -623,7 +628,7 @@
     height: 36px;
     margin-top: -18px;
     border-radius: 999px;
-    background: var(--hover);
+    background: transparent; /* 无灰色圆底（点按时仍由 hover 态给出反馈） */
     color: var(--ink);
   }
 
