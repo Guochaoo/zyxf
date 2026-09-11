@@ -51,8 +51,35 @@ export default function App() {
   const [graphFull, setGraphFull] = useState(false);
   // Collapsible left rail (docs layout) on wide screens. Defaults open.
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  // 全局设置弹窗（账户卡片「设置」触发）。
-  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // ---- 设置：真实路由 /settings（手机端二级页面 = /settings/:section）----
+  // 做成路由而不是「弹窗 + 历史占位」，系统返回手势/返回键就由路由天然接管：
+  // /settings/ai → 返回 → /settings（一级列表）→ 返回 → 打开设置前的页面。
+  const isSettings = location.pathname === '/settings' || location.pathname.startsWith('/settings/');
+  const settingsSection = location.pathname.match(/^\/settings\/([\w-]+)/)?.[1] ?? null;
+  // 打开设置时把当前页面记进 history.state 作为「背景」：弹窗之外照常渲染原页面（弹窗路由的标准做法）。
+  const background = location.state?.background;
+  // 布局判断一律看「背景位置」——弹窗打开时路径是 /settings，但背后仍是资料库等页面。
+  const pageLocation = background ?? location;
+  const pagePath = pageLocation.pathname;
+  const isMobileSettings = useMediaQuery('(max-width: 640px)');
+
+  const openSettings = () => {
+    if (!isSettings) navigate('/settings', { state: { background: location } });
+  };
+  // 手机端点条目 = 进二级页面，用 push（返回手势才能回到列表）；桌面端只是切右栏，用 replace 不堆历史。
+  const openSettingsSection = (id) => {
+    navigate(`/settings/${id}`, { replace: !isMobileSettings, state: location.state });
+  };
+  // 手机端二级的「返回」按钮 = 回到一级列表；用 replace，之后一次返回直接回到原页面。
+  const backToSettingsList = () => {
+    navigate('/settings', { replace: true, state: location.state });
+  };
+  // 关闭设置 = 用背景位置替换掉设置条目，历史里不留 /settings 残影。
+  const closeSettings = () => {
+    const bg = location.state?.background;
+    navigate(bg ? { pathname: bg.pathname, search: bg.search, hash: bg.hash } : '/', { replace: true });
+  };
 
   // 侧边栏开合的缓动曲线与时长（与 ChatComposer/KnowledgeGraph 的收缩动画一致）。
   const SIDEBAR_EASE = EASE_COLLAPSE;
@@ -60,10 +87,12 @@ export default function App() {
 
   // Docs layout: brand + search + folder tree live in the left rail, which
   // appears on browse routes only. Other pages are standalone.
-  const isBrowse = location.pathname === '/' || location.pathname.startsWith('/folder/');
-  const isDashboard = location.pathname === '/dashboard';
-  const isAbout = location.pathname === '/about';
-  const folderId = Number(location.pathname.match(/^\/folder\/(\d+)/)?.[1]) || 0;
+  // 一律基于 pagePath（= 背景位置）：设置弹窗打开时路径是 /settings，但背后仍是原页面，
+  // 布局不能跟着切走；直接访问 /settings 时背后渲染资料库，所以也归入 browse 布局。
+  const isBrowse = pagePath === '/' || pagePath.startsWith('/folder/') || pagePath.startsWith('/settings');
+  const isDashboard = pagePath === '/dashboard';
+  const isAbout = pagePath === '/about';
+  const folderId = Number(pagePath.match(/^\/folder\/(\d+)/)?.[1]) || 0;
 
   // Bottom account card on the menu panel. Logged-in shows username + role;
   // guests show a neutral "未登录" state. Login/logout actions live in the
@@ -210,9 +239,11 @@ export default function App() {
             </div>
           }
         >
-          <Routes>
+          <Routes location={pageLocation}>
             <Route path="/" element={<BrowsePage />} />
             <Route path="/folder/:id" element={<BrowsePage />} />
+            {/* 直接访问 /settings 时，弹窗背后渲染资料库（否则会落到下面的通配重定向、把 URL 冲掉） */}
+            <Route path="/settings/*" element={<BrowsePage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/about" element={<AboutPage />} />
             {/* /login 与 /register 渲染同一 AuthPage 实例：切换不重挂载，仅表单区过渡 */}
@@ -232,7 +263,7 @@ export default function App() {
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
             <div className="flex min-h-0 flex-1 flex-col gap-[15px]">
               <KnowledgeGraph currentId={folderId} onFullChange={setGraphFull} />
-              <ChatComposer onOpenSettings={() => setSettingsOpen(true)} />
+              <ChatComposer onOpenSettings={openSettings} />
             </div>
           </div>
         </div>
@@ -252,12 +283,19 @@ export default function App() {
           accentColor="#5227FF"
           colors={['#B497CF', '#5227FF']}
           isFixed
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={openSettings}
         />
       )}
 
-      {/* 全局设置弹窗：由账户卡片「设置」触发，覆盖所有页面 */}
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      {/* 全局设置：真实路由 /settings（手机端二级页面为 /settings/:section），覆盖所有页面 */}
+      <SettingsModal
+        open={isSettings}
+        section={settingsSection ?? 'ai'}
+        panelOpen={Boolean(settingsSection)}
+        onSectionChange={openSettingsSection}
+        onBack={backToSettingsList}
+        onClose={closeSettings}
+      />
 
       {/* 首次访问的注意清单弹窗：同意后写入 localStorage 才放行站点操作 */}
       <NoticeModal />
