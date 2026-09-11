@@ -65,4 +65,24 @@ describe('SearchBar 失败路径', () => {
     await waitFor(() => expect(searchMock).toHaveBeenCalled());
     expect(screen.getByRole('button', { name: /清除/ })).toBeInTheDocument();
   });
+
+  // IMPROVE-20：后端每类截断 20 条，命中更多时必须说明「只显示了前 N 条」，
+  // 否则用户会把 20 当成命中总数而漏掉资料。
+  test('结果被截断时提示「仅显示前 N 条」而不是把 20 当总数', async () => {
+    const files = Array.from({ length: 20 }, (_, i) => ({ id: i + 1, name: `f${i}.pdf`, ext: 'pdf' }));
+    searchMock.mockResolvedValueOnce({ folders: [], files, truncated: true });
+    renderBar();
+    fireEvent.change(input(), { target: { value: 'gaoshu' } });
+
+    await waitFor(() => expect(screen.getByText('仅显示前 20 条结果')).toBeInTheDocument());
+    expect(screen.queryByText('20 个结果')).toBeNull();
+  });
+
+  test('未截断时保持原有条数文案', async () => {
+    searchMock.mockResolvedValueOnce({ folders: [], files: [{ id: 1, name: 'a.pdf', ext: 'pdf' }], truncated: false });
+    renderBar();
+    fireEvent.change(input(), { target: { value: 'a' } });
+
+    await waitFor(() => expect(screen.getByText('1 个结果')).toBeInTheDocument());
+  });
 });

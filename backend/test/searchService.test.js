@@ -28,7 +28,7 @@ describe('searchService library (BUG-07 / BUG-10 / BUG-16)', () => {
     assert.equal(typeof invalidateSearchCache, 'function');
     invalidateSearchCache(); // 不应抛错
     const empty = searchLibrary('高数');
-    assert.deepEqual(empty, { folders: [], files: [] });
+    assert.deepEqual(empty, { folders: [], files: [], truncated: false });
     // 全库一致，命中/未命中结果结构相同（测试环境禁用 TTL 缓存，始终保持最新）
     insertFolder('高等数学', null);
     insertFile('高等数学.pdf', { ossKey: 'zyxf-test/高等数学.pdf' });

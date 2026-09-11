@@ -517,7 +517,7 @@ describe('files', () => {
 describe('search', () => {
   test('empty query returns empty results', async () => {
     const { body } = await request('GET', '/api/search?q=%20%20');
-    assert.deepEqual(body, { folders: [], files: [] });
+    assert.deepEqual(body, { folders: [], files: [], truncated: false });
   });
 
   test('matches folders and files by name', async () => {

@@ -26,6 +26,11 @@ const isReservedFolderName = (name) =>
 // 校验与写库都是同步逐项执行的，不限长等于给了一个阻塞事件循环的入口。
 const MAX_REORDER_ITEMS = 2000;
 
+// IMPROVE-17：一次改名/移动要逐个搬运子树里的 OSS 对象（copy + delete 各一轮网络往返，
+// 并发固定 10）。超过该规模就拒绝，避免请求拖到 nginx 的 60 s 超时、并留下半途的孤儿对象。
+// 需要更大规模时的正确做法是后台迁移任务（落库迁移状态 + sync 跳过未完成迁移的键）。
+export const MAX_SUBTREE_MOVE_ITEMS = 200;
+
 const SORT_FIELDS = {
   name: 'name COLLATE NOCASE',
   size: 'size',
@@ -148,6 +153,11 @@ async function applySubtreeObjectMove(plan) {
 function planFolderSubtreeMove(folderId, { parentOverrides, nameOverrides } = {}) {
   const { folderIds, files, folderMap } = collectFolderTree(folderId);
 
+  // IMPROVE-17：规模过大时不做逐对象搬运（见 MAX_SUBTREE_MOVE_ITEMS）。
+  if (files.length + folderIds.length > MAX_SUBTREE_MOVE_ITEMS) {
+    return { tooLarge: true, size: files.length + folderIds.length };
+  }
+
   const fileMoves = files.map((file) => ({
     ...file,
     newKey: objectKeyForFileFromMap(file.folder_id, file.name, folderMap, parentOverrides, nameOverrides),
@@ -178,10 +188,12 @@ function planFolderSubtreeMove(folderId, { parentOverrides, nameOverrides } = {}
 }
 
 // 事务内执行：计划 + 更新 files.oss_key + 调用方给的文件夹 UPDATE。
-// 返回 { conflict: true } 表示目标键已被占用（调用方据此回 409，事务会回滚）。
+// 返回 { conflict: true }（目标键已被占用）或 { tooLarge: true }（子树超过搬运阈值），
+// 调用方据此回 409；两种情况都不会写库。
 function relocateFolderSubtree(folderId, { parentOverrides, nameOverrides, updateFolder } = {}) {
   const plan = planFolderSubtreeMove(folderId, { parentOverrides, nameOverrides });
   if (plan.conflict) return { conflict: true };
+  if (plan.tooLarge) return { tooLarge: true, size: plan.size };
 
   const updateFile = db.prepare('UPDATE files SET oss_key = ? WHERE id = ?');
   const tx = transaction(() => {
@@ -424,6 +436,9 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
     if (outcome.conflict) {
       return res.status(409).json({ error: '目标存储路径已存在同名文件' });
     }
+    if (outcome.tooLarge) {
+      return res.status(409).json({ error: `文件夹内条目过多（${outcome.size} 项），请分批移动/改名` });
+    }
     await applySubtreeObjectMove(outcome.plan);
     invalidateLibraryCaches();
     return res.json({ ok: true, name: newName });
@@ -466,6 +481,9 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
   }
   if (outcome.conflict) {
     return res.status(409).json({ error: '目标存储路径已存在同名文件' });
+  }
+  if (outcome.tooLarge) {
+    return res.status(409).json({ error: `文件夹内条目过多（${outcome.size} 项），请分批移动/改名` });
   }
   await applySubtreeObjectMove(outcome.plan);
   invalidateLibraryCaches();

@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { db } from '../db.js';
@@ -7,6 +6,7 @@ import { isUniqueError } from '../dbHelpers.js';
 import { signToken } from '../auth.js';
 import { wrapAsync, serviceError } from '../http.js';
 import { isMailEnabled, sendVerificationCode } from '../mail.js';
+import { hashPassword, verifyPassword, dummyPasswordHash } from '../password.js';
 import { limiterOptions } from '../limiter.js';
 
 const router = Router();
@@ -37,15 +37,12 @@ const DAILY_SEND_LIMIT = 10; // 同一邮箱 24h 内最多发 10 次
 const MAX_CODE_ATTEMPTS = 5; // 单个验证码最多可尝试核验 5 次
 const MAX_CODE_USES = 3; // 单个验证码核验通过后最多可用于 3 次注册提交（防枚举探测，BUG-71）
 
-// 账号不存在时也走一次 bcrypt，抹平「不存在」与「密码错」之间的约 40ms 时间差（BUG-70）。
-// 否则取几个样本即可枚举出哪些用户名/邮箱已注册，把刻意模糊的 401 文案变成枚举接口。
-const DUMMY_HASH = bcrypt.hashSync('timing-equalizer', 10);
-
 const hashCode = (code) => crypto.createHash('sha256').update(String(code)).digest('hex');
 const normalizeEmail = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : '');
 const emailRegistered = (email) => !!db.prepare('SELECT id FROM users WHERE email = ?').get(email);
 
-router.post('/login', loginFloodLimiter, loginLimiter, (req, res) => {
+// IMPROVE-16：密码哈希改用 crypto.scrypt（见 src/password.js），事件循环不再被哈希独占。
+router.post('/login', loginFloodLimiter, loginLimiter, wrapAsync(async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: '用户名和密码不能为空' });
@@ -55,10 +52,19 @@ router.post('/login', loginFloodLimiter, loginLimiter, (req, res) => {
   const user = db
     .prepare('SELECT * FROM users WHERE username = ? OR email = ?')
     .get(identifier, identifier.toLowerCase());
-  // 先 compare 再判 user，两条分支耗时等价（见 DUMMY_HASH）。
-  const passwordOk = bcrypt.compareSync(password, user ? user.password_hash : DUMMY_HASH);
+  // 先校验再判 user，两条分支耗时等价（账号不存在时对着 dummy 哈希跑一次，BUG-70）。
+  const stored = user ? user.password_hash : await dummyPasswordHash();
+  const { ok: passwordOk, legacy } = await verifyPassword(password, stored);
   if (!user || !passwordOk) {
     return res.status(401).json({ error: '用户名或密码错误' });
+  }
+  // 历史 bcrypt 哈希在首次成功登录时升级为 scrypt（存量账号无需重置密码）。
+  if (legacy) {
+    try {
+      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(await hashPassword(password), user.id);
+    } catch (e) {
+      console.warn('[auth] 密码哈希升级失败（不影响本次登录）:', e.message);
+    }
   }
   const token = signToken({
     id: user.id,
@@ -67,7 +73,7 @@ router.post('/login', loginFloodLimiter, loginLimiter, (req, res) => {
     epoch: user.token_epoch ?? 0,
   });
   res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
-});
+}));
 
 // 发送注册验证码。冷却/日限额状态存 email_codes 行，随验证码一起覆写。
 router.post('/register/code', codeLimiter, wrapAsync(async (req, res) => {
@@ -126,7 +132,8 @@ router.post('/register', registerLimiter, wrapAsync(async (req, res) => {
   if (!EMAIL_RE.test(email)) {
     return res.status(400).json({ error: '邮箱格式不正确' });
   }
-  // 密码下限按字符数（8 位字符是用户能理解的口径），上限按字节（bcrypt 只用前 72 字节）：
+  // 密码下限按字符数（8 位字符是用户能理解的口径），上限按字节（bcrypt 只用前 72 字节；
+  // 现在虽然改用 scrypt，仍保留该上限：校验口径不该随哈希算法变，且老库里还有 bcrypt 账号）：
   // 只判 password.length 会让 40 个汉字（120 字节）通过校验、实际只有前 24 个字生效，
   // 于是「前缀相同、后缀不同」的密码也能登录同一账号（BUG-72）。
   if (password.length < 8 || Buffer.byteLength(password, 'utf8') > 72) {
@@ -164,7 +171,7 @@ router.post('/register', registerLimiter, wrapAsync(async (req, res) => {
     return res.status(409).json({ error: '用户名或邮箱已被使用' });
   }
 
-  const hash = bcrypt.hashSync(password, 10);
+  const hash = await hashPassword(password);
   try {
     const info = db
       .prepare('INSERT INTO users (username, password_hash, role, email, created_at) VALUES (?, ?, ?, ?, ?)')

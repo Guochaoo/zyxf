@@ -245,6 +245,7 @@ const zh = {
     loadingAria: '清除',
     failed: '搜索失败，请重试',
     retry: '重试',
+    resultsTruncated: '仅显示前 {{count}} 条结果',
   },
   tree: {
     title: '目录',

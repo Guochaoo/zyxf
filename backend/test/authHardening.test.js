@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import { db } from '../src/db.js';
 import { app } from '../src/index.js';
 import { mailState } from './setup.js';
+import { hashPassword } from '../src/password.js';
 
 let server;
 let base;
@@ -76,21 +77,74 @@ describe('BUG-53: 登录限流按「IP + 账号」分桶', () => {
   });
 });
 
-describe('BUG-70: 账号不存在时也走一次 bcrypt（抹平时间差）', () => {
-  test('不存在的账号同样会调用 compareSync', async () => {
-    const original = bcrypt.compareSync;
-    let calls = 0;
-    bcrypt.compareSync = (...args) => {
-      calls += 1;
-      return original(...args);
-    };
-    try {
-      const r = await login('nobody-here', 'whatever-password', '203.0.113.211');
-      assert.equal(r.status, 401);
-    } finally {
-      bcrypt.compareSync = original;
-    }
-    assert.equal(calls, 1, '账号不存在时也必须跑一次 bcrypt，否则 40ms 时间差可枚举账号');
+describe('IMPROVE-16: 密码哈希不再独占事件循环', () => {
+  // 判据：登录进行中并发打 /api/health，health 的排队时间应远小于一次哈希的耗时。
+  // 改前（bcryptjs 同步/分片实现）health 会被挡到约一整个哈希时长（≈40 ms）；
+  // 改后走 libuv 线程池的 scrypt，health 只需排队一个 tick（实测 1 ms 量级）。
+  test('登录进行中，并发的 /api/health 不被哈希阻塞', async () => {
+    const t = Date.now();
+    await hashPassword('measure-cost');
+    const hashCost = Date.now() - t;
+
+    const loginPromise = request('POST', '/api/auth/login', {
+      body: { username: 'nobody-bench', password: 'some-password' },
+    });
+    const healthStart = Date.now();
+    const health = await request('GET', '/api/health');
+    const healthDelay = Date.now() - healthStart;
+    const login = await loginPromise;
+
+    assert.equal(health.status, 200);
+    assert.equal(login.status, 401);
+    assert.ok(
+      healthDelay < hashCost / 2,
+      `health 排队 ${healthDelay}ms 不应接近一次哈希的耗时 ${hashCost}ms（说明哈希又回到主线程阻塞）`
+    );
+  });
+
+  // 存量 bcrypt 账号：仍能登录，并在这次登录时被升级为 scrypt（无需重置密码）。
+  test('历史 bcrypt 哈希仍可登录并自动升级为 scrypt', async () => {
+    const legacy = bcrypt.hashSync('legacy-pass-123', 10);
+    db.prepare(
+      `INSERT INTO users (username, password_hash, role, created_at) VALUES ('legacy-user', ?, 'user', ?)`
+    ).run(legacy, Date.now());
+
+    const r = await login('legacy-user', 'legacy-pass-123', '203.0.113.220');
+    assert.equal(r.status, 200);
+
+    const row = db.prepare("SELECT password_hash FROM users WHERE username = 'legacy-user'").get();
+    assert.ok(row.password_hash.startsWith('scrypt$'), '登录后应升级为 scrypt 哈希');
+    // 升级后的哈希仍能校验同一个密码
+    const again = await login('legacy-user', 'legacy-pass-123', '203.0.113.221');
+    assert.equal(again.status, 200);
+  });
+});
+
+describe('BUG-70: 账号不存在时也走一次哈希校验（抹平时间差）', () => {
+  // ESM 导出的绑定是只读的，没法 spy 模块函数；这里直接量时间：账号不存在的 401 与
+  // 「账号存在但密码错」的 401 必须是同一量级。一旦有人把不存在分支短路掉（直接 return），
+  // 前者会快一个数量级，这条就会红。
+  test('账号不存在与密码错误的耗时同量级', async () => {
+    const known = 'timing-known';
+    db.prepare(
+      'INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)'
+    ).run(known, await hashPassword('the-right-password'), 'user', Date.now());
+
+    const t1 = Date.now();
+    const missing = await login('nobody-here-at-all', 'whatever-password', '203.0.113.211');
+    const missingMs = Date.now() - t1;
+
+    const t2 = Date.now();
+    const wrong = await login(known, 'the-wrong-password', '203.0.113.212');
+    const wrongMs = Date.now() - t2;
+
+    assert.equal(missing.status, 401);
+    assert.equal(wrong.status, 401);
+    // 取密码错误耗时的 1/3 作下界，跨机器保守；只验证「不存在分支确实跑了哈希」
+    assert.ok(
+      missingMs > wrongMs / 3,
+      `账号不存在耗时 ${missingMs}ms 远低于密码错误 ${wrongMs}ms，说明该分支没有跑哈希`
+    );
   });
 });
 
