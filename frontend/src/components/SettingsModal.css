@@ -583,14 +583,14 @@
   }
 
   /* 顶部条 + 导航：包在白卡片外的顶部区域，导航自己是一张白卡片。
-     标题行按圆形按钮的高度定高（36px），标题在行内居中 → 文字上沿约 9.5px（36px 圆盘 + 17px
-     文字居中的几何下限）；行到列表卡片留 12px。
+     行高 36px + 标题在其中居中 → 文字上沿到页顶约 8px（框）/ 9.5px（字形）；
+     行与列表卡片之间**不留间距**，这样文字下边缘到列表顶端的距离与上边相等（各约 9.5px）。
      index.html 没开 viewport-fit=cover，故不需要 env(safe-area-inset-*)。 */
   .settings-sidebar {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
-    gap: 12px;
+    gap: 0;
     width: auto;
     padding: 0 12px;
     background: transparent;
@@ -620,13 +620,14 @@
     color: var(--ink);
   }
 
+  /* 圆底比点击行小一档（32px，行内居中），视觉上不压到页顶也不贴住列表卡片 */
   .settings-close {
     position: absolute;
     left: 0;
     top: 50%;
-    width: 36px;
-    height: 36px;
-    margin-top: -18px;
+    width: 32px;
+    height: 32px;
+    margin-top: -16px;
     border-radius: 999px;
     background: var(--hover);
     color: var(--ink);
