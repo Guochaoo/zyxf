@@ -99,8 +99,9 @@ export default function SettingsModal({ open, onClose }) {
         label: t('settings.ai.protocol'),
         type: 'select',
         options: [
-          { value: 'openai', label: t('settings.ai.protocolOpenai') },
-          { value: 'anthropic', label: t('settings.ai.protocolAnthropic') },
+          { value: 'openai-completions', label: t('settings.ai.protocolOpenaiCompletions') },
+          { value: 'openai-responses', label: t('settings.ai.protocolOpenaiResponses') },
+          { value: 'anthropic-messages', label: t('settings.ai.protocolAnthropicMessages') },
         ],
       },
       { key: 'apiKey', label: t('settings.ai.apiKey'), type: 'password' },

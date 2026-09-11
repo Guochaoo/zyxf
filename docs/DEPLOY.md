@@ -91,7 +91,8 @@ IMM_PROJECT=
 LLM_API_KEY=
 LLM_BASE_URL=
 LLM_MODEL=
-# 上游协议，留空=openai（OpenAI 兼容）；Anthropic Messages API 填 anthropic
+# 上游协议，留空=openai-completions（OpenAI 兼容 /chat/completions）
+# 可选值：openai-completions / openai-responses（OpenAI /responses）/ anthropic-messages（Anthropic /messages）
 LLM_PROTOCOL=
 
 # 可选：用户注册邮箱验证码（阿里云邮件推送 DirectMail，三项齐备才启用）

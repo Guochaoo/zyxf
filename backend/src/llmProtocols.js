@@ -5,17 +5,27 @@
 //   响应方向：两种协议各自的 SSE 载荷经 reducer 统一成 { delta } / { tool_calls } 事件。
 // 本模块只做纯数据变换（不联网、不读 env），便于单测覆盖。
 
-export const PROTOCOLS = ['openai', 'anthropic'];
-const DEFAULT_PROTOCOL = 'openai';
+export const PROTOCOLS = ['openai-completions', 'openai-responses', 'anthropic-messages'];
+const DEFAULT_PROTOCOL = 'openai-completions';
+
+// 旧值/简称别名：早期版本存的是 openai / anthropic，env 文档也写过这两个词，一律映射到规范名。
+const PROTOCOL_ALIASES = {
+  openai: 'openai-completions',
+  anthropic: 'anthropic-messages',
+};
 
 /** 是否为受支持的协议名（前端配置用它做白名单校验）。 */
 export function isSupportedProtocol(value) {
-  return typeof value === 'string' && PROTOCOLS.includes(value.trim().toLowerCase());
+  if (typeof value !== 'string') return false;
+  const v = value.trim().toLowerCase();
+  return PROTOCOLS.includes(v) || v in PROTOCOL_ALIASES;
 }
 
-/** 归一化协议名：未知/缺省按 openai（兼容旧配置与旧客户端）。 */
+/** 归一化协议名：未知/缺省按 openai-completions（兼容旧配置与旧客户端）。 */
 export function normalizeProtocol(value) {
-  return isSupportedProtocol(value) ? value.trim().toLowerCase() : DEFAULT_PROTOCOL;
+  if (!isSupportedProtocol(value)) return DEFAULT_PROTOCOL;
+  const v = value.trim().toLowerCase();
+  return PROTOCOL_ALIASES[v] || v;
 }
 
 /**
@@ -244,6 +254,147 @@ export function buildAnthropicRequest({ baseUrl, apiKey, model, messages, tools 
     body: buildAnthropicBody({ model, messages, tools }),
   };
 }
+
+// ---- OpenAI Responses API（/responses）----
+
+/**
+ * OpenAI 形状消息 → Responses 的 { instructions, input }。
+ * 与 Chat Completions 的差异：
+ *   1. system 提示走顶层 instructions（不是 input 里的一条消息）；
+ *   2. input 是「条目」数组：普通消息用 { role, content: '文本' }，
+ *      工具调用是 **独立的 function_call 条目**（arguments 仍是 JSON 字符串），
+ *      工具结果是 function_call_output 条目（用 call_id 关联，不是 tool_call_id 字段）；
+ *   3. tools 平铺成 { type: 'function', name, description, parameters }。
+ */
+export function toResponsesInput(messages) {
+  const instructionParts = [];
+  const input = [];
+  for (const m of messages || []) {
+    if (!m || typeof m !== 'object') continue;
+    if (m.role === 'system') {
+      if (typeof m.content === 'string' && m.content) instructionParts.push(m.content);
+      continue;
+    }
+    if (m.role === 'tool') {
+      input.push({
+        type: 'function_call_output',
+        call_id: m.tool_call_id,
+        output: typeof m.content === 'string' ? m.content : String(m.content ?? ''),
+      });
+      continue;
+    }
+    if (m.role === 'assistant') {
+      if (typeof m.content === 'string' && m.content) input.push({ role: 'assistant', content: m.content });
+      for (const tc of m.tool_calls || []) {
+        input.push({
+          type: 'function_call',
+          call_id: tc.id,
+          name: tc.function?.name,
+          arguments: tc.function?.arguments || '{}',
+        });
+      }
+      continue;
+    }
+    if (typeof m.content === 'string' && m.content) input.push({ role: 'user', content: m.content });
+  }
+  return { instructions: instructionParts.join('\n\n'), input };
+}
+
+/** Responses 的 tools：平铺 { type:'function', name, description, parameters }。 */
+export function toResponsesTools(tools) {
+  return (tools || []).map((t) => ({
+    type: 'function',
+    name: t.function?.name,
+    description: t.function?.description,
+    parameters: t.function?.parameters ?? { type: 'object', properties: {} },
+  }));
+}
+
+export function buildResponsesBody({ model, messages, tools }) {
+  const { instructions, input } = toResponsesInput(messages);
+  const body = { model, input, stream: true, store: false }; // store:false：不在上游留对话副本
+  if (instructions) body.instructions = instructions;
+  if (tools?.length) body.tools = toResponsesTools(tools);
+  return body;
+}
+
+export function buildOpenAiResponsesRequest({ baseUrl, apiKey, model, messages, tools }) {
+  return {
+    url: `${baseUrl}/responses`,
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+    body: buildResponsesBody({ model, messages, tools }),
+  };
+}
+
+/**
+ * Responses 流式载荷 → 统一事件。
+ * 相关事件：response.output_text.delta（文本增量）、response.output_item.added（function_call 条目
+ * 给出 call_id/name）、response.function_call_arguments.delta / .done（拼接 arguments）、
+ * response.completed（正常结束）、response.failed / error（上游报错）。
+ * 内部工具回调约定用 call_id 作为调用 id，回灌时 function_call_output 才能对上。
+ */
+export function createOpenAiResponsesReducer() {
+  const pendingTools = new Map(); // item_id → tool_call（call_id 作为对外的 id）
+  let sawDone = false;
+  return {
+    get sawDone() {
+      return sawDone;
+    },
+    feed(payload) {
+      let json;
+      try {
+        json = JSON.parse(payload);
+      } catch {
+        return [];
+      }
+      if (json.type === 'response.output_text.delta') {
+        return json.delta ? [{ type: 'delta', text: json.delta }] : [];
+      }
+      if (json.type === 'response.output_item.added' && json.item?.type === 'function_call') {
+        pendingTools.set(json.item.id, {
+          id: json.item.call_id || json.item.id,
+          type: 'function',
+          function: { name: json.item.name || '', arguments: '' },
+        });
+        return [];
+      }
+      if (json.type === 'response.function_call_arguments.delta') {
+        const acc = pendingTools.get(json.item_id);
+        if (acc && json.delta) acc.function.arguments += json.delta;
+        return [];
+      }
+      if (json.type === 'response.function_call_arguments.done') {
+        // 该事件带完整 arguments，直接以它为准（比逐片拼接更稳）
+        const acc = pendingTools.get(json.item_id);
+        if (acc && typeof json.arguments === 'string') acc.function.arguments = json.arguments;
+        return [];
+      }
+      if (json.type === 'response.completed') {
+        sawDone = true;
+        return [];
+      }
+      if (json.type === 'response.failed' || json.type === 'error') {
+        const detail = json.response?.error?.message || json.error?.message || json.message || '';
+        const err = new Error(`LLM 上游错误: ${detail}`.trim());
+        err.status = 502;
+        throw err;
+      }
+      return [];
+    },
+    finish() {
+      if (pendingTools.size === 0) return [];
+      const toolCalls = finalizeToolCalls(pendingTools);
+      return toolCalls.length ? [{ type: 'tool_calls', tool_calls: toolCalls }] : [];
+    },
+  };
+}
+
+/** 协议 → 请求组装 / 流解析。llm.js 只按这张表分发。 */
+export const PROTOCOL_IMPLS = {
+  'openai-completions': { buildRequest: buildOpenAiRequest, createReducer: createOpenAiReducer },
+  'openai-responses': { buildRequest: buildOpenAiResponsesRequest, createReducer: createOpenAiResponsesReducer },
+  'anthropic-messages': { buildRequest: buildAnthropicRequest, createReducer: createAnthropicReducer },
+};
 
 /**
  * Anthropic 流式载荷 → 统一事件。

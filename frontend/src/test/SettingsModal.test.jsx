@@ -121,7 +121,7 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
     renderModal();
     customMode();
 
-    expect(protocolSelect().value).toBe('openai');
+    expect(protocolSelect().value).toBe('openai-completions');
     fireEvent.change(urlInput(), { target: { value: 'https://llm.test/v1' } });
     fireEvent.change(keyInput(), { target: { value: 'sk-test' } });
     fireEvent.change(modelInput(), { target: { value: 'glm-4.6' } });
@@ -133,39 +133,42 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
         apiKey: 'sk-test',
         baseUrl: 'https://llm.test/v1',
         model: 'glm-4.6',
-        protocol: 'openai',
+        protocol: 'openai-completions',
       })
     );
   });
 
-  test('协议选 Anthropic 兼容后保存，存储里 protocol 为 anthropic', async () => {
+  test('协议下拉提供三种协议，选 Anthropic Messages 后保存生效', async () => {
     renderModal();
     customMode();
+
+    const options = [...protocolSelect().options].map((o) => o.value);
+    expect(options).toEqual(['openai-completions', 'openai-responses', 'anthropic-messages']);
 
     fireEvent.change(urlInput(), { target: { value: 'https://api.anthropic.com/v1' } });
     fireEvent.change(keyInput(), { target: { value: 'sk-ant' } });
     fireEvent.change(modelInput(), { target: { value: 'claude-sonnet-4-5' } });
-    fireEvent.change(protocolSelect(), { target: { value: 'anthropic' } });
+    fireEvent.change(protocolSelect(), { target: { value: 'anthropic-messages' } });
 
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
 
-    await waitFor(() => expect(savedCfg().protocol).toBe('anthropic'));
+    await waitFor(() => expect(savedCfg().protocol).toBe('anthropic-messages'));
   });
 
   test('已有完整本地配置时默认进入「使用自定义配置」并回填（含协议）', () => {
     localStorage.setItem(
       'zyxf_llm',
-      JSON.stringify({ apiKey: 'sk-old', baseUrl: 'https://llm.old/v1', model: 'glm-4.6', protocol: 'anthropic' })
+      JSON.stringify({ apiKey: 'sk-old', baseUrl: 'https://llm.old/v1', model: 'glm-4.6', protocol: 'anthropic-messages' })
     );
     renderModal();
 
     expect(radio('使用自定义配置')).toBeChecked();
     expect(keyInput().value).toBe('sk-old');
-    expect(protocolSelect().value).toBe('anthropic');
+    expect(protocolSelect().value).toBe('anthropic-messages');
   });
 
-  // 旧存储没有 protocol 字段：读出来按 openai，不能因为缺字段就判定「未配置」
-  test('旧存储（无 protocol 字段）仍视为已配置，协议回落到 openai', () => {
+  // 旧存储没有 protocol 字段：读出来按 openai-completions，不能因为缺字段就判定「未配置」
+  test('旧存储（无 protocol 字段）仍视为已配置，协议回落到 openai-completions', () => {
     localStorage.setItem(
       'zyxf_llm',
       JSON.stringify({ apiKey: 'sk-old', baseUrl: 'https://llm.old/v1', model: 'glm-4.6' })
@@ -173,7 +176,18 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
     renderModal();
 
     expect(radio('使用自定义配置')).toBeChecked();
-    expect(protocolSelect().value).toBe('openai');
+    expect(protocolSelect().value).toBe('openai-completions');
+  });
+
+  // 更早的版本存的是 openai / anthropic，读到要映射到规范名（否则下拉会显示成第一个选项、保存后把用户选择改掉）
+  test('旧存储里的旧协议名（openai / anthropic）映射到规范名', () => {
+    localStorage.setItem(
+      'zyxf_llm',
+      JSON.stringify({ apiKey: 'k', baseUrl: 'https://llm.old/v1', model: 'm', protocol: 'anthropic' })
+    );
+    renderModal();
+
+    expect(protocolSelect().value).toBe('anthropic-messages');
   });
 
   test('切回「使用服务器配置」并保存会清掉本地配置，且字段随之隐藏', async () => {

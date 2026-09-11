@@ -8,7 +8,7 @@
 
 - **资料管理**：文件夹任意嵌套；按名称、大小、时间排序，升降序可切换；拖拽 / 点击上传（前端直传 OSS）；后端提供面包屑数据（前端当前未在 UI 展示）
 - **智能搜索**：名称子串、汉字缩写（搜「高数」命中「高等数学」）、拼音全拼与首字母（`gaoshu` / `gdsx`）、所在文件夹路径命中；名称命中排在路径命中之前，结果标注所属文件夹
-- **AI 资料助手**（可选）：右栏流式对话，LLM 按需调用智能检索并推荐文件；回答中【文件N】引用渲染为可点击卡片（跳转 / 预览）；支持 OpenAI 兼容与 Anthropic 两种协议，浏览器端配置或服务器端 env 配置均可；游客限流、管理员豁免
+- **AI 资料助手**（可选）：右栏流式对话，LLM 按需调用智能检索并推荐文件；回答中【文件N】引用渲染为可点击卡片（跳转 / 预览）；支持三种上游协议（OpenAI Chat Completions / OpenAI Responses / Anthropic Messages），浏览器端配置或服务器端 env 配置均可；游客限流、管理员豁免
 - **在线预览**：PDF / PPT / Word / Excel / TXT 走阿里云 IMM WebOffice；zip / rar 等归档仅提供下载
 - **知识图谱**：按目录连接关系的力导向图，点击节点跳转或预览，支持全库视图与当前文件夹邻域放大
 - **统计面板**（`/dashboard`）：近一年 GitHub 式下载热力图、文件类型分布、下载 / 占用排行、今日上传下载动态
@@ -21,7 +21,7 @@
 | 前端 | React 18 · Vite 5 · TailwindCSS 3 · React Router 7 · d3-force · lucide-react |
 | 后端 | Node.js · Express 4 · node:sqlite（SQLite）· JWT · express-rate-limit |
 | 存储 / 预览 | 阿里云 OSS（前端直传，后端仅签名）· 阿里云 IMM WebOffice |
-| AI（可选） | OpenAI 兼容 `/chat/completions` 或 Anthropic Messages API（`/messages`），均支持 SSE 流式 + 工具调用 |
+| AI（可选） | 三种上游协议：OpenAI `/chat/completions`、OpenAI `/responses`、Anthropic `/messages`，均支持 SSE 流式 + 工具调用 |
 
 ## 快速开始
 
@@ -64,7 +64,7 @@ cd frontend && npm install && npm run dev
 | `OSS_KEY_PREFIX` / `OSS_ENDPOINT` |  | 上传根前缀 / 自定义直传 endpoint |
 | `IMM_PROJECT` |  | IMM 项目名（默认 `zyxf`），与 OSS Bucket 绑定的 IMM 项目名不同才需设置 |
 | `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` |  | 三者齐备才启用 AI 对话，留空则该接口返回 503 |
-| `LLM_PROTOCOL` |  | 上游协议：`openai`（默认，OpenAI 兼容）/ `anthropic`（Anthropic Messages API）。前端设置里的「API 协议」可让用户用自带 Key 覆盖它 |
+| `LLM_PROTOCOL` |  | 上游协议：`openai-completions`（默认，OpenAI/GLM/DeepSeek 等 `/chat/completions` 接口）/ `openai-responses`（OpenAI `/responses`）/ `anthropic-messages`（Anthropic `/messages`）。旧值 `openai` / `anthropic` 仍兼容。前端设置里的「API 协议」可让用户用自带 Key 覆盖它 |
 | `DM_ACCESS_KEY_ID` / `DM_ACCESS_KEY_SECRET` / `DM_ACCOUNT_NAME` |  | 三者齐备才启用用户注册（阿里云邮件推送 DirectMail 发送邮箱验证码），留空则注册发码接口返回 503 |
 | `DM_FROM_ALIAS` |  | 发件人显示名（默认「仲英学辅」） |
 

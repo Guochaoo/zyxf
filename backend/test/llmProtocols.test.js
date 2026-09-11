@@ -4,16 +4,21 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   PROTOCOLS,
+  PROTOCOL_IMPLS,
   isSupportedProtocol,
   normalizeProtocol,
   createSseSplitter,
   createOpenAiReducer,
   createAnthropicReducer,
+  createOpenAiResponsesReducer,
   toAnthropicMessages,
   toAnthropicTools,
   buildAnthropicBody,
   buildOpenAiRequest,
   buildAnthropicRequest,
+  buildOpenAiResponsesRequest,
+  toResponsesInput,
+  toResponsesTools,
   anthropicUrl,
   anthropicHeaders,
   ANTHROPIC_VERSION,
@@ -37,16 +42,23 @@ function runReducer(reducer, chunks) {
 }
 
 describe('协议名归一化', () => {
-  test('受支持的两个协议', () => {
-    assert.deepEqual(PROTOCOLS, ['openai', 'anthropic']);
-    assert.equal(isSupportedProtocol('openai'), true);
-    assert.equal(isSupportedProtocol(' Anthropic '), true);
+  test('三个规范协议', () => {
+    assert.deepEqual(PROTOCOLS, ['openai-completions', 'openai-responses', 'anthropic-messages']);
+    assert.deepEqual(Object.keys(PROTOCOL_IMPLS).sort(), [...PROTOCOLS].sort());
+    assert.equal(isSupportedProtocol('openai-responses'), true);
+    assert.equal(isSupportedProtocol(' Anthropic-Messages '), true);
   });
 
-  test('缺省/未知回落到 openai，但白名单判定对未知值返回 false', () => {
-    assert.equal(normalizeProtocol(''), 'openai');
-    assert.equal(normalizeProtocol(undefined), 'openai');
-    assert.equal(normalizeProtocol('gemini'), 'openai');
+  test('旧值 openai / anthropic 映射到规范名（旧存储与旧 env 不会失效）', () => {
+    assert.equal(normalizeProtocol('openai'), 'openai-completions');
+    assert.equal(normalizeProtocol('anthropic'), 'anthropic-messages');
+    assert.equal(isSupportedProtocol('openai'), true);
+  });
+
+  test('缺省/未知回落到 openai-completions，但白名单判定对未知值返回 false', () => {
+    assert.equal(normalizeProtocol(''), 'openai-completions');
+    assert.equal(normalizeProtocol(undefined), 'openai-completions');
+    assert.equal(normalizeProtocol('gemini'), 'openai-completions');
     assert.equal(isSupportedProtocol('gemini'), false);
   });
 });
@@ -103,6 +115,99 @@ describe('OpenAI reducer', () => {
       'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"search_files","arguments":"{\\"q\\":\\"高"}}]}}]}\n\n',
     ]);
     assert.deepEqual(events, []);
+  });
+});
+
+describe('OpenAI Responses reducer', () => {
+  test('output_text.delta 转成统一 delta，response.completed 标记结束', () => {
+    const reducer = createOpenAiResponsesReducer();
+    const events = runReducer(reducer, [
+      'data: {"type":"response.created"}\n\n',
+      'data: {"type":"response.output_text.delta","delta":"你好"}\n\n',
+      'data: {"type":"response.output_text.done","text":"你好"}\n\n',
+      'data: {"type":"response.completed","response":{"id":"resp_1"}}\n\n',
+    ]);
+    assert.deepEqual(events, [{ type: 'delta', text: '你好' }]);
+    assert.equal(reducer.sawDone, true);
+  });
+
+  test('function_call 条目 + arguments 增量拼成 tool_calls（id 用 call_id）', () => {
+    const reducer = createOpenAiResponsesReducer();
+    const events = runReducer(reducer, [
+      'data: {"type":"response.output_item.added","output_index":0,"item":{"id":"fc_1","type":"function_call","call_id":"call_abc","name":"search_files","arguments":""}}\n\n',
+      'data: {"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":"{\\"q\\":"}\n\n',
+      'data: {"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":"\\"高数\\"}"}\n\n',
+      'data: {"type":"response.completed"}\n\n',
+    ]);
+    assert.equal(events.length, 1);
+    assert.deepEqual(events[0].tool_calls[0], {
+      id: 'call_abc',
+      type: 'function',
+      function: { name: 'search_files', arguments: '{"q":"高数"}' },
+    });
+  });
+
+  // 个别代理只推 ...arguments.done（带完整 arguments）而少推 delta，以 done 为准更稳
+  test('function_call_arguments.done 的完整 arguments 覆盖增量拼接结果', () => {
+    const reducer = createOpenAiResponsesReducer();
+    const events = runReducer(reducer, [
+      'data: {"type":"response.output_item.added","item":{"id":"fc_1","type":"function_call","call_id":"call_abc","name":"search_files"}}\n\n',
+      'data: {"type":"response.function_call_arguments.done","item_id":"fc_1","arguments":"{\\"q\\":\\"高数\\"}"}\n\n',
+      'data: {"type":"response.completed"}\n\n',
+    ]);
+    assert.equal(events[0].tool_calls[0].function.arguments, '{"q":"高数"}');
+  });
+
+  test('arguments 被截断的 function_call 被丢弃', () => {
+    const reducer = createOpenAiResponsesReducer();
+    const events = runReducer(reducer, [
+      'data: {"type":"response.output_item.added","item":{"id":"fc_1","type":"function_call","call_id":"call_abc","name":"search_files"}}\n\n',
+      'data: {"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":"{\\"q\\":\\"高"}\n\n',
+    ]);
+    assert.deepEqual(events, []);
+  });
+
+  test('response.failed / error 事件抛 502', () => {
+    const failed = createOpenAiResponsesReducer();
+    assert.throws(
+      () => failed.feed('{"type":"response.failed","response":{"error":{"message":"boom"}}}'),
+      (err) => err.status === 502 && /LLM/.test(err.message) && /boom/.test(err.message)
+    );
+    const errored = createOpenAiResponsesReducer();
+    assert.throws(() => errored.feed('{"type":"error","message":"rate limited"}'), (err) => err.status === 502);
+  });
+});
+
+describe('OpenAI 形状消息 → Responses', () => {
+  test('system 进 instructions，普通消息用字符串 content', () => {
+    const { instructions, input } = toResponsesInput([
+      { role: 'system', content: '你是助手' },
+      { role: 'user', content: '你好' },
+    ]);
+    assert.equal(instructions, '你是助手');
+    assert.deepEqual(input, [{ role: 'user', content: '你好' }]);
+  });
+
+  test('工具调用是独立 function_call 条目，工具结果是 function_call_output（call_id 关联）', () => {
+    const { input } = toResponsesInput([
+      { role: 'user', content: '高数' },
+      { role: 'assistant', content: null, tool_calls: [{ id: 'call_abc', function: { name: 'search_files', arguments: '{"q":"高数"}' } }] },
+      { role: 'tool', tool_call_id: 'call_abc', content: '结果A' },
+    ]);
+    assert.deepEqual(input, [
+      { role: 'user', content: '高数' },
+      { type: 'function_call', call_id: 'call_abc', name: 'search_files', arguments: '{"q":"高数"}' },
+      { type: 'function_call_output', call_id: 'call_abc', output: '结果A' },
+    ]);
+  });
+
+  test('tools 平铺成 type/name/description/parameters', () => {
+    assert.deepEqual(
+      toResponsesTools([
+        { type: 'function', function: { name: 'f', description: 'd', parameters: { type: 'object', properties: {} } } },
+      ]),
+      [{ type: 'function', name: 'f', description: 'd', parameters: { type: 'object', properties: {} } }]
+    );
   });
 });
 
@@ -277,6 +382,42 @@ describe('请求组装（线上形状）', () => {
     const noTools = buildOpenAiRequest({ baseUrl: 'https://llm.test/v1', apiKey: 'k', model: 'm', messages });
     assert.equal('tools' in noTools.body, false);
     assert.equal('tool_choice' in noTools.body, false);
+  });
+
+  // 两轮工具回路：OpenAI 形状的 assistant(tool_calls) + tool 结果要翻成 function_call / function_call_output，
+  // 且用 call_id 关联（Responses 没有 tool_call_id 字段）。
+  test('Responses：/responses + instructions 顶层 + store:false + 平铺 tools', () => {
+    const req = buildOpenAiResponsesRequest({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'sk-x',
+      model: 'gpt-5',
+      tools,
+      messages: [
+        { role: 'system', content: 'sys' },
+        { role: 'user', content: '高数' },
+        { role: 'assistant', content: '找一下', tool_calls: [{ id: 'call_abc', function: { name: 'search_files', arguments: '{"q":"高数"}' } }] },
+        { role: 'tool', tool_call_id: 'call_abc', content: '结果A' },
+      ],
+    });
+    assert.equal(req.url, 'https://api.openai.com/v1/responses');
+    assert.equal(req.headers.authorization, 'Bearer sk-x');
+    assert.equal(req.body.stream, true);
+    assert.equal(req.body.store, false); // 不在上游留对话副本
+    assert.equal(req.body.instructions, 'sys');
+    assert.equal('messages' in req.body, false); // 换成了 input
+    assert.deepEqual(req.body.input, [
+      { role: 'user', content: '高数' },
+      { role: 'assistant', content: '找一下' },
+      { type: 'function_call', call_id: 'call_abc', name: 'search_files', arguments: '{"q":"高数"}' },
+      { type: 'function_call_output', call_id: 'call_abc', output: '结果A' },
+    ]);
+    assert.deepEqual(req.body.tools, [
+      { type: 'function', name: 'search_files', description: '搜索', parameters: { type: 'object', properties: {} } },
+    ]);
+
+    const plain = buildOpenAiResponsesRequest({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-x', model: 'gpt-5', messages: [{ role: 'user', content: 'hi' }] });
+    assert.equal('tools' in plain.body, false);
+    assert.equal('instructions' in plain.body, false);
   });
 
   test('Anthropic：/messages + x-api-key + system 顶层 + input_schema', () => {
