@@ -15,9 +15,16 @@
 
 ```yaml
 更新日期: 2026-09-11
-条目总数: 125        # 缺陷 90 + 改进 35
+条目总数: 128        # 缺陷 91 + 改进 37
 待处理: 7            # 缺陷 2 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性）
-已归档: 118          # 缺陷 88 + 改进 30
+已归档: 121          # 缺陷 89 + 改进 32
+# 本批（预览/下载故障复盘）：生产「预览服务出错」根因是 .env 里的 AccessKey 已被删除（OSS 回 InvalidAccessKeyId，
+#   上传/下载/预览全挂）+ 该 RAM 用户缺 imm:GenerateWebofficeToken；修复线上 .env 与 RAM 策略后，又发现下载链路
+#   的签名 URL 带了 OSS 拒绝的 response-content-type（一律 400），已修并补回归测试（BUG-96）。
+# 本批（预览故障复盘）：线上「预览服务出错」定位为两处配置问题——① 生产 .env 里的 AccessKey 已被删除（OSS 回
+#   InvalidAccessKeyId，上传/下载/预览全线失效）；② 该 RAM 用户缺 imm:GenerateWebofficeToken 授权。DEPLOY.md
+#   补：IMM 授权 statement（含「不支持资源级授权、Resource 必须为 *」）、密钥轮换必须同步服务器 .env 的告警、
+#   排查表按 InvalidAccessKeyId / AccessDenied / InvalidProjectName 分流（IMPROVE-36/37，均已关闭）。
 # 本批（设置页改造）：修复 BUG-95（保存不校验三项齐全——提示文案承诺了却没人执行），并调左栏样式
 #   （灰底 #ECECEE + 「设置」标题、条目交互统一为「往白靠」两档，见 DESIGN.md §4）；另把白屏兜底
 #   改成「友好提示 + 刷新按钮，堆栈只在开发环境展开」（IMPROVE-35，抽到 bootError.js 并补测试）。
@@ -37,7 +44,7 @@
 
 ### 1.1 缺陷
 
-上一轮审计新发现的 11 条缺陷已全部处置并归档（BUG-54～61、64/66/67/79/85～90 见 [2.1 已修复缺陷](#21-已修复缺陷)（88））；设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；本批（设置页改造）新发现的 **1 条**（BUG-95）当轮修复并归档。
+上一轮审计新发现的 11 条缺陷已全部处置并归档（BUG-54～61、64/66/67/79/85～90 见 [2.1 已修复缺陷](#21-已修复缺陷)（89））；设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；设置页改造批新发现的 **1 条**（BUG-95）当轮修复并归档；本轮（预览/下载故障复盘）新发现的 **1 条**（BUG-96）也已当轮修复。
 
 > 审计方式：上一轮为 9 路并行只读审计（安全/后端正确性/后端基础设施/性能/前端状态/前端组件/重复与死代码/工程配置与文档），再由人工逐条读码复核、剔除误报，另做了 4 路针对「SQL 与接口契约 / 前端状态与可访问性 / 安全与文件处理 / 冗余与工程配置」的复核审计。本轮是 4 路并行只读审计 + 2 路对抗性复核，逐段核对 `docs/DESIGN.md` 与代码（色值 / 字号 / 圆角 / 断点 / 组件行为 / 生成产物），发现 2 条真实缺陷（BUG-91、BUG-92）与 1 条视觉一致性改进（IMPROVE-34），其余差异均为文档描述过时（已在 DESIGN.md 内修正）。
 
@@ -109,7 +116,7 @@
 
 > 归档表只作索引（编号 / 严重度 / 类别 / 标题 / 位置 / 日期）。修法依据、踩坑与验证方式写在**代码注释**里（`grep -rn "BUG-54" backend/src`）与 commit message 中。
 
-### 2.1 已修复缺陷（88）
+### 2.1 已修复缺陷（89）
 
 | 编号 | 严重度 | 类别 | 标题 | 修复位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -201,8 +208,9 @@
 | BUG-91 | P1 | 后端 | `PATCH /api/folders/:id` 的环校验与写库之间隔了 OSS 往返：并发可写入 parent 环 | `backend/src/routes/folders.js`, `backend/test/auditFixes.test.js` | 2026-09-11 |
 | BUG-92 | P1 | 后端 | 文件夹改名/移动的 OSS 复制无补偿：孤儿对象会被下一次 sync 当成新文件导入 | `backend/src/routes/folders.js` | 2026-09-11 |
 | BUG-95 | P2 | 前端 | 自定义 LLM 配置保存不校验三项齐全：提示文案承诺「三项都填才生效」，实际会写入半份配置 | `frontend/src/components/SettingsModal.jsx` | 2026-09-11 |
+| BUG-96 | P1 | 后端 | 下载签名 URL 带了 OSS 拒绝的 `response-content-type`：所有「下载」按钮一律 400 失败（`InvalidRequest: Can not override response header on content-type`） | `backend/src/oss.js` | 2026-09-11 |
 
-### 2.2 已关闭改进项（30）
+### 2.2 已关闭改进项（32）
 
 | 编号 | 严重度 | 类别 | 标题 | 处理位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -236,3 +244,5 @@
 | IMPROVE-20 | P2 | 前后端 | `/api/search` 每类截断 20 条却被前端当总数展示 | `backend/src/searchService.js`, `backend/src/routes/search.js`, `frontend/src/components/SearchBar.jsx` | 2026-09-11 |
 | IMPROVE-24 | P2 | 前端 | `useFolderTree` 未去重：同一变更发两次 GET | `frontend/src/hooks/useFolderTree.js`, `frontend/src/test/useFolderTree.test.jsx` | 2026-09-11 |
 | IMPROVE-35 | P2 | 前端 | 白屏兜底把原始错误与堆栈直接展示给终端用户 | `frontend/src/bootError.js`, `frontend/src/main.jsx`, `frontend/src/test/bootError.test.js` | 2026-09-11 |
+| IMPROVE-36 | P1 | 文档·运维 | 部署指南的最小权限策略只有 `oss:*`，照做必然缺 `imm:GenerateWebofficeToken`（该动作还不支持资源级授权，策略需 `Resource: *`） | `docs/DEPLOY.md` | 2026-09-11 |
+| IMPROVE-37 | P1 | 文档·运维 | 部署指南未说明「轮换 AccessKey 后必须同步服务器 `.env`」：漏做后 OSS 回 `InvalidAccessKeyId`，上传/下载/预览全线失效而接口仍返回 200 | `docs/DEPLOY.md` | 2026-09-11 |
