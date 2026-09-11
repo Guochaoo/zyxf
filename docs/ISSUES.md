@@ -15,12 +15,11 @@
 
 ```yaml
 更新日期: 2026-09-11
-条目总数: 128        # 缺陷 91 + 改进 37
+条目总数: 129        # 缺陷 92 + 改进 37
 待处理: 7            # 缺陷 2 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性）
-已归档: 121          # 缺陷 89 + 改进 32
-# 本批（预览/下载故障复盘）：生产「预览服务出错」根因是 .env 里的 AccessKey 已被删除（OSS 回 InvalidAccessKeyId，
-#   上传/下载/预览全挂）+ 该 RAM 用户缺 imm:GenerateWebofficeToken；修复线上 .env 与 RAM 策略后，又发现下载链路
-#   的签名 URL 带了 OSS 拒绝的 response-content-type（一律 400），已修并补回归测试（BUG-96）。
+已归档: 122          # 缺陷 90 + 改进 32
+# 本批（SPA 深链 404）：生产 nginx（宝塔托管）缺 `location / { try_files ... }`，刷新任意前端路由都 404。
+#   已写入面板「伪静态」文件并 reload，DEPLOY.md 补宝塔专属一节（BUG-97）。
 # 本批（预览故障复盘）：线上「预览服务出错」定位为两处配置问题——① 生产 .env 里的 AccessKey 已被删除（OSS 回
 #   InvalidAccessKeyId，上传/下载/预览全线失效）；② 该 RAM 用户缺 imm:GenerateWebofficeToken 授权。DEPLOY.md
 #   补：IMM 授权 statement（含「不支持资源级授权、Resource 必须为 *」）、密钥轮换必须同步服务器 .env 的告警、
@@ -116,7 +115,7 @@
 
 > 归档表只作索引（编号 / 严重度 / 类别 / 标题 / 位置 / 日期）。修法依据、踩坑与验证方式写在**代码注释**里（`grep -rn "BUG-54" backend/src`）与 commit message 中。
 
-### 2.1 已修复缺陷（89）
+### 2.1 已修复缺陷（90）
 
 | 编号 | 严重度 | 类别 | 标题 | 修复位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -209,6 +208,7 @@
 | BUG-92 | P1 | 后端 | 文件夹改名/移动的 OSS 复制无补偿：孤儿对象会被下一次 sync 当成新文件导入 | `backend/src/routes/folders.js` | 2026-09-11 |
 | BUG-95 | P2 | 前端 | 自定义 LLM 配置保存不校验三项齐全：提示文案承诺「三项都填才生效」，实际会写入半份配置 | `frontend/src/components/SettingsModal.jsx` | 2026-09-11 |
 | BUG-96 | P1 | 后端 | 下载签名 URL 带了 OSS 拒绝的 `response-content-type`：所有「下载」按钮一律 400 失败（`InvalidRequest: Can not override response header on content-type`） | `backend/src/oss.js` | 2026-09-11 |
+| BUG-97 | P1 | 部署·运维 | 生产 nginx（宝塔托管）缺 SPA 回退：刷新/直开任意前端路由（`/folder/6`、`/dashboard`、`/settings`…）都 404 | `/www/server/panel/vhost/rewrite/zyxf.top.conf`, `docs/DEPLOY.md` | 2026-09-11 |
 
 ### 2.2 已关闭改进项（32）
 
