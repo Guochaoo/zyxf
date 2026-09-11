@@ -308,16 +308,22 @@ cd /opt/zyxf/frontend && npm install && npm run build   # prebuild 会自动跑 
 - **子集化用 [subset-font](https://www.npmjs.com/package/subset-font)（纯 WASM harfbuzz）**，不用
   `pyftsubset`：这样部署链上**不引入 Python 依赖**，且两个新依赖都**没有 postinstall 脚本**
   （对比 BUG-102：`onnxruntime-node` 的 postinstall 联网拉原生库，直接把部署搞挂）。
-- **字体授权与署名**：OPPO Sans 授权第 2 条的条件 2）禁止修改字体或其任何组件，条件 1）要求
-  「make a prominent notice in the software」，条件 4）要求「retain the copyright notice and this
-  Agreement」。因此：源字体在 `node_modules` 里保持原样、不直接分发；只分发这份派生的 web 子集；
-  授权协议原文保留在 [`frontend/public/licenses/OPPO-Sans-4.0-License.txt`](../frontend/public/licenses/OPPO-Sans-4.0-License.txt)
-  （线上 `/licenses/OPPO-Sans-4.0-License.txt`），并**在首页页脚与 ICP 备案号同行给出署名链接**
-  （`BrowsePage.jsx`，文案走 `footer.font` 字典），使「显著声明」真的可达——**不要**把协议文本
-  丢在一个没人引用的 URL 上，那样既不满足条件 1）也只是部署里的死重。
+- **字体授权：子集化是允许的，要遵守的是署名条款**。OPPO Sans 授权第 2 条授予的权利里明确包含
+  「**embed, bundle** ... unmodified copies of OPPO Sans Fonts **with any software**」——把 CJK 字体
+  嵌进 Web 页面的**技术前提就是子集化**（不可能让浏览器每次下 21 MB 全字符集），所以子集化正是行使
+  这条「嵌入/捆绑」权的正常方式；条件 2）的「不得修改」针对的是**改动字形设计**（派生字体、重绘轮廓、换个名字当成自己的字体），不是「挑选要发布哪些字形」。这也是 Google Fonts / fontsource
+  等所有 webfont 管线的通行做法。
+  真正约束我们的是两条**署名义务**，都已落实：
+  1. 条件 1）「make a prominent notice in the software」→ **首页页脚与 ICP 备案号同行有「字体 OPPO Sans」署名链接**
+     （`BrowsePage.jsx`，文案走 `footer.font` 字典）。**不要**把协议文本丢在一个没人引用的 URL 上——
+     那样既不算「显著」，也只是部署里的死重。
+  2. 条件 4）「retain the copyright notice and this Agreement」→ 协议原文保留在
+     [`frontend/public/licenses/OPPO-Sans-4.0-License.txt`](../frontend/public/licenses/OPPO-Sans-4.0-License.txt)
+     （线上 `/licenses/OPPO-Sans-4.0-License.txt`），且上面那个链接指向它。
+  另外为稳妥起见，源字体在 `node_modules` 里**保持原样**、我们只分发派生的 web 子集，因此也不涉及
+  条件 3）「不得以 stand-alone 形式再分发字体」。
   > ⚠️ **npm 包里不含这份协议**（`@fontpkg/oppo-sans-4-0` 只有 ttf / package.json / README），
-  > 所以仓库里这份是项目唯一的授权文本，**不要删**。
-  > ⚠️ 子集化本身是否落在「unmodified copies」的授权范围内存在解释空间，已记入 `docs/ISSUES.md` BUG-99。
+  > 所以仓库里这份是项目唯一的授权文本，**不要删**；页脚署名链接也不要摘。
 - 手动重新生成（改了字符集、换了字体版本，或想强制刷新）：`cd frontend && npm run fonts`
   —— 脚本按 mtime 自动跳过未变更的情况，加 `FORCE` 语义时删掉产物再跑即可。
 

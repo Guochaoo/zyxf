@@ -16,16 +16,16 @@
 ```yaml
 更新日期: 2026-09-11
 条目总数: 138        # 缺陷 97 + 改进 41
-待处理: 9            # 缺陷 3 + 改进 6（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；93/94 设计规范审计只建档；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index；46 字体子集化的授权解释空间，人类已决定保留 OPPO Sans 并署名）
-已归档: 129          # 缺陷 94 + 改进 35
+待处理: 8            # 缺陷 3 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；93/94 设计规范审计只建档；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index）
+已归档: 130          # 缺陷 94 + 改进 36
 # 本批（首屏字体收尾）：BUG-99 已修复——源字体改走 npm（@fontpkg/oppo-sans-4-0，与原先
 #   入库的 TTF **字节完全一致**，SHA256 相同），构建期用纯 WASM 的 subset-font 子集化到
 #   GB2312 + 源码实际用字，**21.69 MB → 2.72 MB（12.6%）**且 fvar 字重轴 100–700 完整保留，
-#   CSS 无需改动。授权要求「显著署名 + 随附协议」，所以源文件留在 node_modules 不动、
-#   只分发派生 web 子集，协议原文保留在 public/licenses/ 并**在首页页脚与备案号同行给出署名链接**
-#   （原先只丢在 public/fonts/ 下、无任何引用，既不显著又只是部署死重）。
-#   ⚠️ 子集化是否落在「unmodified copies」的授权范围内仍有解释空间，条目标注待人类定夺。
-#   叠加此前各项，首屏关键路径 **23.05 MB → 约 161 KB**。
+#   CSS 无需改动。叠加此前各项，首屏关键路径 **23.05 MB → 2.95 MB**（除字体外约 159 KB）。
+# 授权（IMPROVE-46，已关闭）：**子集化属于第 2 条「embed, bundle ... with any software」的授权范围**
+#   ——CJK 字体要嵌进 Web 就必须子集化，这是行使嵌入权的正常方式；条件 2）的「不得修改」针对的是
+#   改动字形设计，不是挑选要发布哪些字形。真正约束我们的是条件 1）显著署名 与 条件 4）随附协议：
+#   已落实为首页页脚署名链接 + public/licenses/ 里的协议原文。源字体在 node_modules 保持原样。
 ```
 
 ---
@@ -67,15 +67,6 @@
 - **另一条独立改进**：deploy workflow 的 `set -e` 在 `npm install` 这类**早于健康检查**的步骤失败时不会回滚，会把服务器留在半成品状态。应把「构建/安装阶段」也纳入回滚（例如把 `git reset --hard` 之后的所有步骤包成 `if ! ...; then rollback; fi`）。
 - **处置（2026-09-11）**：按人类要求把内容索引 / 知识图谱整批**移出 dev 与 main**（revert 提交 `0d30475`），原 9 个提交完整保存在分支 **`feature/content-index`**（tip `d6e3f34`）。本批的纯前端性能修复与 nginx 修复不依赖它，保留并已重新部署成功（线上 `/api/index/status` 返回 404，确认内容索引未上线）。**⚠️ 下次合并 `feature/content-index` 前必须先解掉本条**，否则会重演这次事故。
 - **验证**：在服务器上（无代理、`registry.npmmirror.com`）跑 `npm install` 应成功；随后 `systemctl restart zyxf` 能起来且 `/api/health` 返回 200；若走方案 ②，故意让 onnxruntime 装不上时后端仍能启动，且 `/api/index/status` 的 `embedding.enabled` 为 false 并给出原因。
-
-#### IMPROVE-46 · OPPO Sans 子集化是否落在授权的「unmodified copies」范围内，存在解释空间
-**影响范围**：`frontend/public/licenses/OPPO-Sans-4.0-License.txt` · `frontend/scripts/build-font.mjs` · `frontend/src/index.css`（前端 · 授权 / 合规）
-
-- **现状**：站点改用「源字体走 npm + 构建期子集化」把首屏字体从 21.69 MB 压到 2.72 MB（BUG-99）。但重读授权原文，第 2 条开头授予的是对「**unmodified copies** of OPPO Sans Fonts」的使用/复制/嵌入/再分发权，条件 2）又写明 **"YOU may not make any modifications to OPPO Sans Fonts or any of their individual components."**。**子集化（移除字形、生成新的 woff2 文件）是否构成这里的 "modification"，文本没有明确覆盖**——这是解释空间，不是我能下定论的。
-- **已做的降低风险措施**：① 源文件在 `node_modules` 里**保持原样**（`@fontpkg/oppo-sans-4-0` 的 TTF 与原先入库那份 SHA256 完全一致），我们从不修改它；② 只分发派生的 web 子集，不单独分发字体文件（对应条件 3）「不得以 stand-alone 形式再分发」）；③ 授权协议原文保留在 `public/licenses/OPPO-Sans-4.0-License.txt`（**npm 包里不含这份协议**，仓库这份是项目唯一副本，不要删），**并在首页页脚与 ICP 备案号同行给出署名链接**，以满足条件 1）「prominent notice」与条件 4）「retain the copyright notice and this Agreement」——原先只是把文本丢在 `public/fonts/` 下、全仓零引用，既不算显著，也只是部署里的死重。
-- **人类决定（2026-09-11）**：**保留 OPPO Sans**，采用上述署名方案，接受该解释空间。
-- **若要彻底消除歧义**：换一款明确允许修改与子集化的字体——Noto Sans SC / 思源黑体（SIL OFL 1.1）、HarmonyOS Sans。子集化后体积相当（2–3 MB），代价是中文字形变化、关于页与标题的字重/字距需重新核对。届时可一并删除 `public/licenses/` 里的 OPPO Sans 协议与页脚署名。
-- **验证**：首页页脚能看到「字体 OPPO Sans」且链接可达（`/licenses/OPPO-Sans-4.0-License.txt` 返回 200）；英文界面显示 "Font" 而非中文（`FooterAttribution.test.jsx` 两条断言）；`ISSUES.md` 与 `DEPLOY.md §4.1.1` 的描述与实际一致。
 
 ---
 
@@ -228,7 +219,7 @@
 | BUG-101 | P2 | 前端 | favicon 是 512×512 / 107 KB，比除字体外全部首屏 JS+CSS 的一半还多 | `frontend/public/favicon.png`, `frontend/scripts/optimize-assets.py` | 2026-09-11 |
 | BUG-99 | P1 | 前端·性能 | 首屏要传 21.7 MB 字体（唯一瓶颈）：源字体改走 npm，构建期子集化到 GB2312，**21.69 MB → 2.72 MB** 且 `fvar` 字重轴（100–700）保留；协议原文移至 `public/licenses/` 并在首页页脚给出署名链接 | `frontend/scripts/build-font.mjs`, `frontend/src/index.css`, `frontend/package.json`, `frontend/src/pages/BrowsePage.jsx`, `frontend/public/licenses/` | 2026-09-11 |
 
-### 2.2 已关闭改进项（35）
+### 2.2 已关闭改进项（36）
 
 | 编号 | 严重度 | 类别 | 标题 | 处理位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -267,3 +258,4 @@
 | IMPROVE-43 | P1 | 性能 | `react-markdown` 与 `d3-force` 被 App 静态 import 进首屏关键路径（路由已懒加载，右栏两个面板没跟上）；顺带把 React 抽成独立 chunk，否则 rollup 会把它塞进任一 manual chunk 并重新拖回首屏 | `frontend/src/App.jsx`, `frontend/vite.config.js` | 2026-09-11 |
 | IMPROVE-44 | P1 | 性能 | 首页被一个 Google Fonts 外链**渲染阻塞**，而它全站只服务「关于」页一行标题；国内不可达时会一直挂到 TCP 超时才渲染 | `frontend/index.html`, `frontend/src/pages/AboutPage.jsx`, `frontend/nginx.conf` | 2026-09-11 |
 | IMPROVE-45 | P2 | 性能 | 「关于」页 4 张图合计 1.17 MB：无懒加载、无宽高、PNG 未转格式 | `frontend/public/images/`, `frontend/src/pages/AboutPage.jsx`, `frontend/scripts/optimize-assets.py` | 2026-09-11 |
+| IMPROVE-46 | P2 | 授权·合规 | OPPO Sans 子集化的授权依据与署名义务：确认子集化属于第 2 条「embed, bundle」授权范围（CJK webfont 的技术前提），真正约束的是条件 1）/4）的两条署名义务，已落实到页脚署名链接与随附协议 | `frontend/public/licenses/OPPO-Sans-4.0-License.txt`, `frontend/src/pages/BrowsePage.jsx`, `frontend/scripts/build-font.mjs`, `docs/DEPLOY.md` | 2026-09-11 |
