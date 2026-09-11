@@ -578,45 +578,62 @@
 
 /* 语言下拉与协议下拉共用 .settings-popover / .settings-popover-option 样式 */
 
-/* ---- 窄屏（≤640px）：固定左右分栏会把右栏挤成一条竖线（文字竖排、底部按钮溢出），
-   改为「关闭 + 搜索 + 导航横排」的上下布局；卡片铺满遮罩内的可用区域（100vw/vh - 32px）。 ---- */
+/* ---- 窄屏（≤640px）：手机上设置就是**整屏页面**——卡片铺满视口（无留白、无圆角、无投影），
+   内部改成上下布局：标题栏 = 「关闭 + 搜索」一行 + 「导航」一行（横排胶囊），
+   下方是内容与底部固定按钮条。固定 220px 侧栏若保留，会把右栏挤成一条竖线、底部按钮溢出。 ---- */
 @media (max-width: 640px) {
+  .settings-backdrop {
+    padding: 0;
+  }
+
   .settings-card {
     width: 100%;
-    height: 100%;
-    border-radius: 14px;
+    height: 100vh;
+    height: 100dvh; /* 避开移动端浏览器地址栏（与 NoticeModal / Preview 同口径） */
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .settings-layout {
     flex-direction: column;
   }
 
+  /* 标题栏：关闭按钮与搜索框同排，导航横排在下一行（flex-wrap + flex-basis 100% 换行） */
   .settings-sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
     width: auto;
-    padding: 10px 12px 8px;
+    padding: 10px 12px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
     overflow-y: visible; /* 侧栏改成顶部条后不再单独滚动 */
   }
 
   .settings-sidebar-top {
-    padding: 0 0 8px;
+    padding: 0;
   }
 
   .settings-search {
-    margin-bottom: 8px;
+    flex: 1;
+    min-width: 0;
+    margin-bottom: 0;
   }
 
   .settings-nav {
+    flex-basis: 100%; /* 独占一行 */
     flex-direction: row;
-    gap: 6px;
+    gap: 4px;
     overflow-x: auto;
   }
 
   .settings-nav-item {
     flex: 0 0 auto;
     width: auto;
-    padding: 8px 12px;
+    padding: 8px 10px;
     font-size: 13px;
     white-space: nowrap;
   }
