@@ -86,6 +86,8 @@ OSS_KEY_PREFIX=zyxf/
 OSS_ENDPOINT=
 
 # 可选：IMM 文档预览、AI 助手
+# IMM 项目名必须与 OSS 控制台「IMM 绑定」里创建的项目名一致（留空按 zyxf 处理）；
+# 名字不对会返回 InvalidProjectName，而凭证没授权 imm 动作会返回 AccessDenied——两者都表现为前端「预览服务出错」。
 IMM_PROJECT=
 # AI 助手：三个变量齐备才启用（地址填到版本层，如 https://open.bigmodel.cn/api/paas/v4）
 LLM_API_KEY=
@@ -147,10 +149,14 @@ sudo -u www node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync
 | 前端直传（PostObject） | `oss:PutObject` |
 | `copyOssObject`（改名/移动） | `oss:CopyObject` + `oss:PutObject` |
 | `deleteOssObjectIfExists`（删除） | `oss:DeleteObject` |
+| `generateWebofficeToken` / `refreshWebofficeToken`（IMM 在线预览，启用预览时） | `imm:GenerateWebofficeToken` + `imm:RefreshWebofficeToken` |
 
-> 注意：后端**只签名**、不代理文件流，上传流量走浏览器直传，所以后端不需要 `oss:GetObject` 之外的读权限；IMM 预览若启用，`GenerateWebofficeToken` 也需要能读该 bucket（IMM 由阿里云服务侧读取）。
+> 注意：后端**只签名**、不代理文件流，上传流量走浏览器直传，所以后端不需要 `oss:GetObject` 之外的读权限。
+> ⚠️ **IMM 预览是另一套权限**：`GenerateWebofficeToken` 是 IMM 的 OpenAPI（`imm.<region>.aliyuncs.com`），RAM 里必须显式授权 `imm:*` 动作；只给 OSS 动作的密钥能正常下载/上传，但一调预览就返回
+> `AccessDenied: You are not authorized to operate imm:GenerateWebofficeToken on the specified resources acs:imm:<region>:<账号ID>:project/<项目名>`，
+> 前端只会显示「预览服务出错，暂时无法在线预览」（后端按设计只回 502 泛化文案，真实原因在 `journalctl -u zyxf`）。不启用预览就删掉下面第二段 statement。
 
-自定义策略（把 bucket 名替换成你自己的；`acs:oss:*:*:<bucket>/*` 用来覆盖对象级操作）：
+自定义策略（把 bucket 名替换成你自己的；`acs:oss:*:*:<bucket>/*` 用来覆盖对象级操作；第二段按预览需要填账号 ID 与 IMM 项目名）：
 
 ```json
 {
@@ -168,6 +174,16 @@ sudo -u www node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync
       "Resource": [
         "acs:oss:*:*:<bucket>",
         "acs:oss:*:*:<bucket>/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "imm:GenerateWebofficeToken",
+        "imm:RefreshWebofficeToken"
+      ],
+      "Resource": [
+        "acs:imm:cn-beijing:<账号ID>:project/<IMM 项目名>"
       ]
     }
   ]
@@ -328,7 +344,7 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 - [ ] `https://zyxf.top` 能看到首页
 - [ ] 展开右侧菜单 → 底部账户卡右侧箭头展开菜单 → 「登录」 → 用 `.env` 账号密码能登录
 - [ ] 上传一个 PDF → 不报 CORS 错
-- [ ] 点击 PDF → 能预览（需先开通 IMM；失败提示「预览服务暂不可用」多半是 IMM 未绑定）
+- [ ] 点击 PDF → 能预览（需先开通 IMM、把 bucket 绑到 IMM 项目、并给该 RAM 用户 `imm:GenerateWebofficeToken`；报「预览服务暂不可用」时先看 `journalctl -u zyxf` 里的真实错误码）
 - [ ] 点「下载」→ 文件名是原中文文件名
 
 ---
@@ -370,6 +386,6 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 | 后端启动即退（无正常启动日志） | `JWT_SECRET`/`ADMIN_PASSWORD` 不合生产校验（会打印 `[index] FATAL...` 到 stderr） | 用 `openssl rand -hex 32` + 12 位强密码 |
 | 上传报 CORS | OSS 跨域规则没加域名 | 回 0.2 节加 `https://zyxf.top` |
 | 上传报 SignatureDoesNotMatch | 服务器时间不准 | `sudo timedatectl set-ntp true` |
-| 预览报「预览服务暂不可用」 | IMM 未开通 / 未绑定（也可能是凭证缺失或请求超时） | 开通 IMM 并绑定 bucket；`IMM_PROJECT` 匹配；查 `journalctl -u zyxf` |
+| 预览报「预览服务暂不可用」/「预览服务出错」 | 先看真实原因：`journalctl -u zyxf --since "30 min ago" \| grep 预览服务 -A2`（后端按设计只回 502 泛化文案）。① `AccessDenied ... imm:GenerateWebofficeToken` → 该 RAM 用户缺 IMM 动作授权，按 2.2 的第二段 statement 补授权（OSS 权限正常不代表 IMM 可用）；② `InvalidProjectName` → `IMM_PROJECT` 与 OSS 控制台 IMM 绑定里的项目名不一致；③ 超时/连接失败 → 网络或 IMM 侧故障 |
 | 首页白屏 / `https` 连不上 | SSL 未配或证书没生效 | 见第 5 节申请 Let's Encrypt |
 | 访问命中默认站点（旧页） | 按 IP 访问，非域名 | 用域名 `zyxf.top` 访问；确认域名已解析 |
