@@ -114,6 +114,10 @@ cd frontend && npm test    # vitest + Testing Library
 
 UI 遵循受 Vercel 启发、以「无界」（边界靠表面色深浅 / 留白 / 投影海拔，而非边框线）为核心的设计系统：色彩 token、OPPO Sans 排版、组件样式、三栏布局与阴影层级，详见 **[docs/DESIGN.md](docs/DESIGN.md)**（中文，逐条对应代码实现）。
 
+## 许可证
+
+代码以 [Apache-2.0](LICENSE) 协议发布。构建期从 npm 拉取的 OPPO Sans 字体遵循其自身协议（协议原文随构建产物分发，见 `frontend/public/licenses/`）。
+
 ## 关于
 
 仲英书院学业辅导中心 · 学业资料共享平台。问题反馈请联系 [xjtuzyxf@163.com](mailto:xjtuzyxf@163.com)。

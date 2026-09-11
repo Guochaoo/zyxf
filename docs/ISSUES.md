@@ -15,13 +15,15 @@
 
 ```yaml
 更新日期: 2026-09-11
-条目总数: 138        # 缺陷 97 + 改进 41
+条目总数: 140        # 缺陷 98 + 改进 42
 待处理: 8            # 缺陷 3 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；93/94 设计规范审计只建档；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index）
-已归档: 130          # 缺陷 94 + 改进 36
-# 本批（首屏字体收尾）：BUG-99 已修复——源字体改走 npm（@fontpkg/oppo-sans-4-0，与原先
-#   入库的 TTF **字节完全一致**，SHA256 相同），构建期用纯 WASM 的 subset-font 子集化到
-#   GB2312 + 源码实际用字，**21.69 MB → 2.72 MB（12.6%）**且 fvar 字重轴 100–700 完整保留，
-#   CSS 无需改动。叠加此前各项，首屏关键路径 **23.05 MB → 2.95 MB**（除字体外约 159 KB）。
+已归档: 132          # 缺陷 95 + 改进 37
+# 本批（公开仓库前审计）：全量扫描工作区与全部提交的密钥/敏感文件——.env、data.db、
+#   证书、日志、云 AK、私钥、PAT 从未入库，无泄露。唯一发现 BUG-103：部署文档把服务器
+#   真实公网 IP 写进了仓库与全部历史——文档改用 RFC 5737 保留段占位，历史用 git-filter-repo
+#   replace-text 全量替换，顺带用 mailmap 把 14 个错署到 guochao@users.noreply.github.com
+#   （该地址归属另一账号）的提交统一为 Guochaoo 的邮箱。随后补 Apache-2.0 LICENSE
+#   （IMPROVE-47）并把仓库切为 public。
 # 授权（IMPROVE-46，已关闭）：**子集化属于第 2 条「embed, bundle ... with any software」的授权范围**
 #   ——CJK 字体要嵌进 Web 就必须子集化，这是行使嵌入权的正常方式；条件 2）的「不得修改」针对的是
 #   改动字形设计，不是挑选要发布哪些字形。真正约束我们的是条件 1）显著署名 与 条件 4）随附协议：
@@ -34,7 +36,7 @@
 
 ### 1.1 缺陷
 
-设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；设置页改造批新发现的 **1 条**（BUG-95）当轮修复并归档；预览/下载故障复盘批新发现的 **1 条**（BUG-96）也已当轮修复；随后 SPA 深链批与知识图谱批各新发现 **1 条**（BUG-97、BUG-98），均当轮修复；线上首屏性能实测批新发现 **3 条**：BUG-100（生产 nginx 三条规则未生效）、BUG-101（favicon 107 KB）与 **BUG-99（首屏 21.7 MB 字体）**，均已当轮修复并线上验证（BUG-99 的最终做法见 [2.1 已修复缺陷](#21-已修复缺陷)（94））。最后把内容索引那批合入 main 时发生**部署事故**，新增 **BUG-102**，当轮 revert 处置、条目保留待解。
+设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；设置页改造批新发现的 **1 条**（BUG-95）当轮修复并归档；预览/下载故障复盘批新发现的 **1 条**（BUG-96）也已当轮修复；随后 SPA 深链批与知识图谱批各新发现 **1 条**（BUG-97、BUG-98），均当轮修复；线上首屏性能实测批新发现 **3 条**：BUG-100（生产 nginx 三条规则未生效）、BUG-101（favicon 107 KB）与 **BUG-99（首屏 21.7 MB 字体）**，均已当轮修复并线上验证（BUG-99 的最终做法见 [2.1 已修复缺陷](#21-已修复缺陷)（94））。最后把内容索引那批合入 main 时发生**部署事故**，新增 **BUG-102**，当轮 revert 处置、条目保留待解。随后为仓库公开做敏感信息全量审计：唯一发现 **BUG-103**（部署文档把服务器真实公网 IP 写进仓库与历史），当轮修复并历史改写；同轮补 Apache-2.0 LICENSE（**IMPROVE-47**）。
 
 #### BUG-93 · 下载热力图的星期标签比格子错开一天（周一开头的网格配了周日开头的字典）
 **影响范围**：`frontend/src/pages/Dashboard/ActivityHeatmap.jsx` · `frontend/src/i18n/zh.js` · `frontend/src/i18n/en.js`（前端 · 正确性 / i18n）
@@ -120,7 +122,7 @@
 
 > 归档表只作索引（编号 / 严重度 / 类别 / 标题 / 位置 / 日期）。修法依据、踩坑与验证方式写在**代码注释**里（`grep -rn "BUG-54" backend/src`）与 commit message 中。
 
-### 2.1 已修复缺陷（94）
+### 2.1 已修复缺陷（95）
 
 | 编号 | 严重度 | 类别 | 标题 | 修复位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -218,8 +220,9 @@
 | BUG-100 | P1 | 部署·运维 | 生产 nginx 未落仓库 `frontend/nginx.conf`：静态资源无 `Cache-Control`、安全头（CSP / nosniff / Referrer-Policy）全缺、不存在的 `/assets/*` 回 200+HTML（发版后白屏） | `/www/server/panel/vhost/rewrite/zyxf.top.conf`, `frontend/nginx.conf`, `frontend/nginx.bt-rewrite.conf`, `docs/DEPLOY.md` | 2026-09-11 |
 | BUG-101 | P2 | 前端 | favicon 是 512×512 / 107 KB，比除字体外全部首屏 JS+CSS 的一半还多 | `frontend/public/favicon.png`, `frontend/scripts/optimize-assets.py` | 2026-09-11 |
 | BUG-99 | P1 | 前端·性能 | 首屏要传 21.7 MB 字体（唯一瓶颈）：源字体改走 npm，构建期子集化到 GB2312，**21.69 MB → 2.72 MB** 且 `fvar` 字重轴（100–700）保留；协议原文移至 `public/licenses/` 并在首页页脚给出署名链接 | `frontend/scripts/build-font.mjs`, `frontend/src/index.css`, `frontend/package.json`, `frontend/src/pages/BrowsePage.jsx`, `frontend/public/licenses/` | 2026-09-11 |
+| BUG-103 | P2 | 安全·信息泄露 | 部署文档把服务器真实公网 IP 写进仓库（全历史 196 处）：文档改用 RFC 5737 保留段占位并加「勿写入真实 IP」提醒；历史用 git-filter-repo replace-text 全量替换，顺带 mailmap 修正 14 个错误署名提交。注意 GitHub 侧 refs/pull/* 仍钉住改写前对象，彻底清除需 Support GC | `docs/DEPLOY.md`, git 历史（filter-repo） | 2026-09-11 |
 
-### 2.2 已关闭改进项（36）
+### 2.2 已关闭改进项（37）
 
 | 编号 | 严重度 | 类别 | 标题 | 处理位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -259,3 +262,4 @@
 | IMPROVE-44 | P1 | 性能 | 首页被一个 Google Fonts 外链**渲染阻塞**，而它全站只服务「关于」页一行标题；国内不可达时会一直挂到 TCP 超时才渲染 | `frontend/index.html`, `frontend/src/pages/AboutPage.jsx`, `frontend/nginx.conf` | 2026-09-11 |
 | IMPROVE-45 | P2 | 性能 | 「关于」页 4 张图合计 1.17 MB：无懒加载、无宽高、PNG 未转格式 | `frontend/public/images/`, `frontend/src/pages/AboutPage.jsx`, `frontend/scripts/optimize-assets.py` | 2026-09-11 |
 | IMPROVE-46 | P2 | 授权·合规 | OPPO Sans 子集化的授权依据与署名义务：确认子集化属于第 2 条「embed, bundle」授权范围（CJK webfont 的技术前提），真正约束的是条件 1）/4）的两条署名义务，已落实到页脚署名链接与随附协议 | `frontend/public/licenses/OPPO-Sans-4.0-License.txt`, `frontend/src/pages/BrowsePage.jsx`, `frontend/scripts/build-font.mjs`, `docs/DEPLOY.md` | 2026-09-11 |
+| IMPROVE-47 | P2 | 合规·开源 | 公开仓库前缺 LICENSE：补 Apache-2.0 协议文件，README 增加许可证小节 | `LICENSE`, `README.md` | 2026-09-11 |
