@@ -328,6 +328,22 @@ nginx -t && systemctl reload nginx
 
 > 若 nginx 是宝塔安装的，配置文件可能放在宝塔的站点目录下；直接在对应站点配置里粘贴上述 `location` 块即可，效果一致。
 
+#### 若站点由宝塔面板托管（当前生产就是这种）
+
+宝塔的站点模板（`/www/server/panel/vhost/nginx/<域名>.conf`）**不会**生成 SPA 回退，`/api` 反代由它 include 的 `proxy/<域名>/*.conf` 里的 `location ^~ /api` 提供。踩过的坑（BUG-97）：
+
+- **刷新任何前端路由都是 404**（`/folder/6`、`/dashboard`、`/about`、`/settings`）。原因就是缺 `location / { try_files $uri $uri/ /index.html; }`：这些路径在 `dist/` 里没有对应文件，必须交给 `index.html`。**别改 vhost 本体**（面板保存设置时会重写它），把这段写进面板的「**伪静态**」，即：
+
+  ```bash
+  # 面板：网站 → 设置 → 伪静态；等价于直接写这个文件（默认为空）
+  F=/www/server/panel/vhost/rewrite/zyxf.top.conf
+  printf 'location / {\n    try_files $uri $uri/ /index.html;\n}\n' > "$F"
+  nginx -t && /www/server/nginx/sbin/nginx -s reload
+  ```
+
+- 宝塔的 nginx **不是 systemd 服务**（`systemctl reload nginx` 会报 `nginx.service is not active`），reload 用 `/www/server/nginx/sbin/nginx -s reload`；配置测试用 `nginx -t`（路径 `/www/server/nginx/conf/nginx.conf`）。
+- `location /` 不会吃掉 API：`^~ /api` 是最长前缀匹配，优先级高于 `location /`。改完顺手验一下 `/api/health` 仍是 JSON、以及 `curl -sI https://<域名>/folder/1` 是 200。
+
 ---
 
 ## 5. HTTPS（Let's Encrypt）
