@@ -150,9 +150,16 @@ describe('i18n 字典一致性', () => {
     expect(en.app.title).toBe('ZYXF Study Center');
   });
 
-  // 中文文案里不应出现英文句子（数组内的 icon 名、以及语言自称等白名单除外）。
+  // 中文文案里不应出现英文句子（数组内的 icon 名、语言自称、协议专有名词等白名单除外）。
   test('中文文案不含未翻译的英文句子', () => {
-    const allow = new Set(['settings.langOptions.en', 'settings.ai.apiKey']);
+    const allow = new Set([
+      'settings.langOptions.en',
+      'settings.ai.apiKey',
+      // 协议名是官方专有名词（与下拉 option 的 id 一一对应），不做本地化
+      'settings.ai.protocolOpenaiCompletions',
+      'settings.ai.protocolOpenaiResponses',
+      'settings.ai.protocolAnthropicMessages',
+    ]);
     const offenders = [];
     const walk = (obj, prefix = '') => {
       for (const [k, v] of Object.entries(obj)) {
