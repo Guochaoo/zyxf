@@ -69,6 +69,7 @@ cd frontend && npm install && npm run dev
 | `DM_FROM_ALIAS` |  | 发件人显示名（默认「仲英学辅」） |
 | `EMBED_MODEL_DIR` |  | 本地嵌入模型目录（默认 `backend/models/bge-small-zh-v1.5`）；模型文件不入库，获取方式见[部署文档 §6](docs/DEPLOY.md)。缺模型时只抽正文不出向量，图谱内容视图不可用，其余功能不受影响 |
 | `INDEX_POLL_MS` / `INDEX_DAILY_LIMIT` |  | 索引 worker 的空闲轮询间隔（默认 8s）/ 每日嵌入调用上限（默认 2000，防误操作长时间占满 CPU） |
+| `INDEX_MAX_FILE_MB` |  | 单文件体积上限（默认 **50**）：超过则不下载不解析（记 `too_large`）。解析内存峰值约为文件的 4~13 倍，**这个值决定服务器要多少 RAM**——1GB 内存建议 20，2GB 留 50，≥4GB 可调到 150。详见[部署文档 §6.5](docs/DEPLOY.md) |
 
 ## 内容索引与语义分类（知识图谱「内容视图」的数据来源）
 
@@ -91,9 +92,10 @@ cd frontend && npm install && npm run dev
 | 有文本层（PDF/docx/pptx/txt/pptm） | 509 | 60% | 正常进入内容视图 |
 | 扫描件与图片版 Office | 122 | 14% | 判定为 `image_only`，只出现在目录视图（需 OCR，见 `docs/ISSUES.md` 的 IMPROVE-39） |
 | `.doc` / `.ppt` / 压缩包 / 图片 | 216 | 25% | `unsupported`：老二进制格式没有纯 JS 解析路径 |
+| 超过 `INDEX_MAX_FILE_MB` 的大文件 | 29 | 3% | `too_large`：主动不解析以保护内存（默认 50MB，可调） |
 | 抽取失败 | 3 | — | 记 `last_error`，不影响其他文件 |
 
-后两类没有内容语义，只能靠**目录视图**浏览，所以内容视图覆盖约 **61%** 的资料——上限由资料本身决定，OCR 是下一轮的事。
+后三类没有内容语义，只能靠**目录视图**浏览，所以内容视图覆盖约 **61%** 的资料——上限由资料本身决定，OCR 是下一轮的事。
 
 - 索引是**后台异步**做的：上传、`/api/sync` 后自动入队，单并发处理，不阻塞请求。图谱会显示「正在建立内容索引（N 个待处理）…」并每 5 秒自动刷新，直到新资料进入分类。
 - 进度与失败原因：`GET /api/index/status`；管理员可用 `POST /api/index/rebuild` 重建。

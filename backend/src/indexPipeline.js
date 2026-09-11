@@ -29,6 +29,11 @@ const JOB_TIMEOUT_MS = 120_000;
 // 850 个文件的首次全量索引需要 850 次，超过这个数通常意味着出了别的问题。
 const DAILY_UNIT_LIMIT = Number(process.env.INDEX_DAILY_LIMIT) || 2000;
 
+// 单文件体积上限：超过就不下载、不解析（见 runJob 里的说明）。
+// 默认 50MB 是按真实库定的：本库 >50MB 的只有 29 个（3%），而内存占用与最大文件成正比。
+// 小内存服务器可调到 20-30MB；内存宽裕（≥2GB）想覆盖大部头教材可调到 150 或更大。
+const MAX_FILE_BYTES = (Number(process.env.INDEX_MAX_FILE_MB) || 50) * 1024 * 1024;
+
 let timer = null;
 let busy = false;
 let started = false;
@@ -90,12 +95,33 @@ export function pendingCount() {
 
 /** 处理单个任务。抛错表示这一轮失败（由调用方决定重试或记 failed）。 */
 async function runJob(job) {
-  const file = db.prepare('SELECT id, name, oss_key, ext FROM files WHERE id = ?').get(job.file_id);
+  const file = db.prepare('SELECT id, name, oss_key, ext, size FROM files WHERE id = ?').get(job.file_id);
   if (!file) {
     // 文件在上传与索引之间被删了：任务随之作废（外键本会级联，这里只兜底）
     db.prepare('DELETE FROM index_jobs WHERE file_id = ?').run(job.file_id);
     return;
   }
+
+  // 体积闸门：OSS get() 会把整个对象读进内存，实测峰值约为文件大小的 2.2 倍
+  // （151MB 的 PDF 让常驻内存涨了 326MB，稳态逼近 1GB）。小内存服务器会 OOM，
+  // 所以超过上限的文件不下载、不解析，只记一条 too_large——它们在内容视图里缺席，
+  // 但在目录视图里照常可见。上限可配（INDEX_MAX_FILE_MB）。
+  if (file.size > MAX_FILE_BYTES) {
+    const hash = contentHash('', DOC_KIND.TOO_LARGE);
+    db.prepare(
+      `INSERT INTO text_extractions (file_id, content, doc_kind, pages, chars, content_hash, extracted_at)
+       VALUES (?, '', ?, NULL, 0, ?, ?)
+       ON CONFLICT(file_id) DO UPDATE SET content = '', doc_kind = excluded.doc_kind,
+         pages = NULL, chars = 0, content_hash = excluded.content_hash, extracted_at = excluded.extracted_at`
+    ).run(file.id, DOC_KIND.TOO_LARGE, hash, Date.now());
+    db.prepare('DELETE FROM file_embeddings WHERE file_id = ?').run(file.id);
+    db.prepare(
+      `UPDATE index_jobs SET state = 'done', content_hash = ?, finished_at = ?, last_error = NULL
+       WHERE file_id = ?`
+    ).run(hash, Date.now(), file.id);
+    return { name: file.name, docKind: DOC_KIND.TOO_LARGE, chars: 0, skippedBytes: file.size };
+  }
+
   const object = await ossClient().get(file.oss_key);
   const { text, docKind, pages, thinPages } = await extractText({
     buf: object.content,
@@ -153,7 +179,14 @@ async function runOnce() {
         t.unref?.();
       }),
     ]);
-    console.log(`[index] #${job.file_id} ${result.docKind} ${result.chars}字 ${result.name}`);
+    if (result.skippedBytes) {
+      console.log(
+        `[index] #${job.file_id} 超过体积上限 ${Math.round(MAX_FILE_BYTES / 1024 / 1024)}MB，`
+        + `跳过解析（${Math.round(result.skippedBytes / 1024 / 1024)}MB）${result.name}`
+      );
+    } else {
+      console.log(`[index] #${job.file_id} ${result.docKind} ${result.chars}字 ${result.name}`);
+    }
   } catch (e) {
     const attempts = job.attempts + 1;
     const failed = attempts >= MAX_ATTEMPTS;

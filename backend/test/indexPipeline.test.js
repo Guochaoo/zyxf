@@ -36,6 +36,17 @@ function addFile(name, ext, content) {
   return r.lastInsertRowid;
 }
 
+/** 只登记元数据、**不放对象体**：用来验证「体积闸门在下载之前就生效」。 */
+function addFileWithSize(name, ext, size) {
+  const r = db
+    .prepare(
+      `INSERT INTO files (folder_id, name, oss_key, size, mime_type, ext, sort_order, created_at)
+       VALUES (?, ?, ?, ?, NULL, ?, 0, ?)`
+    )
+    .run(folderId, name, `test/size/${name}`, size, ext, Date.now());
+  return r.lastInsertRowid;
+}
+
 /** 等一个任务进入终态（done/failed），超时则带上实际状态报错。 */
 async function waitSettled(fileId, timeoutMs = 8000) {
   const deadline = Date.now() + timeoutMs;
@@ -120,6 +131,37 @@ describe('索引流水线：抽取落库', () => {
     assert.equal(db.prepare('SELECT 1 FROM text_extractions WHERE file_id = ?').get(id), undefined);
     assert.equal(db.prepare('SELECT 1 FROM index_jobs WHERE file_id = ?').get(id), undefined);
     assert.equal(db.prepare('SELECT 1 FROM file_embeddings WHERE file_id = ?').get(id), undefined);
+  });
+
+  test('**超过体积上限的文件不下载、不解析**（保护小内存服务器，见 INDEX_MAX_FILE_MB）', async () => {
+    // 故意不放对象体：如果闸门没生效，这一步会因 NoSuchKey 失败——正是要防的「先下载再判断」
+    const id = addFileWithSize(`超大-${Date.now()}.pdf`, 'pdf', 300 * 1024 * 1024);
+    enqueueFile(id);
+    const settled = await waitSettled(id);
+    assert.equal(settled.state, 'done', `应直接跳过而不是失败：${settled.last_error || ''}`);
+    const row = db.prepare('SELECT doc_kind, content, chars FROM text_extractions WHERE file_id = ?').get(id);
+    assert.equal(row.doc_kind, DOC_KIND.TOO_LARGE);
+    assert.equal(row.chars, 0);
+    assert.equal(db.prepare('SELECT 1 FROM file_embeddings WHERE file_id = ?').get(id), undefined);
+  });
+
+  test('体积闸门会清掉旧向量：文件被换成超大件后不能再拿旧内容的语义去连线', async () => {
+    const id = addFile(`先小后大-${Date.now()}.pdf`, 'pdf', '这是一段足够长的正文用来生成向量 内容内容内容');
+    enqueueFile(id);
+    await waitSettled(id);
+    // 模拟「同名文件被替换成一个超大件」：只改 size
+    db.prepare('UPDATE files SET size = ? WHERE id = ?').run(400 * 1024 * 1024, id);
+    enqueueFile(id, { force: true });
+    await waitSettled(id);
+    assert.equal(
+      db.prepare('SELECT 1 FROM file_embeddings WHERE file_id = ?').get(id),
+      undefined,
+      '旧向量必须被清掉'
+    );
+    assert.equal(
+      db.prepare('SELECT doc_kind FROM text_extractions WHERE file_id = ?').get(id).doc_kind,
+      DOC_KIND.TOO_LARGE
+    );
   });
 
   test('对象缺失时记 last_error 并保留重试（不静默吞掉，也不当成成功）', async () => {

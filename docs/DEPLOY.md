@@ -438,7 +438,52 @@ console.log('queued', enqueueAll());
 | 首次打开内容视图卡十几秒 | 正在现算分类 + LLM 命名 | 用上面那条命令预生成，或等首次算完（结果已缓存） |
 | 新增资料后分类没变 | 分类指纹按「该学科的文件 id + 向量时间」判定；索引还没跑完时分类自然不含它 | 等索引完成（图谱会显示待处理数并自动刷新）；索引完成后仍未更新则调 refresh |
 
-### 6.5 观察进度与排错
+### 6.5 服务器资源需求（单核小内存机器的实测结论）
+
+内容索引是我实测过整条链路的功能，下面是**在本机 20 核上量的数字**以及换算到弱服务器的注意点。结论：**CPU 不是瓶颈，内存才是**。
+
+| 资源 | 实测 / 需求 | 说明 |
+|---|---|---|
+| **CPU** | 1 核可用 | 实测解析 151MB PDF 期间 `/api/health` 的 p50 是 **1ms**、p95 **2ms**——pdfjs 逐页 `await`、ONNX 推理在原生线程池，都不占 JS 线程。网站**不会因为索引而卡住** |
+| **内存** | **≥2GB 推荐**，1GB 需配合 §6.5 的调低上限 + swap | RSS 基线约 100–150MB（含模型）；解析一个文件时峰值增量是**文件大小的 4~13 倍**（42MB→+188MB，25MB→+331MB，取决于页数/复杂度），且有高水位不立即回落 |
+| 磁盘 | node_modules 371MB + 模型 23MB + 数据库（正文+向量，本库 28MB） | onnxruntime 里 **240MB 是别的平台**，可删（见下） |
+| 首次全量索引 | 网络为主、CPU 次之 | 嵌入实测 29ms/文件（全库 850 个约 **25 秒** CPU），大文件解析几百 ms~几秒；主要时间花在从 OSS 下载（本库总共 **5.02GB**）。**同地域服务器会快得多**（本机是跨地域测的） |
+
+**① 按内存设置单文件上限**（最重要的一个旋钮）：
+
+```bash
+# 1GB 内存：跳过 ≥20MB 的文件（本库约 5% 的文件不进内容视图）
+INDEX_MAX_FILE_MB=20
+# 2GB：默认 50 即可
+INDEX_MAX_FILE_MB=50
+# ≥4GB：可以覆盖那几本大部头教材
+INDEX_MAX_FILE_MB=150
+```
+
+超限的文件**不下载、不解析**，只记一条 `too_large`（在 `GET /api/index/status` 的 `totals.kinds` 里可见），它们在「目录视图」里照常浏览，只是不进内容语义分类。**为什么需要这个闸门**：不设限时实测常驻内存会被那几本 100MB+ 教材推到 **872MB、峰值 976MB**；设成 50MB 后同样索引那批文件，RSS 平稳在 **104MB**。
+
+**② 删掉用不到的平台原生库**（省 240MB 磁盘；Linux x64 服务器只需 43MB）：
+
+```bash
+cd /opt/zyxf/backend/node_modules/onnxruntime-node/bin/napi-v6
+rm -rf darwin win32 linux/arm64   # 保留 linux/x64
+```
+
+**③ 加 swap**（1GB 内存建议）：`fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile`，并写进 `/etc/fstab`。索引偶发的内存尖峰有 swap 兜底就不会被 OOM 杀掉（真被杀也不丢进度：重启后 worker 会把 `running` 复位为 `pending` 继续）。
+
+**④ 更省事的路线：本地预索引，只把索引数据搬到服务器**。如果你的开发机性能好、服务器弱，可以把重活放在本地做，服务器只负责服务与「新上传」的增量：
+
+```bash
+# 本地（能访问同一 OSS、已跑完全量索引）导出四张索引表
+cd backend && sqlite3 data.db ".dump text_extractions file_embeddings index_jobs taxonomy_subjects" > /tmp/index-dump.sql
+# 传到服务器后导入（⚠️ 只导这四张表，绝不要整库覆盖——库里还有 users/download_logs）
+scp /tmp/index-dump.sql server:/tmp/
+ssh server 'cd /opt/zyxf/backend && systemctl stop zyxf && sqlite3 data.db < /tmp/index-dump.sql && systemctl start zyxf'
+```
+
+导入后 `GET /api/index/status` 会显示与本地一致的覆盖率与向量数，分类缓存也是现成的，服务器**启动即用**、不需要跑首次全量索引。
+
+### 6.6 观察进度与排错
 
 ```bash
 curl -s https://zyxf.top/api/index/status | jq '{totals, usage, pending}'
@@ -454,6 +499,9 @@ journalctl -u zyxf -f | grep -E '\[index\]|\[taxonomy\]'
 | `last_error` 是「已达当日索引配额」 | 触到 `INDEX_DAILY_LIMIT` | 次日自动继续，或临时调大该值重启 |
 | 内容视图显示「索引里还没有可用资料」 | 库里可抽取的文本太少（扫描件/老格式占比高） | 属预期：扫描件需 OCR，见 `docs/ISSUES.md` |
 | 重复重建时 CPU 一直高 | `force` 全量重建会重新下载解析每个文件 | 用增量重建（默认 `force=false` 只排没抽过的） |
+| 后端被 OOM 杀掉（`journalctl` 里 `Killed process ... node`） | 解析大文件的内存尖峰超出可用 RAM | 调低 `INDEX_MAX_FILE_MB`（见 6.5）、加 swap；被杀不丢进度，重启会继续 |
+| `totals.kinds.too_large` 有很多 | 这些文件超过了 `INDEX_MAX_FILE_MB` | 属预期；内容视图里没有它们，想覆盖就调大该值（注意同步加内存） |
+| 索引很慢 / 首次要很久 | 主要时间是**从 OSS 下载**（本库共 5GB） | 服务器与 Bucket 同地域会快很多；也可走 6.5 的「本地预索引」路线 |
 
 ---
 
