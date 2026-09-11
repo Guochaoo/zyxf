@@ -27,7 +27,7 @@ Key Characteristics:
 - Multi-layer shadow stacks for nuanced depth (border + elevation + ambient in single declarations)
 - Near-pure white canvas with #171717 text — not quite black, creating micro-contrast softness
 - Data-viz accent tokens for the stats dashboard: 下载蓝 `--accent` (#3d9aff), 上传橙 `--orange` (#f68f3c), 动态红 `--red` (#ee5c61), 占用绿 `--green` (#3fae6b) — the only accent colors in the system, reserved for the dashboard cards (see §2 / §4)
-- Focus ring system using hsla(212, 100%, 48%, 1) — a saturated blue for accessibility
+- Focus ring system using hsla(212, 100%, 48%, 1) — a saturated blue for accessibility, reserved for buttons/links (form controls get no focus ring; see §2 / §6)
 - Pill badges (9999px) with tinted backgrounds for status indicators
 
 ## 2. Color Palette & Roles
@@ -41,7 +41,7 @@ Key Characteristics:
 - Link Blue (#0072f5, `brand-600`): Primary links, primary CTA backgrounds.
 - Develop Blue (#0a72ef, `brand-500`): Brand mark hover, progress-bar default fill.
 - Badge Blue Text (#0068d6, `brand-700`): CTA hover state (darkens the blue).
-- Focus Blue (hsla(212, 100%, 48%, 1)): keyboard focus outline on all interactive elements.
+- Focus Blue (hsla(212, 100%, 48%, 1)): keyboard focus outline on buttons/links. 表单控件（input/textarea/select）不加任何聚焦描边或光晕——无界理念下聚焦态 = 常驻态（灰底色块），见 §6。
 - **Icons are monochrome on light surfaces** — `FileIcon` renders file/folder icons with the `text-slate-600` class (actual color is forced to `#000000` by `.app-theme svg { color: #000000 }`); white icons appear on dark CTA buttons and colored icon badges (see §4).
 
 ### Data-viz tokens (stats dashboard only — the one permitted accent use)
@@ -177,7 +177,7 @@ Colored Icon Badge（彩色图标徽章 — dashboard 卡片标题的统一视�
 ### Inputs & Forms
 - Radio: standard styling with focus var(--ds-gray-200) background
 - Focus shadow: 1px 0 0 0 var(--ds-gray-alpha-600)
-- Focus outline: 2px solid var(--ds-focus-color) — consistent blue focus ring
+- Focus: 表单控件**不加任何聚焦描边/光晕**（无界——聚焦态与常驻态一致，边界只由底色/细线表达）；蓝色 Focus Blue 仅用于按钮/链接的键盘焦点环
 - Border: via shadow technique, not traditional border
 
 ### Navigation
@@ -288,8 +288,8 @@ Download Heatmap（下载热力图，`/dashboard` 首行左卡）
 | Card (Level 2) | `.rb-card` (CSS 类): rgba(0,0,0,0.08) 0 0 0 1px, rgba(0,0,0,0.04) 0 2px 2px, rgba(0,0,0,0.04) 0 8px 8px -8px, inner #fafafa ring | Upload/rename dialogs (`rb-card`). Dashboard cards are `bg-surface` with **no shadow** (无界) |
 | Popover (Level 3) | 纯投影浮层，**无任何描边/光晕圈**（连 shadow-as-border ring 都不用）：rgba(0,0,0,0.06) 0 4px 10px + rgba(0,0,0,0.12) 0 12px 32px 双层柔和投影 | 设置弹窗内的下拉浮层（如右上角语言切换菜单 `.settings-lang-menu`）与页面顶部 Toast（`Toast` 组件，error 红 / success 绿 / info 蓝 / warning 橙 四类型通知卡）；无界——浮层边界完全由投影海拔表达 |
 | Raised Toggle (Level 2b) | `shadow-btn`: rgba(23,23,23,.12) 0 1px 2px, rgba(23,23,23,.06) 0 0 0 1px | Active pill toggles, refresh button |
-| Input Border (inline) | rgba(0,0,0,0.08) 0 0 0 1px; focus adds hsla(212,100%,48%,.25) 0 0 0 3px | All form inputs/selects (CSS, not a token) |
-| Focus (Accessibility) | 2px solid hsla(212, 100%, 48%, 1) outline | Keyboard focus on all interactive elements |
+| Input Border (inline) | rgba(0,0,0,0.08) 0 0 0 1px，**聚焦态同款**（不加蓝色光晕） | All form inputs/selects (CSS, not a token) |
+| Focus (Accessibility) | 2px solid hsla(212, 100%, 48%, 1) outline | Keyboard focus on buttons/links only；input/textarea/select 无聚焦效果（无界，见 §2） |
 
 > Removed from the config: `shadow-card`, `shadow-ring`, `shadow-ringlight`, `shadow-card-subtle`, `shadow-hairline` — nothing references them (the card stack lives only as the CSS class `.rb-card`).
 
@@ -368,7 +368,7 @@ Shadow Philosophy: Vercel has arguably the most sophisticated shadow system in m
 - File icons: Gray 600 (#4d4d4d, monochrome)
 - Card shadow: `.rb-card` CSS class (dialogs only; see §6). Dashboard cards are borderless.
 - Link: Link Blue (#0072f5, brand-600)
-- Focus ring: Focus Blue (hsla(212, 100%, 48%, 1))
+- Focus ring: Focus Blue (hsla(212, 100%, 48%, 1)) — 仅按钮/链接；表单控件聚焦不加任何描边/光晕（无界）
 - Dashboard accents (cards only): 下载 `--accent` #3d9aff · 上传 `--orange` #f68f3c · 今日 `--red` #ee5c61 · 存储 `--green` #3fae6b
 
 ### Example Component Prompts
