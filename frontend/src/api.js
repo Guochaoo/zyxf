@@ -217,10 +217,10 @@ export async function search(q) {
   return data;
 }
 
-// 图谱内容视图的数据：后端算好「每个文件最相似的 K 个邻居」与节点标签再回传，
-// 前端不拉全库向量（850×512 float32 base64 约 2.3 MB），也不做 O(n²) 比较。
-export async function getKgSemantics({ k = 5, min = 0.72 } = {}) {
-  const { data } = await api.get('/index/semantics', { params: { k, min } });
+// 图谱内容视图的数据：内容语义分类（大类 = 顶层学科，细分 = 学科内按内容向量聚类）。
+// 后端算好结构与名字再回传（首次会现算并缓存），前端不拉全库向量、也不做聚类。
+export async function getKgTaxonomy() {
+  const { data } = await api.get('/index/taxonomy');
   return data;
 }
 

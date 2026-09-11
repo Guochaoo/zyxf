@@ -15,12 +15,12 @@ import { useFolderTree } from '../hooks/useFolderTree.js';
 import PanelHeader from './PanelHeader.jsx';
 import { ICON_BUTTON_CLASS, EASE_COLLAPSE } from './ui.js';
 import { openFilePreview } from '../ui.js';
-import { getKgSemantics } from '../api.js';
+import { getKgTaxonomy } from '../api.js';
 
 const VIEW_W = 600;
 const VIEW_H = 420;
 
-// 簇心拉力强度：越大簇越紧、层级骨架越糊。0.05 是实测取值（见 GraphCanvas 的语义布局注释）。
+// 簇心拉力强度：越大簇越紧、结构越糊。0.05 是实测取值（见 GraphCanvas 的语义布局注释）。
 const SEMANTIC_PULL = 0.05;
 
 // 图谱区高度：原卡片高 295px，头部栏占 37px（p-1.5×2 + size-6 + 1px 分割线）。
@@ -30,32 +30,31 @@ const GRAPH_H = '258px';
 let collapsedPersistent = false;
 
 // 图谱视图模式跨导航保留（理由同上：右栏组件会卸载重建）。
-// 两档：content = 按资料内容向量聚类；folder = 只看文件夹层级。
+// 两档：content = 按内容分类组织；folder = 按文件夹层级。
 export const VIEW_MODES = ['content', 'folder'];
 const DEFAULT_VIEW_MODE = 'content';
 let viewModePersistent = DEFAULT_VIEW_MODE;
 
 /**
- * 内容视图数据在模块级去重：整库向量边是全局数据，右栏组件随路由卸载重建，
+ * 内容分类数据在模块级去重：分类是整库级别的数据，右栏组件随路由卸载重建，
  * 用一个共享的在途 Promise 保证「同时挂载/来回切档只发一次请求」。
  */
-let kgSemanticsInflight = null;
-function loadKgSemantics() {
-  if (!kgSemanticsInflight) {
-    kgSemanticsInflight = getKgSemantics()
+let kgTaxonomyInflight = null;
+function loadKgTaxonomy() {
+  if (!kgTaxonomyInflight) {
+    kgTaxonomyInflight = getKgTaxonomy()
       .catch(() => null)
       .then((data) => {
-        // 失败时清掉缓存，下次切档可重试（成功的结果整会话复用）
-        if (!data) kgSemanticsInflight = null;
+        if (!data) kgTaxonomyInflight = null; // 失败允许下次重试
         return data;
       });
   }
-  return kgSemanticsInflight;
+  return kgTaxonomyInflight;
 }
 
-/** 仅供测试：清掉内容视图的共享缓存与档位记忆。 */
+/** 仅供测试：清掉分类共享缓存与档位记忆。 */
 export function __resetKgSemanticsCache() {
-  kgSemanticsInflight = null;
+  kgTaxonomyInflight = null;
   viewModePersistent = DEFAULT_VIEW_MODE;
 }
 
@@ -65,7 +64,7 @@ function setViewModePersistent(setter, mode) {
   setter(mode);
 }
 
-/** 档位按钮：与前两个图标按钮同款外观，用 aria-pressed 表达当前档（三档单选）。 */
+/** 档位按钮：与前两个图标按钮同款外观，用 aria-pressed 表达当前档（两档单选）。 */
 function ViewModeButton({ active, onClick, title, icon: Icon }) {
   return (
     <button
@@ -82,7 +81,8 @@ function ViewModeButton({ active, onClick, title, icon: Icon }) {
   );
 }
 
-// Node ids: folders are `f<id>` (root is f0), files are `file<id>`.
+// Node ids: folders are `f<id>` (root is f0), files are `file<id>`,
+// 内容分类节点是 `k:<clusterKey>`（细分）与学科对应的 `f<id>`（复用目录节点）。
 export const nodeIdOf = (currentId) => (currentId ? `f${currentId}` : 'f0');
 
 // d3-force 在模拟运行后会把 l.source/l.target 从字符串 id 改写为节点对象，
@@ -135,11 +135,22 @@ export function localSubgraph(nodes, links, currentId) {
   };
 }
 
+export function buildDegrees(links) {
+  const deg = {};
+  for (const l of links) {
+    // 端点可能是字符串 id，也可能已被 d3-force 改写成节点对象（见 localSubgraph 的注释）
+    const s = endpointId(l.source);
+    const t = endpointId(l.target);
+    deg[s] = (deg[s] || 0) + 1;
+    deg[t] = (deg[t] || 0) + 1;
+  }
+  return deg;
+}
+
 function displayName(name) {
   const s = String(name || '');
   return s.length > 16 ? `${s.slice(0, 16)}…` : s;
 }
-
 
 /** 簇 → 色槽：固定顺序分配，超出的簇用中性兜底色。 */
 export const MAX_SEMANTIC_COLORS = 6;
@@ -154,113 +165,147 @@ export const semanticColorFor = (index) =>
   index >= 0 && index < MAX_SEMANTIC_COLORS ? cssVar(`--kg-c${index + 1}`) : cssVar('--kg-cn');
 
 /**
- * 内容视图：把后端给的相似边收敛成「可读的簇」。
+ * 内容视图的图结构：**用内容分类替代目录骨架**。
  *
- * 成簇判据 = 相似度 ≥ VECTOR_LINK_THRESHOLD **且互为 top-K 最近邻**。
- * 两个条件缺一不可，阈值是在真实向量上标定的（518 个文件 / 2943 条边）：
- *   - 只用单阈值：0.78 时最大簇 125 个成员（数学类试题资料靠「试卷」这一文体逐级串起来），
- *     0.82 时仍有 64 个、纯度只有 25%——链式效应靠调阈值解决不掉；
- *   - 加上「互为 top-4」后最大簇降到 17，且 线性代数/思政/概率论/流体力学 这些真主题
- *     仍是 100% 纯度的整簇。原因是桥接文件不再能把两团单向拉近：它必须也在对方的
- *     前 4 名里，而弱连接的关系通常不是相互的。
+ *   根目录 ─┬─ 学科分类（大类）─┬─ 内容细分 ─ 文件
+ *           └─ …                └─ …
+ *
+ * 结构由后端算好（`GET /api/index/taxonomy`）：大类 = 顶层学科目录，细分 = 该学科目录内按内容
+ * 向量 k-means 的结果（细分名字由 LLM 起一次并缓存）。前端只负责拼图，不参与聚类。
+ *
+ * 关键取舍：
+ *   - **不再画目录层级边**（这正是「按内容组织」的含义）：文件挂在「内容细分」下，而不是挂在
+ *     它所在的文件夹下；当前范围里的其他子目录仍作为节点挂到父目录，局部视图才能继续下钻。
+ *   - 学科节点与细分节点都可点击进入对应目录（meta.folderId）。
+ *   - 未被索引的文件（扫描件/老格式）不在分类里，**不画**——画了没有归属边，只会变成游离点；
+ *     它们在「目录视图」里照常可见。
+ *
+ * @param nodes 当前视图范围内的图谱节点（buildGraph/localSubgraph 的产物）
+ * @param taxonomy 后端 /taxonomy 响应
+ * @param parentOf Map<folderId, parentFolderId|null>，用于把子目录接到父目录下
  */
-export const VECTOR_LINK_THRESHOLD = 0.84;
-export const VECTOR_MUTUAL_K = 4;
-
-/** 后端回的是数据库 file_id（数字），图谱节点 id 是 «file<id>»：两端必须归一，否则一条边都接不上。 */
-export const vectorNodeId = (id) => (String(id).startsWith('file') ? String(id) : `file${id}`);
-
-export function buildVectorGraph(nodes, edges, labels) {
-  // 两边都过 vectorNodeId：节点在图谱里是 'file11'，后端回的是 11，不归一就一条边都接不上
-  const scope = new Set(nodes.map((n) => vectorNodeId(n.id)));
-  const inScope = (edges || [])
-    .map((e) => ({
-      source: vectorNodeId(e.source),
-      target: vectorNodeId(e.target),
-      weight: Number(e.weight) || 0,
-    }))
-    .filter((e) => scope.has(e.source) && scope.has(e.target));
-
-  // 每个节点的邻居表（按相似度降序），用于「互为 top-K」判定
-  const neighbors = new Map();
-  for (const id of scope) neighbors.set(id, []);
-  for (const e of inScope) {
-    neighbors.get(e.source)?.push({ id: e.target, weight: e.weight });
-    neighbors.get(e.target)?.push({ id: e.source, weight: e.weight });
+export function buildTopicGraph(nodes, taxonomy, { rootId = 'f0', parentOf } = {}) {
+  const fileByNum = new Map();
+  const folderByNum = new Map();
+  for (const n of nodes) {
+    const f = String(n.id).match(/^file(\d+)$/);
+    if (f) fileByNum.set(Number(f[1]), n);
+    const d = String(n.id).match(/^f(\d+)$/);
+    if (d && Number(d[1]) !== 0) folderByNum.set(Number(d[1]), n);
   }
-  for (const list of neighbors.values()) list.sort((a, b) => b.weight - a.weight);
-  const inTopK = (id, other) =>
-    (neighbors.get(id) || []).slice(0, VECTOR_MUTUAL_K).some((n) => n.id === other);
 
-  const clustered = inScope.filter(
-    (e) => e.weight >= VECTOR_LINK_THRESHOLD && inTopK(e.source, e.target) && inTopK(e.target, e.source)
-  );
-
-  const parent = new Map([...scope].map((id) => [id, id]));
-  const find = (x) => {
-    let root = x;
-    while (parent.get(root) !== root) root = parent.get(root);
-    let cur = x;
-    while (parent.get(cur) !== root) {
-      const next = parent.get(cur);
-      parent.set(cur, root);
-      cur = next;
-    }
-    return root;
-  };
-  for (const e of clustered) {
-    const ra = find(e.source);
-    const rb = find(e.target);
-    if (ra !== rb) parent.set(ra, rb);
-  }
-  const groups = new Map();
-  for (const id of scope) {
-    const root = find(id);
-    if (!groups.has(root)) groups.set(root, []);
-    groups.get(root).push(id);
-  }
+  const groups = taxonomy?.groups || [];
+  // 按 id 去重：目录节点先整体保留（导航入口 + 骨架锚点），学科节点再**就地覆盖**成分类节点，
+  // 否则同一个 f<id> 会被 push 两次（React 的 key 重复、d3 也会把它当成两个节点）。
+  const byId = new Map();
+  for (const n of nodes) if (n.type === 'folder') byId.set(n.id, n);
+  const links = [];
   const clusters = [];
-  for (const ids of groups.values()) {
-    const counted = new Map();
-    for (const id of ids) {
-      const label = labels?.[id] ?? labels?.[Number(String(id).replace(/^file/, ''))];
-      if (label) counted.set(label, (counted.get(label) || 0) + 1);
+  const decoratedFolders = new Set();
+
+  for (const g of groups) {
+    const subjectInScope = folderByNum.has(g.subjectId);
+    const subjectNodeId = subjectInScope ? `f${g.subjectId}` : rootId;
+    const subjectFiles = g.clusters.reduce(
+      (n, c) => n + c.fileIds.filter((id) => fileByNum.has(id)).length,
+      0
+    );
+    if (!subjectFiles) continue;
+
+    if (subjectInScope) {
+      decoratedFolders.add(g.subjectId);
+      byId.set(subjectNodeId, {
+        id: subjectNodeId,
+        name: g.subject,
+        type: 'topic',
+        kind: 'subject',
+        size: subjectFiles,
+        meta: { folder_id: g.subjectId },
+      });
+      links.push({ source: rootId, target: subjectNodeId });
     }
-    const top = [...counted.entries()]
-      .filter(([, count]) => count >= Math.max(2, Math.ceil(ids.length / 3)))
-      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
-      .slice(0, 1)
-      .map(([t]) => t);
-    clusters.push({ key: ids[0], nodeIds: ids, label: top[0] || null });
+
+    for (const c of g.clusters) {
+      const present = c.fileIds.filter((id) => fileByNum.has(id));
+      if (!present.length) continue;
+      if (present.length < 2) {
+        // 只有一个文件时不套一层细分节点，直接挂到学科下——**不能丢**：这些文件是已建索引的，
+        // 丢掉等于它们在内容视图里凭空消失（文件少的学科尤其常见）。
+        for (const fileId of present) {
+          const fileNode = fileByNum.get(fileId);
+          byId.set(fileNode.id, fileNode);
+          links.push({ source: subjectNodeId, target: fileNode.id });
+        }
+        continue;
+      }
+      const clusterNodeId = `k:${c.key}`;
+      byId.set(clusterNodeId, {
+        id: clusterNodeId,
+        name: c.name || '',
+        type: 'topic',
+        kind: 'cluster',
+        size: present.length,
+        meta: { folder_id: g.subjectId },
+      });
+      links.push({ source: subjectNodeId, target: clusterNodeId });
+      for (const fileId of present) {
+        const fileNode = fileByNum.get(fileId);
+        byId.set(fileNode.id, fileNode);
+        links.push({ source: clusterNodeId, target: fileNode.id });
+      }
+      clusters.push({ key: clusterNodeId, nodeIds: present.map((id) => `file${id}`) });
+    }
   }
-  clusters.sort(
-    (a, b) =>
-      b.nodeIds.length - a.nodeIds.length ||
-      (a.nodeIds[0] < b.nodeIds[0] ? -1 : a.nodeIds[0] > b.nodeIds[0] ? 1 : 0)
-  );
-  return { edges: inScope, clusters };
+
+  // 当前范围里的其他子目录接回父目录（节点已在上面统一放入，这里只补边）
+  for (const [id, node] of folderByNum) {
+    if (decoratedFolders.has(id)) continue;
+    const parent = parentOf?.get(id) ?? null;
+    const parentInScope = parent != null && folderByNum.has(parent);
+    links.push({ source: parentInScope ? `f${parent}` : rootId, target: node.id });
+  }
+
+  // 收口：边必须两端都在节点集里。d3 的 forceLink 遇到悬空端点会直接抛
+  // `node not found: <id>`（分类图的边都从根出发，而局部子图里可能没有根节点），
+  // 这里滤掉比让画布崩掉好——悬空边本来就画不出来。
+  const out = [...byId.values()];
+  const nodeIds = new Set(byId.keys());
+  const safeLinks = links.filter((l) => nodeIds.has(l.source) && nodeIds.has(l.target));
+  return { nodes: out, links: safeLinks, clusters };
 }
 
 /**
- * 图例：只列成员 ≥2 且有标签的簇（单点没有「聚成一类」的含义，列出来只是噪音），
- * 取前 MAX_SEMANTIC_COLORS 个（色槽数量与画布上色一致）。
+ * 从边集推出每个节点的父节点与邻居（内容分类图里这两种都用得上：
+ * 悬停要亮起「子节点 + 所属分类」，并让「文件 → 细分 → 学科 → 根」这条骨架保持高亮）。
  */
-function legendOf(clusters) {
-  return clusters
-    .filter((cluster) => cluster.nodeIds.length > 1 && cluster.label)
-    .slice(0, MAX_SEMANTIC_COLORS)
-    .map((cluster, index) => ({
-      key: cluster.key,
-      label: cluster.label,
-      count: cluster.nodeIds.length,
-      color: semanticColorFor(index),
-    }));
+function relationsOf(links) {
+  const parents = new Map();
+  const neighbors = new Map();
+  const add = (map, k, v) => {
+    if (!map.has(k)) map.set(k, new Set());
+    map.get(k).add(v);
+  };
+  for (const l of links) {
+    const s = endpointId(l.source);
+    const t = endpointId(l.target);
+    if (!parents.has(t)) parents.set(t, s);
+    add(neighbors, s, t);
+    add(neighbors, t, s);
+  }
+  return { parents, neighbors };
+}
+
+/** 从节点 id 取后端给的分类标签（学科 / 细分的可读名字）。 */
+export function labelOfNode(id, labels) {
+  if (!labels) return null;
+  const folder = String(id).match(/^f(\d+)$/);
+  if (folder) return labels[`folder:${folder[1]}`] || null;
+  return labels[`cluster:${String(id).replace(/^k:/, '')}`] || null;
 }
 
 /**
- * 知识库 — force-directed graph of the library, forestry.md "Connected Pages"
- * style: circular nodes sized by degree, hover highlights neighbors,
- * zoom reveals labels; pan/zoom/drag; full-library view in a modal.
+ * 知识库 — force-directed graph of the library.
+ * 内容档按「学科 → 内容细分 → 文件」组织，目录档保持文件夹层级。
  */
 export default function KnowledgeGraph({ currentId = 0, className = '', onFullChange }) {
   const { t } = useTranslation();
@@ -269,13 +314,9 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
   // folder neighborhood zoomed (maximize). null = dialog closed.
   const [dialog, setDialog] = useState(null);
   const [collapsed, setCollapsed] = useState(collapsedPersistent);
-  // 视图模式：content（默认，按内容向量聚类）/ name（按文件名主题）/ folder（纯目录层级）
+  // 视图模式：content（默认，按内容分类）/ folder（按文件夹层级）
   const [viewMode, setViewMode] = useState(viewModePersistent);
-  // 内容视图的数据：整库级别，只在切到 content 档时拉一次。
-  // ⚠️ 用「模块级在途 Promise + 显式 refresh」而不是把 contentState 放进 effect 依赖：
-  // 后者会在 setLoading 时立即重跑 effect，cleanup 把 cancelled 置真，数据回来就被丢掉
-  // （表现是内容视图永远停在「正在读取内容索引」，但网络请求其实成功了）。
-  const [contentData, setContentData] = useState(null);
+  const [taxonomy, setTaxonomy] = useState(null);
   const [contentState, setContentState] = useState('idle'); // idle | loading | ready | error
   const { tree, rootFiles, loading } = useFolderTree();
 
@@ -283,14 +324,14 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
     if (viewMode !== 'content') return undefined;
     let alive = true;
     setContentState((prev) => (prev === 'idle' || prev === 'error' ? 'loading' : prev));
-    loadKgSemantics()
+    loadKgTaxonomy()
       .then((data) => {
         if (!alive) return;
         if (!data) {
           setContentState('error');
           return;
         }
-        setContentData(data);
+        setTaxonomy(data);
         setContentState('ready');
       })
       .catch(() => {
@@ -316,39 +357,57 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
     };
   }, [fullGraph, currentId]);
 
-  /**
-   * 语义层：内容视图的数据（虚线边 / 簇 / 图例），目录档直接返回 null。
-   * 不写回 fullGraph —— d3 会就地改写它拿到的节点/边（见 localSubgraph 注释）。
-   */
-  const semantics = useMemo(() => {
-    if (viewMode !== 'content' || !contentData) return null;
-    const { edges, clusters } = buildVectorGraph(
-      fullGraph.nodes,
-      contentData.edges,
-      contentData.labels
-    );
-    return { edges, clusters, legend: legendOf(clusters) };
-  }, [viewMode, contentData, fullGraph]);
+  // 目录树里的父子关系（用于把子目录接到父目录下）
+  const parentOfFolders = useMemo(() => {
+    const map = new Map();
+    for (const l of fullGraph.links) {
+      const child = String(l.target).match(/^f(\d+)$/);
+      const parent = String(l.source).match(/^f(\d+)$/);
+      if (child && parent && !map.has(Number(child[1]))) {
+        map.set(Number(child[1]), Number(parent[1]) === 0 ? null : Number(parent[1]));
+      }
+    }
+    return map;
+  }, [fullGraph]);
 
-  // 当前视图范围内实际要画的语义边（局部视图只画两端都在场的边）。
-  const semanticEdgesIn = useCallback(
-    (nodes) => {
-      if (!semantics) return [];
-      const scope = new Set(nodes.map((n) => n.id));
-      return semantics.edges.filter((e) => scope.has(e.source) && scope.has(e.target));
-    },
-    [semantics]
-  );
-  // 节点 → 所属簇（渲染上色用）；不传时退化成原来的「文件夹墨黑 / 文件白」。
-  const clusterNodes = semantics
-    ? semantics.clusters.slice(0, MAX_SEMANTIC_COLORS).map((c) => new Set(c.nodeIds))
-    : [];
-  const legend = semantics ? semantics.legend : [];
+  /**
+   * 画布数据：内容档用分类图（局部 / 全库两份），目录档用目录层级图。
+   * 都用**拷贝**——d3 会就地改写它拿到的节点与边（见 localSubgraph 注释）。
+   */
+  const canvasData = useMemo(() => {
+    const forContent = viewMode === 'content' && taxonomy;
+    const build = (nodes, links) =>
+      forContent
+        ? buildTopicGraph(nodes, taxonomy, { parentOf: parentOfFolders })
+        : { nodes: nodes.map((n) => ({ ...n })), links: links.map((l) => ({ ...l })), clusters: [] };
+    return {
+      local: build(localNodes, localLinks),
+      full: build(fullNodes, fullLinks),
+      clusters: forContent
+        ? buildTopicGraph(localNodes, taxonomy, { parentOf: parentOfFolders }).clusters
+        : [],
+    };
+  }, [viewMode, taxonomy, parentOfFolders, localNodes, localLinks, fullNodes, fullLinks]);
+
+  /**
+   * 内容档在分类数据到达前**不能**先用目录边画一次：局部子图里没有根节点（只含根的直接邻居），
+   * 而分类图的所有边都从根出发 → d3 的 forceLink 会抛 `node not found: f0`。
+   * 所以这一档必须等数据到齐再渲染画布。
+   */
+  const canvasReady = viewMode === 'folder' || Boolean(taxonomy);
+  // 「空」的判据是**当前范围里一个分类节点都没有**（而不是节点数 ≤1：目录节点总会保留，
+  // 拿节点数判断会永远不为空，提示就永远不出现）。
+  const canvasEmpty =
+    viewMode === 'content' && taxonomy && !canvasData.local.nodes.some((n) => n.type === 'topic');
 
   const onNavigate = useCallback(
     (node) => {
-      if (node.type === 'folder') {
-        navigate(node.isRoot ? '/' : `/folder/${Number(node.id.slice(1))}`);
+      if (node.type === 'folder' || node.kind === 'subject') {
+        const folderId = node.kind === 'subject' ? node.meta?.folder_id : Number(node.id.slice(1));
+        navigate(node.isRoot ? '/' : `/folder/${folderId}`);
+      } else if (node.kind === 'cluster') {
+        // 内容细分节点：进入它所属的学科目录（细分本身不是一个目录，不能跳转过去）
+        if (node.meta?.folder_id) navigate(`/folder/${node.meta.folder_id}`);
       } else {
         openFilePreview(node.meta, navigate);
       }
@@ -369,6 +428,9 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
   const onFullChangeRef = useRef(onFullChange);
   onFullChangeRef.current = onFullChange;
   useEffect(() => () => onFullChangeRef.current?.(false), []);
+
+  const labels = taxonomy?.labels || null;
+  const dialogData = dialog === 'local' ? canvasData.local : canvasData.full;
 
   return (
     <div
@@ -434,27 +496,25 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
           <div className="flex h-full items-center justify-center text-[12px] text-slate-500">
             {loading ? t('common.loading') : t('kg.empty')}
           </div>
-        ) : viewMode === 'content' && !semantics ? (
-          // 内容视图的数据还没到（首次拉向量边）：给明确反馈，不要显示成「没有数据」
+        ) : !canvasReady ? (
+          // 分类数据还没到（首次会现算：k-means + 可能的 LLM 命名）
           <div className="flex h-full items-center justify-center px-4 text-center text-[12px] text-slate-500">
             {contentState === 'error' ? t('kg.contentFailed') : t('kg.contentLoading')}
           </div>
-        ) : viewMode === 'content' && semantics.edges.length === 0 ? (
-          // 索引建完了但没有任何向量边：可能是模型没装、或这批文件都是扫描件/老格式。
-          // 明确给出提示，否则看起来和「图谱坏了」一样。
+        ) : canvasEmpty ? (
+          // 有分类数据但没聚出任何分类：模型没装、或这批文件都是扫描件/老格式
           <div className="flex h-full items-center justify-center px-4 text-center text-[12px] text-slate-500">
             {t('kg.contentEmpty')}
           </div>
         ) : (
           <GraphCanvas
-            nodes={localNodes}
-            links={localLinks}
+            nodes={canvasData.local.nodes}
+            links={canvasData.local.links}
             currentId={currentId}
             onNavigate={onNavigate}
             height={GRAPH_H}
-            semanticEdges={semanticEdgesIn(localNodes)}
-            clusterNodes={clusterNodes}
-            legend={legend}
+            clusterNodes={canvasData.clusters.map((c) => new Set(c.nodeIds))}
+            labels={labels}
           />
         )}
       </div>
@@ -477,14 +537,17 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
               <X className="h-5 w-5" />
             </button>
             <GraphCanvas
-              nodes={dialog === 'local' ? localNodes : fullNodes}
-              links={dialog === 'local' ? localLinks : fullLinks}
+              nodes={dialogData.nodes}
+              links={dialogData.links}
               currentId={currentId}
               onNavigate={onNavigate}
               height="100%"
-              semanticEdges={semanticEdgesIn(dialog === 'local' ? localNodes : fullNodes)}
-              clusterNodes={clusterNodes}
-              legend={legend}
+              clusterNodes={
+                viewMode === 'content'
+                  ? (dialog === 'local' ? canvasData.clusters : canvasData.clusters).map((c) => new Set(c.nodeIds))
+                  : []
+              }
+              labels={labels}
             />
           </div>
         </div>
@@ -493,44 +556,18 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
   );
 }
 
-export function buildDegrees(links) {
-  const deg = {};
-  for (const l of links) {
-    // 端点可能是字符串 id，也可能已被 d3-force 改写成节点对象（见 localSubgraph 的注释）
-    const s = endpointId(l.source);
-    const t = endpointId(l.target);
-    deg[s] = (deg[s] || 0) + 1;
-    deg[t] = (deg[t] || 0) + 1;
-  }
-  return deg;
-}
-
-function GraphCanvas({ nodes, links, currentId, onNavigate, height, semanticEdges, clusterNodes, legend }) {
+function GraphCanvas({ nodes, links, currentId, onNavigate, height, clusterNodes, labels }) {
   const svgRef = useRef(null);
   const simRef = useRef(null);
   const dragRef = useRef(null);
   const [, setTick] = useState(0);
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   const [hovered, setHovered] = useState(null);
-  // 图例悬停：点亮某一簇（其余节点淡出），让「这簇到底是哪些资料」可查。
-  const [legendHover, setLegendHover] = useState(-1);
+  // 图例已去掉：悬停某簇的入口没有了，只保留「悬停节点亮起它的关系」这条交互。
   const neighborsRef = useRef(new Set());
-  // 语义边的端点解析成节点引用（只读：仿真不绑定这些边，见下面 forceX/forceY 的注释）。
-  const semanticDraw = useMemo(() => {
-    if (!semanticEdges?.length) return [];
-    const byId = new Map(nodes.map((n) => [n.id, n]));
-    return semanticEdges
-      .map((e) => ({ source: byId.get(e.source), target: byId.get(e.target), weight: e.weight }))
-      .filter((e) => e.source && e.target);
-  }, [semanticEdges, nodes]);
+  const parentRef = useRef(null);
 
-  const clusterColorFor = useMemo(() => {
-    const palette = [];
-    for (let i = 0; i < MAX_SEMANTIC_COLORS; i += 1) palette.push(semanticColorFor(i));
-    return (slot) => palette[slot];
-  }, []);
-
-  // 节点 id → 簇槽号（= 图例序号）：渲染上色、图例悬停过滤、簇心布局共用同一张表。
+  // 节点 id → 簇槽号（= 上色顺序）；渲染着色与簇心布局共用。
   const slotOf = useMemo(() => {
     const map = new Map();
     clusterNodes.forEach((set, slot) => {
@@ -539,12 +576,19 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height, semanticEdge
     return map;
   }, [clusterNodes]);
 
+  const clusterColorFor = useMemo(() => {
+    const palette = [];
+    for (let i = 0; i < MAX_SEMANTIC_COLORS; i += 1) palette.push(semanticColorFor(i));
+    return (slot) => palette[slot];
+  }, []);
+
   const degrees = useMemo(() => buildDegrees(links), [links]);
   const radiusOf = useCallback(
-    (n) => 2 + Math.sqrt(degrees[n.id] || 0) * 2.2,
+    (n) => (n.type === 'topic' ? 4 + Math.sqrt(n.size || 1) * 1.6 : 2 + Math.sqrt(degrees[n.id] || 0) * 2.2),
     [degrees]
   );
   const current = nodeIdOf(currentId);
+  const { parents, neighbors } = useMemo(() => relationsOf(links), [links]);
 
   // (Re)build the simulation whenever the node set changes.
   useEffect(() => {
@@ -566,7 +610,7 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height, semanticEdge
         'link',
         forceLink(links)
           .id((d) => d.id)
-          .distance(55)
+          .distance((l) => (endpointId(l.source) === 'f0' ? 70 : 46))
           .strength(0.5)
       )
       .force('charge', forceManyBody().strength(-220))
@@ -612,10 +656,8 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height, semanticEdge
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, links]);
 
-  /* 语义簇定位：按簇心把同簇节点轻轻拉开（forceX/forceY 指向各自簇心），目录层级边仍然
-   * 负责整体骨架。刻意**不**把语义边绑进 forceLink：那会让 d3 就地改写我们传入的语义边
-   * 端点（同 BUG-98 那类「共享对象被改写」的坑），而且语义边数量远多于目录边，会盖过层级布局。
-   * 强度取 0.05 是实测值：再大整张图会被拽成几个硬邦邦的圆团，层级结构看不出来。 */
+  /* 簇心定位：按簇心把同簇节点轻轻拉开（forceX/forceY 指向各自簇心）。
+   * 实测强度 0.05：再大整张图会被拽成几个硬邦邦的圆团，层级/分类骨架看不出来。 */
   useEffect(() => {
     const sim = simRef.current;
     if (!sim) return undefined;
@@ -649,21 +691,29 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height, semanticEdge
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, slotOf]);
 
-  // Recompute neighbors when hovering.
+  // Recompute neighbors（悬停亮起：直接邻居 + 所属分类 + 分类骨架，其余淡出）
   const onHover = useCallback(
     (id) => {
       setHovered(id);
-      if (!id) return;
+      if (!id) {
+        neighborsRef.current = new Set();
+        parentRef.current = null;
+        return;
+      }
       const set = new Set([id]);
-      for (const l of links) {
-        const s = endpointId(l.source);
-        const t = endpointId(l.target);
-        if (s === id) set.add(t);
-        if (t === id) set.add(s);
+      for (const nb of neighbors.get(id) || []) set.add(nb);
+      // 所属分类（父节点）与它的上级也亮着，文件才不会显得「无依无靠」
+      let parent = parents.get(id) || null;
+      let guard = 0;
+      while (parent && guard < 4) {
+        set.add(parent);
+        parent = parents.get(parent) || null;
+        guard += 1;
       }
       neighborsRef.current = set;
+      parentRef.current = parents.get(id) || null;
     },
-    [links]
+    [neighbors, parents]
   );
 
   // Bind wheel natively with passive:false — React's synthetic onWheel is a
@@ -770,7 +820,9 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height, semanticEdge
     [onNavigate]
   );
 
-  const showLabels = view.k > 1.2;
+  // 内容分类图里节点少、语义重，标签默认就显示；目录图沿用「放大或悬停才显示」。
+  const hasTopics = nodes.some((n) => n.type === 'topic');
+  const showLabels = hasTopics || view.k > 1.2;
   const svgH = typeof height === 'number' ? `${height}px` : height;
   // d3-force assigns node.x/node.y inside the effect above, which runs after
   // the first commit — so freshly built node objects have no positions on
@@ -791,55 +843,8 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height, semanticEdge
       onPointerUp={onBackgroundUp}
       onPointerLeave={onBackgroundUp}
     >
-      {/* 图例：只列成员 ≥2 的簇（单点没有「聚成一类」的含义）。悬停可点亮该簇。 */}
-      {legend.length > 0 && (
-        <foreignObject x={6} y={6} width={VIEW_W - 12} height={VIEW_H - 12} pointerEvents="none">
-          <div className="flex max-w-[54%] flex-wrap gap-x-2.5 gap-y-1">
-            {legend.map((item, i) => (
-              <span
-                key={item.key}
-                className="flex items-center gap-1 rounded px-1 text-[9px] leading-4"
-                style={{
-                  color: 'var(--ink-2)',
-                  background: 'var(--kg-legend-bg)',
-                  opacity: legendHover >= 0 && legendHover !== i ? 0.4 : 1,
-                  pointerEvents: 'auto',
-                  cursor: 'default',
-                }}
-                onMouseEnter={() => setLegendHover(i)}
-                onMouseLeave={() => setLegendHover(-1)}
-              >
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ background: item.color || 'var(--ink-3)' }}
-                />
-                {displayName(item.label)}
-              </span>
-            ))}
-          </div>
-        </foreignObject>
-      )}
       {positioned && (
         <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
-          {/* 语义边画在层级边之前（更底层），虚线与目录实线区分：它表达「主题相关」，
-              不是「属于同一目录」。画层级边时按 hover 关联关系，语义边不做 hover 高亮。 */}
-          {semanticDraw.map((e, i) => {
-            const slot = slotOf.get(e.source.id);
-            const faded = legendHover >= 0 && slot !== legendHover;
-            return (
-              <line
-                key={`s-${i}`}
-                x1={e.source.x}
-                y1={e.source.y}
-                x2={e.target.x}
-                y2={e.target.y}
-                stroke={hovered ? 'var(--line-strong)' : 'var(--kg-semantic-line)'}
-                strokeWidth={0.8}
-                strokeDasharray="3 3"
-                opacity={hovered ? 0.12 : faded ? 0.06 : 0.5}
-              />
-            );
-          })}
           {links.map((l, i) => {
             const s = endpointId(l.source);
             const t = endpointId(l.target);
@@ -852,26 +857,31 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height, semanticEdge
                 y1={l.source.y}
                 x2={l.target.x}
                 y2={l.target.y}
-                stroke={hovered ? 'var(--ink)' : 'var(--line-strong)'}
+                stroke={active && hovered ? 'var(--ink)' : 'var(--line-strong)'}
                 strokeWidth={1}
-                opacity={dim ? 0.05 : hovered ? 0.7 : 0.5}
+                opacity={dim ? 0.05 : hovered ? 0.55 : 0.4}
               />
             );
           })}
           {nodes.map((n) => {
             const r = radiusOf(n);
             const slot = slotOf.get(n.id);
-            const inLegendCluster = legendHover < 0 || slot === legendHover;
-            const dim = (hovered && !neighborsRef.current.has(n.id)) || !inLegendCluster;
+            const dim = hovered && !neighborsRef.current.has(n.id);
             const isFolder = n.type === 'folder';
+            const isTopic = n.type === 'topic';
             const isCurrent = n.id === current;
-            // 超出色板的簇不给颜色（用中性兜底），避免不同主题拿到同一个颜色看起来像同一类。
-            const clusterColor = slot !== undefined && slot < MAX_SEMANTIC_COLORS ? clusterColorFor(slot) : undefined;
+            const clusterColor =
+              slot !== undefined && slot < MAX_SEMANTIC_COLORS ? clusterColorFor(slot) : undefined;
+            const topicLabel = isTopic ? n.name || labelOfNode(n.id, labels) : null;
             return (
               <g
                 key={n.id}
                 transform={`translate(${n.x},${n.y})`}
-                style={{ cursor: 'pointer', opacity: dim ? 0.12 : 1, transition: 'opacity 150ms' }}
+                style={{
+                  cursor: 'pointer',
+                  opacity: dim ? 0.12 : 1,
+                  transition: 'opacity 150ms',
+                }}
                 onPointerDown={(e) => onNodeDown(e, n)}
                 onPointerMove={onNodeMove}
                 onPointerUp={(e) => onNodeUp(e, n)}
@@ -881,19 +891,26 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height, semanticEdge
                 {isCurrent && (
                   <circle r={r + 3} fill="none" stroke="var(--ink)" strokeWidth={1.2} opacity={0.5} />
                 )}
-                {/* 文件夹仍用实心、文件仍用空心（这一层语义不能被颜色抢掉）：
-                    有簇色时只换颜色，没有簇色时保持原来的墨黑/白。 */}
+                {/* 分类节点实心 + 簇色，构成图骨架；同一内容细分的文件用同色描边，
+                    这样「一组资料」在视觉上是一体的（悬停/着色都与分类一致）。 */}
                 <circle
                   r={r}
-                  fill={clusterColor || (isFolder ? 'var(--ink)' : 'var(--surface)')}
+                  fill={
+                    isTopic
+                      ? clusterColor || 'var(--ink)'
+                      : isFolder
+                        ? 'var(--ink)'
+                        : 'var(--surface)'
+                  }
                   stroke={clusterColor || (isFolder ? 'var(--ink)' : 'var(--line-strong)')}
-                  strokeWidth={1}
+                  strokeWidth={isTopic ? 1.2 : clusterColor ? 1.4 : 1}
                 />
-                {(hovered === n.id || showLabels) && (
+                {(showLabels || hovered === n.id) && (topicLabel || !isTopic) && (
                   <text
                     y={-r - 6}
                     textAnchor="middle"
-                    fontSize={10}
+                    fontSize={isTopic ? 11 : 10}
+                    fontWeight={isTopic ? 600 : 400}
                     strokeWidth={3}
                     paintOrder="stroke"
                     style={{
@@ -902,7 +919,7 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height, semanticEdge
                       pointerEvents: 'none',
                     }}
                   >
-                    {displayName(n.name)}
+                    {displayName(topicLabel || n.name)}
                   </text>
                 )}
               </g>
