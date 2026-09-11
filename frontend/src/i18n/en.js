@@ -190,7 +190,7 @@ const en = {
       modeCustom: 'Use custom config',
       baseUrl: 'API URL',
       protocol: 'API protocol',
-      protocolOpenaiCompletions: 'OpenAI-compatible (Chat Completions)',
+      protocolOpenaiCompletions: 'OpenAI Chat Completions',
       protocolOpenaiResponses: 'OpenAI Responses',
       protocolAnthropicMessages: 'Anthropic Messages',
       apiKey: 'API Key',

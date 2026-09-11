@@ -45,6 +45,55 @@ function AccountInfo({ t }) {
   );
 }
 
+// 协议下拉：原生 <select> 的选项列表由系统绘制（浅色直角 + 系统高亮），既跟不上暗色主题也与
+// 站点的「无界」风格冲突，因此改成按钮触发器 + Level 3 浮层自绘（与「外观」页语言下拉同一套浮层）。
+function ProtocolSelect({ label, value, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useClickOutside(open, () => setOpen(false), ref);
+  const current = options.find((o) => o.value === value) ?? options[0];
+
+  return (
+    <span className="settings-select" ref={ref}>
+      <button
+        type="button"
+        className="settings-select-trigger"
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="settings-select-value">{current.label}</span>
+        <ChevronDown
+          size={16}
+          strokeWidth={1.8}
+          aria-hidden="true"
+          style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 180ms' }}
+        />
+      </button>
+      {open && (
+        <div className="settings-popover settings-select-menu" role="listbox" aria-label={label}>
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              role="option"
+              aria-selected={o.value === value}
+              className={`settings-popover-option ${o.value === value ? 'settings-popover-option--selected' : ''}`}
+              onClick={() => {
+                onChange(o.value);
+                setOpen(false);
+              }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
 export default function SettingsModal({ open, onClose }) {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
@@ -236,20 +285,12 @@ export default function SettingsModal({ open, onClose }) {
                         <label key={key} className="settings-field">
                           <span className="settings-field-label">{label}</span>
                           {type === 'select' ? (
-                            <span className="settings-select-wrap">
-                              <select
-                                className="settings-select"
-                                value={cfgDraft[key]}
-                                onChange={(e) => setCfgDraft((d) => ({ ...d, [key]: e.target.value }))}
-                              >
-                                {options.map((o) => (
-                                  <option key={o.value} value={o.value}>
-                                    {o.label}
-                                  </option>
-                                ))}
-                              </select>
-                              <ChevronDown size={16} strokeWidth={1.8} className="settings-select-icon" aria-hidden="true" />
-                            </span>
+                            <ProtocolSelect
+                              label={label}
+                              value={cfgDraft[key]}
+                              options={options}
+                              onChange={(v) => setCfgDraft((d) => ({ ...d, [key]: v }))}
+                            />
                           ) : (
                             <input
                               type={type}
@@ -320,14 +361,14 @@ export default function SettingsModal({ open, onClose }) {
                         </span>
                       </button>
                       {langOpen && (
-                        <div className="settings-lang-menu" role="listbox" aria-label={t('settings.appearance.selectLang')}>
+                        <div className="settings-popover settings-lang-menu" role="listbox" aria-label={t('settings.appearance.selectLang')}>
                           {langOptions.map((o) => (
                             <button
                               key={o.value}
                               type="button"
                               role="option"
                               aria-selected={locale === o.value}
-                              className={`settings-lang-option ${locale === o.value ? 'settings-lang-option--selected' : ''}`}
+                              className={`settings-popover-option ${locale === o.value ? 'settings-popover-option--selected' : ''}`}
                               onClick={() => {
                                 setLocale(o.value);
                                 setLangOpen(false);

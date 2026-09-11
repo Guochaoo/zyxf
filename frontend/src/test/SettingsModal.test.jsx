@@ -85,7 +85,13 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
   const urlInput = () => screen.getByLabelText('API 地址');
   const keyInput = () => screen.getByLabelText('API Key');
   const modelInput = () => screen.getByLabelText('模型');
-  const protocolSelect = () => screen.getByRole('combobox', { name: 'API 协议' });
+  // 协议是自绘下拉（原生 select 的 option 列表跟不上主题与风格）：触发器 + Level 3 浮层
+  const protocolTrigger = () => screen.getByRole('button', { name: 'API 协议' });
+  const protocolValue = () => protocolTrigger().textContent.trim();
+  const pickProtocol = (name) => {
+    fireEvent.click(protocolTrigger());
+    fireEvent.click(screen.getByRole('option', { name }));
+  };
   const customMode = () => fireEvent.click(radio('使用自定义配置'));
 
   test('本地无配置时默认选中「使用服务器配置」，且不显示自定义字段', () => {
@@ -94,7 +100,7 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
     expect(radio('使用服务器配置')).toBeChecked();
     expect(radio('使用自定义配置')).not.toBeChecked();
     expect(screen.queryByLabelText('API Key')).toBeNull();
-    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'API 协议' })).toBeNull();
   });
 
   test('字段自上而下为 地址 → 协议 → Key → 模型', () => {
@@ -117,11 +123,11 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
     expect(document.querySelector('[placeholder*="bigmodel"]')).toBeNull();
   });
 
-  test('选「使用自定义配置」填完保存后写入本地存储（默认协议 OpenAI 兼容）', async () => {
+  test('选「使用自定义配置」填完保存后写入本地存储（默认协议 OpenAI Chat Completions）', async () => {
     renderModal();
     customMode();
 
-    expect(protocolSelect().value).toBe('openai-completions');
+    expect(protocolValue()).toBe('OpenAI Chat Completions');
     fireEvent.change(urlInput(), { target: { value: 'https://llm.test/v1' } });
     fireEvent.change(keyInput(), { target: { value: 'sk-test' } });
     fireEvent.change(modelInput(), { target: { value: 'glm-4.6' } });
@@ -138,21 +144,41 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
     );
   });
 
-  test('协议下拉提供三种协议，选 Anthropic Messages 后保存生效', async () => {
+  test('协议下拉提供三种协议（官方叫法，不带「兼容」），选 Anthropic Messages 后保存生效', async () => {
     renderModal();
     customMode();
 
-    const options = [...protocolSelect().options].map((o) => o.value);
-    expect(options).toEqual(['openai-completions', 'openai-responses', 'anthropic-messages']);
+    fireEvent.click(protocolTrigger());
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'OpenAI Chat Completions',
+      'OpenAI Responses',
+      'Anthropic Messages',
+    ]);
+    // 选中项有 --selected，且菜单是自绘浮层（非原生 select）
+    expect(document.querySelector('.settings-popover.settings-select-menu')).not.toBeNull();
+    fireEvent.click(screen.getByRole('option', { name: 'OpenAI Responses' }));
+    expect(document.querySelector('.settings-popover.settings-select-menu')).toBeNull(); // 选完收起
+    expect(protocolValue()).toBe('OpenAI Responses');
 
     fireEvent.change(urlInput(), { target: { value: 'https://api.anthropic.com/v1' } });
     fireEvent.change(keyInput(), { target: { value: 'sk-ant' } });
     fireEvent.change(modelInput(), { target: { value: 'claude-sonnet-4-5' } });
-    fireEvent.change(protocolSelect(), { target: { value: 'anthropic-messages' } });
+    pickProtocol('Anthropic Messages');
 
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
 
     await waitFor(() => expect(savedCfg().protocol).toBe('anthropic-messages'));
+  });
+
+  test('点击下拉以外的区域收起浮层', async () => {
+    renderModal();
+    customMode();
+
+    fireEvent.click(protocolTrigger());
+    expect(document.querySelector('.settings-select-menu')).not.toBeNull();
+
+    fireEvent.mouseDown(screen.getByText('使用服务器配置'));
+    await waitFor(() => expect(document.querySelector('.settings-select-menu')).toBeNull());
   });
 
   test('已有完整本地配置时默认进入「使用自定义配置」并回填（含协议）', () => {
@@ -164,11 +190,11 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
 
     expect(radio('使用自定义配置')).toBeChecked();
     expect(keyInput().value).toBe('sk-old');
-    expect(protocolSelect().value).toBe('anthropic-messages');
+    expect(protocolValue()).toBe('Anthropic Messages');
   });
 
   // 旧存储没有 protocol 字段：读出来按 openai-completions，不能因为缺字段就判定「未配置」
-  test('旧存储（无 protocol 字段）仍视为已配置，协议回落到 openai-completions', () => {
+  test('旧存储（无 protocol 字段）仍视为已配置，协议回落到 OpenAI Chat Completions', () => {
     localStorage.setItem(
       'zyxf_llm',
       JSON.stringify({ apiKey: 'sk-old', baseUrl: 'https://llm.old/v1', model: 'glm-4.6' })
@@ -176,7 +202,7 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
     renderModal();
 
     expect(radio('使用自定义配置')).toBeChecked();
-    expect(protocolSelect().value).toBe('openai-completions');
+    expect(protocolValue()).toBe('OpenAI Chat Completions');
   });
 
   // 更早的版本存的是 openai / anthropic，读到要映射到规范名（否则下拉会显示成第一个选项、保存后把用户选择改掉）
@@ -187,7 +213,7 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
     );
     renderModal();
 
-    expect(protocolSelect().value).toBe('anthropic-messages');
+    expect(protocolValue()).toBe('Anthropic Messages');
   });
 
   test('切回「使用服务器配置」并保存会清掉本地配置，且字段随之隐藏', async () => {

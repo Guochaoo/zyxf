@@ -276,44 +276,88 @@
   color: var(--ink-3);
 }
 
-/* 协议下拉：与输入框同一套外观（灰底、无描边、聚焦无光晕），自绘 chevron 替换系统箭头 */
-.settings-select-wrap {
+/* 协议下拉：原生 <select> 的弹出列表由系统绘制（浅色直角、系统高亮），与主题和「无界」
+   风格都冲突，因此改成「按钮触发器 + Level 3 浮层」自绘；触发器外观与输入框一致。 */
+.settings-select {
   position: relative;
   display: block;
 }
 
-.settings-select {
+.settings-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
-  appearance: none;
-  -webkit-appearance: none;
-  padding: 9px 34px 9px 12px;
+  padding: 9px 12px;
   border: 0;
   border-radius: 10px;
   background: #f5f5f5;
   font: inherit;
   font-size: 13px;
   color: var(--ink);
-  outline: none;
+  text-align: left;
   cursor: pointer;
+  transition: background-color 150ms ease;
 }
 
-.settings-select option {
+.settings-select-trigger svg {
+  flex-shrink: 0;
+  color: var(--ink-3);
+}
+
+.settings-select-value {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 弹窗内的浮层（DESIGN.md §6 Level 3）：纯投影、无描边、无光晕；语言下拉与协议下拉共用 */
+.settings-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 12;
+  padding: 6px;
+  border-radius: 10px;
   background: var(--surface);
+  box-shadow:
+    rgba(0, 0, 0, 0.06) 0 4px 10px,
+    rgba(0, 0, 0, 0.12) 0 12px 32px;
+}
+
+.settings-popover-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.settings-popover-option:hover {
+  background: var(--hover);
   color: var(--ink);
 }
 
-.settings-select-icon {
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  transform: translateY(-50%);
-  color: var(--ink-3);
-  pointer-events: none;
+.settings-popover-option--selected {
+  color: var(--ink);
 }
 
 /* 暗色下 #f5f5f5 会变成刺眼亮块，改用 token 灰底 */
 [data-theme='dark'] .settings-input,
-[data-theme='dark'] .settings-select {
+[data-theme='dark'] .settings-select-trigger {
   background: var(--field);
 }
 
@@ -532,44 +576,5 @@
   color: var(--ink-2);
 }
 
-.settings-lang-menu {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 12;
-  padding: 6px;
-  border-radius: 10px;
-  background: var(--surface);
-  box-shadow:
-    rgba(0, 0, 0, 0.06) 0 4px 10px,
-    rgba(0, 0, 0, 0.12) 0 12px 32px;
-}
+/* 语言下拉与协议下拉共用 .settings-popover / .settings-popover-option 样式 */
 
-.settings-lang-option {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ink-2);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background-color 150ms ease,
-    color 150ms ease;
-}
-
-.settings-lang-option:hover {
-  background: var(--hover);
-  color: var(--ink);
-}
-
-.settings-lang-option--selected {
-  color: var(--ink);
-}

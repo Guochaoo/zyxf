@@ -187,9 +187,10 @@ const zh = {
       modeCustom: '使用自定义配置',
       baseUrl: 'API 地址',
       protocol: 'API 协议',
-      protocolOpenaiCompletions: 'OpenAI 兼容（Chat Completions）',
-      protocolOpenaiResponses: 'OpenAI Responses 接口',
-      protocolAnthropicMessages: 'Anthropic Messages 接口',
+      // 协议名是官方专有名词，与下拉里的 id 一一对应，不做本地化
+      protocolOpenaiCompletions: 'OpenAI Chat Completions',
+      protocolOpenaiResponses: 'OpenAI Responses',
+      protocolAnthropicMessages: 'Anthropic Messages',
       apiKey: 'API Key',
       model: '模型',
       hint: '地址、API Key、模型三项都填写后才生效。配置仅保存在本地浏览器。',
