@@ -308,6 +308,14 @@ const en = {
     largeFileHint: 'This file is large (>{{size}}). Preview over WiFi or download it directly.',
     downloadFailedHint: 'Download failed. Close and reopen the preview.',
   },
+  // Footer attribution strip (same line as the ICP filing number). Crediting the
+  // typeface is required by the OPPO Sans licence — condition 1 "prominent notice"
+  // plus condition 4 "retain the copyright notice and this Agreement" — so the
+  // licence text has to be reachable, not buried at an unadvertised URL.
+  footer: {
+    font: 'Font',
+  },
+
   common: {
     cancel: 'Cancel',
     save: 'Save',
