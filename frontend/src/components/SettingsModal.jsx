@@ -95,17 +95,23 @@ function ProtocolSelect({ label, value, options, onChange }) {
   );
 }
 
-export default function SettingsModal({ open, onClose }) {
+export default function SettingsModal({
+  open,
+  onClose,
+  section = 'ai',
+  panelOpen = false,
+  onSectionChange = () => {},
+  onBack = () => {},
+}) {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
   const { locale, setLocale } = useLocale();
-  const [section, setSection] = useState('ai');
   const [langOpen, setLangOpen] = useState(false);
-  // 手机端是两级结构（一级设置列表 → 二级板块内容，参照原生 App 设置页）：
-  // panel 为 null 时停在一级；桌面端不参与渲染（isMobile 为 false 时始终显示左右分栏）。
-  const [panel, setPanel] = useState(null);
+  // 手机端是两级结构（一级设置列表 → 二级板块内容），由外层路由驱动：
+  // /settings 是一级，/settings/:section 是二级。这样系统返回手势天然可用
+  // （二级 → 一级 → 上一页），不需要在历史里塞占位条目。
   const isMobile = useMediaQuery('(max-width: 640px)');
-  const inSubPage = isMobile && panel !== null;
+  const inSubPage = isMobile && panelOpen;
   // 语言下拉：点击「行 + 菜单」以外任意处收起（含弹窗内空白）。ref 挂在整个
   // .settings-lang 容器上，故点击触发按钮本身仍走它自己的切换逻辑，不会被重复收起。
   const langRef = useRef(null);
@@ -164,59 +170,14 @@ export default function SettingsModal({ open, onClose }) {
     [t]
   );
 
-  // 每次打开时，将已提交配置载入草稿、重置到首个板块、回到设置列表、收起语言下拉。
+  // 每次打开时，将已提交配置载入草稿、收起语言下拉（板块与层级由路由决定，不在这里重置）。
   useEffect(() => {
     if (open) {
       setLlmCfg(loadLlmCfg());
       setCfgDraft(loadLlmCfg());
       setCfgMode(modeOf(loadLlmCfg()));
-      setPanel(null);
       setLangOpen(false);
     }
-  }, [open]);
-
-  // ---- 系统返回（手机边缘左滑 / 浏览器返回键）----
-  // 设置是覆盖在资料库之上的弹窗，没有自己的历史条目，于是返回手势会直接退出整个站点。
-  // 这里在打开期间往历史里压一条「哨兵」占位，返回手势先弹出它：
-  //   手机端二级页面 → 回到一级设置列表（并补回哨兵，所以「再返回一次」才关闭设置）；
-  //   一级列表 / 桌面端   → 关闭设置，回到资料库。
-  const sentinelOn = useRef(false);
-  // popstate 回调要读最新值，用 ref 承载，避免把监听器绑成 panel/isMobile 的依赖、每次渲染重绑。
-  const backStateRef = useRef({ isMobile, panel, onClose });
-  useEffect(() => {
-    backStateRef.current = { isMobile, panel, onClose };
-  });
-
-  useEffect(() => {
-    if (!open) return undefined;
-    if (!sentinelOn.current) {
-      window.history.pushState({ zyxfSettings: true }, '');
-      sentinelOn.current = true;
-    }
-    return () => {
-      // 关闭时把哨兵摘掉，否则用户之后的一次返回会落在一条重复的历史条目上（按了没反应）
-      if (sentinelOn.current) {
-        sentinelOn.current = false;
-        window.history.back();
-      }
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onPopState = () => {
-      const { isMobile: mobile, panel: current, onClose: close } = backStateRef.current;
-      sentinelOn.current = false; // 哨兵已被弹出
-      if (mobile && current !== null) {
-        setPanel(null);
-        window.history.pushState({ zyxfSettings: true }, '');
-        sentinelOn.current = true;
-        return;
-      }
-      close();
-    };
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
   }, [open]);
 
   // 打开时锁定页面滚动，配合遮罩阻断背景操作。
@@ -277,7 +238,7 @@ export default function SettingsModal({ open, onClose }) {
                 className="settings-close"
                 aria-label={t(inSubPage ? 'settings.back' : 'settings.close')}
                 title={t(inSubPage ? 'settings.back' : 'settings.close')}
-                onClick={inSubPage ? () => setPanel(null) : onClose}
+                onClick={inSubPage ? onBack : onClose}
               >
                 {isMobile ? (
                   /* 手机端统一用「箭头的头」本身（‹ 那种 V 形，不带杆）：一级是关闭、二级是返回 */
@@ -296,10 +257,7 @@ export default function SettingsModal({ open, onClose }) {
                     key={id}
                     type="button"
                     className={`settings-nav-item ${section === id ? 'settings-nav-item--active' : ''}`}
-                    onClick={() => {
-                      setSection(id);
-                      if (isMobile) setPanel(id); // 手机端点行进二级；桌面端维持左右分栏
-                    }}
+                    onClick={() => onSectionChange(id)}
                   >
                     <Icon size={17} strokeWidth={1.7} aria-hidden="true" />
                     <span>{label}</span>
