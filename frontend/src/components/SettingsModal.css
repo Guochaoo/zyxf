@@ -632,11 +632,6 @@
     color: var(--ink);
   }
 
-  /* Play 是右三角，水平镜像成「返回」左三角 */
-  .settings-close svg {
-    transform: scaleX(-1);
-  }
-
   /* 导航：白卡片 + 列表行（图标 + 文案 + 右侧状态图标） */
   .settings-nav {
     flex: 1 1 100%;
