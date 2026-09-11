@@ -187,7 +187,51 @@
   gap: 14px;
 }
 
-/* ---- 大模型配置 ---- */
+/* ---- 智能对话配置 ---- */
+/* 配置来源：两个小圆点单选（原生 radio 去外观后自绘，保留键盘/读屏语义） */
+.settings-modes {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.settings-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.settings-mode-input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--line-strong) 0px 0px 0px 1px;
+  cursor: pointer;
+  transition: box-shadow 150ms ease;
+}
+
+.settings-mode-input:checked {
+  background: radial-gradient(circle, var(--ink) 0 4px, transparent 4px);
+  box-shadow: var(--ink) 0px 0px 0px 1px;
+}
+
+.settings-mode-label {
+  font-size: 14px;
+  color: var(--ink-2);
+  transition: color 150ms ease;
+}
+
+.settings-mode--active .settings-mode-label {
+  color: var(--ink);
+  font-weight: 500;
+}
+
 /* 字段分组：白底 + 留白分隔（无界理念，不用描边）；灰底交给输入框自己表达 */
 .settings-form {
   display: flex;
