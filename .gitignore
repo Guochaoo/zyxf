@@ -22,6 +22,13 @@ gui-test-screenshots/
 # DSH 本地技能（如 alibabacloud-workbench-cli）——按需 clone 后本地生效，不入库
 .dsh/
 
-# Python bytecode cache (frontend/scripts/*.py 的编译产物)
+# 本地嵌入模型（bge-small-zh，约 23 MB）——按需下载后本地生效，绝不入库（AGENTS.md §6）
+backend/models/
+
+# Python bytecode cache (frontend/scripts/optimize-assets.py 的编译产物)
 __pycache__/
 *.pyc
+
+# 构建期生成的字体子集：源字体走 npm（@fontpkg/oppo-sans-4-0），
+# 由 frontend/scripts/build-font.mjs 生成，不经版本控制（BUG-99）
+frontend/src/assets/fonts/*.woff2
