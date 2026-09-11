@@ -166,6 +166,7 @@ const en = {
   settings: {
     title: 'Settings',
     close: 'Close',
+    back: 'Back',
     navAria: 'Settings sections',
     nav: {
       ai: 'AI Chat Settings',

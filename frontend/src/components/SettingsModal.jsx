@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Bot, ChevronDown, CircleUserRound, Monitor, Moon, Palette, Sun, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronLeft, ChevronRight, CircleUserRound, Monitor, Moon, Palette, Sun, X } from 'lucide-react';
 import { loadLlmCfg, saveLlmCfg, clearLlmCfg } from '../llmConfig.js';
 import { useAuth } from '../auth.jsx';
 import useTheme from '../hooks/useTheme.js';
 import useLocale from '../hooks/useLocale.js';
 import { useClickOutside } from '../hooks/useClickOutside.js';
+import useMediaQuery from '../hooks/useMediaQuery.js';
 import './SettingsModal.css';
 
 // 配置来源由「存储里是否已有一份三项齐全的配置」推导：ChatComposer 也只在三项
@@ -100,6 +101,11 @@ export default function SettingsModal({ open, onClose }) {
   const { locale, setLocale } = useLocale();
   const [section, setSection] = useState('ai');
   const [langOpen, setLangOpen] = useState(false);
+  // 手机端是两级结构（一级设置列表 → 二级板块内容，参照原生 App 设置页）：
+  // panel 为 null 时停在一级；桌面端不参与渲染（isMobile 为 false 时始终显示左右分栏）。
+  const [panel, setPanel] = useState(null);
+  const isMobile = useMediaQuery('(max-width: 640px)');
+  const inSubPage = isMobile && panel !== null;
   // 语言下拉：点击「行 + 菜单」以外任意处收起（含弹窗内空白）。ref 挂在整个
   // .settings-lang 容器上，故点击触发按钮本身仍走它自己的切换逻辑，不会被重复收起。
   const langRef = useRef(null);
@@ -158,12 +164,13 @@ export default function SettingsModal({ open, onClose }) {
     [t]
   );
 
-  // 每次打开时，将已提交配置载入草稿、重置到首个板块、收起语言下拉。
+  // 每次打开时，将已提交配置载入草稿、重置到首个板块、回到设置列表、收起语言下拉。
   useEffect(() => {
     if (open) {
       setLlmCfg(loadLlmCfg());
       setCfgDraft(loadLlmCfg());
       setCfgMode(modeOf(loadLlmCfg()));
+      setPanel(null);
       setLangOpen(false);
     }
   }, [open]);
@@ -218,32 +225,56 @@ export default function SettingsModal({ open, onClose }) {
     >
       <div className="settings-card" onClick={(e) => e.stopPropagation()}>
         <div className="settings-layout">
-          {/* 左栏：关闭 + 垂直导航（原先还有一个「搜索设置」输入框，但它不过滤任何内容，已移除） */}
+          {/* 左栏（手机端 = 顶部条 + 设置列表）：关闭 / 返回 + 垂直导航 */}
           <aside className="settings-sidebar">
             <div className="settings-sidebar-top">
-              <button type="button" className="settings-close" aria-label={t('settings.close')} title={t('settings.close')} onClick={onClose}>
-                <X size={20} strokeWidth={1.8} aria-hidden="true" />
+              <button
+                type="button"
+                className="settings-close"
+                aria-label={t(inSubPage ? 'settings.back' : 'settings.close')}
+                title={t(inSubPage ? 'settings.back' : 'settings.close')}
+                onClick={inSubPage ? () => setPanel(null) : onClose}
+              >
+                {inSubPage ? (
+                  <ChevronLeft size={22} strokeWidth={2} aria-hidden="true" />
+                ) : (
+                  <X size={20} strokeWidth={1.8} aria-hidden="true" />
+                )}
               </button>
+              {/* 手机端顶部条的居中标题（桌面端隐藏，见 CSS）：一级显示页面名，二级显示板块名 */}
+              <span className="settings-mobile-title">{inSubPage ? currentLabel : t('settings.title')}</span>
             </div>
-            <nav className="settings-nav" aria-label={t('settings.navAria')}>
-              {navItems.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={`settings-nav-item ${section === id ? 'settings-nav-item--active' : ''}`}
-                  onClick={() => setSection(id)}
-                >
-                  <Icon size={17} strokeWidth={1.7} aria-hidden="true" />
-                  <span>{label}</span>
-                </button>
-              ))}
-            </nav>
+            {!inSubPage && (
+              <nav className="settings-nav" aria-label={t('settings.navAria')}>
+                {navItems.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={`settings-nav-item ${section === id ? 'settings-nav-item--active' : ''}`}
+                    onClick={() => {
+                      setSection(id);
+                      if (isMobile) setPanel(id); // 手机端点行进二级；桌面端维持左右分栏
+                    }}
+                  >
+                    <Icon size={17} strokeWidth={1.7} aria-hidden="true" />
+                    <span>{label}</span>
+                    {/* 手机端列表行的右侧状态图标：选中打勾，未选中是「可进入」箭头 */}
+                    {section === id ? (
+                      <Check size={16} strokeWidth={2} className="settings-nav-arrow" aria-hidden="true" />
+                    ) : (
+                      <ChevronRight size={16} strokeWidth={1.8} className="settings-nav-arrow" aria-hidden="true" />
+                    )}
+                  </button>
+                ))}
+              </nav>
+            )}
           </aside>
 
-          {/* 右栏：标题 + 内容 */}
-          <div className="settings-content">
-            <h2 className="settings-content-title">{currentLabel}</h2>
-            <div className="settings-content-body">
+          {/* 右栏（手机端 = 二级页面）：标题 + 内容 + 底部操作条 */}
+          {(!isMobile || inSubPage) && (
+            <div className="settings-content">
+              {!isMobile && <h2 className="settings-content-title">{currentLabel}</h2>}
+              <div className="settings-content-body">
               {section === 'ai' && (
                 <div className="settings-section">
                   {/* 配置来源：二选一。选「服务器配置」时整块隐藏，避免看起来像已生效的输入。 */}
@@ -389,7 +420,8 @@ export default function SettingsModal({ open, onClose }) {
                 </button>
               </div>
             )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>,
