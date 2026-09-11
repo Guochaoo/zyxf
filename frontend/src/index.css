@@ -2,9 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* OPPO Sans 4.0, subset to GB2312 + the characters this app actually uses.
+   The file is generated at build time by scripts/build-font.mjs from the
+   npm-managed source (@fontpkg/oppo-sans-4-0), so it is never committed.
+   21.7 MB -> 2.7 MB with the 100-900 weight axis intact; BUG-99.
+   Licence forbids modifying the font itself, so the source stays untouched in
+   node_modules and only this derived web build ships (attribution kept in
+   public/fonts/OPPO Sans 4.0 License Notice.txt). */
 @font-face {
   font-family: 'OPPOSans';
-  src: url('/fonts/OPPO%20Sans%204.0.ttf') format('truetype');
+  src: url('./assets/fonts/opposans-subset.woff2') format('woff2');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -16,7 +23,7 @@
    canvas text resolves fonts through CSS, so the alias applies there too. */
 @font-face {
   font-family: 'SF Mono';
-  src: url('/fonts/OPPO%20Sans%204.0.ttf') format('truetype');
+  src: url('./assets/fonts/opposans-subset.woff2') format('woff2');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;

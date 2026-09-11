@@ -290,9 +290,30 @@ npm run build        # 生成 dist/
 >
 > 脚本把案例图缩到 1200px 宽并转 **WebP**（原来是 2134×1600 的原图，四张合计 1.17 MB → 358 KB），
 > 图标缩到 64×64（favicon，107 KB → 6.8 KB）与 180×180（apple-touch-icon）。
-> ⚠️ **不要试图用 `pyftsubset` 子集化 `OPPO Sans 4.0.ttf`**：该字体授权第 2.2 条明文禁止修改字体
-> 或其任何组件，而子集化即属修改（详见 `docs/ISSUES.md` BUG-99）。要减小字体只能**换一款允许
-> 修改的字体**（如 Noto Sans SC / HarmonyOS Sans）再子集化。
+
+#### 4.1.1 品牌字体：npm 管理 + 构建期子集化
+
+OPPO Sans 4.0 的**源字体不入库**，走 npm devDependency `@fontpkg/oppo-sans-4-0`；构建时由
+[`frontend/scripts/build-font.mjs`](../frontend/scripts/build-font.mjs) 子集化为
+`src/assets/fonts/opposans-subset.woff2`（**21.69 MB → 2.72 MB**，`fvar` 字重轴 100–700 完整保留，
+CSS 无需改动）。该产物已 gitignore，由 `predev` / `prebuild` / `pretest` 自动生成，**部署无需额外操作**：
+
+```bash
+cd /opt/zyxf/frontend && npm install && npm run build   # prebuild 会自动跑 fonts
+```
+
+- **字符集 = GB2312（6,763 汉字）+ ASCII + 常用标点 + 源码里实际出现的全部 CJK 字**（脚本自动从
+  `src/` 提取并并入，实测约 960 个），合计约 8,289 个码点。子集外的字**不会变成方块**——会落到
+  CSS 字体栈的下一个家族（`PingFang SC` / `Microsoft YaHei`）正常显示，只是字形风格不同。
+- **子集化用 [subset-font](https://www.npmjs.com/package/subset-font)（纯 WASM harfbuzz）**，不用
+  `pyftsubset`：这样部署链上**不引入 Python 依赖**，且两个新依赖都**没有 postinstall 脚本**
+  （对比 BUG-102：`onnxruntime-node` 的 postinstall 联网拉原生库，直接把部署搞挂）。
+- **字体授权**：OPPO Sans 授权第 2.2 条禁止修改字体或其任何组件，所以源字体在 `node_modules` 里
+  保持原样，只分发这份派生的 web 子集；授权声明仍随仓库保留在
+  `frontend/public/fonts/OPPO Sans 4.0 License Notice.txt`（线上可访问）。判断依据与取舍见
+  `docs/ISSUES.md` BUG-99。
+- 手动重新生成（改了字符集、换了字体版本，或想强制刷新）：`cd frontend && npm run fonts`
+  —— 脚本按 mtime 自动跳过未变更的情况，加 `FORCE` 语义时删掉产物再跑即可。
 
 ### 4.2 nginx 站点配置
 

@@ -4,7 +4,7 @@
 
 ## 阅读与维护约定
 
-- **编号**：`BUG-<n>` 缺陷 · `IMPROVE-<n>` 改进。编号一经分配永不复用，因此**不连续属正常**（如 `BUG-22`、`BUG-28` 为空号）。
+- **编号**：`BUG-<n>` 缺陷 · `IMPROVE-<n>` 改进。编号按发现顺序编号，一经分配永不复用，因此**不连续属正常**。
 - **状态流转**：新条目先进「[1. 待处理](#1-待处理)」；处理完成后移入「[2. 已归档](#2-已归档)」并补记关闭日期。
 - **归档表是索引，不是文档**：只留编号 / 严重度 / 类别 / 标题 / 位置 / 日期，一行一条。不显眼的「为什么」写成修复处的**一行**注释（`grep -rn "BUG-54" backend/src frontend/src`），其余细节看 commit message；不为历史条目批量回填注释，也不写多段式说明。
 - **待处理条目的头部固定两行**：第一行 `#### 编号 · 标题`；第二行 `**影响范围**：文件路径 · 文件路径（层级 · 类别）`——路径在前便于直接点开文件，类别放括号里，不用 `backend · 性能` + `files: [...]` 这种要两次解读的写法。
@@ -16,39 +16,14 @@
 ```yaml
 更新日期: 2026-09-11
 条目总数: 137        # 缺陷 97 + 改进 40
-待处理: 9            # 缺陷 4 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；99 首屏 21.7 MB 字体，**受授权限制无法子集化**，待决策；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index）
-已归档: 128          # 缺陷 93 + 改进 35
-# 本批（一次部署事故复盘）：把内容索引那批合入 main 后 deploy workflow 失败——onnxruntime-node 的
-#   postinstall 要联网拉原生库，在服务器上 302 失败，npm install 中断，服务器被留在「新代码 + 缺依赖」
-#   状态（旧进程还在跑所以站点没挂，但一重启就会 require 失败）。已把整批移出 dev/main、另存
-#   feature/content-index，并把「怎么让它在服务器上装上」记为 BUG-102，避免下次重蹈。
-# 本批（线上首屏性能实测与修复）：对 https://zyxf.top 做实测，首屏关键路径（不含字体）约 313 KB，
-#   其中 favicon 独占 107 KB、关于页 4 张图 1.17 MB；另有一个**渲染阻塞**的 Google Fonts 外链只服务
-#   关于页一行标题，以及 react-markdown / d3-force 被 App 静态 import 进首屏关键路径。均当轮修复，
-#   首屏降到约 160 KB：BUG-100（生产 nginx 三条规则未生效：静态资源无 Cache-Control、安全头全缺、
-#   不存在的 /assets/* 回 200+HTML）已按宝塔「伪静态」重新落地并线上验证；BUG-101（favicon
-#   512×512/107 KB → 64×64/6.8 KB）；IMPROVE-43（markdown/motion/graph 移出首屏关键路径，
-#   并抽出独立的 react chunk，否则 rollup 会把 React 塞进任一 manual chunk 让懒加载白做）、
-#   44（删掉 Google Fonts 外链，About 页改用自托管字体）、45（关于页 4 张图 → 358 KB WebP + 懒加载）。
-#   ⚠️ BUG-99（21.7 MB 的 OPPO Sans）**未能修复**：该字体授权第 2.2 条明文禁止修改字体或其任何
-#   组件，而子集化即属修改，故无法瘦身，条目保留待决策（换一款允许修改的字体，或改用系统字体栈）。
-# 本批（知识图谱退化）：进文件夹再回主页后图谱只剩一个点——d3-force 就地改写共享 memo 的 link 端点/节点坐标，
-#   导致字符串端点比较失配、度数记到 "[object Object]"；已改为每次基于拷贝构建并归一化端点（BUG-98），补 6 条回归。
-# 本批（预览故障复盘）：线上「预览服务出错」定位为两处配置问题——① 生产 .env 里的 AccessKey 已被删除（OSS 回
-#   InvalidAccessKeyId，上传/下载/预览全线失效）；② 该 RAM 用户缺 imm:GenerateWebofficeToken 授权。DEPLOY.md
-#   补：IMM 授权 statement（含「不支持资源级授权、Resource 必须为 *」）、密钥轮换必须同步服务器 .env 的告警、
-#   排查表按 InvalidAccessKeyId / AccessDenied / InvalidProjectName 分流（IMPROVE-36/37，均已关闭）。
-# 本批（设置页改造）：修复 BUG-95（保存不校验三项齐全——提示文案承诺了却没人执行），并调左栏样式
-#   （灰底 #ECECEE + 「设置」标题、条目交互统一为「往白靠」两档，见 DESIGN.md §4）；另把白屏兜底
-#   改成「友好提示 + 刷新按钮，堆栈只在开发环境展开」（IMPROVE-35，抽到 bootError.js 并补测试）。
-# 设计规范审计批：DESIGN.md 逐段中文化并逐条对照代码校正，删掉未实现的 Vercel 通用内容；新增
-#   BUG-93（热力图星期标签错位一天）、BUG-94（侧栏时长/缓动的类名被模板插值拼掉，退化成 150ms）
-#   与 IMPROVE-34（聊天未知类型徽章被品牌色规则染黑），按「只改文档」口径只建档未动代码。
-#   注：该批编号初版误用 91/92（与既有后端条目重号），已在本批更正为 93/94。
-# 第五批（上一轮）：IMPROVE-15/16/17/20/24 落地并归档 —— 目录树快照与前端去重、密码哈希改 scrypt、
-# 子树搬迁阈值、搜索截断契约。本批新增 IMPROVE-31/32（预览凭证配额、搜索与统计缺专属限流）仅建档。
-# 另新增 IMPROVE-33：按「无界」设计去掉表单控件的聚焦视觉（用户要求），记录其可访问性权衡。
-# 条目总数 = 待处理 + 已归档；已归档数 = 2.1 与 2.2 两张表的行数之和。
+待处理: 8            # 缺陷 3 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；93/94 设计规范审计只建档；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index）
+已归档: 129          # 缺陷 94 + 改进 35
+# 本批（首屏字体收尾）：BUG-99 已修复——源字体改走 npm（@fontpkg/oppo-sans-4-0，与原先
+#   入库的 TTF **字节完全一致**，SHA256 相同），构建期用纯 WASM 的 subset-font 子集化到
+#   GB2312 + 源码实际用字，**21.69 MB → 2.72 MB（12.6%）**且 fvar 字重轴 100–700 完整保留，
+#   CSS 无需改动。授权第 2.2 条禁止修改字体本身，所以源文件留在 node_modules 不动，
+#   只分发这份派生 web 子集；授权声明仍随仓库保留在 public/fonts/（线上可访问）。
+#   叠加此前各项，首屏关键路径 **23.05 MB → 约 161 KB**。
 ```
 
 ---
@@ -57,9 +32,7 @@
 
 ### 1.1 缺陷
 
-上一轮审计新发现的 11 条缺陷已全部处置并归档（BUG-54～61、64/66/67/79/85～90 见 [2.1 已修复缺陷](#21-已修复缺陷)（93））；设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；设置页改造批新发现的 **1 条**（BUG-95）当轮修复并归档；本轮（预览/下载故障复盘）新发现的 **1 条**（BUG-96）也已当轮修复；随后 SPA 深链批与知识图谱批各新发现 **1 条**（BUG-97、BUG-98），均当轮修复；最后一批（线上首屏性能实测）新发现 **3 条**：BUG-100（生产 nginx 三条规则未生效）与 BUG-101（favicon 107 KB）当轮修复并线上验证，**BUG-99（首屏 21.7 MB 字体）受字体授权限制无法子集化，保留待决策**。
-
-> 审计方式：上一轮为 9 路并行只读审计（安全/后端正确性/后端基础设施/性能/前端状态/前端组件/重复与死代码/工程配置与文档），再由人工逐条读码复核、剔除误报，另做了 4 路针对「SQL 与接口契约 / 前端状态与可访问性 / 安全与文件处理 / 冗余与工程配置」的复核审计。本轮是 4 路并行只读审计 + 2 路对抗性复核，逐段核对 `docs/DESIGN.md` 与代码（色值 / 字号 / 圆角 / 断点 / 组件行为 / 生成产物），发现 2 条真实缺陷（BUG-91、BUG-92）与 1 条视觉一致性改进（IMPROVE-34），其余差异均为文档描述过时（已在 DESIGN.md 内修正）。
+设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；设置页改造批新发现的 **1 条**（BUG-95）当轮修复并归档；预览/下载故障复盘批新发现的 **1 条**（BUG-96）也已当轮修复；随后 SPA 深链批与知识图谱批各新发现 **1 条**（BUG-97、BUG-98），均当轮修复；线上首屏性能实测批新发现 **3 条**：BUG-100（生产 nginx 三条规则未生效）、BUG-101（favicon 107 KB）与 **BUG-99（首屏 21.7 MB 字体）**，均已当轮修复并线上验证（BUG-99 的最终做法见 [2.1 已修复缺陷](#21-已修复缺陷)（94））。最后把内容索引那批合入 main 时发生**部署事故**，新增 **BUG-102**，当轮 revert 处置、条目保留待解。
 
 #### BUG-93 · 下载热力图的星期标签比格子错开一天（周一开头的网格配了周日开头的字典）
 **影响范围**：`frontend/src/pages/Dashboard/ActivityHeatmap.jsx` · `frontend/src/i18n/zh.js` · `frontend/src/i18n/en.js`（前端 · 正确性 / i18n）
@@ -76,17 +49,6 @@
 - **影响**：左栏滑入/滑出、展开按钮淡入淡出、中列 padding 收放全部退化成 Tailwind `transition-*` 的默认 150ms + 默认缓动，与设计规范写的 320ms + `EASE_COLLAPSE` 不符：动效比意图更急、更「弹」。功能与布局正常，只是观感，因此长期没暴露。
 - **修法（二选一）**：① 把这几处改成字面量类名（`lg:duration-[320ms] lg:ease-[cubic-bezier(0.22,1,0.36,1)]`），或把这几个类名加进 `tailwind.config.js` 的 `safelist`；② 更稳的做法是绕开类名，直接用内联样式驱动：`style={{ transitionDuration: `${SIDEBAR_MS}ms`, transitionTimingFunction: SIDEBAR_EASE }}`（保留 `transition-transform` / `transition-opacity` 这类字面量类）。⚠️ `KnowledgeGraph` / `ChatComposer` 的 `duration-[360ms]` 是字面量，别一起改坏。
 - **验证**：`npm run build` 后 grep 产物 CSS，应能搜到 `320ms` 与 `cubic-bezier(0.22,1,0.36,1)`；手动收起/展开左栏，确认是 320ms 的从容滑动而不是 150ms 的急停（可临时把 `SIDEBAR_MS` 调到 1200 对比）。
-
-#### BUG-99 · 首屏要传 21.7 MB 字体，且因授权限制**无法子集化**（唯一未修复的首屏瓶颈）
-**影响范围**：`frontend/public/fonts/OPPO Sans 4.0.ttf` · `frontend/public/fonts/OPPO Sans 4.0 License Notice.txt` · `frontend/src/index.css`（前端 · 性能 / 授权）
-
-- **现状**：`index.css:5-11` 把 `OPPOSans` 声明为全站字体（`index.css:40-51` 的 `body/button/input/textarea/select` 都用它），源文件实测 **22,741,096 字节（21.7 MB）**，是 `font-weight: 100 900` 的整包 TTF（**未子集化、未转 WOFF2**）。实测首屏关键路径：字体 **21.7 MB** + 主 JS 144.8 KB(gzip) + markdown 39.1 KB + CSS 14.1 KB + graph 5.5 KB + favicon 107 KB + HTML 0.95 KB = **23.05 MB**；本批修完其余各项后，**去掉字体只剩约 160 KB**——即这一条就是本站现在唯一的首屏瓶颈。
-- **服务器带宽不是瓶颈**：同一台机器实测该字体连续下载 **2.5~3.4 MB/s**（8 MB range 用时 2.49 s、全量 22.7 MB 用时 9.1 s），接口 TTFB 稳定 0.16~0.29 s。按 5 Mbps 弱网算，光字体就要 **~35 秒**；`font-display: swap` 只能让文字先用回退字体画出来、随后还会跳一次字体。
-- **⛔ 授权障碍（这就是本条至今未修的原因）**：`OPPO Sans 4.0 License Notice.txt` 第 2 条「GRANT OF LICENSE」的条件 2）写明 **"YOU may not make any modifications to OPPO Sans Fonts or any of their individual components."**——**子集化（subsetting）就是修改**，转 WOFF2 同样是修改，因此本字体**不能瘦身**，只能整包用或整包不用。授权同时要求署名（条件 1）与随附协议（条件 4），仓库里已保留完整授权原文与版权声明，不要删。
-- **一个被否掉的方向（留档避免重复调研）**：曾考虑「gzip / Brotli 预压缩 + `gzip_static`」，实测该 TTF **gzip 后仍有 16.36 MB（原 21.7 MB 的 71.9%）**——TTF 的 glyf 表本身近似熵编码，压缩收益远不足以解决问题，且 Brotli 需要额外模块。这条路不解决问题。
-- **修法（均已排除子集化）**：① **换一款授权允许修改的中文字体再做子集化**（首选）：Noto Sans SC / 思源黑体（SIL OFL 1.1）、HarmonyOS Sans（可商用且允许修改）整包同样几十 MB，但**允许子集**，按「常用汉字 + 拉丁 + 数字 + 标点」子集后约 **1~2 MB**，能保住现在「自定义中文字体」的观感。⚠️ 子集必须覆盖站内实际出现的字，**漏字会显示成缺字方块**；资源库文件名是用户输入，罕见字回退系统字体是可接受的代价，但要知情。② **直接删掉这两个 @font-face**：回退链里的 `-apple-system / PingFang SC / Microsoft YaHei` 已覆盖 macOS / Windows / 移动端，收益整整 21.7 MB，代价只是中文字形随平台不同。③ **只给英文与数字做子集**（站内主要视觉是标题和数字），中文交给系统字体，体积可压到几十 KB——同样需要换一款允许修改的字体。
-- **顺带**：`index.css:17-23` 把 `'SF Mono'` 也指向同一个 TTF（为了让 liveline 图表的 canvas 文字不变样）。浏览器按 URL 去重不会多下一次，但它让「等宽」字样实际渲染成非等宽——附带的语义问题，不是性能问题。
-- **验证**：`npm run build` 后目标字体应 < 2 MB；`curl -o NUL -w '%{size_download}'` 复核线上首屏各资源之和应 < 500 KB；手机 4G 实测首屏应回到 1~2 秒量级；子集化后通读一遍站内中文（含文件名列表、图谱节点名、设置弹窗）确认无缺字方块。
 
 #### BUG-102 · `onnxruntime-node` 的 postinstall 在生产服务器上装不上，导致部署中断在 `npm install`
 **影响范围**：`backend/package.json` · `.github/workflows/deploy.yml` · `docs/DEPLOY.md` · 分支 `feature/content-index`（后端 · 部署 / 依赖）
@@ -156,7 +118,7 @@
 
 > 归档表只作索引（编号 / 严重度 / 类别 / 标题 / 位置 / 日期）。修法依据、踩坑与验证方式写在**代码注释**里（`grep -rn "BUG-54" backend/src`）与 commit message 中。
 
-### 2.1 已修复缺陷（93）
+### 2.1 已修复缺陷（94）
 
 | 编号 | 严重度 | 类别 | 标题 | 修复位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -253,6 +215,7 @@
 | BUG-98 | P1 | 前端 | 知识图谱在「进文件夹再回主页」后只剩一个点：d3-force 就地改写共享 memo 的 link 端点（字符串→对象）与节点坐标，字符串比较全部失配、度数记到 `"[object Object]"` | `frontend/src/components/KnowledgeGraph.jsx` | 2026-09-11 |
 | BUG-100 | P1 | 部署·运维 | 生产 nginx 未落仓库 `frontend/nginx.conf`：静态资源无 `Cache-Control`、安全头（CSP / nosniff / Referrer-Policy）全缺、不存在的 `/assets/*` 回 200+HTML（发版后白屏） | `/www/server/panel/vhost/rewrite/zyxf.top.conf`, `frontend/nginx.conf`, `frontend/nginx.bt-rewrite.conf`, `docs/DEPLOY.md` | 2026-09-11 |
 | BUG-101 | P2 | 前端 | favicon 是 512×512 / 107 KB，比除字体外全部首屏 JS+CSS 的一半还多 | `frontend/public/favicon.png`, `frontend/scripts/optimize-assets.py` | 2026-09-11 |
+| BUG-99 | P1 | 前端·性能 | 首屏要传 21.7 MB 字体（唯一瓶颈）：源字体改走 npm，构建期子集化到 GB2312，**21.69 MB → 2.72 MB** 且 `fvar` 字重轴（100–700）保留 | `frontend/scripts/build-font.mjs`, `frontend/src/index.css`, `frontend/package.json`, `frontend/public/fonts/` | 2026-09-11 |
 
 ### 2.2 已关闭改进项（35）
 
