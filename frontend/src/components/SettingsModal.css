@@ -582,14 +582,17 @@
     flex-direction: column;
   }
 
-  /* 顶部条 + 导航：包在白卡片外的顶部区域，导航自己是一张白卡片 */
+  /* 顶部条 + 导航：包在白卡片外的顶部区域，导航自己是一张白卡片。
+     顶部只留 4px + 安全区（刘海屏/状态栏不压住按钮），行高与 36px 的圆按钮齐平，
+     与下面的卡片保持 6px —— 这一条就是标题栏，不留额外空白。 */
   .settings-sidebar {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
     width: auto;
-    padding: 10px 12px 0;
+    padding: 4px 12px 0;
+    padding-top: calc(4px + env(safe-area-inset-top, 0px));
     background: transparent;
     border-right: 0;
     border-bottom: 0;
@@ -601,7 +604,7 @@
     position: relative;
     flex: 1 1 100%;
     justify-content: center;
-    min-height: 40px;
+    min-height: 36px;
     padding: 0;
   }
 
