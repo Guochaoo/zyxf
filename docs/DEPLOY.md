@@ -178,7 +178,6 @@ sudo -u www node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync
       ]
     },
     {
-      "Comment": "IMM WebOffice 预览；这两个动作不支持资源级授权，只能给 *",
       "Effect": "Allow",
       "Action": [
         "imm:GenerateWebofficeToken",
@@ -189,6 +188,8 @@ sudo -u www node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync
   ]
 }
 ```
+
+> 注意：RAM 的策略语句**不认 `Comment` 字段**（写了会返回 `The statement element 'Comment' is not valid`），说明只能写在文档里。
 
 用 CLI 落地（写入前先用只读 `list` 验证密钥确实只能访问目标 bucket）：
 ```bash
@@ -204,9 +205,10 @@ aliyun ram AttachPolicyToUser --PolicyType Custom --PolicyName zyxf-oss-app \
 # 3) 建 AccessKey，把密钥填进 .env 的 OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET
 aliyun ram CreateAccessKey --UserName zyxf-oss --region cn-beijing
 
-# 4) 之后若要给策略补动作（例如加 IMM 预览权限），改文档后发新版本并置为默认：
+# 4) 之后若要给策略补动作（例如加 IMM 预览权限），改文档后发新版本并置为默认
+#    （--SetAsDefault 要写成小写 true；写成 True 或不带值会报 InvalidSetAsDefault）：
 aliyun ram CreatePolicyVersion --PolicyName zyxf-oss-app \
-  --PolicyDocument "$(cat oss-policy.json)" --SetAsDefault --region cn-beijing
+  --PolicyDocument "$(cat oss-policy.json)" --SetAsDefault true --region cn-beijing
 ```
 
 验证：用新密钥访问**其他** bucket 应返回 `AccessDenied`（越权被拒），访问目标 bucket 正常——两者都满足才算最小权限生效。
