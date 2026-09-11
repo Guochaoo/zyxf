@@ -120,6 +120,8 @@ export default function SettingsModal({
   const [llmCfg, setLlmCfg] = useState(loadLlmCfg);
   const [cfgDraft, setCfgDraft] = useState(loadLlmCfg);
   const [cfgMode, setCfgMode] = useState(() => modeOf(loadLlmCfg()));
+  // 保存被拦下的原因（null = 没有错误）。三项没填完就点保存时给提示，并把缺的字段标出来。
+  const [saveError, setSaveError] = useState(null);
 
   // 语言响应式的常量数组（切换语言时随 t 刷新）。
   const themeOptions = useMemo(
@@ -170,6 +172,16 @@ export default function SettingsModal({
     [t]
   );
 
+  // 三项齐全才算「已配置」：这里与 llmConfig/ChatComposer 的判定口径一致（都要求三项非空）。
+  // 半份配置存下来等于没配置——ChatComposer 不会下发，下次打开还会回落到服务器配置，
+  // 所以保存前先拦住（提示文案见 zh/en 字典的 settings.ai.errorIncomplete）。
+  const missingKeys = useMemo(() => {
+    if (cfgMode !== 'custom') return [];
+    return llmFields
+      .filter((f) => f.type !== 'select' && !String(cfgDraft[f.key] ?? '').trim())
+      .map((f) => f.key);
+  }, [cfgMode, llmFields, cfgDraft]);
+
   // 每次打开时，将已提交配置载入草稿、收起语言下拉（板块与层级由路由决定，不在这里重置）。
   useEffect(() => {
     if (open) {
@@ -177,6 +189,7 @@ export default function SettingsModal({
       setCfgDraft(loadLlmCfg());
       setCfgMode(modeOf(loadLlmCfg()));
       setLangOpen(false);
+      setSaveError(null);
     }
   }, [open]);
 
@@ -206,9 +219,16 @@ export default function SettingsModal({
     if (cfgMode === 'server') {
       setLlmCfg(EMPTY_CFG);
       clearLlmCfg();
+      setSaveError(null);
+      return;
+    }
+    // BUG-95：没填完就不写存储——半份配置 ChatComposer 不会下发，只会让用户以为已经生效
+    if (missingKeys.length) {
+      setSaveError(t('settings.ai.errorIncomplete'));
       return;
     }
     setLlmCfg(saveLlmCfg(cfgDraft));
+    setSaveError(null);
   };
 
   const clearAi = () => {
@@ -216,6 +236,7 @@ export default function SettingsModal({
     setLlmCfg(EMPTY_CFG);
     setCfgDraft(EMPTY_CFG);
     clearLlmCfg();
+    setSaveError(null);
   };
 
   const currentLabel = navItems.find((n) => n.id === section)?.label ?? '';
@@ -297,7 +318,10 @@ export default function SettingsModal({
                           className="settings-mode-input"
                           value={id}
                           checked={cfgMode === id}
-                          onChange={() => setCfgMode(id)}
+                          onChange={() => {
+                            setCfgMode(id);
+                            setSaveError(null);
+                          }}
                         />
                         <span className="settings-mode-label">{label}</span>
                       </label>
@@ -305,31 +329,44 @@ export default function SettingsModal({
                   </div>
 
                   {cfgMode === 'custom' && (
-                    /* 字段顺序：地址 → 协议 → Key → 模型；分组靠留白（无界理念，不用色块也不用描边） */
+                    /* 字段顺序：地址 → 协议 → Key → 模型；分组靠留白（无界理念，不用色块也不用描边）。
+                       三项（地址 / Key / 模型）是必填：缺哪项就把哪项的标签标红，保存时再给一行提示。 */
                     <div className="settings-form">
                       {llmFields.map(({ key, label, placeholder, type, options }) => {
                         // 下拉字段不用 <label> 包裹：label 会把点击转发给内部控件，等于「API 协议」
                         // 那一行整行都可点，点击区域过大；改成 div，只有触发器本身可点（触发器自带 aria-label）。
                         const Wrapper = type === 'select' ? 'div' : 'label';
+                        const invalid = missingKeys.includes(key);
                         return (
-                          <Wrapper key={key} className="settings-field">
+                          <Wrapper
+                            key={key}
+                            className={`settings-field ${invalid ? 'settings-field--invalid' : ''}`}
+                          >
                             <span className="settings-field-label">{label}</span>
                             {type === 'select' ? (
                               <ProtocolSelect
                                 label={label}
                                 value={cfgDraft[key]}
                                 options={options}
-                                onChange={(v) => setCfgDraft((d) => ({ ...d, [key]: v }))}
+                                onChange={(v) => {
+                                  setCfgDraft((d) => ({ ...d, [key]: v }));
+                                  setSaveError(null);
+                                }}
                               />
                             ) : (
                               <input
                                 type={type}
                                 value={cfgDraft[key]}
-                                onChange={(e) => setCfgDraft((d) => ({ ...d, [key]: e.target.value }))}
+                                onChange={(e) => {
+                                  setCfgDraft((d) => ({ ...d, [key]: e.target.value }));
+                                  setSaveError(null);
+                                }}
                                 placeholder={placeholder}
                                 className="settings-input"
                                 spellCheck={false}
                                 autoComplete={key === 'apiKey' ? 'off' : undefined}
+                                aria-invalid={invalid || undefined}
+                                aria-describedby={invalid ? 'settings-ai-error' : undefined}
                               />
                             )}
                           </Wrapper>
@@ -337,9 +374,17 @@ export default function SettingsModal({
                       })}
                     </div>
                   )}
-                  <p className="settings-hint">
-                    {t(cfgMode === 'custom' ? 'settings.ai.hint' : 'settings.ai.hintServer')}
-                  </p>
+                  {/* 校验提示与说明同处一块：错误在上（有错才出现），口径说明常驻 */}
+                  <div className="settings-notes">
+                    {saveError && (
+                      <p id="settings-ai-error" className="settings-error" role="alert">
+                        {saveError}
+                      </p>
+                    )}
+                    <p className="settings-hint">
+                      {t(cfgMode === 'custom' ? 'settings.ai.hint' : 'settings.ai.hintServer')}
+                    </p>
+                  </div>
                 </div>
               )}
 

@@ -292,6 +292,76 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
     expect(radio('使用服务器配置')).toBeChecked();
     expect(screen.queryByLabelText('API Key')).toBeNull();
   });
+
+  // 三项（地址 / Key / 模型）都填完才生效：没填完点保存不写存储，并提示 + 标红缺的字段
+  describe('保存前校验：三项必须填完', () => {
+    test('只填部分时点保存不写存储，提示并把缺的字段标红', () => {
+      renderModal();
+      customMode();
+
+      fireEvent.change(urlInput(), { target: { value: 'https://llm.test/v1' } });
+      fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+      expect(savedCfg()).toBeNull(); // 没保存
+      expect(screen.getByRole('alert')).toHaveTextContent('三项没填完');
+      // 缺的两项标红（aria-invalid + 标签类名），已填的地址不受影响
+      expect(keyInput()).toHaveAttribute('aria-invalid', 'true');
+      expect(modelInput()).toHaveAttribute('aria-invalid', 'true');
+      expect(urlInput()).not.toHaveAttribute('aria-invalid');
+      expect(
+        [...document.querySelectorAll('.settings-field--invalid .settings-field-label')].map((el) => el.textContent)
+      ).toEqual(['API Key', '模型']);
+    });
+
+    test('补齐后可以保存，且提示随之消失', async () => {
+      renderModal();
+      customMode();
+
+      fireEvent.click(screen.getByRole('button', { name: '保存' }));
+      expect(savedCfg()).toBeNull();
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+
+      // 编辑任一字段即清掉上一次的提示
+      fireEvent.change(urlInput(), { target: { value: 'https://llm.test/v1' } });
+      expect(screen.queryByRole('alert')).toBeNull();
+
+      fireEvent.change(keyInput(), { target: { value: 'sk-test' } });
+      fireEvent.change(modelInput(), { target: { value: 'glm-4.6' } });
+      fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+      await waitFor(() =>
+        expect(savedCfg()).toMatchObject({ apiKey: 'sk-test', baseUrl: 'https://llm.test/v1', model: 'glm-4.6' })
+      );
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+
+    test('只有空白字符不算已填', () => {
+      renderModal();
+      customMode();
+
+      fireEvent.change(urlInput(), { target: { value: 'https://llm.test/v1' } });
+      fireEvent.change(keyInput(), { target: { value: '   ' } });
+      fireEvent.change(modelInput(), { target: { value: 'glm-4.6' } });
+      fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+      expect(savedCfg()).toBeNull();
+      expect(keyInput()).toHaveAttribute('aria-invalid', 'true');
+    });
+
+    test('选「使用服务器配置」时不受校验影响，保存即清掉本地配置', async () => {
+      localStorage.setItem(
+        'zyxf_llm',
+        JSON.stringify({ apiKey: 'sk-old', baseUrl: 'https://llm.old/v1', model: 'glm-4.6' })
+      );
+      renderModal();
+
+      fireEvent.click(radio('使用服务器配置'));
+      fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+      await waitFor(() => expect(savedCfg()).toBeNull());
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+  });
 });
 
 

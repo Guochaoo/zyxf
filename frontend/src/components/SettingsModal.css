@@ -375,6 +375,25 @@
   color: var(--ink-3);
 }
 
+/* 校验提示（保存被拦下时出现）+ 常驻说明：合成一块，间距比区块节奏更紧 */
+.settings-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 错误用语义红（--red），只给文字，不加描边——设置区输入框一律靠底色表达边界 */
+.settings-error {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--red);
+}
+
+/* 必填项缺失：标红该字段的标签（这是最轻的信号，仍然不画描边） */
+.settings-field--invalid .settings-field-label {
+  color: var(--red);
+}
+
 /* ---- 按钮组（按钮本体复用站点 rb-btn-dark / rb-btn-ghost）----
    固定在右栏右下角：作为 .settings-content 的底部条（不在滚动区内，内容再长也不会被推走）。 */
 .settings-actions {
