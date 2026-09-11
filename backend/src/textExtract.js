@@ -21,6 +21,7 @@ export const DOC_KIND = {
   OFFICE_TEXT: 'office_text', // docx / pptx / pptm 的 XML 文本
   IMAGE_ONLY: 'image_only', // 能打开但没有文本，内容全是图片（需要 OCR）
   UNSUPPORTED: 'unsupported', // 格式无纯 JS 解析路径（.doc / .ppt / 压缩包 / 图片）
+  TOO_LARGE: 'too_large', // 超过 INDEX_MAX_FILE_MB：主动不解析，保护内存（见 indexPipeline）
   PDF_OCR: 'pdf_ocr', // 预留：OCR 产出（下一轮接本地 Tesseract）
 };
 
