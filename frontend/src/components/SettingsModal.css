@@ -18,6 +18,7 @@
 
 /* ---- Card（固定尺寸；视口更小时按 100vw/vh - 32px 收窄） ---- */
 .settings-card {
+  position: relative; /* 关闭按钮绝对定位到卡片右上角 */
   width: 800px;
   max-width: calc(100vw - 32px);
   height: 580px;
@@ -50,10 +51,16 @@
   overflow-y: auto;
 }
 
+/* 关闭按钮固定在卡片右上角（内容列的标题左对齐，右上角是空白，不会压到文字）；
+   手机端整屏布局下改回随标题栏横排，见文件末尾的媒体查询。 */
 .settings-sidebar-top {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
   display: flex;
   align-items: center;
-  padding: 2px 4px 10px;
+  padding: 0;
 }
 
 .settings-close {
@@ -134,7 +141,7 @@
 }
 
 .settings-content-title {
-  padding: 18px 24px 12px;
+  padding: 18px 56px 12px 24px; /* 右侧留出角落关闭按钮的位置，长标题也不会压到它 */
   font-size: 18px;
   font-weight: 600;
   line-height: 1.2;
@@ -581,6 +588,7 @@
   }
 
   .settings-sidebar-top {
+    position: static; /* 整屏布局下与导航胶囊同排，不再绝对定位到右上角 */
     flex: 0 0 auto;
     padding: 0;
   }
