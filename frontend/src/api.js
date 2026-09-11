@@ -217,6 +217,19 @@ export async function search(q) {
   return data;
 }
 
+// 图谱内容视图的数据：后端算好「每个文件最相似的 K 个邻居」与节点标签再回传，
+// 前端不拉全库向量（850×512 float32 base64 约 2.3 MB），也不做 O(n²) 比较。
+export async function getKgSemantics({ k = 5, min = 0.72 } = {}) {
+  const { data } = await api.get('/index/semantics', { params: { k, min } });
+  return data;
+}
+
+// 内容索引的覆盖率与队列状态（用于「正在建立索引 / 未安装模型」这类提示）
+export async function getIndexStatus() {
+  const { data } = await api.get('/index/status');
+  return data;
+}
+
 // Direct-to-OSS upload using a presigned PostObject policy.
 export async function uploadFile({ file, folderId, onProgress }) {
   const { data: policy } = await api.post('/files/upload-url', {

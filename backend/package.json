@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@alicloud/pop-core": "^1.8.0",
+    "@huggingface/tokenizers": "^0.2.0",
     "ali-oss": "^6.20.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -21,6 +22,8 @@
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
+    "onnxruntime-node": "^1.29.0",
+    "pdfjs-dist": "^6.3.289",
     "pinyin-pro": "^3.29.3"
   },
   "overrides": {

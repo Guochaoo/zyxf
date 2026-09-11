@@ -4,8 +4,10 @@ import { MemoryRouter } from 'react-router-dom';
 
 // 图谱的数据来源（模块级共享 store）：这里给固定树，避免真实网络请求。
 const getFolderTreeMock = vi.fn();
+const getKgSemanticsMock = vi.fn();
 vi.mock('../api.js', () => ({
   getFolderTree: (...a) => getFolderTreeMock(...a),
+  getKgSemantics: (...a) => getKgSemanticsMock(...a),
   default: { get: vi.fn(), post: vi.fn() },
 }));
 vi.mock('../ui.js', async (importOriginal) => ({
@@ -18,6 +20,9 @@ const {
   tokenizeNodeName,
   buildSemanticNodes,
   buildSemanticEdges,
+  buildVectorGraph,
+  VECTOR_LINK_THRESHOLD,
+  __resetKgSemanticsCache,
 } = await import('../components/KnowledgeGraph.jsx');
 const { __resetFolderTreeStore } = await import('../hooks/useFolderTree.js');
 
@@ -45,18 +50,31 @@ function renderGraph(currentId = 1) {
   );
 }
 
-describe('知识图谱语义视图（渲染层）', () => {
+describe('知识图谱视图（渲染层）', () => {
   beforeEach(() => {
     __resetFolderTreeStore();
+    __resetKgSemanticsCache(); // 内容视图数据是模块级共享的，用例之间必须清掉
     getFolderTreeMock.mockReset();
     getFolderTreeMock.mockResolvedValue({ tree, files: [] });
+    // 内容视图的默认桩：没有向量数据（正是「模型未装/尚未索引」时的真实响应形状）
+    getKgSemanticsMock.mockReset();
+    getKgSemanticsMock.mockResolvedValue({ enabled: true, files: 0, edges: [], labels: {}, hint: '尚未建立内容索引' });
     // jsdom 不加载 index.css，手写一份簇色变量，断言「节点颜色来自 --kg-cN」。
     document.documentElement.style.setProperty('--kg-c1', 'rgb(1, 2, 3)');
     document.documentElement.style.setProperty('--kg-c2', 'rgb(4, 5, 6)');
   });
 
-  test('语义视图画出簇图例、语义边（虚线）并按簇上色', async () => {
+  test('默认内容视图：没有向量数据时给出可读提示，而不是空白（也不是「暂无图谱数据」）', async () => {
+    renderGraph();
+    const modeBtn = await screen.findByRole('button', { name: '内容视图：按资料内容聚类' });
+    expect(modeBtn.getAttribute('aria-pressed')).toBe('true'); // 默认档就是内容视图
+    // 索引里没有可用资料 → 明确指向名称视图，而不是一片空白
+    expect(await screen.findByText(/内容索引里还没有可用的资料/)).toBeTruthy();
+  });
+
+  test('切到名称视图：画出簇图例、语义边（虚线）并按簇上色', async () => {
     const { container } = renderGraph();
+    fireEvent.click(await screen.findByRole('button', { name: '名称视图：按资料名主题聚类' }));
     // 等定位完成（positioned 为真）才会画线与节点：只看 circle 会在首帧后就返回
     await waitFor(() => expect(container.querySelectorAll('line').length).toBeGreaterThan(0));
 
@@ -78,22 +96,103 @@ describe('知识图谱语义视图（渲染层）', () => {
     expect(colored.length).toBeGreaterThan(0);
   });
 
-  test('关掉语义视图后不再画语义边与图例，目录边仍在', async () => {
+  test('切到目录视图：语义边与图例都消失，目录层级边仍在', async () => {
     const { container } = renderGraph();
-    await waitFor(() => expect(container.querySelector('foreignObject')).toBeTruthy());
+    await waitFor(() => expect(container.querySelectorAll('line').length).toBeGreaterThan(0));
 
-    fireEvent.click(screen.getByRole('button', { name: '切换到目录视图（按文件夹层级）' }));
+    fireEvent.click(screen.getByRole('button', { name: '目录视图：只看文件夹层级' }));
     await waitFor(() => expect(container.querySelector('foreignObject')).toBeNull());
 
     const dashed = [...container.querySelectorAll('line')].filter(
       (l) => l.getAttribute('stroke-dasharray') === '3 3'
     );
     expect(dashed).toHaveLength(0);
-    // 目录层级边必须还在：这个开关只关语义层，不能把整张图关掉
+    // 目录层级边必须还在：这一档只关语义层，不能把整张图关掉
     expect(container.querySelectorAll('line').length).toBeGreaterThan(0);
   });
 
-  test('同一主题的资料连成弱边/主题边，纯日期名靠同目录兜底', () => {
+  test('内容视图拿到向量边后：虚线边与簇图例来自内容相似度', async () => {
+    // 三个文件互相相似（>0.9），一个离群（与谁都不像）：应呈现为一个簇 + 一个单点
+    getKgSemanticsMock.mockResolvedValue({
+      enabled: true,
+      model: 'bge-small-zh-v1.5',
+      files: 4,
+      edges: [
+        { source: 11, target: 12, weight: 0.93 },
+        { source: 11, target: 13, weight: 0.91 },
+        { source: 12, target: 13, weight: 0.9 },
+      ],
+      labels: { 11: '高数', 12: '高数', 13: '高数', 21: '足球' },
+    });
+    const { container } = renderGraph();
+    fireEvent.click(await screen.findByRole('button', { name: '名称视图：按资料名主题聚类' }));
+    fireEvent.click(screen.getByRole('button', { name: '内容视图：按资料内容聚类' }));
+
+    await waitFor(() => expect(container.querySelector('foreignObject')).toBeTruthy());
+    // 内容视图的簇标签取「簇内最高频目录名」
+    expect(container.querySelector('foreignObject').textContent).toContain('高数');
+    const dashed = [...container.querySelectorAll('line')].filter(
+      (l) => l.getAttribute('stroke-dasharray') === '3 3'
+    );
+    expect(dashed.length).toBeGreaterThan(0);
+  });
+});
+
+describe('内容视图：向量边成簇（纯函数）', () => {
+  const nodes = [
+    { id: 1, name: 'a.pdf', type: 'file' },
+    { id: 2, name: 'b.pdf', type: 'file' },
+    { id: 3, name: 'c.pdf', type: 'file' },
+    { id: 4, name: 'd.pdf', type: 'file' },
+  ];
+  const labels = { 1: '高数', 2: '高数', 3: '高数', 4: '足球' };
+
+  test('只保留当前范围内的边（局部视图不会画到范围外的邻居）', () => {
+    const all = [
+      { source: 1, target: 2, weight: 0.9 },
+      { source: 1, target: 9, weight: 0.95 }, // 9 不在范围内
+    ];
+    const { edges } = buildVectorGraph(nodes, all, labels);
+    expect(edges).toHaveLength(1);
+    // 端点统一成图谱节点 id 形式（file<id>），否则永远接不上节点
+    expect(edges[0]).toMatchObject({ source: 'file1', target: 'file2' });
+  });
+
+  test('超过阈值的边把成员聚成一簇，标签取簇内最高频目录名', () => {
+    const { clusters } = buildVectorGraph(
+      nodes,
+      [
+        { source: 1, target: 2, weight: 0.9 },
+        { source: 2, target: 3, weight: 0.88 },
+      ],
+      labels
+    );
+    const big = clusters.find((c) => c.nodeIds.includes('file1'));
+    expect(big.nodeIds.sort()).toEqual(['file1', 'file2', 'file3']);
+    expect(big.label).toBe('高数');
+    // 离群文件自成一簇、没有标签（不会被硬塞进别人的簇）
+    const lone = clusters.find((c) => c.nodeIds.includes('file4'));
+    expect(lone.nodeIds).toEqual(['file4']);
+    expect(lone.label).toBeNull();
+  });
+
+  test('低于阈值的相似度只画线、不成簇（避免链式把整库串成一坨）', () => {
+    const weak = VECTOR_LINK_THRESHOLD - 0.01;
+    const { edges, clusters } = buildVectorGraph(
+      nodes,
+      [
+        { source: 1, target: 2, weight: weak },
+        { source: 2, target: 3, weight: weak },
+      ],
+      labels
+    );
+    expect(edges).toHaveLength(2); // 线照画
+    expect(clusters.every((c) => c.nodeIds.length === 1)).toBe(true); // 但不合并
+  });
+});
+
+describe('名称层语义：主题边与弱边（纯函数）', () => {
+  test('同一主题的资料连成主题边，纯日期名靠同目录弱边兜底', () => {
     const nodes = buildSemanticNodes([
       { id: 'file11', name: '高等数学期末试卷A.pdf', type: 'file', meta: { folder_id: 1 } },
       { id: 'file12', name: '高等数学期中复习资料B.pdf', type: 'file', meta: { folder_id: 1 } },

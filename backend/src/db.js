@@ -154,6 +154,50 @@ if (!hasColumn('email_codes', 'uses')) {
   db.exec(`ALTER TABLE email_codes ADD COLUMN uses INTEGER NOT NULL DEFAULT 0`);
 }
 
+// --- migration: 内容语义索引（抽取正文 + 向量 + 任务队列）---
+// 图谱与搜索原本只有「名称」这一路信号，内容级语义要求先把正文抽出来落库：
+// 抽取是 OSS 下载 + 解析的重活，绝不能每次请求重做，因此正文必须持久化。
+db.exec(`
+CREATE TABLE IF NOT EXISTS text_extractions (
+  file_id      INTEGER PRIMARY KEY,
+  content      TEXT NOT NULL,
+  doc_kind     TEXT NOT NULL,   -- text | pdf_text | office_text | image_only | unsupported | pdf_ocr(预留)
+  pages        INTEGER,
+  chars        INTEGER NOT NULL,
+  content_hash TEXT NOT NULL,   -- 内容指纹：文件被替换成同 key 的新上传时靠它判断要不要重算
+  extracted_at INTEGER NOT NULL,
+  FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS file_embeddings (
+  file_id    INTEGER NOT NULL,
+  vec        BLOB NOT NULL,     -- Float32Array 的字节
+  dim        INTEGER NOT NULL,
+  model      TEXT NOT NULL,     -- 换模型必须能识别旧向量，否则新旧混算会失真
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (file_id),
+  FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS index_jobs (
+  file_id      INTEGER PRIMARY KEY,
+  state        TEXT NOT NULL,   -- pending | running | done | failed
+  attempts     INTEGER NOT NULL DEFAULT 0,
+  last_error   TEXT,
+  content_hash TEXT,            -- 已处理到的版本；与 text_extractions.content_hash 比对决定是否重跑
+  enqueued_at  INTEGER NOT NULL,
+  finished_at  INTEGER,
+  FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_index_jobs_state ON index_jobs(state, enqueued_at);
+
+-- 索引的每日用量（嵌入/OCR 这类有成本的步骤靠它限流，按天计数）
+CREATE TABLE IF NOT EXISTS index_usage (
+  day   TEXT PRIMARY KEY,       -- YYYY-MM-DD（本地时区）
+  units INTEGER NOT NULL DEFAULT 0
+);
+`);
+
 export function ensureAdmin(username, password) {
   const existing = db
     .prepare('SELECT id, role, password_hash FROM users WHERE username = ?')
