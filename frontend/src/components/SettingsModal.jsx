@@ -120,8 +120,9 @@ export default function SettingsModal({
   const [llmCfg, setLlmCfg] = useState(loadLlmCfg);
   const [cfgDraft, setCfgDraft] = useState(loadLlmCfg);
   const [cfgMode, setCfgMode] = useState(() => modeOf(loadLlmCfg()));
-  // 保存被拦下的原因（null = 没有错误）。三项没填完就点保存时给提示，并把缺的字段标出来。
-  const [saveError, setSaveError] = useState(null);
+  // 是否已经点过「保存」：校验只在提交时开始（打开弹窗、刚切到自定义配置时都不标红），
+  // 点过之后缺项标红与提示才出现，并随填写实时收敛，三项补齐即自动消失。
+  const [saveAttempted, setSaveAttempted] = useState(false);
 
   // 语言响应式的常量数组（切换语言时随 t 刷新）。
   const themeOptions = useMemo(
@@ -181,6 +182,7 @@ export default function SettingsModal({
       .filter((f) => f.type !== 'select' && !String(cfgDraft[f.key] ?? '').trim())
       .map((f) => f.key);
   }, [cfgMode, llmFields, cfgDraft]);
+  const showIncomplete = saveAttempted && missingKeys.length > 0;
 
   // 每次打开时，将已提交配置载入草稿、收起语言下拉（板块与层级由路由决定，不在这里重置）。
   useEffect(() => {
@@ -189,7 +191,7 @@ export default function SettingsModal({
       setCfgDraft(loadLlmCfg());
       setCfgMode(modeOf(loadLlmCfg()));
       setLangOpen(false);
-      setSaveError(null);
+      setSaveAttempted(false);
     }
   }, [open]);
 
@@ -219,16 +221,16 @@ export default function SettingsModal({
     if (cfgMode === 'server') {
       setLlmCfg(EMPTY_CFG);
       clearLlmCfg();
-      setSaveError(null);
+      setSaveAttempted(false);
       return;
     }
     // BUG-95：没填完就不写存储——半份配置 ChatComposer 不会下发，只会让用户以为已经生效
     if (missingKeys.length) {
-      setSaveError(t('settings.ai.errorIncomplete'));
+      setSaveAttempted(true); // 点过保存才开始标红 / 出提示
       return;
     }
     setLlmCfg(saveLlmCfg(cfgDraft));
-    setSaveError(null);
+    setSaveAttempted(false);
   };
 
   const clearAi = () => {
@@ -236,7 +238,7 @@ export default function SettingsModal({
     setLlmCfg(EMPTY_CFG);
     setCfgDraft(EMPTY_CFG);
     clearLlmCfg();
-    setSaveError(null);
+    setSaveAttempted(false);
   };
 
   const currentLabel = navItems.find((n) => n.id === section)?.label ?? '';
@@ -320,7 +322,7 @@ export default function SettingsModal({
                           checked={cfgMode === id}
                           onChange={() => {
                             setCfgMode(id);
-                            setSaveError(null);
+                            setSaveAttempted(false); // 换来源就撤掉上一次的校验痕迹
                           }}
                         />
                         <span className="settings-mode-label">{label}</span>
@@ -330,13 +332,13 @@ export default function SettingsModal({
 
                   {cfgMode === 'custom' && (
                     /* 字段顺序：地址 → 协议 → Key → 模型；分组靠留白（无界理念，不用色块也不用描边）。
-                       三项（地址 / Key / 模型）是必填：缺哪项就把哪项的标签标红，保存时再给一行提示。 */
+                       三项（地址 / Key / 模型）是必填，但只在点过保存之后才标红——一开始不打扰用户。 */
                     <div className="settings-form">
                       {llmFields.map(({ key, label, placeholder, type, options }) => {
                         // 下拉字段不用 <label> 包裹：label 会把点击转发给内部控件，等于「API 协议」
                         // 那一行整行都可点，点击区域过大；改成 div，只有触发器本身可点（触发器自带 aria-label）。
                         const Wrapper = type === 'select' ? 'div' : 'label';
-                        const invalid = missingKeys.includes(key);
+                        const invalid = showIncomplete && missingKeys.includes(key);
                         return (
                           <Wrapper
                             key={key}
@@ -348,19 +350,13 @@ export default function SettingsModal({
                                 label={label}
                                 value={cfgDraft[key]}
                                 options={options}
-                                onChange={(v) => {
-                                  setCfgDraft((d) => ({ ...d, [key]: v }));
-                                  setSaveError(null);
-                                }}
+                                onChange={(v) => setCfgDraft((d) => ({ ...d, [key]: v }))}
                               />
                             ) : (
                               <input
                                 type={type}
                                 value={cfgDraft[key]}
-                                onChange={(e) => {
-                                  setCfgDraft((d) => ({ ...d, [key]: e.target.value }));
-                                  setSaveError(null);
-                                }}
+                                onChange={(e) => setCfgDraft((d) => ({ ...d, [key]: e.target.value }))}
                                 placeholder={placeholder}
                                 className="settings-input"
                                 spellCheck={false}
@@ -374,11 +370,11 @@ export default function SettingsModal({
                       })}
                     </div>
                   )}
-                  {/* 校验提示与说明同处一块：错误在上（有错才出现），口径说明常驻 */}
+                  {/* 校验提示与说明同处一块：保存被拦下的提示在上（点过保存且仍缺项才出现），口径说明常驻 */}
                   <div className="settings-notes">
-                    {saveError && (
+                    {showIncomplete && (
                       <p id="settings-ai-error" className="settings-error" role="alert">
-                        {saveError}
+                        {t('settings.ai.errorIncomplete')}
                       </p>
                     )}
                     <p className="settings-hint">

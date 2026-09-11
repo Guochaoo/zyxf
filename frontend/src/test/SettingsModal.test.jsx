@@ -293,42 +293,65 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
     expect(screen.queryByLabelText('API Key')).toBeNull();
   });
 
-  // 三项（地址 / Key / 模型）都填完才生效：没填完点保存不写存储，并提示 + 标红缺的字段
+  // 三项（地址 / Key / 模型）都填完才生效：**只有点过「保存」才开始校验**，
+  // 一开始（含刚切到自定义配置时）不标红、不提示。
   describe('保存前校验：三项必须填完', () => {
-    test('只填部分时点保存不写存储，提示并把缺的字段标红', () => {
+    const invalidLabels = () =>
+      [...document.querySelectorAll('.settings-field--invalid .settings-field-label')].map((el) => el.textContent);
+
+    test('刚切到自定义配置时不标红、不提示', () => {
+      renderModal();
+      customMode();
+
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(invalidLabels()).toEqual([]);
+      expect(urlInput()).not.toHaveAttribute('aria-invalid');
+      expect(keyInput()).not.toHaveAttribute('aria-invalid');
+      expect(modelInput()).not.toHaveAttribute('aria-invalid');
+    });
+
+    test('只填部分时点保存不写存储，此时才提示并标红缺的字段', () => {
       renderModal();
       customMode();
 
       fireEvent.change(urlInput(), { target: { value: 'https://llm.test/v1' } });
+      // 填了一项也还不标红（还没提交过）
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(invalidLabels()).toEqual([]);
+
       fireEvent.click(screen.getByRole('button', { name: '保存' }));
 
       expect(savedCfg()).toBeNull(); // 没保存
       expect(screen.getByRole('alert')).toHaveTextContent('三项没填完');
-      // 缺的两项标红（aria-invalid + 标签类名），已填的地址不受影响
       expect(keyInput()).toHaveAttribute('aria-invalid', 'true');
       expect(modelInput()).toHaveAttribute('aria-invalid', 'true');
       expect(urlInput()).not.toHaveAttribute('aria-invalid');
-      expect(
-        [...document.querySelectorAll('.settings-field--invalid .settings-field-label')].map((el) => el.textContent)
-      ).toEqual(['API Key', '模型']);
+      expect(invalidLabels()).toEqual(['API Key', '模型']);
     });
 
-    test('补齐后可以保存，且提示随之消失', async () => {
+    test('点过保存后标红随填写实时收敛，三项补齐即自动消失，随后可保存', async () => {
       renderModal();
       customMode();
 
       fireEvent.click(screen.getByRole('button', { name: '保存' }));
       expect(savedCfg()).toBeNull();
+      expect(invalidLabels()).toEqual(['API 地址', 'API Key', '模型']);
+
+      // 补上地址：它不再标红，但还缺两项，提示仍在
+      fireEvent.change(urlInput(), { target: { value: 'https://llm.test/v1' } });
+      expect(invalidLabels()).toEqual(['API Key', '模型']);
       expect(screen.getByRole('alert')).toBeInTheDocument();
 
-      // 编辑任一字段即清掉上一次的提示
-      fireEvent.change(urlInput(), { target: { value: 'https://llm.test/v1' } });
+      // 补上 Key：只剩模型标红
+      fireEvent.change(keyInput(), { target: { value: 'sk-test' } });
+      expect(invalidLabels()).toEqual(['模型']);
+
+      // 补上模型：标红与提示一起自动消失（不必再点一次保存）
+      fireEvent.change(modelInput(), { target: { value: 'glm-4.6' } });
+      expect(invalidLabels()).toEqual([]);
       expect(screen.queryByRole('alert')).toBeNull();
 
-      fireEvent.change(keyInput(), { target: { value: 'sk-test' } });
-      fireEvent.change(modelInput(), { target: { value: 'glm-4.6' } });
       fireEvent.click(screen.getByRole('button', { name: '保存' }));
-
       await waitFor(() =>
         expect(savedCfg()).toMatchObject({ apiKey: 'sk-test', baseUrl: 'https://llm.test/v1', model: 'glm-4.6' })
       );
@@ -346,6 +369,17 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
 
       expect(savedCfg()).toBeNull();
       expect(keyInput()).toHaveAttribute('aria-invalid', 'true');
+    });
+
+    test('切回「使用服务器配置」会撤掉上一次的校验痕迹', () => {
+      renderModal();
+      customMode();
+
+      fireEvent.click(screen.getByRole('button', { name: '保存' }));
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+
+      fireEvent.click(radio('使用服务器配置'));
+      expect(screen.queryByRole('alert')).toBeNull();
     });
 
     test('选「使用服务器配置」时不受校验影响，保存即清掉本地配置', async () => {
