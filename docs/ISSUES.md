@@ -15,11 +15,12 @@
 
 ```yaml
 更新日期: 2026-09-11
-条目总数: 124        # 缺陷 90 + 改进 34
+条目总数: 125        # 缺陷 90 + 改进 35
 待处理: 7            # 缺陷 2 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性）
-已归档: 117          # 缺陷 88 + 改进 29
+已归档: 118          # 缺陷 88 + 改进 30
 # 本批（设置页改造）：修复 BUG-95（保存不校验三项齐全——提示文案承诺了却没人执行），并调左栏样式
-#   （灰底 #ECECEE + 「设置」标题、条目交互统一为「往白靠」两档，见 DESIGN.md §4）。
+#   （灰底 #ECECEE + 「设置」标题、条目交互统一为「往白靠」两档，见 DESIGN.md §4）；另把白屏兜底
+#   改成「友好提示 + 刷新按钮，堆栈只在开发环境展开」（IMPROVE-35，抽到 bootError.js 并补测试）。
 # 设计规范审计批：DESIGN.md 逐段中文化并逐条对照代码校正，删掉未实现的 Vercel 通用内容；新增
 #   BUG-93（热力图星期标签错位一天）、BUG-94（侧栏时长/缓动的类名被模板插值拼掉，退化成 150ms）
 #   与 IMPROVE-34（聊天未知类型徽章被品牌色规则染黑），按「只改文档」口径只建档未动代码。
@@ -201,7 +202,7 @@
 | BUG-92 | P1 | 后端 | 文件夹改名/移动的 OSS 复制无补偿：孤儿对象会被下一次 sync 当成新文件导入 | `backend/src/routes/folders.js` | 2026-09-11 |
 | BUG-95 | P2 | 前端 | 自定义 LLM 配置保存不校验三项齐全：提示文案承诺「三项都填才生效」，实际会写入半份配置 | `frontend/src/components/SettingsModal.jsx` | 2026-09-11 |
 
-### 2.2 已关闭改进项（29）
+### 2.2 已关闭改进项（30）
 
 | 编号 | 严重度 | 类别 | 标题 | 处理位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -234,3 +235,4 @@
 | IMPROVE-17 | P2 | 后端 | 文件夹改名/移动逐对象搬运子树，无规模阈值 | `backend/src/routes/folders.js`, `backend/test/auditFixes.test.js` | 2026-09-11 |
 | IMPROVE-20 | P2 | 前后端 | `/api/search` 每类截断 20 条却被前端当总数展示 | `backend/src/searchService.js`, `backend/src/routes/search.js`, `frontend/src/components/SearchBar.jsx` | 2026-09-11 |
 | IMPROVE-24 | P2 | 前端 | `useFolderTree` 未去重：同一变更发两次 GET | `frontend/src/hooks/useFolderTree.js`, `frontend/src/test/useFolderTree.test.jsx` | 2026-09-11 |
+| IMPROVE-35 | P2 | 前端 | 白屏兜底把原始错误与堆栈直接展示给终端用户 | `frontend/src/bootError.js`, `frontend/src/main.jsx`, `frontend/src/test/bootError.test.js` | 2026-09-11 |

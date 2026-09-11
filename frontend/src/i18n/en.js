@@ -323,6 +323,10 @@ const en = {
     downloadFailedStatus: 'Download failed ({{status}})',
     actionFailed: 'Something went wrong',
     today: 'Today',
+    bootErrorTitle: 'Something went wrong',
+    bootErrorHint: 'Reloading usually fixes it. If it keeps failing, contact xjtuzyxf@163.com.',
+    bootErrorReload: 'Reload page',
+    // Dev-only label above the raw stack (not shown to end users in production)
     bootError: 'Page failed to start (frontend error; the backend may be fine):',
     minutesAgo_one: '{{count}} minute ago',
     minutesAgo_other: '{{count}} minutes ago',
