@@ -154,9 +154,10 @@ sudo -u www node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync
 > 注意：后端**只签名**、不代理文件流，上传流量走浏览器直传，所以后端不需要 `oss:GetObject` 之外的读权限。
 > ⚠️ **IMM 预览是另一套权限**：`GenerateWebofficeToken` 是 IMM 的 OpenAPI（`imm.<region>.aliyuncs.com`），RAM 里必须显式授权 `imm:*` 动作；只给 OSS 动作的密钥能正常下载/上传，但一调预览就返回
 > `AccessDenied: You are not authorized to operate imm:GenerateWebofficeToken on the specified resources acs:imm:<region>:<账号ID>:project/<项目名>`，
-> 前端只会显示「预览服务出错，暂时无法在线预览」（后端按设计只回 502 泛化文案，真实原因在 `journalctl -u zyxf`）。不启用预览就删掉下面第二段 statement。
+> 前端只会显示「预览服务出错，暂时无法在线预览」（后端按设计只回 502 泛化文案，真实原因在 `journalctl -u zyxf`）。
+> 另外**这两个动作不支持资源级授权**，策略里 `Resource` 必须写 `*`（写项目 ARN 会一直 AccessDenied）。不启用预览就删掉下面第二段 statement。
 
-自定义策略（把 bucket 名替换成你自己的；`acs:oss:*:*:<bucket>/*` 用来覆盖对象级操作；第二段按预览需要填账号 ID 与 IMM 项目名）：
+自定义策略（把 bucket 名替换成你自己的；`acs:oss:*:*:<bucket>/*` 用来覆盖对象级操作）：
 
 ```json
 {
@@ -177,21 +178,19 @@ sudo -u www node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync
       ]
     },
     {
+      "Comment": "IMM WebOffice 预览；这两个动作不支持资源级授权，只能给 *",
       "Effect": "Allow",
       "Action": [
         "imm:GenerateWebofficeToken",
         "imm:RefreshWebofficeToken"
       ],
-      "Resource": [
-        "acs:imm:cn-beijing:<账号ID>:project/<IMM 项目名>"
-      ]
+      "Resource": ["*"]
     }
   ]
 }
 ```
 
 用 CLI 落地（写入前先用只读 `list` 验证密钥确实只能访问目标 bucket）：
-
 ```bash
 # 1) 建策略
 aliyun ram CreatePolicy --PolicyName zyxf-oss-app \
@@ -204,9 +203,15 @@ aliyun ram AttachPolicyToUser --PolicyType Custom --PolicyName zyxf-oss-app \
 
 # 3) 建 AccessKey，把密钥填进 .env 的 OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET
 aliyun ram CreateAccessKey --UserName zyxf-oss --region cn-beijing
+
+# 4) 之后若要给策略补动作（例如加 IMM 预览权限），改文档后发新版本并置为默认：
+aliyun ram CreatePolicyVersion --PolicyName zyxf-oss-app \
+  --PolicyDocument "$(cat oss-policy.json)" --SetAsDefault --region cn-beijing
 ```
 
 验证：用新密钥访问**其他** bucket 应返回 `AccessDenied`（越权被拒），访问目标 bucket 正常——两者都满足才算最小权限生效。
+
+> ⚠️ **轮换密钥后必须同步服务器上的 `.env`**（`/opt/zyxf/.env`）并 `systemctl restart zyxf`。只改控制台/本地 `.env` 而漏掉服务器时，旧密钥一旦被删除，OSS 会回 `InvalidAccessKeyId`——症状是**上传（PostObject 签名）、下载（签名直链）、在线预览（IMM）全线失效**，而接口本身照常返回 URL（签名是本地计算、不校验），前端只看到「下载失败 / 预览服务出错」。自查：`curl -sS "$(curl -s 'https://<域名>/api/files/<id>/url' | jq -r .url)" | head -3`，看是否 `InvalidAccessKeyId`。
 
 ### 2.3 DirectMail 凭证（注册验证码）
 
@@ -386,6 +391,7 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 | 后端启动即退（无正常启动日志） | `JWT_SECRET`/`ADMIN_PASSWORD` 不合生产校验（会打印 `[index] FATAL...` 到 stderr） | 用 `openssl rand -hex 32` + 12 位强密码 |
 | 上传报 CORS | OSS 跨域规则没加域名 | 回 0.2 节加 `https://zyxf.top` |
 | 上传报 SignatureDoesNotMatch | 服务器时间不准 | `sudo timedatectl set-ntp true` |
-| 预览报「预览服务暂不可用」/「预览服务出错」 | 先看真实原因：`journalctl -u zyxf --since "30 min ago" \| grep 预览服务 -A2`（后端按设计只回 502 泛化文案）。① `AccessDenied ... imm:GenerateWebofficeToken` → 该 RAM 用户缺 IMM 动作授权，按 2.2 的第二段 statement 补授权（OSS 权限正常不代表 IMM 可用）；② `InvalidProjectName` → `IMM_PROJECT` 与 OSS 控制台 IMM 绑定里的项目名不一致；③ 超时/连接失败 → 网络或 IMM 侧故障 |
+| 下载/上传/预览全都不通，接口却返回 200 | **密钥已失效**：`OSS_ACCESS_KEY_ID` 指向被删除/停用的 AccessKey（轮换后漏改服务器 `.env` 最常见）。签名是本地算的、不校验，所以接口照常给 URL，真链一取就 `InvalidAccessKeyId`。改 `/opt/zyxf/.env` → `systemctl restart zyxf` |
+| 预览报「预览服务暂不可用」/「预览服务出错」 | 先看真实原因：`journalctl -u zyxf --since "30 min ago" \| grep 预览服务 -A2`（后端按设计只回 502 泛化文案）。① `InvalidAccessKeyId` → 见上一行；② `AccessDenied ... imm:GenerateWebofficeToken` → 该 RAM 用户缺 IMM 动作授权，按 2.2 的第二段 statement 补授权（OSS 权限正常不代表 IMM 可用）；③ `InvalidProjectName` → `IMM_PROJECT` 与 IMM 控制台项目名不一致；④ 超时/连接失败 → 网络或 IMM 侧故障 |
 | 首页白屏 / `https` 连不上 | SSL 未配或证书没生效 | 见第 5 节申请 Let's Encrypt |
 | 访问命中默认站点（旧页） | 按 IP 访问，非域名 | 用域名 `zyxf.top` 访问；确认域名已解析 |
