@@ -106,4 +106,48 @@ describe('BUG-08: sync 批量删除（>999 文件场景）', () => {
     assert.equal(typeof body.repaired_files, 'number');
     assert.equal(body.ok, true);
   });
+
+  // IMPROVE-13：导入前一次性建「父级 → 清洗后段名 → id」内存索引。索引必须
+  // 以**父级**为键登记新建行，否则同一层的文件夹会被重复创建（每个对象各建一份）。
+  test('同一目录下多个对象只建一个文件夹，新链自动复用', async () => {
+    const token = await adminLogin();
+    const keys = [];
+    for (let i = 0; i < 30; i++) keys.push(`zyxf-test/课程/图书/doc${i}.txt`);
+    keys.push('zyxf-test/课程/图书/'); // 该目录的占位对象
+    keys.push('zyxf-test/课程/试卷/exam.txt');
+    ossObjectStore.keys = keys;
+
+    const { body } = await request('POST', '/api/sync', { token });
+    assert.equal(body.added.folders, 3); // 课程 / 课程·图书 / 课程·试卷
+    assert.equal(body.added.files, 31);
+
+    const rows = db.prepare('SELECT id, name, parent_id FROM folders ORDER BY id').all();
+    assert.equal(rows.length, 3);
+    assert.deepEqual(rows.map((r) => r.name), ['课程', '图书', '试卷']);
+    assert.equal(rows[0].parent_id, null);
+    // 两个子目录都挂在「课程」下，且不存在重复的「课程」
+    assert.equal(rows[1].parent_id, rows[0].id);
+    assert.equal(rows[2].parent_id, rows[0].id);
+  });
+
+  // IMPROVE-14：排序游标不能只对「同父级」正确——跨父级/跨表也要各自独立递增。
+  test('大目录导入后 sort_order 连续且不重复', async () => {
+    const token = await adminLogin();
+    const keys = [];
+    for (let i = 0; i < 600; i++) keys.push(`zyxf-test/big/f${i}.txt`);
+    ossObjectStore.keys = keys;
+
+    const { body } = await request('POST', '/api/sync', { token });
+    assert.equal(body.added.files, 600);
+
+    const fid = db.prepare("SELECT id FROM folders WHERE name = 'big'").get().id;
+    const orders = db
+      .prepare('SELECT sort_order FROM files WHERE folder_id = ? ORDER BY sort_order')
+      .all(fid)
+      .map((r) => r.sort_order);
+    assert.equal(orders.length, 600);
+    assert.deepEqual(orders, Array.from({ length: 600 }, (_, i) => i));
+    // 根级那条「big」文件夹的 sort_order 必须从 0 开始（不是接着文件的计数）
+    assert.equal(db.prepare("SELECT sort_order FROM folders WHERE name = 'big'").get().sort_order, 0);
+  });
 });

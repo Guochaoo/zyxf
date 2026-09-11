@@ -4,14 +4,15 @@ import { ArrowUp, Settings, Square, Trash2 } from 'lucide-react';
 import { chatStream, getChatStatus } from '../api.js';
 import { EASE_COLLAPSE, ICON_BUTTON_CLASS } from './ui.js';
 import PanelHeader from './PanelHeader.jsx';
-import { loadLlmCfg } from '../llmConfig.js';
+import { loadLlmCfg, subscribeLlmCfg } from '../llmConfig.js';
+import { useAuth } from '../auth.jsx';
 // 展示组件已迁至 ./Chat/parts.jsx（IMPROVE-01）。
 import { FileChip, Section } from './Chat/parts.jsx';
 
 /* ─────────────────────────────────────────────────────────
  * CHAT — interactive panel with a header, replies, and composer.
  * 头部：智能对话标签 + 清空会话 + 设置（齿轮）。齿轮不再就地展开表单，
- * 而是交给上层打开全局设置弹窗（AI 配置项已在弹窗里有完整实现），
+ * 而是交给上层打开全局设置弹窗（智能对话配置项已在弹窗里有完整实现），
  * 避免同一份 localStorage 配置在两处维护。
  * 回复经 SSE 流式渲染，检索推荐的文件以【文件N】引用映射为卡片。
  * ───────────────────────────────────────────────────────── */
@@ -29,6 +30,8 @@ const fmtTime = () => {
 
 export default function ChatComposer({ onOpenSettings }) {
   const { t } = useTranslation();
+  // useAuth() 在无 Provider 的测试环境下返回 null —— 用可选链保持组件可独立渲染。
+  const user = useAuth()?.user;
   const suggestions = useMemo(() => t('chat.suggestions', { returnObjects: true }), [t]);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
@@ -47,6 +50,10 @@ export default function ChatComposer({ onOpenSettings }) {
       alive = false;
     };
   }, []);
+  // IMPROVE-10：服务端未配置 AI + 自带 Key 时后端要求登录，前端提前禁用输入并说明原因。
+  const hasClientCfg = Boolean(llmCfg.apiKey && llmCfg.baseUrl && llmCfg.model);
+  const loginRequired = serverAiEnabled === false && !user && hasClientCfg;
+
   // 折叠动画：snapH 以像素高度驱动过渡（fr/auto 高度无法从当前值平滑过渡），
   // innerH 把内层冻结在固定高度——内容不重排，由外层容器从下往上裁剪（同知识图谱）；
   // 消息列表始终 overflow-y-auto + scrollbar-gutter: stable，滚动条槽位恒定，
@@ -69,7 +76,17 @@ export default function ChatComposer({ onOpenSettings }) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  useEffect(() => () => clearTimeout(snapTimer.current), []);
+  // BUG-61：卸载时中止在途流式请求并清计时器（否则 SSE 继续消费、对已卸载组件 setState）。
+  useEffect(
+    () => () => {
+      clearTimeout(snapTimer.current);
+      abortRef.current?.abort();
+    },
+    []
+  );
+
+  // BUG-58：设置弹窗保存后常驻右栏要立刻用新配置（原先只在挂载时读一次）。
+  useEffect(() => subscribeLlmCfg(() => setLlmCfg(loadLlmCfg())), []);
 
   // 动画结束（360ms 过渡 + 余量）后回到自然布局（高度交还给 flex）
   const endSnap = () => {
@@ -127,9 +144,15 @@ export default function ChatComposer({ onOpenSettings }) {
 
   const stop = () => abortRef.current?.abort();
 
+  // BUG-61：清空时同时中止在途请求（否则流式回答会继续写进已清空的会话）。
+  const clearConversation = () => {
+    abortRef.current?.abort();
+    setMessages([]);
+  };
+
   const send = async (text) => {
     const question = (text ?? draft).trim();
-    if (!question || busy) return;
+    if (!question || busy || loginRequired) return;
 
     const history = [
       ...messages.map((m) => ({
@@ -152,7 +175,7 @@ export default function ChatComposer({ onOpenSettings }) {
     // serverAiEnabled 为 null（状态未知）时保持既有行为：带上用户配置。
     const llm =
       serverAiEnabled !== true && llmCfg.apiKey && llmCfg.baseUrl && llmCfg.model
-        ? { apiKey: llmCfg.apiKey, baseUrl: llmCfg.baseUrl, model: llmCfg.model }
+        ? { apiKey: llmCfg.apiKey, baseUrl: llmCfg.baseUrl, model: llmCfg.model, protocol: llmCfg.protocol }
         : undefined;
 
     const patchAi = (patch) =>
@@ -160,18 +183,27 @@ export default function ChatComposer({ onOpenSettings }) {
 
     const abort = new AbortController();
     abortRef.current = abort;
+    // BUG-61：signal 只能停止读取，已 resolve 的 reader 回调仍会各触发一次，
+    // 所以要自己判「这轮是否还有效」，否则「已停止生成。」后面会被追加半截文本。
+    const live = () => abortRef.current === abort && !abort.signal.aborted;
     try {
       await chatStream(history, {
         signal: abort.signal,
         llm,
-        onDelta: (t) =>
-          setMessages((prev) =>
-            prev.map((m) => (m.id === aiId ? { ...m, text: m.text + t } : m))
-          ),
-        onFiles: (files) => patchAi({ files }),
+        onDelta: (t) => {
+          if (!live()) return;
+          setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: m.text + t } : m)));
+        },
+        onFiles: (files) => {
+          if (!live()) return;
+          patchAi({ files });
+        },
       });
-      patchAi({ streaming: false });
+      if (live()) patchAi({ streaming: false });
     } catch (err) {
+      // 仍然处理本次请求的失败（用户点「停止」也走这里，要落「已停止生成。」）；
+      // 只有 abortRef 已被清空/换人（卸载、发起了下一轮）才彻底丢弃。
+      if (abortRef.current !== abort) return;
       if (err.name === 'AbortError') {
         setMessages((prev) =>
           prev.map((m) =>
@@ -189,7 +221,7 @@ export default function ChatComposer({ onOpenSettings }) {
 
   const openSettings = () => onOpenSettings?.();
 
-  const canSend = draft.trim().length > 0 && !busy;
+  const canSend = draft.trim().length > 0 && !busy && !loginRequired;
 
   return (
     <div
@@ -209,8 +241,9 @@ export default function ChatComposer({ onOpenSettings }) {
           type="button"
           aria-label={t('chat.clear')}
           title={t('chat.clear')}
-          disabled={busy || messages.length === 0}
-          onClick={() => setMessages([])}
+          // BUG-61：流式期间也保持可点（点击会先中止在途请求）。
+          disabled={messages.length === 0}
+          onClick={clearConversation}
           className={ICON_BUTTON_CLASS}
         >
           <Trash2 className="h-[15px] w-[15px]" />
@@ -227,6 +260,8 @@ export default function ChatComposer({ onOpenSettings }) {
       </PanelHeader>
 
       {/* 主体：height 像素过渡收起/展开；动画期间锁定高度、隐藏列表滚动条 */}
+      {/* 收起/动画期间设 inert：内容只是被 height:0 + overflow:hidden 裁掉，控件仍在
+          Tab 顺序里——键盘用户会聚焦到看不见的输入框，盲打回车真的会把问题发出去。 */}
       <div
         ref={bodyRef}
         className={`min-h-0 shrink overflow-hidden transition-[height] duration-[360ms] ${
@@ -236,6 +271,7 @@ export default function ChatComposer({ onOpenSettings }) {
           height: snapH ?? (collapsed ? '0px' : undefined),
           transitionTimingFunction: EASE_COLLAPSE,
         }}
+        inert={collapsed || snapping ? '' : undefined}
       >
         <div
           className={`flex min-h-0 flex-col overflow-hidden ${snapping ? '' : 'h-full'}`}
@@ -250,19 +286,23 @@ export default function ChatComposer({ onOpenSettings }) {
       >
         {messages.length === 0 && (
           <div className="flex flex-1 flex-col items-start justify-center gap-2 py-4">
-            <p className="w-full text-center text-[12.5px] text-ink-2">{t('chat.askHint')}</p>
-            <div className="flex flex-wrap gap-1.5 pl-4">
-              {suggestions.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => send(s)}
-                  className="rounded-full bg-field px-2.5 py-1 text-[12px] text-ink-2 transition-colors duration-100 hover:text-ink"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
+            <p className="w-full text-center text-[12.5px] text-ink-2">
+              {loginRequired ? t('chat.loginRequired') : t('chat.askHint')}
+            </p>
+            {!loginRequired && (
+              <div className="flex flex-wrap gap-1.5 pl-4">
+                {suggestions.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => send(s)}
+                    className="rounded-full bg-field px-2.5 py-1 text-[12px] text-ink-2 transition-colors duration-100 hover:text-ink"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {messages.map((m) =>
@@ -304,9 +344,11 @@ export default function ChatComposer({ onOpenSettings }) {
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') send();
+              // 中文输入法用回车选词：合成期间必须忽略，否则半截问题会被直接发出。
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing) send();
             }}
             placeholder={t('chat.promptPlaceholder')}
+            disabled={loginRequired}
             aria-label={t('chat.promptAria')}
             className="chat-prompt min-h-4.5 bg-transparent text-[13px] leading-[1.4] text-ink outline-none placeholder:text-ink-3"
           />

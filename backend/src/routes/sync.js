@@ -2,11 +2,12 @@ import { Router } from 'express';
 import path from 'node:path';
 import { db, transaction } from '../db.js';
 import { listOssObjects } from '../oss.js';
-import { buildFolderIndex, nextSortOrder } from '../dbHelpers.js';
+import { buildFolderIndex, makeSortOrderCursor } from '../dbHelpers.js';
 import { tieredLimiter } from '../limiter.js';
 import { cleanObjectSegment, ossPrefix, placeholderKeyForFolderFromMap } from '../storagePath.js';
 import { normalizeExt } from '../extPolicy.js';
 import { mimeOf } from '../mime.js';
+import { invalidateLibraryCaches } from '../searchService.js';
 
 // 游客亦可触发同步（用于共享 OSS 桶的多部署刷新），按身份分层限流：
 // 游客 2 次/分钟 < 登录用户 5 次/分钟 < 管理员豁免（同下载/对话的既有约定）。
@@ -20,18 +21,25 @@ const syncLimiter = tieredLimiter({
 const router = Router();
 
 // SQLite 绑定参数上限为 32766（Node 24 捆绑的 SQLite 编译值；999 是 3.32 前的旧默认）。
-// 分批 DELETE/FIX 每批远低于该上限，留足余量（BUG-08）。
-// DELETE 用 1 参数/行；fixExt 的 CASE 用 3 参数/行（WHEN id, THEN ext, WHERE id IN）。
+// BUG-08：每批远低于 SQLite 的绑定参数上限（DELETE 1 参数/行，fixExt 的 CASE 3 参数/行）。
 const DELETE_BATCH = 500;
 const FIX_EXT_BATCH = 300;
 
-// Find a folder whose OSS segment (cleaned name) equals `segment`, under parentId.
-function findFolderBySegment(segment, parentId) {
-  const rows =
-    parentId === null
-      ? db.prepare('SELECT id, name FROM folders WHERE parent_id IS NULL').all()
-      : db.prepare('SELECT id, name FROM folders WHERE parent_id = ?').all(parentId);
-  return rows.find((r) => cleanObjectSegment(r.name) === segment) || null;
+// IMPROVE-13：一次性建「parentId -> (清洗段名 -> id)」索引，新建时就地登记。
+function buildChildNameIndex() {
+  const rows = db.prepare('SELECT id, name, parent_id FROM folders').all();
+  const index = new Map(); // parentId(NaN 表示根) -> Map(cleanedName -> id)
+  for (const r of rows) {
+    const pid = r.parent_id == null ? null : r.parent_id;
+    let bucket = index.get(pid);
+    if (!bucket) {
+      bucket = new Map();
+      index.set(pid, bucket);
+    }
+    const key = cleanObjectSegment(r.name);
+    if (!bucket.has(key)) bucket.set(key, r.id);
+  }
+  return index;
 }
 
 /**
@@ -56,21 +64,35 @@ router.post('/', syncLimiter, async (req, res, next) => {
     };
 
     const tx = transaction(() => {
+      const childNameIndex = buildChildNameIndex();
+      // IMPROVE-14：游标只在本次事务内使用，避免每个新行都 prepare + 查一次 MAX(sort_order)。
+      const nextSo = makeSortOrderCursor(db);
+      const findFolderBySegment = (segment, parentId) =>
+        childNameIndex.get(parentId === null ? null : parentId)?.get(segment) ?? null;
+
       const ensureFolderChain = (segments) => {
         let parentId = null;
         for (const seg of segments) {
           const hit = findFolderBySegment(seg, parentId);
-          if (hit) {
-            parentId = hit.id;
+          if (hit != null) {
+            parentId = hit;
             continue;
           }
-          const so = nextSortOrder(db, 'folders', 'parent_id', parentId);
+          const so = nextSo('folders', 'parent_id', parentId);
           const info = db
             .prepare(
               'INSERT INTO folders (name, parent_id, sort_order, created_at) VALUES (?, ?, ?, ?)'
             )
             .run(seg, parentId, so, Date.now());
           counts.added_folders += 1;
+          // 登记进索引：同一批后续对象/占位符无需再查库就能命中这个新文件夹。
+          // 登记的键必须是**父级** id（而不是新行自己的 id），否则同一层会被反复新建。
+          let bucket = childNameIndex.get(parentId);
+          if (!bucket) {
+            bucket = new Map();
+            childNameIndex.set(parentId, bucket);
+          }
+          bucket.set(seg, info.lastInsertRowid);
           parentId = info.lastInsertRowid;
         }
         return parentId;
@@ -102,7 +124,7 @@ router.post('/', syncLimiter, async (req, res, next) => {
         if (fileByKey.get(key)) continue;
         const fname = rel.pop();
         const folderId = rel.length ? ensureFolderChain(rel) : null;
-        const so = nextSortOrder(db, 'files', 'folder_id', folderId);
+        const so = nextSo('files', 'folder_id', folderId);
         const ext = normalizeExt(path.extname(fname)) || null;
         insertFile.run(
           folderId,
@@ -122,11 +144,23 @@ router.post('/', syncLimiter, async (req, res, next) => {
       // Normalize the ext column from the file name — older imports stored the
       // whole filename there, which breaks mime/imm routing for previews.
       // 批量修复：先查出不一致行，再用 CASE 单条 SQL 批量 UPDATE，避免逐行 UPDATE。
+      // 本次会被删除的失联行先算出来：后面的 ext 修复与统计都要排除它们，否则
+      // 同一行会同时计入 repaired_files 与 removed_files，一次同步的汇总自相矛盾。
+      const staleIds = new Set(
+        objects.length > 0
+          ? db
+              .prepare('SELECT id, oss_key FROM files')
+              .all()
+              .filter((f) => !keySet.has(f.oss_key))
+              .map((f) => f.id)
+          : []
+      );
+
       const mismatched = db
         .prepare('SELECT id, name, ext FROM files')
         .all()
         .map((f) => ({ id: f.id, correct: normalizeExt(path.extname(f.name)) || null, cur: f.ext ?? null }))
-        .filter((x) => x.correct !== x.cur);
+        .filter((x) => x.correct !== x.cur && !staleIds.has(x.id));
       // fixExt 的批量 CASE：每条记录的 UPDATE 需要 2 个参数（WHEN id THEN correct），
       // WHERE id IN 需要 1 个参数/id。为了不触及参数上限并保持统计准确，分批执行。
       for (let i = 0; i < mismatched.length; i += FIX_EXT_BATCH) {
@@ -143,11 +177,7 @@ router.post('/', syncLimiter, async (req, res, next) => {
       // Drop local records whose OSS object is gone. Skip when the listing is
       // empty — an empty bucket must never wipe the library (misconfig guard).
       if (objects.length > 0) {
-        const staleFileIds = db
-          .prepare('SELECT id, oss_key FROM files')
-          .all()
-          .filter((f) => !keySet.has(f.oss_key))
-          .map((f) => f.id);
+        const staleFileIds = [...staleIds];
         // 批量删除：收集待删 id 后分批 IN 删除，避免逐行 DELETE（BUG-08）。
         for (let i = 0; i < staleFileIds.length; i += DELETE_BATCH) {
           const chunk = staleFileIds.slice(i, i + DELETE_BATCH);
@@ -192,6 +222,7 @@ router.post('/', syncLimiter, async (req, res, next) => {
       }
     });
     tx();
+    invalidateLibraryCaches();
 
     res.json({
       ok: true,

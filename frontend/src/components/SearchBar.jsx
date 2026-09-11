@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Download, Loader2, Search, X } from 'lucide-react';
 import { BsFolder } from 'react-icons/bs';
 import { getFileUrl, search as searchApi } from '../api.js';
-import { downloadAndAlert } from '../utils.js';
+import { downloadAndAlert, errMsg } from '../utils.js';
 import FileIcon from './FileIcon.jsx';
 import { openFolderOrFile } from '../ui.js';
 import { useClickOutside } from '../hooks/useClickOutside.js';
@@ -15,6 +15,7 @@ export default function SearchBar({ className = '' }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
   const [open, setOpen] = useState(false);
   const [dropdownRect, setDropdownRect] = useState(null);
   const inputRef = useRef(null);
@@ -24,26 +25,36 @@ export default function SearchBar({ className = '' }) {
   const reqIdRef = useRef(0);
   const navigate = useNavigate();
 
-  const doSearch = useCallback(async (query) => {
-    if (!query.trim()) {
+  const doSearch = useCallback(
+    async (query) => {
+      if (!query.trim()) {
+        setResults(null);
+        setErr('');
+        setOpen(false);
+        return;
+      }
+      // Drop out-of-order responses: only the latest request may write state.
+      const reqId = ++reqIdRef.current;
+      setLoading(true);
+      // 发起新查询就必须先扔掉上一次的命中列表：原先失败分支是空 catch，下拉会继续展示
+      // 上一次查询的结果，用户以为那就是新关键词的命中并打开错文件（P1）。
       setResults(null);
-      setOpen(false);
-      return;
-    }
-    // Drop out-of-order responses: only the latest request may write state.
-    const reqId = ++reqIdRef.current;
-    setLoading(true);
-    try {
-      const data = await searchApi(query);
-      if (reqId !== reqIdRef.current) return;
-      setResults(data);
-      setOpen(true);
-    } catch {
-      /* ignore */
-    } finally {
-      if (reqId === reqIdRef.current) setLoading(false);
-    }
-  }, []);
+      setErr('');
+      try {
+        const data = await searchApi(query);
+        if (reqId !== reqIdRef.current) return;
+        setResults(data);
+        setOpen(true);
+      } catch (e) {
+        if (reqId !== reqIdRef.current) return;
+        setErr(errMsg(e, t('search.failed')));
+        setOpen(true); // 打开下拉把失败原因显示出来
+      } finally {
+        if (reqId === reqIdRef.current) setLoading(false);
+      }
+    },
+    [t]
+  );
 
   const onChange = (e) => {
     const v = e.target.value;
@@ -55,6 +66,7 @@ export default function SearchBar({ className = '' }) {
   const clear = () => {
     setQ('');
     setResults(null);
+    setErr('');
     setOpen(false);
     inputRef.current?.focus();
   };
@@ -143,7 +155,7 @@ export default function SearchBar({ className = '' }) {
         )}
       </div>
 
-      {open && results && dropdownRect && createPortal(
+      {open && (err || results) && dropdownRect && createPortal(
         <div
           ref={dropdownRef}
           className="rb-search-dropdown fixed z-[200] overflow-hidden"
@@ -153,7 +165,18 @@ export default function SearchBar({ className = '' }) {
             width: dropdownRect.width,
           }}
         >
-          {total === 0 ? (
+          {err ? (
+            <div className="flex items-center justify-between gap-3 px-4 py-4 text-sm">
+              <span className="text-red">{err}</span>
+              <button
+                type="button"
+                onClick={() => doSearch(q)}
+                className="shrink-0 rounded-full bg-field px-3 py-1 text-xs text-ink-2 hover:bg-hover"
+              >
+                {t('search.retry')}
+              </button>
+            </div>
+          ) : total === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-slate-500">{t('search.noResult')}</div>
           ) : (
             <div className="max-h-80 overflow-y-auto">
@@ -209,7 +232,11 @@ export default function SearchBar({ className = '' }) {
             </div>
           )}
           <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-400">
-            {t('search.resultsCount', { count: total })}
+            {err
+              ? t('search.failed')
+              : results?.truncated
+                ? t('search.resultsTruncated', { count: total })
+                : t('search.resultsCount', { count: total })}
           </div>
         </div>,
         document.body

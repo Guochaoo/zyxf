@@ -27,6 +27,17 @@
     "body-parser": "^1.20.6",
     "qs": "^6.16.0"
   },
+  "nodemonConfig": {
+    "watch": [
+      "src"
+    ],
+    "ignore": [
+      "**/*.tmp",
+      "**/*.TMP",
+      "**/*.tmpdir/**",
+      "**/*~RF*"
+    ]
+  },
   "devDependencies": {
     "nodemon": "^3.1.7"
   }

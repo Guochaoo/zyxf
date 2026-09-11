@@ -1,30 +1,59 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { gsap } from 'gsap';
 import { Link } from 'react-router-dom';
 import { CircleUserRound, LogIn, LogOut, Settings } from 'lucide-react';
 import { useClickOutside } from '../hooks/useClickOutside.js';
 import './StaggeredMenu.css';
 
+// IMPROVE-23：gsap 改为动态 import，避免常驻首屏预加载整个动画库；等待期间面板由 CSS
+// 预置为不可见（opacity:0），所以是「还没出现」而不是闪烁。
+let gsapPromise = null;
+function loadGsap() {
+  if (window.gsap) return Promise.resolve(window.gsap);
+  if (!gsapPromise) {
+    gsapPromise = import('gsap')
+      .then((m) => {
+        window.gsap = m.gsap;
+        window.onGdReady?.();
+        return m.gsap;
+      })
+      .catch((e) => {
+        gsapPromise = null; // 失败不缓存，下次交互可重试
+        throw e;
+      });
+  }
+  return gsapPromise;
+}
+
+// 在首次交互（悬停/按下）时就并行取回动画库：主包不必等，但点开菜单时通常已经就位。
+function prefetchGsap() {
+  try {
+    loadGsap().catch(() => {});
+  } catch {
+    /* 动态 import 不受支持时保持无动画可用 */
+  }
+}
+
 // Query the animated panel content and reset it to its pre-open state
 // (labels pushed down/rotated, numbers and socials hidden). Returns the
 // elements so the open timeline can tween them back in; also used after the
 // close tween finishes to leave the panel ready for the next open.
-function resetPanelContent(panel) {
+// `g` 是惰性取回的 gsap 实例（模块级不再静态 import，见 loadGsap）。
+function resetPanelContent(g, panel) {
   const itemEls = Array.from(panel.querySelectorAll('.sm-panel-itemLabel'));
   if (itemEls.length) {
-    gsap.set(itemEls, { yPercent: 140, rotate: 10 });
+    g.set(itemEls, { yPercent: 140, rotate: 10 });
   }
   const numberEls = Array.from(panel.querySelectorAll('.sm-panel-list[data-numbering] .sm-panel-item'));
   if (numberEls.length) {
-    gsap.set(numberEls, { '--sm-num-opacity': 0 });
+    g.set(numberEls, { '--sm-num-opacity': 0 });
   }
   const socialTitle = panel.querySelector('.sm-socials-title');
-  if (socialTitle) gsap.set(socialTitle, { opacity: 0 });
+  if (socialTitle) g.set(socialTitle, { opacity: 0 });
   const socialLinks = Array.from(panel.querySelectorAll('.sm-socials-link'));
-  if (socialLinks.length) gsap.set(socialLinks, { y: 25, opacity: 0 });
+  if (socialLinks.length) g.set(socialLinks, { y: 25, opacity: 0 });
   const accountCard = panel.querySelector('.sm-account-card');
-  if (accountCard) gsap.set(accountCard, { y: 25, opacity: 0 });
+  if (accountCard) g.set(accountCard, { y: 25, opacity: 0 });
   return { itemEls, numberEls, socialTitle, socialLinks, accountCard };
 }
 
@@ -70,6 +99,25 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   const iconRef = useRef(null);
   const textInnerRef = useRef(null);
   const [textLines, setTextLines] = useState([t('menu.toggleOpen'), t('menu.toggleClose')]);
+  // 动画库按需就位：未就位时视觉上什么都不会出现（CSS 已把面板/预层预置为 opacity:0），
+  // 交互本身不依赖它（点击仍会开合 data-open 与 aria 状态）。
+  const [gInit, setGInit] = useState(null);
+  const gRef = useRef(null);
+
+  // 挂载后立刻并行取回 gsap（不阻塞首屏渲染；失败则永久降级为无动画）。
+  useEffect(() => {
+    let alive = true;
+    loadGsap()
+      .then((g) => {
+        if (!alive) return;
+        gRef.current = g;
+        setGInit(g);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // 语言切换后按钮文字要立刻跟上：textLines 的初值只在首次渲染取自 t()，之后仅由
   // 开合动画重建，所以切语言时可见文字会停留在旧语言（同一按钮的 aria-label 是
@@ -80,8 +128,8 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     const openLabel = t('menu.toggleOpen');
     const closeLabel = t('menu.toggleClose');
     setTextLines([openRef.current ? closeLabel : openLabel]);
-    if (textInnerRef.current) gsap.set(textInnerRef.current, { yPercent: 0 });
-  }, [t]);
+    if (textInnerRef.current) gInit?.set(textInnerRef.current, { yPercent: 0 });
+  }, [t, gInit]);
 
   const openTlRef = useRef(null);
   const closeTweenRef = useRef(null);
@@ -90,9 +138,16 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   const colorTweenRef = useRef(null);
   const toggleBtnRef = useRef(null);
   const busyRef = useRef(false);
+  // 打开动画的开合轮次：await gsap 期间用户可能已经点了关闭（甚至又点开），
+  // 回来的时间线只有在「仍是同一轮且仍是打开态」时才允许播放。
+  const openGenRef = useRef(0);
 
+  // gsap 就位后把面板/预层挪到屏幕外（再交给时间线推进）。原先这步在 useLayoutEffect 里
+  // 同步执行；惰性加载后推迟到 gsap 到位时，等待期间由 CSS 的 opacity:0 保证不可见。
   useLayoutEffect(() => {
-    const ctx = gsap.context(() => {
+    if (!gInit) return undefined;
+    const g = gInit;
+    const ctx = g.context(() => {
       const panel = panelRef.current;
       const preContainer = preLayersRef.current;
       const plusH = plusHRef.current;
@@ -108,23 +163,24 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
       preLayerElsRef.current = preLayers;
 
       const offscreen = position === 'left' ? -100 : 100;
-      gsap.set([panel, ...preLayers], { xPercent: offscreen, opacity: 1 });
+      g.set([panel, ...preLayers], { xPercent: offscreen, opacity: 1 });
       if (preContainer) {
-        gsap.set(preContainer, { xPercent: 0, opacity: 1 });
+        g.set(preContainer, { xPercent: 0, opacity: 1 });
       }
-      gsap.set(plusH, { transformOrigin: '50% 50%', rotate: 0 });
-      gsap.set(plusV, { transformOrigin: '50% 50%', rotate: 90 });
-      gsap.set(icon, { rotate: 0, transformOrigin: '50% 50%' });
-      gsap.set(textInner, { yPercent: 0 });
-      if (toggleBtnRef.current) gsap.set(toggleBtnRef.current, { color: menuButtonColor });
+      g.set(plusH, { transformOrigin: '50% 50%', rotate: 0 });
+      g.set(plusV, { transformOrigin: '50% 50%', rotate: 90 });
+      g.set(icon, { rotate: 0, transformOrigin: '50% 50%' });
+      g.set(textInner, { yPercent: 0 });
+      if (toggleBtnRef.current) g.set(toggleBtnRef.current, { color: menuButtonColor });
     });
     return () => ctx.revert();
-  }, [menuButtonColor, position]);
+  }, [gInit, menuButtonColor, position]);
 
-  const buildOpenTimeline = useCallback(() => {
+  // 拿到 gsap 实例后才构造时间线；返回 null 表示本环境没有动画（交互仍然可用）。
+  const buildOpenTimeline = useCallback((g) => {
     const panel = panelRef.current;
     const layers = preLayerElsRef.current;
-    if (!panel) return null;
+    if (!g || !panel) return null;
 
     openTlRef.current?.kill();
     if (closeTweenRef.current) {
@@ -132,13 +188,13 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
       closeTweenRef.current = null;
     }
 
-    const { itemEls, numberEls, socialTitle, socialLinks, accountCard } = resetPanelContent(panel);
+    const { itemEls, numberEls, socialTitle, socialLinks, accountCard } = resetPanelContent(g, panel);
 
     const offscreen = position === 'left' ? -100 : 100;
     const layerStates = layers.map(el => ({ el, start: offscreen }));
     const panelStart = offscreen;
 
-    const tl = gsap.timeline({ paused: true });
+    const tl = g.timeline({ paused: true });
 
     layerStates.forEach((ls, i) => {
       tl.fromTo(ls.el, { xPercent: ls.start }, { xPercent: 0, duration: 0.5, ease: 'power4.out' }, i * 0.07);
@@ -203,7 +259,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
           ease: 'power3.out',
           stagger: { each: 0.08, from: 'start' },
           onComplete: () => {
-            gsap.set(socialLinks, { clearProps: 'opacity' });
+            g.set(socialLinks, { clearProps: 'opacity' });
           }
         },
         socialsStart + 0.04
@@ -218,7 +274,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
           duration: 0.55,
           ease: 'power3.out',
           onComplete: () => {
-            gsap.set(accountCard, { clearProps: 'all' });
+            g.set(accountCard, { clearProps: 'all' });
           }
         },
         socialsStart + 0.12
@@ -232,20 +288,33 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   const playOpen = useCallback(() => {
     if (busyRef.current) return;
     busyRef.current = true;
-    const tl = buildOpenTimeline();
-    if (tl) {
-      tl.eventCallback('onComplete', () => {
-        busyRef.current = false;
+    const gen = (openGenRef.current += 1);
+    // 动画库可能还没就位（首次点击通常已预取完成）：等到位再放时间线。
+    // 期间用户若已关闭或再次开合，本轮结果直接丢弃，绝不在关闭态上播放打开动画。
+    Promise.resolve()
+      .then(() => gRef.current || loadGsap())
+      .catch(() => null)
+      .then((g) => {
+        if (gen !== openGenRef.current || !openRef.current) return;
+        const tl = buildOpenTimeline(g);
+        if (tl) {
+          tl.eventCallback('onComplete', () => {
+            busyRef.current = false;
+          });
+          tl.play(0);
+        } else {
+          busyRef.current = false;
+        }
       });
-      tl.play(0);
-    } else {
-      busyRef.current = false;
-    }
   }, [buildOpenTimeline]);
 
   const playClose = useCallback(() => {
+    // 作废在途的打开动画（可能是等待 gsap 的那一轮）
+    openGenRef.current += 1;
     openTlRef.current?.kill();
     openTlRef.current = null;
+    // BUG-59：被 kill 的打开时间线不会触发 onComplete，这里必须自己解锁 busyRef。
+    busyRef.current = false;
 
     const panel = panelRef.current;
     const layers = preLayerElsRef.current;
@@ -253,14 +322,16 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
 
     const all = [...layers, panel];
     closeTweenRef.current?.kill();
+    const g = gRef.current;
+    if (!g) return; // 无动画库时面板本来就没被移出屏幕，无需回位
     const offscreen = position === 'left' ? -100 : 100;
-    closeTweenRef.current = gsap.to(all, {
+    closeTweenRef.current = g.to(all, {
       xPercent: offscreen,
       duration: 0.32,
       ease: 'power3.in',
       overwrite: 'auto',
       onComplete: () => {
-        resetPanelContent(panel);
+        resetPanelContent(g, panel);
         busyRef.current = false;
       }
     });
@@ -268,49 +339,53 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
 
   const animateIcon = useCallback(opening => {
     const icon = iconRef.current;
-    if (!icon) return;
+    const g = gRef.current;
+    if (!icon || !g) return;
     spinTweenRef.current?.kill();
     if (opening) {
-      spinTweenRef.current = gsap.to(icon, { rotate: 225, duration: 0.8, ease: 'power4.out', overwrite: 'auto' });
+      spinTweenRef.current = g.to(icon, { rotate: 225, duration: 0.8, ease: 'power4.out', overwrite: 'auto' });
     } else {
-      spinTweenRef.current = gsap.to(icon, { rotate: 0, duration: 0.35, ease: 'power3.inOut', overwrite: 'auto' });
+      spinTweenRef.current = g.to(icon, { rotate: 0, duration: 0.35, ease: 'power3.inOut', overwrite: 'auto' });
     }
   }, []);
 
   const animateColor = useCallback(
     opening => {
       const btn = toggleBtnRef.current;
-      if (!btn) return;
+      const g = gRef.current;
+      if (!btn || !g) return;
       colorTweenRef.current?.kill();
       if (changeMenuColorOnOpen) {
         const targetColor = opening ? openMenuButtonColor : menuButtonColor;
-        colorTweenRef.current = gsap.to(btn, {
+        colorTweenRef.current = g.to(btn, {
           color: targetColor,
           delay: 0.18,
           duration: 0.3,
           ease: 'power2.out'
         });
       } else {
-        gsap.set(btn, { color: menuButtonColor });
+        g.set(btn, { color: menuButtonColor });
       }
     },
     [openMenuButtonColor, menuButtonColor, changeMenuColorOnOpen]
   );
 
   useEffect(() => {
-    if (toggleBtnRef.current) {
+    const g = gRef.current;
+    if (toggleBtnRef.current && g) {
       if (changeMenuColorOnOpen) {
         const targetColor = openRef.current ? openMenuButtonColor : menuButtonColor;
-        gsap.set(toggleBtnRef.current, { color: targetColor });
+        g.set(toggleBtnRef.current, { color: targetColor });
       } else {
-        gsap.set(toggleBtnRef.current, { color: menuButtonColor });
+        g.set(toggleBtnRef.current, { color: menuButtonColor });
       }
     }
-  }, [changeMenuColorOnOpen, menuButtonColor, openMenuButtonColor]);
+  }, [changeMenuColorOnOpen, menuButtonColor, openMenuButtonColor, gInit]);
 
   const animateText = useCallback(opening => {
     const inner = textInnerRef.current;
-    if (!inner) return;
+    const g = gRef.current;
+    if (!inner || !g) return;
     textCycleAnimRef.current?.kill();
 
     const openLabel = t('menu.toggleOpen');
@@ -327,10 +402,10 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     seq.push(targetLabel);
     setTextLines(seq);
 
-    gsap.set(inner, { yPercent: 0 });
+    g.set(inner, { yPercent: 0 });
     const lineCount = seq.length;
     const finalShift = ((lineCount - 1) / lineCount) * 100;
-    textCycleAnimRef.current = gsap.to(inner, {
+    textCycleAnimRef.current = g.to(inner, {
       yPercent: -finalShift,
       duration: 0.5 + lineCount * 0.07,
       ease: 'power4.out'
@@ -363,7 +438,6 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     }
     animateTo(target);
   }, [animateTo, onMenuOpen, onMenuClose]);
-
   const closeMenu = useCallback(() => {
     if (openRef.current) {
       openRef.current = false;
@@ -415,6 +489,9 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
             aria-expanded={open}
             aria-controls="staggered-menu-panel"
             onClick={toggleMenu}
+            onPointerEnter={prefetchGsap}
+            onPointerDown={prefetchGsap}
+            onFocus={prefetchGsap}
             type="button"
           >
             <span className="sm-toggle-textWrap" aria-hidden="true">
@@ -434,7 +511,16 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
         )}
       </header>
 
-      <aside id="staggered-menu-panel" ref={panelRef} className="staggered-menu-panel" aria-hidden={!open}>
+      <aside
+        id="staggered-menu-panel"
+        ref={panelRef}
+        className="staggered-menu-panel"
+        aria-hidden={!open}
+        // 关闭态的面板仍然常驻渲染（只是 opacity:0 + 平移出屏），子项因此还在 Tab 顺序里：
+        // 键盘用户会聚焦到完全看不见的「资料库 / 登录」并回车触发。关闭时把整块设为 inert，
+        // 使可聚焦性与 aria-hidden 一致。
+        inert={open ? undefined : ''}
+      >
         <div className="sm-panel-inner">
           <ul className="sm-panel-list" role="list" data-numbering={displayItemNumbering || undefined}>
             {items && items.length ? (

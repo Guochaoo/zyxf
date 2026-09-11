@@ -29,11 +29,17 @@ let sdkPromise = null;
 function loadSdk() {
   if (window.aliyun?.config) return Promise.resolve(window.aliyun);
   if (sdkPromise) return sdkPromise;
+  // BUG-60：失败要清缓存并移除 script，否则本次会话所有 Office 预览都复用它、只能整页刷新。
+  const onFail = (reject) => (err) => {
+    sdkPromise = null;
+    document.querySelector('script[data-weboffice-sdk]')?.remove();
+    reject(err instanceof Error ? err : new Error(SDK_LOAD_FAILED));
+  };
   sdkPromise = new Promise((resolve, reject) => {
     const existing = document.querySelector('script[data-weboffice-sdk]');
     if (existing) {
       existing.addEventListener('load', () => resolve(window.aliyun), { once: true });
-      existing.addEventListener('error', () => reject(new Error(SDK_LOAD_FAILED)), { once: true });
+      existing.addEventListener('error', onFail(reject), { once: true });
       return;
     }
     const s = document.createElement('script');
@@ -41,7 +47,7 @@ function loadSdk() {
     s.dataset.webofficeSdk = '1';
     s.async = true;
     s.onload = () => resolve(window.aliyun);
-    s.onerror = () => reject(new Error(SDK_LOAD_FAILED));
+    s.onerror = onFail(reject);
     document.head.appendChild(s);
   });
   return sdkPromise;

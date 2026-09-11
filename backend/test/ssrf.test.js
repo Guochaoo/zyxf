@@ -47,4 +47,26 @@ describe('BUG-20: resolveClientLlmConfig SSRF hardening', () => {
     assert.ok(ok);
     assert.equal(ok.baseUrl, 'https://8.8.8.8/v1');
   });
+
+  // 审计修复：IPv6 分支原先只拦 ::1 / ::ffff:，整个内网地址族（fc00::/7 ULA、
+  // fe80::/10 链路本地、ff00::/8 组播）都能绕过。阿里云内网元数据在 IPv6 下就是
+  // fd00:0:0:0::1，恰在未拦截段内。
+  test('rejects IPv6 private / link-local / multicast / site-local ranges', async () => {
+    const cases = [
+      'https://[fd00:0:0:0::1]/v1', // ULA（阿里云 IPv6 元数据）
+      'https://[fc00::1]/v1', // ULA
+      'https://[fe80::1]/v1', // 链路本地
+      'https://[fec0::1]/v1', // 站点本地（已废弃）
+      'https://[ff02::1]/v1', // 组播
+      'https://[::]/v1', // 未指定
+    ];
+    for (const baseUrl of cases) {
+      assert.equal(await resolveClientLlmConfig({ ...VALID, baseUrl }), null, `${baseUrl} 应被拒绝`);
+    }
+  });
+
+  test('accepts a public global-unicast IPv6 literal', async () => {
+    const ok = await resolveClientLlmConfig({ ...VALID, baseUrl: 'https://[2606:4700:4700::1111]/v1' });
+    assert.ok(ok, '全局单播 2000::/3 应放行');
+  });
 });

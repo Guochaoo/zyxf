@@ -56,13 +56,12 @@ a,
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ---- DESIGN.md §2/§6: Focus ring system (Focus Blue) ---- */
+/* ---- DESIGN.md §2/§6: Focus ring system (Focus Blue) ----
+   键盘焦点环只给按钮/链接这类「无原生焦点语义」的元素；表单控件（input/
+   textarea/select）按其无界风格只用底色表达，聚焦不加任何描边/光晕。 */
 button:focus-visible,
 a:focus-visible,
-[role='button']:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
+[role='button']:focus-visible {
   outline: 2px solid hsla(212, 100%, 48%, 1);
   outline-offset: 2px;
 }
@@ -423,13 +422,13 @@ textarea:focus-visible {
   border-radius: 6px;
 }
 
+/* 聚焦不加任何视觉：保持与常驻态同款的 shadow-as-border，不做蓝色光晕。
+   outline: none 不能省——少了它浏览器会画默认焦点环，等于换个颜色的蓝框。 */
 .app-theme input:focus,
 .app-theme textarea:focus,
 .app-theme select:focus {
   border: 0 !important;
-  box-shadow:
-    var(--line-strong) 0px 0px 0px 1px,
-    hsla(212, 100%, 48%, 0.25) 0px 0px 0px 3px;
+  box-shadow: var(--line-strong) 0px 0px 0px 1px;
   outline: none;
 }
 

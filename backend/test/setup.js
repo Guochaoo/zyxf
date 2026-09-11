@@ -7,8 +7,20 @@
 // Do not drop that flag (tests fail without it); re-verify when bumping Node.
 import './env.js';
 import { mock } from 'node:test';
+import { db } from '../src/db.js';
 import * as realOss from '../src/oss.js';
 import * as realLlm from '../src/llm.js';
+
+// 认证加固后 attachUser 会按 payload.id 回查用户行（BUG-51/52：使改密/降权/删号立即生效），
+// 所以任何「以某个身份发请求」的用例都必须先让该 id 真实存在，否则 token 会被判为无效。
+// id 显式指定，便于用例直接把它写进 signToken 的 payload。
+export function ensureTestUser({ id, username = `u${id}`, role = 'user' } = {}) {
+  db.prepare(
+    `INSERT INTO users (id, username, password_hash, role, created_at) VALUES (?, ?, 'x', ?, ?)
+     ON CONFLICT(id) DO UPDATE SET username = excluded.username, role = excluded.role`
+  ).run(id, username, role, Date.now());
+  return { id, username, role };
+}
 
 // Controllable fake OSS object store — tests write ossObjectStore.keys to
 // simulate what the bucket contains (sync endpoint reads this).
@@ -62,13 +74,18 @@ mock.module('../src/llm.js', {
 
 // DirectMail 邮件客户端 — 不真正发信。sendVerificationCode 收到的验证码
 // 记录在 mailState.lastCode，注册流程测试据此取回明文验证码。
-export const mailState = { enabled: true, calls: [], lastCode: null };
+export const mailState = { enabled: true, calls: [], lastCode: null, failNext: false };
 
 mock.module('../src/mail.js', {
   exports: {
     isMailEnabled: () => mailState.enabled,
     sendVerificationCode: async (email, code) => {
       mailState.calls.push({ email, code });
+      // 测试钩子：模拟发信失败（用于验证「失败不消耗冷却/额度、不覆写旧验证码」）。
+      if (mailState.failNext) {
+        mailState.failNext = false;
+        throw new Error('mail service down');
+      }
       mailState.lastCode = code;
     },
   },

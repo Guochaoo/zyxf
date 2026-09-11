@@ -1,4 +1,7 @@
 import i18n from './i18n/index.js';
+// IMPROVE-19：扩展名分类直接复用后端 extPolicy（别名见 vite.config.js 的 @backend），
+// 手抄副本会让「后端加了类型、前端仍判 unknown → 预览退化成只能下载」。
+import { ARCHIVE_EXTS, PREVIEWABLE_EXTS, normalizeExt } from '@backend/extPolicy.js';
 
 export function formatSize(bytes) {
   if (bytes == null) return '-';
@@ -33,36 +36,16 @@ export function timeAgo(ts) {
   return i18n.t('common.monthsAgo', { count: mo });
 }
 
-// ---- extension classification (mirrors backend extPolicy.js) ----
-// Macro-enabled Office formats (docm/dotm/xlsm/xltm/pptm/potm) are rejected
-// by the backend upload whitelist, so they are intentionally absent here too.
+// 分类集合直接取后端导出：可预览（白名单 − 压缩包）与压缩包。
+const OFFICE_EXT = PREVIEWABLE_EXTS;
+const ARCHIVE_EXT = ARCHIVE_EXTS;
 
-const OFFICE_EXT = new Set([
-  // Word
-  'doc', 'dot', 'wps', 'wpt', 'docx', 'dotx', 'rtf',
-  // PPT
-  'ppt', 'pptx', 'ppsx', 'ppsm', 'pps', 'potx', 'dpt', 'dps',
-  // Excel
-  'xls', 'xlt', 'et', 'xlsx', 'xltx', 'csv',
-  // PDF
-  'pdf',
-  // 文本
-  'txt',
-]);
-
-const ARCHIVE_EXT = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2']);
-
+// 大文件提示阈值。文案里的数值由这个常量注入（见 Preview/index.jsx），
+// 两边不再各写一份——原先 i18n 字典里硬写着「>20MB」，改阈值就会说不一致。
 export const LARGE_FILE_THRESHOLD = 20 * 1024 * 1024; // 20 MB
-// Large-file hint is language-aware; resolve lazily at call time (not module
-// load) so the current locale is honored.
-export const largeFileHint = () => i18n.t('preview.largeFileHint');
 
-// ---- helpers ----
-
-// Strip the leading dot and lowercase an extension string (mirrors backend extPolicy.js).
-export function normalizeExt(ext) {
-  return String(ext || '').toLowerCase().replace(/^\./, '');
-}
+// normalizeExt 由 extPolicy.js 提供（原先这里再抄一份实现）。
+export { normalizeExt };
 
 export async function downloadFileById(file, getFileUrl) {
   const meta = await getFileUrl(file.id, { download: true });
@@ -102,4 +85,11 @@ export function isLargeFile(size) {
 // Pull the backend error message out of an axios error, with a fallback.
 export function errMsg(e, fallback = i18n.t('common.actionFailed')) {
   return e?.response?.data?.error || e?.message || fallback;
+}
+
+// ---- 目录结构变更广播 ----
+// 管理操作（新建/重命名/移动/删除/重排/同步）后广播，让侧边栏 FolderTree 与知识图谱
+// 重新拉取目录树；监听方见 hooks/useFolderTree.js 与 components/FolderTree.jsx。
+export function notifyFoldersChanged() {
+  window.dispatchEvent(new Event('folders-changed'));
 }

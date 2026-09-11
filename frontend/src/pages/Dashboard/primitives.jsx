@@ -24,7 +24,7 @@ export function Empty({ children }) {
   return <div className="mt-6 py-8 text-center text-[12px] text-ink-3">{children}</div>;
 }
 
-export function RangeSwitch({ value, onChange }) {
+export function RangeSwitch({ value, onChange, disabled = false }) {
   const { t } = useTranslation();
   const opts = [
     { v: 7, label: t('dashboard.rangeDays.seven') },
@@ -38,8 +38,9 @@ export function RangeSwitch({ value, onChange }) {
           key={o.v}
           type="button"
           aria-pressed={value === o.v}
+          disabled={disabled}
           onClick={() => onChange(o.v)}
-          className={`rounded-full px-3 py-1 text-[12px] transition-[background-color,color,box-shadow,transform] duration-150 active:scale-[0.96] ${
+          className={`rounded-full px-3 py-1 text-[12px] transition-[background-color,color,box-shadow,transform] duration-150 enabled:active:scale-[0.96] disabled:opacity-50 ${
             value === o.v ? 'bg-surface text-ink shadow-btn' : 'text-ink-3 hover:text-ink-2'
           }`}
         >

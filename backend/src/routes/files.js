@@ -8,6 +8,7 @@ import { mimeOf } from '../mime.js';
 import { findSibling, folderExists, isUniqueError, nextSortOrder } from '../dbHelpers.js';
 import { objectKeyForFile, ossPrefix, parseOptionalFolderId } from '../storagePath.js';
 import { isExtAllowed, normalizeExt, PREVIEWABLE_EXTS, shouldForceDownload } from '../extPolicy.js';
+import { invalidateLibraryCaches } from '../searchService.js';
 import { adminBypassLimiter } from '../limiter.js';
 import { wrapAsync, serviceError } from '../http.js';
 
@@ -50,16 +51,38 @@ function sanitizeName(name) {
   return String(name || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
 }
 
+// 文件名同样不能含路径分隔符。OSS key 的每一段都要过 cleanObjectSegment（'/'、'\' → '-'），
+// 于是 'a/b.pdf' 与 'a-b.pdf' 会落到同一个 key，而查重是按**原始 name** 比较的（findSibling），
+// 两者不等价：轻则 INSERT 撞 UNIQUE(oss_key)，重则先覆盖既有对象再失败，把别的文件内容换掉。
+// 文件夹名早已有同款校验（folders.js containsPathSeparator），文件名这一半此前缺失。
+const containsPathSeparator = (name) => /[\/\\]/.test(name);
+const SEPARATOR_ERROR = '文件名不能包含路径分隔符（/ 或 \\）';
+
 // Shared duplicate-name check: a file with the same (non-NULL) folder_id and
 // name, optionally excluding one id (for rename/move self-checks).
 const findFileByName = (name, folderId, excludeId) =>
   findSibling(db, 'files', { name, parentColumn: 'folder_id', parentId: folderId, excludeId });
 
+// 目标 OSS key 是否已被别的文件记录占用。**按 key 查重是必需的**：`cleanObjectSegment`
+// 不是单射——NFC/NFD 两种写法的 `café.pdf`、以及 `.`/`_` 这类段名都会映射到同一个 key，
+// 而按 name 查重的 SQL 是字节比较（NFD ≠ NFC），于是 upload-url 会放行并把已存在对象的
+// key 发回给浏览器，直传时**覆盖掉既有文件的内容**，之后 POST /files 才撞 UNIQUE(oss_key)
+// 报 409，前端 cleanup-upload 又因该 key 已被引用而拒绝清理 → 内容被换且不可恢复。
+const findFileByOssKey = (key, excludeId = null) =>
+  excludeId == null
+    ? db.prepare('SELECT id FROM files WHERE oss_key = ?').get(key)
+    : db.prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?').get(key, excludeId);
+
+const KEY_TAKEN_ERROR = '该存储路径已被占用（同名或等价名称的文件已存在）';
+
 // Shared validation for both upload steps: filename, parent folder, duplicate
 // name and extension whitelist. Returns { trimmed, pid, ext } or { error, status }.
 function validateUploadInput(name, folderId) {
-  const trimmed = sanitizeName(name);
+  // 文件名统一按 NFC 落库：OSS key 由 cleanObjectSegment 归一化，库里若保留 NFD 形式，
+  // 「按 name 查重」与「按 key 查重」就永远不等价（同一条目两种写法都能建）。
+  const trimmed = sanitizeName(name).normalize('NFC');
   if (!trimmed) return { error: '文件名不能为空' };
+  if (containsPathSeparator(trimmed)) return { error: SEPARATOR_ERROR };
   const pid = parseOptionalFolderId(folderId);
   if (Number.isNaN(pid)) return { error: '无效的文件夹 ID' };
   if (pid !== null && !folderExists(db, pid)) {
@@ -67,6 +90,10 @@ function validateUploadInput(name, folderId) {
   }
   if (findFileByName(trimmed, pid)) {
     return { error: '此文件夹中已存在同名文件', status: 409 };
+  }
+  // 名称不同但 key 相同（归一化/清洗后等价）同样要拦，见 findFileByOssKey 的说明。
+  if (findFileByOssKey(objectKeyForFile(db, pid, trimmed))) {
+    return { error: KEY_TAKEN_ERROR, status: 409 };
   }
   const ext = normalizeExt(path.extname(trimmed));
   if (!isExtAllowed(ext)) {
@@ -131,6 +158,7 @@ router.post('/', requireAdmin, wrapAsync(async (req, res) => {
         Date.now()
       );
     res.json({ id: info.lastInsertRowid });
+    invalidateLibraryCaches();
   } catch (e) {
     if (isUniqueError(e)) {
       return res.status(409).json({ error: '此文件夹中已存在同名文件' });
@@ -160,7 +188,13 @@ router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => 
   }
 
   res.json({
-    url: signedGetUrl(file.oss_key, SHORT_SIGN_TTL),
+    url: signedGetUrl(file.oss_key, SHORT_SIGN_TTL, {
+      // 不可预览类型由 OSS 强制 attachment：桶绑定站点自有域名时，内联 SVG/HTML
+      // 会在站点源上执行脚本，而 extPolicy 的 default-deny 只有服务端能真正兜住
+      // （前端此前并不消费 force_download 字段）。
+      forceDownload: isDownload || shouldForceDownload(ext),
+      filename: file.name,
+    }),
     name: file.name,
     ext: file.ext,
     mime_type: mimeOf(ext) || 'application/octet-stream',
@@ -220,9 +254,21 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
   if (!file) return;
   const id = file.id;
 
+  const patchBody = req.body || {};
+  if (
+    !Object.prototype.hasOwnProperty.call(patchBody, 'name') &&
+    !Object.prototype.hasOwnProperty.call(patchBody, 'folder_id')
+  ) {
+    // 空 body / 全是未知字段原先会被当成「folder_id: undefined → 移动到根」，
+    // 一个拼错的请求就静默移动文件（并复制一份 OSS 对象）。必须显式 400。
+    return res.status(400).json({ error: '请求体必须包含 name 或 folder_id' });
+  }
+
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
-    const newName = sanitizeName(req.body?.name);
+    // 与上传路径同款 NFC 归一化：否则同一条目能用 NFD 写法再建一份，而两者的 OSS key 相同。
+    const newName = sanitizeName(req.body?.name).normalize('NFC');
     if (!newName) return res.status(400).json({ error: '名称不能为空' });
+    if (containsPathSeparator(newName)) return res.status(400).json({ error: SEPARATOR_ERROR });
     if (newName === file.name) return res.json({ ok: true, unchanged: true });
     const ext = normalizeExt(path.extname(newName));
     if (!isExtAllowed(ext)) {
@@ -250,12 +296,12 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
           ),
         file.oss_key !== newKey
       );
+      invalidateLibraryCaches();
       return res.json({ ok: true, name: newName, oss_key: newKey });
     } catch (e) {
       return next(e);
     }
   }
-
   const target = parseOptionalFolderId(req.body?.folder_id);
   if (Number.isNaN(target)) return res.status(400).json({ error: '无效的文件夹 ID' });
   if (target !== null && !folderExists(db, target)) {
@@ -266,6 +312,13 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
     return res.status(409).json({ error: '目标文件夹中已存在同名文件' });
   }
   const newKey = objectKeyForFile(db, target, file.name);
+  // 与改名分支同款的 key 冲突检查。文件名查重是按**原始 name** 比较的（findSibling），
+  // 而 OSS key 是 cleanObjectSegment 归一化后比较，两者不等价（历史脏数据、Unicode
+  // 归一化差异都能制造同名不同 name 的情况）。缺这步会先 copyOssObject 覆盖目标对象、
+  // 再因 UNIQUE(oss_key) 抛 500——目标文件的内容被换掉而 DB 行还指向旧 key。
+  if (db.prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?').get(newKey, id)) {
+    return res.status(409).json({ error: '目标存储路径已存在同名文件' });
+  }
   try {
     await copyUpdateDelete(file, newKey, () => {
       const so = nextSortOrder(db, 'files', 'folder_id', target);
@@ -276,6 +329,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
         id
       );
     });
+    invalidateLibraryCaches();
     res.json({ ok: true });
   } catch (e) {
     return next(e);
@@ -292,6 +346,7 @@ router.delete('/:id', requireAdmin, wrapAsync(async (req, res) => {
     return serviceError(res, e, 'OSS 删除失败');
   }
   db.prepare('DELETE FROM files WHERE id = ?').run(file.id);
+  invalidateLibraryCaches();
   res.json({ ok: true });
 }));
 
@@ -301,8 +356,25 @@ router.post('/cleanup-upload', requireAdmin, wrapAsync(async (req, res) => {
   const { oss_key } = req.body || {};
   if (!oss_key) return res.status(400).json({ error: 'oss_key 不能为空' });
   const prefix = ossPrefix();
-  if (prefix && !oss_key.startsWith(prefix + '/') && oss_key !== prefix) {
+  // 没有前缀就无法界定「本应用的对象」范围：原实现在这种配置下会照删任意 key，
+  // 等于提供了一个可销毁桶内任意对象（含别的应用对象）的接口。宁可放弃这次
+  // best-effort 清理（最坏只留一个孤儿对象），也不做无边界删除。
+  if (!prefix) {
+    return res.status(400).json({ error: '未配置 OSS_KEY_PREFIX，拒绝清理（无法确定对象归属）' });
+  }
+  if (!oss_key.startsWith(prefix + '/')) {
     return res.status(400).json({ error: 'OSS key 与配置的前缀不匹配' });
+  }
+  // `zyxf/../other/x` 也能通过 startsWith（字符串层面确实以 `zyxf/` 开头），
+  // 但 OSS 端若按路径语义归一化就会删到前缀之外的对象。对象键里不存在合法的
+  // `.` / `..` 段（生成侧 cleanObjectSegment 已把它们换成 `_`），一律拒绝。
+  if (oss_key.split('/').some((seg) => seg === '.' || seg === '..')) {
+    return res.status(400).json({ error: 'OSS key 含非法路径段' });
+  }
+  // 已被 files 行引用的对象不能删：注册失败后的清理不该动到已入库文件的对象
+  // （并发或同名上传会让两者的 key 相同），否则等于把线上文件的存储对象删掉。
+  if (db.prepare('SELECT id FROM files WHERE oss_key = ?').get(oss_key)) {
+    return res.status(409).json({ error: '该对象已被文件记录引用，拒绝清理' });
   }
   try {
     await deleteOssObjectIfExists(oss_key);

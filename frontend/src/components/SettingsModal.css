@@ -1,6 +1,6 @@
 /* SettingsModal — 左右分栏设置的中央弹窗（参照系统设置卡片）。
    遮罩复用菜单的 rb-frost-backdrop 磨砂玻璃；卡片固定尺寸，左右两栏：
-   左栏为关闭按钮 + 搜索 + 垂直导航，右栏为标题 + 内容。 */
+   左栏为关闭按钮 + 垂直导航，右栏为标题 + 内容（底部固定操作条）。 */
 
 .settings-backdrop {
   position: fixed;
@@ -16,11 +16,12 @@
   background: rgba(0, 0, 0, 0.46);
 }
 
-/* ---- Card（固定尺寸） ---- */
+/* ---- Card（固定尺寸；视口更小时按 100vw/vh - 32px 收窄） ---- */
 .settings-card {
-  width: 720px;
+  position: relative; /* 关闭按钮绝对定位到卡片右上角 */
+  width: 800px;
   max-width: calc(100vw - 32px);
-  height: 520px;
+  height: 580px;
   max-height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
@@ -39,21 +40,40 @@
   display: flex;
 }
 
-/* ---- 左栏 ---- */
+/* ---- 左栏 ----
+   底色与资料库左栏同款灰（--app-sidebar，#ECECEE），靠表面色差与右栏白底分区，
+   不再画分割细线（无界）；手机端整屏布局下改回透明，见文件末尾的媒体查询。 */
 .settings-sidebar {
   display: flex;
   flex-direction: column;
   width: 220px;
   flex-shrink: 0;
   padding: 14px 12px;
-  border-right: 1px solid var(--line);
+  background: var(--app-sidebar);
   overflow-y: auto;
 }
 
+/* 左栏标题（桌面端）：与右栏板块标题同一行高与 18px 起点，两栏标题对齐 */
+.settings-sidebar-title {
+  flex-shrink: 0;
+  padding: 4px 10px 12px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+
+/* 关闭按钮固定在卡片右上角（内容列的标题左对齐，右上角是空白，不会压到文字）；
+   手机端整屏布局下改回随标题栏横排，见文件末尾的媒体查询。 */
 .settings-sidebar-top {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
   display: flex;
   align-items: center;
-  padding: 2px 4px 10px;
+  padding: 0;
 }
 
 .settings-close {
@@ -83,43 +103,21 @@
   color: var(--ink);
 }
 
-/* 搜索框 */
-.settings-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  margin-bottom: 10px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  color: var(--ink-3);
-  transition: border-color 150ms ease;
-}
-
-.settings-search:focus-within {
-  border-color: var(--line-strong);
-}
-
-.settings-search-input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  font-size: 13px;
-  color: var(--ink);
-  outline: none;
-}
-
-.settings-search-input::placeholder {
-  color: var(--ink-3);
-}
-
 /* 垂直导航 */
 .settings-nav {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* 条目交互（灰底左栏）：hover 与选中都「往白靠」，只差档位——hover 半档、选中整档。
+     原先 hover 是加深（--hover）而选中是变白，两个方向相反，观感不协调。
+     暗色下 --surface 比栏底更暗，直接用它会让方向反回来，故改成具名白色叠加。 */
+  --settings-chip-hover: color-mix(in srgb, var(--surface) 55%, transparent);
+  --settings-chip-active: var(--surface);
+}
+
+[data-theme='dark'] .settings-nav {
+  --settings-chip-hover: rgba(255, 255, 255, 0.06);
+  --settings-chip-active: rgba(255, 255, 255, 0.12);
 }
 
 .settings-nav-item {
@@ -143,17 +141,27 @@
 }
 
 .settings-nav-item:hover {
-  background: var(--hover);
+  background: var(--settings-chip-hover);
   color: var(--ink);
 }
 
+/* 选中条目：整档白块 + 提拉投影（与统计面板的时间范围 / 指标胶囊同一套语汇：
+   组内只有选中的那一项「浮到表面上」，其余靠文字色深浅区分） */
 .settings-nav-item--active {
-  background: var(--hover);
+  background: var(--settings-chip-active);
   color: var(--ink);
+  box-shadow:
+    rgba(23, 23, 23, 0.12) 0px 1px 2px,
+    rgba(23, 23, 23, 0.06) 0px 0px 0px 1px;
 }
 
 .settings-nav-item:focus-visible {
   outline: none;
+}
+
+/* 手机端列表行专用的元素（行尾状态图标），桌面端隐藏 */
+.settings-nav-arrow {
+  display: none;
 }
 
 /* ---- 右栏 ---- */
@@ -166,7 +174,7 @@
 }
 
 .settings-content-title {
-  padding: 18px 24px 12px;
+  padding: 18px 56px 12px 24px; /* 右侧留出角落关闭按钮的位置，长标题也不会压到它 */
   font-size: 18px;
   font-weight: 600;
   line-height: 1.2;
@@ -181,17 +189,66 @@
   padding: 4px 24px 20px;
 }
 
+/* 板块内节奏：块间距 20 > 字段间距 14 > 标签到输入框 6，靠间距层级分组，不用色块/描边。
+   弹窗卡片本身是白底，字段组再加白底只会多出一圈 16px 假缩进，故不再设底色。 */
 .settings-section {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
 }
 
-/* ---- AI 配置 ---- */
-.settings-fields {
+/* ---- 智能对话配置 ---- */
+/* 配置来源：两个小圆点单选，纵向排列（原生 radio 去外观后自绘，保留键盘/读屏语义） */
+.settings-modes {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.settings-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.settings-mode-input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--line-strong) 0px 0px 0px 1px;
+  cursor: pointer;
+  transition: box-shadow 150ms ease;
+}
+
+.settings-mode-input:checked {
+  background: radial-gradient(circle, var(--ink) 0 4px, transparent 4px);
+  box-shadow: var(--ink) 0px 0px 0px 1px;
+}
+
+/* 选中/未选只换颜色 + 圆点填充，不改字重（改字重会让文字宽度跳动） */
+.settings-mode-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-2);
+  transition: color 150ms ease;
+}
+
+.settings-mode--active .settings-mode-label {
+  color: var(--ink);
+}
+
+/* 字段分组：靠留白分隔（无界理念，不用色块也不用描边）；卡片本身白底，无需底色块 */
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .settings-field {
@@ -201,32 +258,115 @@
 }
 
 .settings-field-label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--ink-2);
+  letter-spacing: 0.01em;
 }
 
+/* 输入框：浅灰底色块本身就是边界（无界），既无描边细线也无聚焦光晕
+   （与登录页输入框同款做法）。暗色下改用 --field，避免亮色块刺眼。 */
 .settings-input {
   width: 100%;
-  padding: 9px 11px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #f5f5f5;
   font: inherit;
   font-size: 13px;
   color: var(--ink);
   outline: none;
-  transition:
-    border-color 150ms ease,
-    box-shadow 150ms ease;
+  box-shadow: none;
+  transition: background-color 150ms ease;
 }
 
 .settings-input::placeholder {
   color: var(--ink-3);
 }
 
-.settings-input:focus {
-  border-color: var(--line-strong);
+/* 协议下拉：原生 <select> 的弹出列表由系统绘制（浅色直角、系统高亮），与主题和「无界」
+   风格都冲突，因此改成「按钮触发器 + Level 3 浮层」自绘；触发器外观与输入框一致。 */
+.settings-select {
+  position: relative;
+  display: block;
+}
+
+.settings-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #f5f5f5;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.settings-select-trigger svg {
+  flex-shrink: 0;
+  color: var(--ink-3);
+}
+
+.settings-select-value {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 弹窗内的浮层（DESIGN.md §6 Level 3）：纯投影、无描边、无光晕；语言下拉与协议下拉共用 */
+.settings-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 12;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow:
+    rgba(0, 0, 0, 0.06) 0 4px 10px,
+    rgba(0, 0, 0, 0.12) 0 12px 32px;
+}
+
+.settings-popover-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.settings-popover-option:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.settings-popover-option--selected {
+  color: var(--ink);
+}
+
+/* 暗色下 #f5f5f5 会变成刺眼亮块，改用 token 灰底 */
+[data-theme='dark'] .settings-input,
+[data-theme='dark'] .settings-select-trigger {
+  background: var(--field);
 }
 
 .settings-hint {
@@ -235,49 +375,40 @@
   color: var(--ink-3);
 }
 
-/* ---- 按钮组 ---- */
+/* 校验提示（保存被拦下时出现）+ 常驻说明：合成一块，间距比区块节奏更紧 */
+.settings-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 错误用语义红（--red），只给文字，不加描边——设置区输入框一律靠底色表达边界 */
+.settings-error {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--red);
+}
+
+/* 必填项缺失：标红该字段的标签（这是最轻的信号，仍然不画描边） */
+.settings-field--invalid .settings-field-label {
+  color: var(--red);
+}
+
+/* ---- 按钮组（按钮本体复用站点 rb-btn-dark / rb-btn-ghost）----
+   固定在右栏右下角：作为 .settings-content 的底部条（不在滚动区内，内容再长也不会被推走）。 */
 .settings-actions {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  padding: 12px 24px 18px;
 }
 
-.settings-btn {
-  padding: 8px 14px;
-  border: 0;
-  border-radius: 8px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background-color 150ms ease,
-    color 150ms ease,
-    transform 0.12s ease;
-}
-
-.settings-btn:active {
-  transform: scale(0.985);
-}
-
-.settings-btn--ghost {
-  background: transparent;
-  color: var(--ink-2);
-}
-
-.settings-btn--ghost:hover {
-  background: var(--hover);
-  color: var(--ink);
-}
-
-.settings-btn--primary {
-  background: var(--ink);
-  color: #ffffff;
-}
-
-.settings-btn--primary:hover {
-  background: rgba(23, 23, 23, 0.9);
+/* 次级按钮在本条里跟主按钮配对展示，圆角对齐到 rb-btn-dark 的 14px（其他页面的
+   ghost 仍是 6px，属站点既有规范，不在此处统一） */
+.settings-actions .rb-btn-ghost {
+  border-radius: 14px;
 }
 
 /* ---- 账户信息 ---- */
@@ -472,44 +603,141 @@
   color: var(--ink-2);
 }
 
-.settings-lang-menu {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 12;
-  padding: 6px;
-  border-radius: 10px;
-  background: var(--surface);
-  box-shadow:
-    rgba(0, 0, 0, 0.06) 0 4px 10px,
-    rgba(0, 0, 0, 0.12) 0 12px 32px;
+/* 语言下拉与协议下拉共用 .settings-popover / .settings-popover-option 样式 */
+
+/* ---- 窄屏（≤640px）：整屏页面，视觉仿原生 App 设置页 ——
+   灰底页面 + 白色圆角分组卡片；顶部条是「左侧圆形按钮 + 居中标题」，
+   导航变成一张白卡片里的列表行，区块内容各成一张卡片，底部操作条也是一张卡片。 ---- */
+@media (max-width: 640px) {
+  .settings-backdrop {
+    padding: 0;
+  }
+
+  .settings-card {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh; /* 避开移动端浏览器地址栏（与 NoticeModal / Preview 同口径） */
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: var(--page); /* 页面底色转灰，分区靠白色卡片表达 */
+  }
+
+  .settings-layout {
+    flex-direction: column;
+  }
+
+  /* 顶部条 + 导航：包在白卡片外的顶部区域，导航自己是一张白卡片。
+     行高 36px + 标题在其中居中 → 文字上沿到页顶 8px；
+     行与列表卡片之间留 6px，于是文字下边缘到列表顶端 14px。
+     index.html 没开 viewport-fit=cover，故不需要 env(safe-area-inset-*)。 */
+  .settings-sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    padding: 0 12px;
+    background: transparent;
+    overflow-y: visible; /* 侧栏改成顶部条后不再单独滚动 */
+  }
+
+  /* 整行：左侧圆形关闭按钮（绝对定位）+ 居中标题。
+     必须清掉基类的 top/right —— 那是桌面端把关闭按钮钉到卡片右上角用的绝对定位偏移，
+     这里 position 换成 relative 后它们会变成「相对偏移」，把整行推下 10px、拉左 10px。 */
+  .settings-sidebar-top {
+    position: relative;
+    top: auto;
+    right: auto;
+    flex: 1 1 100%;
+    justify-content: center;
+    min-height: 36px;
+    padding: 0;
+  }
+
+  .settings-mobile-title {
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.2; /* 固定行高，避免跟随系统字体把行撑高 */
+    color: var(--ink);
+  }
+
+  /* 圆底比点击行小一档（32px，行内居中），视觉上不压到页顶也不贴住列表卡片 */
+  .settings-close {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 32px;
+    height: 32px;
+    margin-top: -16px;
+    border-radius: 999px;
+    background: var(--hover);
+    color: var(--ink);
+  }
+
+  /* 导航：白卡片 + 列表行（图标 + 文案 + 右侧状态图标） */
+  .settings-nav,
+  [data-theme='dark'] .settings-nav {
+    flex: 1 1 100%;
+    flex-direction: column;
+    gap: 0;
+    padding: 4px;
+    border-radius: 16px;
+    background: var(--surface);
+    overflow: visible;
+    /* 条目已经坐在白卡片里：hover / 选中都回到浅灰块（白块 + 投影在白底上反而看不出边界） */
+    --settings-chip-hover: var(--hover);
+    --settings-chip-active: var(--hover);
+  }
+
+  .settings-nav-item--active {
+    box-shadow: none;
+  }
+
+  .settings-nav-item {
+    width: 100%;
+    gap: 12px;
+    padding: 13px 12px;
+    border-radius: 12px;
+    font-size: 15px;
+  }
+
+  .settings-nav-item svg:first-child {
+    width: 20px;
+    height: 20px;
+    color: var(--ink);
+  }
+
+  .settings-nav-arrow {
+    display: block;
+    margin-left: auto;
+    color: var(--ink-3);
+  }
+
+  /* 内容区（二级页面）：板块名已在顶部条上，这里不再重复标题 */
+  .settings-content {
+    background: transparent;
+  }
+
+  .settings-content-body {
+    padding: 10px 12px 12px;
+  }
+
+  /* 每个板块 = 一张白卡片 */
+  .settings-section {
+    gap: 18px;
+    padding: 14px;
+    border-radius: 16px;
+    background: var(--surface);
+  }
+
+  /* 底部操作条：同样是一张白卡片，钉在页面底部 */
+  .settings-actions {
+    margin: 0 12px 12px;
+    padding: 12px;
+    border-radius: 16px;
+    background: var(--surface);
+  }
 }
 
-.settings-lang-option {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ink-2);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background-color 150ms ease,
-    color 150ms ease;
-}
-
-.settings-lang-option:hover {
-  background: var(--hover);
-  color: var(--ink);
-}
-
-.settings-lang-option--selected {
-  color: var(--ink);
-}

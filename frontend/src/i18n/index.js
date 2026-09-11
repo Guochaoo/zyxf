@@ -6,12 +6,6 @@ import { storageGet } from '../ui.js';
 
 export const LOCALE_KEY = 'zyxf_lang';
 
-// 支持的 locale 列表（母语名用于设置弹窗下拉展示）。
-export const LOCALES = [
-  { value: 'zh', label: zh.settings.langOptions.zh },
-  { value: 'en', label: en.settings.langOptions.en },
-];
-
 // 初始语言：localStorage 优先，否则默认中文。
 const initialLocale = (() => {
   const s = storageGet(LOCALE_KEY);

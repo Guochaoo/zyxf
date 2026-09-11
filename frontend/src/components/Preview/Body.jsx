@@ -20,5 +20,5 @@ export default function PreviewBody({ kind, signedUrl, wbToken, fileId, name, on
   }
 
   // Never-previewable types (archives etc.) — plain download prompt.
-  return <UnknownViewer signedUrl={signedUrl} />;
+  return <UnknownViewer onDownload={onDownload} />;
 }

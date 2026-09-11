@@ -116,6 +116,12 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
     onFullChange?.(dialog !== null);
   }, [dialog, onFullChange]);
 
+  // BUG-64：卸载时必须复位 graphFull（窄屏卸载时 App 的悬浮菜单会因此永久消失）。
+  // 用 ref 读最新回调，保证这个清理只在真正卸载时执行。
+  const onFullChangeRef = useRef(onFullChange);
+  onFullChangeRef.current = onFullChange;
+  useEffect(() => () => onFullChangeRef.current?.(false), []);
+
   return (
     <div
       className={`relative flex shrink-0 flex-col bg-surface rounded-[14px] overflow-hidden ${className}`.trim()}
@@ -293,6 +299,9 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
 
     return () => {
       sim.stop();
+      // 解绑 tick（BUG-67）：只 stop 不摘监听时，旧模拟的回调仍在（节点集每次变化都重建
+      // 一份 simulation），卸载后继续 setState、逐帧触发无意义重渲染。
+      sim.on('tick', null);
       simRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

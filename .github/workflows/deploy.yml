@@ -4,6 +4,17 @@ on:
   push:
     branches: [main, master]
 
+# 同一次生产部署串行化：两次 push 挨得近时两个 job 会并发在同一台服务器上执行
+# git reset --hard + npm install + systemctl start，互相覆盖文件并把服务停在
+# 两次修订混合的中间态。cancel-in-progress: false 让排队的那次等前一次跑完。
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+# 最小权限：部署只读仓库内容（服务器凭据走 SSH secrets）。
+permissions:
+  contents: read
+
 # 标准 SSH 部署：后端用 systemd 托管（zyxf.service），前端构建产物交给 nginx。
 # 流程：SSH 上服务器 → git pull → 装依赖 → 构建前端 → systemctl 重启后端。
 jobs:
@@ -25,6 +36,9 @@ jobs:
           script: |
             set -e
             cd /opt/zyxf
+            # 回滚基线：本次部署前的修订。健康检查失败时据此回退（人工排障也可直接执行
+            # `git reset --hard <该 SHA>` + 重新构建）。
+            PREV=$(git rev-parse HEAD)
             git config --global --add safe.directory /opt/zyxf
             mkdir -p ~/.ssh
             ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
@@ -74,4 +88,24 @@ jobs:
 
             sleep 3
             # 健康检查：确认后端起来（写库/加载环境变量失败会在此暴露）。
-            curl -fsS http://127.0.0.1:4000/api/health
+            if curl -fsS http://127.0.0.1:4000/api/health; then
+              exit 0
+            fi
+
+            # 健康检查失败 = 新修订起不来。此时前端 dist/ 已被新构建覆盖、新代码也已就位，
+            # 直接留在新修订上会让线上持续 502，所以退回部署前的修订并重建，至少恢复可用。
+            # 注意：回滚会把本地分支指针退回 PREV，与 origin/main 暂时分叉；下次部署的
+            # `git reset --hard origin/main` 会自动重新对齐，属预期行为。
+            echo "::error::health check failed on $(git rev-parse --short HEAD), rolling back to ${PREV}"
+            cd /opt/zyxf
+            git reset --hard "$PREV"
+            cd /opt/zyxf/backend
+            npm install --no-audit --no-fund
+            cd /opt/zyxf/frontend
+            npm install --no-audit --no-fund
+            npm run build
+            systemctl restart zyxf
+            sleep 3
+            curl -fsS http://127.0.0.1:4000/api/health || true
+            echo "::error::rolled back to ${PREV}: 回滚已完成，但本次部署判定为失败"
+            exit 1

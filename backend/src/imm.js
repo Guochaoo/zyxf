@@ -13,12 +13,8 @@ import { envOrThrow } from './env.js';
 // This module hand-rolls the Aliyun RPC signature (HMAC-SHA1) so we don't
 // need to pull in the full OpenAPI SDK dependency tree just for one call.
 
-// Aliyun RPC 签名规范与 form 表单体的空格编码不同：
-//  - 签名（stringToSign / canonical）用 RFC 3986，空格编码为 %20；
-//  - application/x-www-form-urlencoded 表单体用 HTML 表单规则，空格编码为 +。
-// 此外 `!` `'` `(` `)` `*` 都需要按 utf8 字节转义（RPC 规范要求）。
-// 若两者共用同一个编码器（把 %20 换成 +），含空格的文件名/oss_key 会导致
-// 签名串与实际发送的 body 不一致 → IMM 签名校验失败（BUG-03）。
+// BUG-03：签名用 RFC 3986（空格 → %20），form 体用 HTML 表单规则（空格 → +）。
+// 两者共用编码器会让含空格的文件名/oss_key 签名校验失败。
 const encodeRfc3986 = (str) =>
   encodeURIComponent(String(str)).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
 
@@ -28,6 +24,8 @@ export const percentEncodeForSign = (str) => encodeRfc3986(str);
 // 表单体（urlencoded）用：空格 → +（仍保持 `!` `'` `(` `)` `*` 的转义）
 export const percentEncodeUrlencoded = (str) => encodeRfc3986(str).replace(/%20/g, '+');
 
+// IMPROVE-02（就地豁免）：阿里云 OSS 签名协议**固定**要求 HMAC-SHA1，不是可替换的实现选择——
+// 换成 SHA-256 会直接导致签名校验失败、无法调用 OSS。此处非「弱算法」缺陷。
 const hmacSha1 = (secret, str) =>
   crypto.createHmac('sha1', secret).update(str).digest('base64');
 
@@ -47,7 +45,7 @@ export function toImmTimeoutError(action, e) {
 const regionId = () => envOrThrow('OSS_REGION').replace(/^oss-/, '');
 
 /** IMM project bound to the bucket (OSS console → IMM binding). */
-export function immProject() {
+function immProject() {
   return process.env.IMM_PROJECT || 'zyxf';
 }
 

@@ -55,4 +55,50 @@ describe('ensureAdmin 以 .env 为权威同步管理员账号', () => {
     assert.ok(bcrypt.compareSync('admin-password', row.password_hash));
     cleanup('sync-promo');
   });
+
+  // BUG-52：改 ADMIN_USER 等于「换管理员」。旧行若留着，旧用户名 + 旧密码仍能登录成
+  // admin（登录只查 users 表、完全不看配置），而应用内没有用户管理入口，只能手改库才能清掉。
+  test('BUG-52: 换 ADMIN_USER 后旧管理员被降权', () => {
+    ensureAdmin('sync-old-admin', 'old-admin-password');
+    assert.equal(rowOf('sync-old-admin').role, 'admin');
+
+    ensureAdmin('sync-new-admin', 'new-admin-password');
+
+    assert.equal(rowOf('sync-old-admin').role, 'user', '旧管理员应被降权');
+    assert.equal(rowOf('sync-new-admin').role, 'admin');
+    cleanup('sync-old-admin');
+    cleanup('sync-new-admin');
+  });
+
+  // BUG-51 的基础：改密码时自增 token_epoch（比对在 auth.attachUser），未改密码则不动。
+  test('BUG-51: 改密码使 token_epoch 自增，未改密码则不动', () => {
+    ensureAdmin('sync-epoch', 'epoch-password-1');
+    const epochOf = () =>
+      db.prepare('SELECT token_epoch FROM users WHERE username = ?').get('sync-epoch').token_epoch;
+    const e0 = epochOf();
+
+    ensureAdmin('sync-epoch', 'epoch-password-1'); // 密码未变
+    assert.equal(epochOf(), e0, '未改密码不应变动');
+
+    ensureAdmin('sync-epoch', 'epoch-password-2'); // 改密码
+    assert.equal(epochOf(), e0 + 1, '改密码应自增');
+    cleanup('sync-epoch');
+  });
+
+  // BUG-73：表级默认值不再是 'admin'——任何漏写 role 的写入都必须落到普通用户。
+  test('BUG-73: users.role 的默认值是 user', () => {
+    const dflt = db
+      .prepare('PRAGMA table_info(users)')
+      .all()
+      .find((c) => c.name === 'role')?.dflt_value;
+    assert.equal(dflt, "'user'");
+
+    db.prepare('INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)').run(
+      'sync-default-role',
+      'x',
+      Date.now()
+    );
+    assert.equal(rowOf('sync-default-role').role, 'user');
+    cleanup('sync-default-role');
+  });
 });

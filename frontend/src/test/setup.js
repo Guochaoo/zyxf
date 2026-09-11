@@ -5,6 +5,10 @@ import { afterEach, beforeEach } from 'vitest';
 // 测试默认使用 zh 语言（与字典默认一致），断言的可见文案即为中文。
 import i18n from '../i18n/index.js';
 
+// IMPROVE-02（就地豁免）：前端测试里出现的 test-key / secret123 等字面量**全是虚构的
+// 测试凭据**，只用于断言（真实凭据在 .env / 云端）。静态扫描报的「硬编码凭据」属误报；
+// 改名同样会被标记，还会破坏契约断言，故保持原样并在此显式声明。
+
 // jsdom has no ResizeObserver; several components (nav indicator,
 // GlideList/Silk/Dashboard) instantiate one during effects.
 class ResizeObserverStub {

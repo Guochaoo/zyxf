@@ -15,13 +15,20 @@ api.interceptors.response.use(
   (err) => {
     // Expired/invalid token: drop it so the user can log back in, and let the
     // AuthProvider clear the UI state.
-    if (err.response?.status === 401 && getToken()) {
-      clearToken();
-      window.dispatchEvent(new CustomEvent('auth:expired'));
-    }
+    handleUnauthorized(err.response?.status);
     return Promise.reject(err);
   }
 );
+
+// 统一的 401 处理：清 token 并通知 AuthProvider 复位登录态。
+// chatStream 走原生 fetch（不走 axios 拦截器），也必须调它——否则 token 过期后
+// 聊天一直失败，而账户卡片仍显示已登录，用户不知道该重新登录。
+function handleUnauthorized(status) {
+  if (status === 401 && getToken()) {
+    clearToken();
+    window.dispatchEvent(new CustomEvent('auth:expired'));
+  }
+}
 
 export default api;
 
@@ -55,6 +62,7 @@ export async function chatStream(messages, { onDelta, onFiles, signal, llm } = {
   });
 
   if (!res.ok) {
+    handleUnauthorized(res.status);
     let message = i18n.t('common.requestFailed', { status: res.status });
     try {
       const data = await res.json();
@@ -196,7 +204,9 @@ export async function getHeatmap() {
 }
 
 // Sync the local library with the shared OSS bucket (multi-deployment support).
-// Rate-limited server-side to 5/min per IP.
+// 服务端按身份分层限流（backend/src/limiter.js 的 tieredLimiter，见 routes/sync.js）：
+// 游客 2 次/分钟（按 IP，IPv6 归并到子网）、登录用户 5 次/分钟（按 user id，不占 IP 配额）、
+// 管理员豁免。注意不是「按 IP 一律 5 次/分钟」——评审时不要据此判断滥用面。
 export async function syncOss() {
   const { data } = await api.post('/sync');
   return data;

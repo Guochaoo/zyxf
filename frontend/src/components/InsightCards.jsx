@@ -1,5 +1,5 @@
 import { Liveline } from 'liveline';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatMonthDay } from '../utils.js';
 
 /* ─────────────────────────────────────────────────────────
@@ -264,6 +264,14 @@ export function AnomalyCard({ title, metrics, className = '' }) {
           extra (optional trailing legend node) */
 export function AllocationCard({ title, segments, extra }) {
   const [selected, setSelected] = useState(segments[0]?.name ?? null);
+  // segments 变了（上传/删除后类型分布刷新）且当前选中项已不在列表里时必须一起重置：
+  // 原先只有 useState 初值，selected 会留在一个已消失的类型上——大数字回落到 segments[0]，
+  // 但没有任何分段是 aria-pressed（视觉与读屏状态和显示的数字互相矛盾）。
+  useEffect(() => {
+    setSelected((cur) =>
+      cur != null && segments.some((s) => s.name === cur) ? cur : segments[0]?.name ?? null
+    );
+  }, [segments]);
   const active = segments.find((segment) => segment.name === selected) ?? segments[0];
   if (!active) return null;
 

@@ -28,11 +28,28 @@ export function buildFolderIndex(rows) {
 
 // Next sort_order for a new row in a parent-ordered table.
 // table/column come from fixed call-site literals (never user input).
+// 注意：这里**不做**跨调用的语句缓存——`db` 是参数，测试会传入自己的内存库，
+// 以 (table,column,parentId) 为键缓存会把语句绑到另一个数据库实例上。
+// 需要批量调用时（sync 导入）由调用方用 syncSortOrder 包一层进程内缓存。
 export function nextSortOrder(db, table, column, parentId) {
   const where = parentId === null ? `${column} IS NULL` : `${column} = ?`;
   const stmt = db.prepare(`SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM ${table} WHERE ${where}`);
   const row = parentId === null ? stmt.get() : stmt.get(parentId);
   return row.n;
+}
+
+// 单次批量操作内复用「上一个 sort_order + 1」：同父级的连续插入不必每次都查 MAX()。
+// 只在同一临界区（如同一事务）内使用；跨请求复用会算错。
+// table/column 仍是固定字面量（调用点写死，不接受用户输入）。
+export function makeSortOrderCursor(db) {
+  const cache = new Map();
+  return (table, column, parentId) => {
+    const key = `${table}|${column}|${parentId === null ? 'root' : parentId}`;
+    if (!cache.has(key)) cache.set(key, nextSortOrder(db, table, column, parentId));
+    const n = cache.get(key);
+    cache.set(key, n + 1);
+    return n;
+  };
 }
 
 // Does a folder with this id exist? Shared by the "parent folder must exist"

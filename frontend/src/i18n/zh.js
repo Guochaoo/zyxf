@@ -48,7 +48,10 @@ const zh = {
     colAction: '操作',
     filesLabel: '文件',
     foldersLabel: '文件夹',
-    syncDone: '同步完成：新增 {{folders}} 个文件夹 / {{files}} 个文件，清理 {{removed}} 个失效文件',
+    syncDone: '同步完成',
+    // 明细放副行（13px，可两行），主行只留 4 个字，避免被单行省略号截断（见 Toast.css）
+    syncDetail: '新增 {{folders}} 个文件夹 / {{files}} 个文件，清理 {{removed}} 个失效文件',
+    syncNone: '无新增、无清理',
     confirmDeleteFolder: '确认删除文件夹「{{name}}」及其所有内容？此操作不可恢复。',
     confirmDeleteFile: '确认删除文件「{{name}}」？',
     moving: '正在移动「{{name}}」',
@@ -58,6 +61,8 @@ const zh = {
     download: '下载',
     openFolder: '打开文件夹',
     deleteError: '删除失败',
+    createError: '新建失败',
+    syncError: '同步失败',
     renameError: '重命名失败',
     moveError: '移动失败',
     dragSortHint: ' — 在行的上/下边缘可插入排序，拖到文件夹中部可移入',
@@ -103,6 +108,7 @@ const zh = {
     title: '统计面板',
     refresh: '刷新',
     downloadHeatmap: '下载热力图',
+    heatmapCell: '{{date}}：{{count}} 次下载',
     topFolders: '热门文件夹',
     recentUploads: '近期上传',
     typeDist: '类型分布',
@@ -158,10 +164,10 @@ const zh = {
   settings: {
     title: '设置',
     close: '关闭',
-    searchPlaceholder: '搜索设置',
+    back: '返回',
     navAria: '设置板块',
     nav: {
-      ai: 'AI 配置',
+      ai: '智能对话配置',
       account: '账户信息',
       appearance: '外观',
     },
@@ -176,10 +182,21 @@ const zh = {
       selectLang: '选择语言',
     },
     ai: {
-      apiKey: 'API Key',
+      modeAria: '配置来源',
+      modeServer: '使用服务器配置',
+      modeCustom: '使用自定义配置',
       baseUrl: 'API 地址',
+      protocol: 'API 协议',
+      // 协议名是官方专有名词，与下拉里的 id 一一对应，不做本地化
+      protocolOpenaiCompletions: 'OpenAI Chat Completions',
+      protocolOpenaiResponses: 'OpenAI Responses',
+      protocolAnthropicMessages: 'Anthropic Messages',
+      apiKey: 'API Key',
       model: '模型',
-      hint: '三项都填写后使用本浏览器配置；留空任意项则使用服务器配置。配置仅保存在本地浏览器。',
+      hint: '地址、API Key、模型三项都填写后才生效。配置仅保存在本地浏览器。',
+      hintServer: '使用服务器已配置的模型，不在本地保存任何密钥。',
+      // 三项没填完时点保存的拦截提示（同时把缺的字段标签标红）
+      errorIncomplete: '三项没填完，配置没有保存——请补齐标红的字段。',
       restore: '恢复默认设置',
       save: '保存',
     },
@@ -198,13 +215,14 @@ const zh = {
   chat: {
     title: '智能对话',
     clear: '清空会话历史',
-    settingsAria: 'AI 设置',
-    settingsTitle: 'AI 设置（API Key / 地址 / 模型）',
+    settingsAria: '智能对话配置',
+    settingsTitle: '智能对话配置（服务器配置 / 自定义配置）',
     collapse: '收起对话',
     expand: '展开对话',
     promptPlaceholder: '输入问题…',
     promptAria: '聊天输入',
     askHint: '问我资料在哪，我来帮你找：',
+    loginRequired: '登录后才能使用自带 Key 的 AI 对话',
     suggestions: ['高数往年题在哪', '有没有物理复习资料', '线代课件推荐一下'],
     sendAria: '发送',
     stopAria: '停止',
@@ -236,6 +254,9 @@ const zh = {
     download: '下载 {{name}}',
     clear: '清除搜索',
     loadingAria: '清除',
+    failed: '搜索失败，请重试',
+    retry: '重试',
+    resultsTruncated: '仅显示前 {{count}} 条结果',
   },
   tree: {
     title: '目录',
@@ -271,6 +292,7 @@ const zh = {
     start: '开始上传',
   },
   preview: {
+    aria: '文件预览',
     download: '下载',
     close: '关闭',
     loading: '正在获取文件地址…',
@@ -281,7 +303,7 @@ const zh = {
     downloadFile: '下载文件',
     unsupported: '该文件类型暂不支持在线预览',
     reload: '重新加载',
-    largeFileHint: '文件较大（>20MB），建议在 WiFi 下预览或直接下载',
+    largeFileHint: '文件较大（>{{size}}），建议在 WiFi 下预览或直接下载',
     downloadFailedHint: '下载失败，请关闭后重新打开',
   },
   common: {
@@ -299,12 +321,16 @@ const zh = {
     // 以下为原先硬编码在各模块里的提示语，统一收进字典（英文界面不再露中文）。
     actionFailed: '操作失败',
     today: '今日',
+    // 启动期致命错误（白屏兜底）：面向用户的三条走字典（源码里不得硬编码中文，见 i18n 测试）
+    bootErrorTitle: '页面出了点问题',
+    bootErrorHint: '刷新一下通常就能恢复。若一直打不开，请联系 xjtuzyxf@163.com。',
+    bootErrorReload: '刷新页面',
+    // 下面这条只在开发环境显示（给开发者看的排查提示，不给终端用户看）
+    bootError: '启动失败（前端错误，后端可能是正常的）：',
     loadFailed: '加载失败',
     requestFailed: '请求失败（{{status}}）',
     downloadFailed: '下载失败',
     downloadFailedStatus: '下载失败（{{status}}）',
-    actionFailed: '操作失败',
-    today: '今日',
   },
 };
 
