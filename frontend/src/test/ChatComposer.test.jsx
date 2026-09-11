@@ -161,6 +161,7 @@ describe('ChatComposer', () => {
       apiKey: 'test-key',
       baseUrl: 'https://llm.test/v1',
       model: 'glm-4.6',
+      protocol: 'openai',
     });
   });
 
@@ -200,6 +201,7 @@ describe('ChatComposer', () => {
       apiKey: 'k2',
       baseUrl: 'https://llm2.test/v1',
       model: 'glm-4.6',
+      protocol: 'openai',
     });
   });
 

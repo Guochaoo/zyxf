@@ -276,8 +276,44 @@
   color: var(--ink-3);
 }
 
+/* 协议下拉：与输入框同一套外观（灰底、无描边、聚焦无光晕），自绘 chevron 替换系统箭头 */
+.settings-select-wrap {
+  position: relative;
+  display: block;
+}
+
+.settings-select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 9px 34px 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #f5f5f5;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  outline: none;
+  cursor: pointer;
+}
+
+.settings-select option {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.settings-select-icon {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
 /* 暗色下 #f5f5f5 会变成刺眼亮块，改用 token 灰底 */
-[data-theme='dark'] .settings-input {
+[data-theme='dark'] .settings-input,
+[data-theme='dark'] .settings-select {
   background: var(--field);
 }
 
