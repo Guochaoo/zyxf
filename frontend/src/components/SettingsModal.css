@@ -108,6 +108,16 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* 条目交互（灰底左栏）：hover 与选中都「往白靠」，只差档位——hover 半档、选中整档。
+     原先 hover 是加深（--hover）而选中是变白，两个方向相反，观感不协调。
+     暗色下 --surface 比栏底更暗，直接用它会让方向反回来，故改成具名白色叠加。 */
+  --settings-chip-hover: color-mix(in srgb, var(--surface) 55%, transparent);
+  --settings-chip-active: var(--surface);
+}
+
+[data-theme='dark'] .settings-nav {
+  --settings-chip-hover: rgba(255, 255, 255, 0.06);
+  --settings-chip-active: rgba(255, 255, 255, 0.12);
 }
 
 .settings-nav-item {
@@ -131,14 +141,18 @@
 }
 
 .settings-nav-item:hover {
-  background: var(--hover);
+  background: var(--settings-chip-hover);
   color: var(--ink);
 }
 
-/* 选中条目：在灰底左栏上改用白底块（比 --hover 的加深更清楚，与手机端「灰页面 + 白卡片」同构） */
+/* 选中条目：整档白块 + 提拉投影（与统计面板的时间范围 / 指标胶囊同一套语汇：
+   组内只有选中的那一项「浮到表面上」，其余靠文字色深浅区分） */
 .settings-nav-item--active {
-  background: var(--surface);
+  background: var(--settings-chip-active);
   color: var(--ink);
+  box-shadow:
+    rgba(23, 23, 23, 0.12) 0px 1px 2px,
+    rgba(23, 23, 23, 0.06) 0px 0px 0px 1px;
 }
 
 .settings-nav-item:focus-visible {
@@ -644,7 +658,8 @@
   }
 
   /* 导航：白卡片 + 列表行（图标 + 文案 + 右侧状态图标） */
-  .settings-nav {
+  .settings-nav,
+  [data-theme='dark'] .settings-nav {
     flex: 1 1 100%;
     flex-direction: column;
     gap: 0;
@@ -652,6 +667,13 @@
     border-radius: 16px;
     background: var(--surface);
     overflow: visible;
+    /* 条目已经坐在白卡片里：hover / 选中都回到浅灰块（白块 + 投影在白底上反而看不出边界） */
+    --settings-chip-hover: var(--hover);
+    --settings-chip-active: var(--hover);
+  }
+
+  .settings-nav-item--active {
+    box-shadow: none;
   }
 
   .settings-nav-item {
