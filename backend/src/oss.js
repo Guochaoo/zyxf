@@ -70,10 +70,14 @@ export function buildPostPolicy({ key, maxSizeBytes = 200 * 1024 * 1024, expires
 
 /**
  * Generate a signed GET url for previewing/downloading a file.
- * forceDownload 让 OSS 按签名下发 `Content-Disposition: attachment` 与通用二进制
- * 类型——桶绑定了站点自有域名时，内联 SVG/HTML 会在站点源上执行脚本，所以
- * extPolicy.shouldForceDownload() 判为「不可内联」的对象必须走这条路径，
- * 由服务端强制，而不是指望客户端遵守 force_download 字段。
+ * forceDownload 让 OSS 按签名下发 `Content-Disposition: attachment`——桶绑定了站点自有
+ * 域名时，内联 SVG/HTML 会在站点源上执行脚本，所以 extPolicy.shouldForceDownload()
+ * 判为「不可内联」的对象必须走这条路径，由服务端强制，而不是指望客户端遵守
+ * force_download 字段。
+ *
+ * ⚠️ 只能覆盖 `response-content-disposition`：OSS **拒绝** `response-content-type`，
+ * 带上它整个请求会 400（`InvalidRequest: Can not override response header on
+ * content-type`），下载直接失败。attachment 已经足以阻止内联渲染，不需要再改 MIME。
  */
 export function signedGetUrl(key, expiresSec = 1800, { forceDownload = false, filename } = {}) {
   const options = { expires: expiresSec };
@@ -81,7 +85,6 @@ export function signedGetUrl(key, expiresSec = 1800, { forceDownload = false, fi
     const name = encodeURIComponent(filename || key.split('/').pop() || 'download');
     options.response = {
       'content-disposition': `attachment; filename="${name}"`,
-      'content-type': 'application/octet-stream',
     };
   }
   const url = ossClient().signatureUrl(key, options);
