@@ -281,29 +281,34 @@ export default function SettingsModal({ open, onClose }) {
                   {cfgMode === 'custom' && (
                     /* 字段顺序：地址 → 协议 → Key → 模型；分组靠留白（无界理念，不用色块也不用描边） */
                     <div className="settings-form">
-                      {llmFields.map(({ key, label, placeholder, type, options }) => (
-                        <label key={key} className="settings-field">
-                          <span className="settings-field-label">{label}</span>
-                          {type === 'select' ? (
-                            <ProtocolSelect
-                              label={label}
-                              value={cfgDraft[key]}
-                              options={options}
-                              onChange={(v) => setCfgDraft((d) => ({ ...d, [key]: v }))}
-                            />
-                          ) : (
-                            <input
-                              type={type}
-                              value={cfgDraft[key]}
-                              onChange={(e) => setCfgDraft((d) => ({ ...d, [key]: e.target.value }))}
-                              placeholder={placeholder}
-                              className="settings-input"
-                              spellCheck={false}
-                              autoComplete={key === 'apiKey' ? 'off' : undefined}
-                            />
-                          )}
-                        </label>
-                      ))}
+                      {llmFields.map(({ key, label, placeholder, type, options }) => {
+                        // 下拉字段不用 <label> 包裹：label 会把点击转发给内部控件，等于「API 协议」
+                        // 那一行整行都可点，点击区域过大；改成 div，只有触发器本身可点（触发器自带 aria-label）。
+                        const Wrapper = type === 'select' ? 'div' : 'label';
+                        return (
+                          <Wrapper key={key} className="settings-field">
+                            <span className="settings-field-label">{label}</span>
+                            {type === 'select' ? (
+                              <ProtocolSelect
+                                label={label}
+                                value={cfgDraft[key]}
+                                options={options}
+                                onChange={(v) => setCfgDraft((d) => ({ ...d, [key]: v }))}
+                              />
+                            ) : (
+                              <input
+                                type={type}
+                                value={cfgDraft[key]}
+                                onChange={(e) => setCfgDraft((d) => ({ ...d, [key]: e.target.value }))}
+                                placeholder={placeholder}
+                                className="settings-input"
+                                spellCheck={false}
+                                autoComplete={key === 'apiKey' ? 'off' : undefined}
+                              />
+                            )}
+                          </Wrapper>
+                        );
+                      })}
                     </div>
                   )}
                   <p className="settings-hint">
