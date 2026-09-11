@@ -112,7 +112,7 @@ cd frontend && npm test    # vitest + Testing Library
 
 ## 设计规范
 
-UI 遵循 Vercel 风格的设计系统（色彩、字体、组件、布局、阴影层级），详见 **[docs/DESIGN.md](docs/DESIGN.md)**。
+UI 遵循受 Vercel 启发、以「无界」（边界靠表面色深浅 / 留白 / 投影海拔，而非边框线）为核心的设计系统：色彩 token、OPPO Sans 排版、组件样式、三栏布局与阴影层级，详见 **[docs/DESIGN.md](docs/DESIGN.md)**（中文，逐条对应代码实现）。
 
 ## 关于
 
