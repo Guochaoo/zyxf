@@ -14,23 +14,26 @@ import { LogoIcon } from '../components/icons';
 const EASE = [0.22, 1, 0.36, 1];
 
 /* Non-translatable base per case study: (id, image).
- * Title/category come from the about.caseStudies dictionary (language-reactive). */
+ * Title/category come from the about.caseStudies dictionary (language-reactive).
+ * Images are pre-resized WebP (see frontend/scripts/optimize-assets.py): the
+ * cards render ~600 CSS px wide, so shipping the 2134px camera originals cost
+ * ~3x the bytes the layout could use. */
 const CASE_BASE = [
   {
     id: 'fina',
-    image: '/images/final-lecture.jpeg',
+    image: '/images/final-lecture.webp',
   },
   {
     id: 'fresh',
-    image: '/images/freshman-guide.jpeg',
+    image: '/images/freshman-guide.webp',
   },
   {
     id: 'peer',
-    image: '/images/peer-support.jpeg',
+    image: '/images/peer-support.webp',
   },
   {
     id: 'lib',
-    image: '/images/resource-sharing.png',
+    image: '/images/resource-sharing.webp',
   },
 ];
 
@@ -47,8 +50,17 @@ function CaseCard({ study, index, isAdmin }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* background image */}
-      <img src={study.image} alt={study.title} className="absolute h-full w-full object-cover" />
+      {/* background image — first card is the LCP candidate, rest load lazily */}
+      <img
+        src={study.image}
+        alt={study.title}
+        width={1200}
+        height={900}
+        loading={index === 0 ? 'eager' : 'lazy'}
+        fetchPriority={index === 0 ? 'high' : 'auto'}
+        decoding="async"
+        className="absolute h-full w-full object-cover"
+      />
 
       {/* pixel-block dissolve overlay — 12×8 grid, diagonal stagger */}
       <div className="absolute inset-0 z-[4]">
@@ -114,7 +126,7 @@ export default function AboutPage() {
   return (
     <section
       className="relative bg-page text-ink"
-      style={{ fontFamily: "'DM Sans', sans-serif" }}
+      style={{ fontFamily: "'OPPOSans', -apple-system, BlinkMacSystemFont, sans-serif" }}
     >
       {/* marquee keyframes */}
       <style>{`

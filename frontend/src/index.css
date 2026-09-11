@@ -581,6 +581,15 @@ input:-webkit-autofill:active {
   --green: #3fae6b;
   /* 知识图谱标签描边：亮色白衬边，暗色透明（纯白字无描边）。 */
   --kg-label-stroke: #ffffff;
+  /* 知识图谱内容分类：色板（--kg-c1..--kg-c6，超出用 --kg-cn 中性兜底）。
+     色相彼此拉开、饱和度压低，避免抢过「文件夹实心 / 文件空心」这层结构语义。 */
+  --kg-c1: #4a7fb5;
+  --kg-c2: #c07a3e;
+  --kg-c3: #5e9b62;
+  --kg-c4: #a05fa0;
+  --kg-c5: #3f9a9a;
+  --kg-c6: #c05a66;
+  --kg-cn: #7a7a7a;
 }
 
 /* 暗色主题 token（useTheme 给 <html> 设 data-theme='dark' 时生效）。
@@ -599,6 +608,14 @@ input:-webkit-autofill:active {
   --line: rgba(255, 255, 255, 0.1);
   --line-strong: rgba(255, 255, 255, 0.16);
   --kg-label-stroke: transparent;
+  /* 暗色下簇色板整体提亮、降饱和：深底上高饱和色会「发光」，反而抢结构语义。 */
+  --kg-c1: #8ab4e0;
+  --kg-c2: #dda871;
+  --kg-c3: #8fc793;
+  --kg-c4: #c795c7;
+  --kg-c5: #75c2c2;
+  --kg-c6: #d98d96;
+  --kg-cn: #9a9a9a;
 }
 
 /* Chart stage + pointer-driven hover affordances (mirrors the InsightCards

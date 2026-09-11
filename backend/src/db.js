@@ -154,6 +154,64 @@ if (!hasColumn('email_codes', 'uses')) {
   db.exec(`ALTER TABLE email_codes ADD COLUMN uses INTEGER NOT NULL DEFAULT 0`);
 }
 
+// --- migration: 内容语义索引（抽取正文 + 向量 + 任务队列）---
+// 图谱与搜索原本只有「名称」这一路信号，内容级语义要求先把正文抽出来落库：
+// 抽取是 OSS 下载 + 解析的重活，绝不能每次请求重做，因此正文必须持久化。
+db.exec(`
+CREATE TABLE IF NOT EXISTS text_extractions (
+  file_id      INTEGER PRIMARY KEY,
+  content      TEXT NOT NULL,
+  doc_kind     TEXT NOT NULL,   -- text | pdf_text | office_text | image_only | unsupported | pdf_ocr(预留)
+  pages        INTEGER,
+  chars        INTEGER NOT NULL,
+  content_hash TEXT NOT NULL,   -- 内容指纹：文件被替换成同 key 的新上传时靠它判断要不要重算
+  extracted_at INTEGER NOT NULL,
+  FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS file_embeddings (
+  file_id    INTEGER NOT NULL,
+  vec        BLOB NOT NULL,     -- Float32Array 的字节
+  dim        INTEGER NOT NULL,
+  model      TEXT NOT NULL,     -- 换模型必须能识别旧向量，否则新旧混算会失真
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (file_id),
+  FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS index_jobs (
+  file_id      INTEGER PRIMARY KEY,
+  state        TEXT NOT NULL,   -- pending | running | done | failed
+  attempts     INTEGER NOT NULL DEFAULT 0,
+  last_error   TEXT,
+  content_hash TEXT,            -- 已处理到的版本；与 text_extractions.content_hash 比对决定是否重跑
+  enqueued_at  INTEGER NOT NULL,
+  finished_at  INTEGER,
+  FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_index_jobs_state ON index_jobs(state, enqueued_at);
+
+-- 索引的每日用量（嵌入/OCR 这类有成本的步骤靠它限流，按天计数）
+CREATE TABLE IF NOT EXISTS index_usage (
+  day   TEXT PRIMARY KEY,       -- YYYY-MM-DD（本地时区）
+  units INTEGER NOT NULL DEFAULT 0
+);
+
+-- 内容分类缓存：k-means 很快（每学科几十 ms），但细分命名要调 LLM（每次几秒），必须缓存。
+-- **按学科一行**而不是整库一行：整库指纹一有新文件就整库失效 → 上传 1 个文件要重新命名
+-- 全部 50+ 个细分（实测 273 秒，还是在请求里同步跑）。k-means 本来就按学科独立，
+-- 所以按学科缓存天然成立：上传一个文件只重算它所在的那个学科。
+CREATE TABLE IF NOT EXISTS taxonomy_subjects (
+  subject_id  INTEGER PRIMARY KEY,  -- 顶层学科目录 id（0 = 根目录下的文件）
+  version     INTEGER NOT NULL,
+  fingerprint TEXT NOT NULL,
+  payload     TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+);
+-- 旧版整库单行缓存已被上面按学科的表取代（纯缓存，无数据价值）
+DROP TABLE IF EXISTS taxonomy_cache;
+`);
+
 export function ensureAdmin(username, password) {
   const existing = db
     .prepare('SELECT id, role, password_hash FROM users WHERE username = ?')

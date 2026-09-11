@@ -21,3 +21,11 @@ gui-test-screenshots/
 
 # DSH 本地技能（如 alibabacloud-workbench-cli）——按需 clone 后本地生效，不入库
 .dsh/
+
+# 本地嵌入模型（bge-small-zh，约 23 MB）——按需下载后本地生效，不入库；
+# 获取方式与校验见 docs/DEPLOY.md
+backend/models/
+
+# Python bytecode cache (frontend/scripts/*.py 的编译产物)
+__pycache__/
+*.pyc

@@ -8,6 +8,7 @@ import { cleanObjectSegment, ossPrefix, placeholderKeyForFolderFromMap } from '.
 import { normalizeExt } from '../extPolicy.js';
 import { mimeOf } from '../mime.js';
 import { invalidateLibraryCaches } from '../searchService.js';
+import { enqueueAll } from '../indexPipeline.js';
 
 // 游客亦可触发同步（用于共享 OSS 桶的多部署刷新），按身份分层限流：
 // 游客 2 次/分钟 < 登录用户 5 次/分钟 < 管理员豁免（同下载/对话的既有约定）。
@@ -223,6 +224,9 @@ router.post('/', syncLimiter, async (req, res, next) => {
     });
     tx();
     invalidateLibraryCaches();
+    // 同步可能一次导入上百个新文件：内容索引入队（增量，只排还没有抽取记录的），
+    // 由后台 worker 慢慢消化，不在同步请求里做
+    const indexed = enqueueAll();
 
     res.json({
       ok: true,
@@ -230,6 +234,7 @@ router.post('/', syncLimiter, async (req, res, next) => {
       added: { folders: counts.added_folders, files: counts.added_files },
       removed: { folders: counts.removed_folders, files: counts.removed_files },
       repaired_files: counts.repaired_files,
+      indexing_queued: indexed,
     });
   } catch (e) {
     next(e);

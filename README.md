@@ -67,6 +67,40 @@ cd frontend && npm install && npm run dev
 | `LLM_PROTOCOL` |  | 上游协议：`openai-completions`（默认，OpenAI/GLM/DeepSeek 等 `/chat/completions` 接口）/ `openai-responses`（OpenAI `/responses`）/ `anthropic-messages`（Anthropic `/messages`）。旧值 `openai` / `anthropic` 仍兼容。前端设置里的「API 协议」可让用户用自带 Key 覆盖它 |
 | `DM_ACCESS_KEY_ID` / `DM_ACCESS_KEY_SECRET` / `DM_ACCOUNT_NAME` |  | 三者齐备才启用用户注册（阿里云邮件推送 DirectMail 发送邮箱验证码），留空则注册发码接口返回 503 |
 | `DM_FROM_ALIAS` |  | 发件人显示名（默认「仲英学辅」） |
+| `EMBED_MODEL_DIR` |  | 本地嵌入模型目录（默认 `backend/models/bge-small-zh-v1.5`）；模型文件不入库，获取方式见[部署文档 §6](docs/DEPLOY.md)。缺模型时只抽正文不出向量，图谱内容视图不可用，其余功能不受影响 |
+| `INDEX_POLL_MS` / `INDEX_DAILY_LIMIT` |  | 索引 worker 的空闲轮询间隔（默认 8s）/ 每日嵌入调用上限（默认 2000，防误操作长时间占满 CPU） |
+| `INDEX_MAX_FILE_MB` |  | 单文件体积上限（默认 **50**）：超过则不下载不解析（记 `too_large`）。解析内存峰值约为文件的 4~13 倍，**这个值决定服务器要多少 RAM**——1GB 内存建议 20，2GB 留 50，≥4GB 可调到 150。详见[部署文档 §6.5](docs/DEPLOY.md) |
+
+## 内容索引与语义分类（知识图谱「内容视图」的数据来源）
+
+图谱默认按**内容语义分类**组织，而不是按目录摊开：
+
+```
+根 ─┬─ 学科分类（大类）─┬─ 内容细分 ─ 文件
+    │                    └─ 内容细分 ─ 文件
+    └─ …
+```
+
+- 大类 = 顶层学科目录；**内容细分** = 该学科目录内按内容向量聚类（k-means，每约 8 个文件一簇、上限 5 簇）
+- 细分名字由 LLM 起一次并缓存（无 LLM 时回落到文件名里本簇独有的词）；实测本库 **53 个大类 / 84 个细分 / 85% 有名字**
+- 未被索引的文件（扫描件、老格式）不进分类，切到**目录视图**照常按文件夹浏览
+
+覆盖率取决于资料本身（实测本库 850 个文件的真实结果）：
+
+| 类别 | 数量 | 占比 | 说明 |
+|---|---|---|---|
+| 有文本层（PDF/docx/pptx/txt/pptm） | 509 | 60% | 正常进入内容视图 |
+| 扫描件与图片版 Office | 122 | 14% | 判定为 `image_only`，只出现在目录视图（需 OCR，见 `docs/ISSUES.md` 的 IMPROVE-39） |
+| `.doc` / `.ppt` / 压缩包 / 图片 | 216 | 25% | `unsupported`：老二进制格式没有纯 JS 解析路径 |
+| 超过 `INDEX_MAX_FILE_MB` 的大文件 | 29 | 3% | `too_large`：主动不解析以保护内存（默认 50MB，可调） |
+| 抽取失败 | 3 | — | 记 `last_error`，不影响其他文件 |
+
+后三类没有内容语义，只能靠**目录视图**浏览，所以内容视图覆盖约 **61%** 的资料——上限由资料本身决定，OCR 是下一轮的事。
+
+- 索引是**后台异步**做的：上传、`/api/sync` 后自动入队，单并发处理，不阻塞请求。图谱会显示「正在建立内容索引（N 个待处理）…」并每 5 秒自动刷新，直到新资料进入分类。
+- 进度与失败原因：`GET /api/index/status`；管理员可用 `POST /api/index/rebuild` 重建。
+- 语义分类：`GET /api/index/taxonomy`（**按学科缓存**，新增一个文件只重算它所在的学科）；管理员可用 `POST /api/index/taxonomy/refresh` 强制全部重算。
+- 降级：没装模型时只抽正文；没有分类数据时图谱内容视图给出提示，可一键切到目录视图（图谱只有这两档）。
 
 ## 项目结构
 
@@ -80,9 +114,13 @@ zyxf/
 │   │   ├── oss.js         # OSS 直传 / 下载签名
 │   │   ├── imm.js         # IMM WebOffice 预览令牌
 │   │   ├── searchService.js / searchMatch.js   # 智能搜索（路由与 AI 工具共用）
+│   │   ├── textExtract.js / ooxml.js           # 正文抽取（PDF/OOXML/纯文本，含扫描件判定）
+│   │   ├── embed.js                            # 本地嵌入（bge-small-zh ONNX，可缺失降级）
+│   │   ├── indexPipeline.js                    # 内容索引队列与 worker
 │   │   ├── llm.js         # LLM 流式客户端（OpenAI / Anthropic，可选启用）
 │   │   ├── llmProtocols.js # 上游协议适配（请求体与 SSE 形状翻译，纯函数）
-│   │   └── routes/        # auth / folders / files / search / chat / stats / sync
+│   │   └── routes/        # auth / folders / files / search / chat / stats / sync / indexing
+│   ├── models/            # 本地嵌入模型（gitignore，按需下载）
 │   └── test/
 ├── frontend/              # React 前端
 │   ├── src/
