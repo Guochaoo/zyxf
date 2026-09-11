@@ -181,10 +181,12 @@
   padding: 4px 24px 20px;
 }
 
+/* 板块内节奏：块间距 20 > 字段间距 14 > 标签到输入框 6，靠间距层级分组，不用色块/描边。
+   弹窗卡片本身是白底，字段组再加白底只会多出一圈 16px 假缩进，故不再设底色。 */
 .settings-section {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
 }
 
 /* ---- 智能对话配置 ---- */
@@ -222,25 +224,23 @@
   box-shadow: var(--ink) 0px 0px 0px 1px;
 }
 
+/* 选中/未选只换颜色 + 圆点填充，不改字重（改字重会让文字宽度跳动） */
 .settings-mode-label {
   font-size: 14px;
+  font-weight: 500;
   color: var(--ink-2);
   transition: color 150ms ease;
 }
 
 .settings-mode--active .settings-mode-label {
   color: var(--ink);
-  font-weight: 500;
 }
 
-/* 字段分组：白底 + 留白分隔（无界理念，不用描边）；灰底交给输入框自己表达 */
+/* 字段分组：靠留白分隔（无界理念，不用色块也不用描边）；卡片本身白底，无需底色块 */
 .settings-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 14px;
-  background: var(--surface);
+  gap: 14px;
 }
 
 .settings-field {
