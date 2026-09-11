@@ -26,7 +26,7 @@ zyxf/
 │   │   ├── pages/         # BrowsePage / DashboardPage / AuthPage（登录+注册） / AboutPage
 │   │   │                  #   页面级子模块：pages/Browse/、pages/Dashboard/（容器 + 数据 hook + 纯展示件）
 │   │   ├── components/    # 文件列表 / 预览 / 知识图谱 / 智能对话 / 菜单等
-│   │   │                  #   知识图谱的语义层（分词 / 语义边 / 成簇）是同文件内导出的纯函数，见 §5
+│   │   │                  #   知识图谱的内容语义层（向量边收敛 / 成簇 / 配色）是同文件内导出的纯函数，见 §5
 │   │   └── test/          # vitest 测试（图谱：KnowledgeGraph.test.jsx 测纯函数、KnowledgeGraphView.test.jsx 测渲染）
 ├── docs/
 │   ├── DEPLOY.md          # 部署指南（systemd + nginx + HTTPS）
@@ -119,7 +119,7 @@ zyxf/
 
 ## 5. 前端纯函数与 i18n 边界
 
-- **可测的逻辑要写成导出的纯函数**，与组件同文件放（如 `KnowledgeGraph.jsx` 的分词 / 语义边 / 成簇 / 向量边收敛），便于 `frontend/src/test` 直接单测；组件里只留取数与渲染。
+- **可测的逻辑要写成导出的纯函数**，与组件同文件放（如 `KnowledgeGraph.jsx` 的向量边收敛 / 成簇 / 配色），便于 `frontend/src/test` 直接单测；组件里只留取数与渲染。
 - **i18n 只覆盖界面文案**：源码里不得硬编码中文文案（`test/i18n.test.js` 会扫）。唯一的例外是**领域数据**——分词停用字/词表这类"中文资料名切出来的 token"，不随语言切换，需在数据行上方用 `// i18n-exempt-cjk` 标注豁免（标记后到下一个空行之间的行都跳过检查）。
 
 ## 6. 内容索引与本地模型

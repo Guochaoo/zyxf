@@ -17,9 +17,6 @@ vi.mock('../ui.js', async (importOriginal) => ({
 
 const {
   default: KnowledgeGraph,
-  tokenizeNodeName,
-  buildSemanticNodes,
-  buildSemanticEdges,
   buildVectorGraph,
   VECTOR_LINK_THRESHOLD,
   __resetKgSemanticsCache,
@@ -68,37 +65,24 @@ describe('知识图谱视图（渲染层）', () => {
     renderGraph();
     const modeBtn = await screen.findByRole('button', { name: '内容视图：按资料内容聚类' });
     expect(modeBtn.getAttribute('aria-pressed')).toBe('true'); // 默认档就是内容视图
-    // 索引里没有可用资料 → 明确指向名称视图，而不是一片空白
-    expect(await screen.findByText(/内容索引里还没有可用的资料/)).toBeTruthy();
-  });
-
-  test('切到名称视图：画出簇图例、语义边（虚线）并按簇上色', async () => {
-    const { container } = renderGraph();
-    fireEvent.click(await screen.findByRole('button', { name: '名称视图：按资料名主题聚类' }));
-    // 等定位完成（positioned 为真）才会画线与节点：只看 circle 会在首帧后就返回
-    await waitFor(() => expect(container.querySelectorAll('line').length).toBeGreaterThan(0));
-
-    // 图例：两个高数资料共享「数学」，聚成一簇，标签取共享 token
-    const legend = container.querySelector('foreignObject');
-    expect(legend).toBeTruthy();
-    expect(legend.textContent).toContain('数学');
-
-    // 语义边用虚线、目录边用实线：两者必须能区分
-    const dashed = [...container.querySelectorAll('line')].filter(
-      (l) => l.getAttribute('stroke-dasharray') === '3 3'
-    );
-    expect(dashed.length).toBeGreaterThan(0);
-
-    // 至少有一个节点拿到了簇色（inline fill 来自 --kg-c1/--kg-c2）
-    const colored = [...container.querySelectorAll('circle')].filter((c) =>
-      /rgb\(1, 2, 3\)|rgb\(4, 5, 6\)/.test(c.getAttribute('fill') || '')
-    );
-    expect(colored.length).toBeGreaterThan(0);
+    // 索引里没有可用资料 → 明确给出提示与下一步，而不是一片空白
+    expect(await screen.findByText(/内容索引里还没有可用资料/)).toBeTruthy();
   });
 
   test('切到目录视图：语义边与图例都消失，目录层级边仍在', async () => {
+    // 先给一份有向量边的数据：否则内容档只显示提示、画布不渲染，测不到「切档后仍在画」
+    getKgSemanticsMock.mockResolvedValue({
+      enabled: true,
+      model: 'bge-small-zh-v1.5',
+      files: 3,
+      edges: [
+        { source: 11, target: 12, weight: 0.93 },
+        { source: 11, target: 13, weight: 0.91 },
+      ],
+      labels: { 11: '高数', 12: '高数', 13: '高数' },
+    });
     const { container } = renderGraph();
-    await waitFor(() => expect(container.querySelectorAll('line').length).toBeGreaterThan(0));
+    await waitFor(() => expect(container.querySelector('foreignObject')).toBeTruthy());
 
     fireEvent.click(screen.getByRole('button', { name: '目录视图：只看文件夹层级' }));
     await waitFor(() => expect(container.querySelector('foreignObject')).toBeNull());
@@ -111,22 +95,22 @@ describe('知识图谱视图（渲染层）', () => {
     expect(container.querySelectorAll('line').length).toBeGreaterThan(0);
   });
 
-  test('内容视图拿到向量边后：虚线边与簇图例来自内容相似度', async () => {
-    // 三个文件互相相似（>0.9），一个离群（与谁都不像）：应呈现为一个簇 + 一个单点
+  test('内容视图拿到向量边后：画虚线边、图例并按簇上色', async () => {
+    // 三个文件互相相似（>0.9）：应呈现为一个簇
     getKgSemanticsMock.mockResolvedValue({
       enabled: true,
       model: 'bge-small-zh-v1.5',
-      files: 4,
+      files: 3,
       edges: [
         { source: 11, target: 12, weight: 0.93 },
         { source: 11, target: 13, weight: 0.91 },
         { source: 12, target: 13, weight: 0.9 },
       ],
-      labels: { 11: '高数', 12: '高数', 13: '高数', 21: '足球' },
+      labels: { 11: '高数', 12: '高数', 13: '高数' },
     });
+    // 内容视图数据是模块级共享缓存：换桩数据前必须清掉，否则会用上一个用例的结果
+    __resetKgSemanticsCache();
     const { container } = renderGraph();
-    fireEvent.click(await screen.findByRole('button', { name: '名称视图：按资料名主题聚类' }));
-    fireEvent.click(screen.getByRole('button', { name: '内容视图：按资料内容聚类' }));
 
     await waitFor(() => expect(container.querySelector('foreignObject')).toBeTruthy());
     // 内容视图的簇标签取「簇内最高频目录名」
@@ -135,6 +119,11 @@ describe('知识图谱视图（渲染层）', () => {
       (l) => l.getAttribute('stroke-dasharray') === '3 3'
     );
     expect(dashed.length).toBeGreaterThan(0);
+    // 节点按簇上色（inline fill 来自 --kg-cN）
+    const colored = [...container.querySelectorAll('circle')].filter((c) =>
+      /rgb\(1, 2, 3\)|rgb\(4, 5, 6\)/.test(c.getAttribute('fill') || '')
+    );
+    expect(colored.length).toBeGreaterThan(0);
   });
 });
 
@@ -225,33 +214,5 @@ describe('内容视图：向量边成簇（纯函数）', () => {
     expect(withOne.nodeIds.sort()).toEqual(['file1', 'file2', 'file3', 'file4', 'file9']);
     const five = clusters.find((c) => c.nodeIds.includes('file5'));
     expect(five.nodeIds).toEqual(['file5']);
-  });
-});
-
-describe('名称层语义：主题边与弱边（纯函数）', () => {
-  test('同一主题的资料连成主题边，纯日期名靠同目录弱边兜底', () => {
-    const nodes = buildSemanticNodes([
-      { id: 'file11', name: '高等数学期末试卷A.pdf', type: 'file', meta: { folder_id: 1 } },
-      { id: 'file12', name: '高等数学期中复习资料B.pdf', type: 'file', meta: { folder_id: 1 } },
-      { id: 'file13', name: '2019.6.18.pdf', type: 'file', meta: { folder_id: 1 } },
-    ]);
-    expect([...nodes[2].tokens]).toEqual([]); // 纯日期切完什么都不剩
-    const edges = buildSemanticEdges(nodes);
-    // 同一主题：两条边都在，且都带共享 token
-    const themed = edges.filter((e) => e.tokens?.length);
-    expect(themed.length).toBeGreaterThan(0);
-    expect(themed[0].tokens).toContain('数学');
-    // 没有 token 的那个只能靠弱边接回去
-    const weak = edges.filter((e) => e.weak);
-    expect(weak.length).toBeGreaterThan(0);
-    expect(weak.some((e) => e.source === 'file13' || e.target === 'file13')).toBe(true);
-  });
-
-  test('文档性质词不参与主题（否则任意两门课的「XX期末试卷」都会连上）', () => {
-    const tokens = tokenizeNodeName('高等数学期末试卷A.pdf', true);
-    expect(tokens.has('数学')).toBe(true);
-    expect(tokens.has('期末')).toBe(false);
-    expect(tokens.has('试卷')).toBe(false);
-    expect(tokens.has('提纲')).toBe(false);
   });
 });

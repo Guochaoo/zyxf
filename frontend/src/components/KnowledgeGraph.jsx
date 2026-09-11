@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Globe, Hash, Maximize, Shuffle, Sparkles, X } from 'lucide-react';
+import { Globe, Maximize, Shuffle, Sparkles, X } from 'lucide-react';
 import {
   forceCenter,
   forceCollide,
@@ -29,9 +29,9 @@ const GRAPH_H = '258px';
 // 收起状态跨页面导航保留（右栏组件会随路由卸载重建）。
 let collapsedPersistent = false;
 
-// 语义视图模式跨导航保留（理由同上：右栏组件会卸载重建）。
-// 三档：content = 按文件内容向量聚类；name = 按文件名主题聚类；folder = 只看目录层级。
-export const VIEW_MODES = ['content', 'name', 'folder'];
+// 图谱视图模式跨导航保留（理由同上：右栏组件会卸载重建）。
+// 两档：content = 按资料内容向量聚类；folder = 只看文件夹层级。
+export const VIEW_MODES = ['content', 'folder'];
 const DEFAULT_VIEW_MODE = 'content';
 let viewModePersistent = DEFAULT_VIEW_MODE;
 
@@ -53,9 +53,10 @@ function loadKgSemantics() {
   return kgSemanticsInflight;
 }
 
-/** 仅供测试：清掉内容视图的共享缓存。 */
+/** 仅供测试：清掉内容视图的共享缓存与档位记忆。 */
 export function __resetKgSemanticsCache() {
   kgSemanticsInflight = null;
+  viewModePersistent = DEFAULT_VIEW_MODE;
 }
 
 /** 切档并跨导航记住（右栏组件会随路由卸载重建）。 */
@@ -139,298 +140,6 @@ function displayName(name) {
   return s.length > 16 ? `${s.slice(0, 16)}…` : s;
 }
 
-/* ---- 语义层：把「名称里的主题」变成边与簇 -------------------------------------
- * 图谱原本只有目录层级边，语义组织必须先制造信号。全部走名称层（不读文件内容），
- * 三个纯函数按顺序串起来：tokenizeNodeName → buildSemanticEdges → buildClusters。
- *
- * 阈值是拿真实库跑出来的（908 个节点 / 850 个文件），不是拍的：
- *   - 只比同类型节点（文件↔文件、文件夹↔文件夹）。跨类型连边会把「文件夹名必是其后代
- *     节点 token 子集」的结构变成星形全连通，必然塌成一个巨簇；
- *   - 共享 token 只算「库内非套话」的那些（df ≤ MAX_SEMANTIC_DF），且至少 2 个：套话词
- *     （数学/大学…）命中再多也不能证明同主题；
- *   - 共享 token 要占较小的那个主题集合的 1/2 以上：否则长名称之间靠零散公共词连边；
- *   - 再用 idf 加权的 Jaccard ≥ 0.6 卡一道：'西安'/'交通' 这类库内高频词即使命中多，
- *     权重也被压低。实测这一组阈值把「265 节点的巨簇」拆成 ~100 个主题簇、最大 17。
- */
-export const MAX_SEMANTIC_DF = 15; // 出现在超过这么多文档里的 token 视为库内套话，不参与连边
-export const MIN_SHARED_TOKENS = 2;
-export const MIN_TOKEN_OVERLAP = 0.5;
-export const MIN_WEIGHTED_JACCARD = 0.6;
-
-// 出现在「词与词交界」上的停用字。它们不删除 token，而是把中文串在**这里切开**，
-// 只在切出的片段内部生成 n-gram：「高等数学期末试卷」→ 高 | 数学 | 期末 | 试，
-// 于是留下「数学」这类真主题词，切掉「学期」这种跨词碎片——后者在库内出现频率极高
-// （任意「XX数学期中」与「XX物理期末」都会撞上），足以把不相关学科连成一片。
-// ⚠️ 判据是「单独成词时没有主题信息」，不是「常出现在套话里」。数/物/理/化/学 这类
-// 学科相关字一个都不能收——「数学」「有机化学」会被切碎；偶尔漏出「学期」这种跨词碎片
-// 由 STOP_WORDS 与 idf 加权兜底（库内高频词的权重被压低，连不成边）。
-// 与 和 及 或 的 之 等 中 第 年 级 版 次 末 卷 参 答 总 汇 复 讲
-const STOP_CHARS = new Set([
-  '\u4e0e', '\u548c', '\u53ca', '\u6216', '\u7684', '\u4e4b', '\u7b49', '\u4e2d', '\u7b2c', '\u5e74',
-  '\u7ea7', '\u7248', '\u6b21', '\u672b', '\u5377', '\u53c2', '\u7b54', '\u603b', '\u6c47', '\u590d',
-  '\u8bb2',
-]);
-
-// 泛词：文档性质 + 编排套话。这类词讲「这是什么类型的材料」，不讲「讲哪门课」。
-// ⚠️ 下面的中文数据不是界面文案、也不该随语言切换，i18n 的「源码里不许硬编码中文」规则
-// 对它不适用，故整段标注豁免（见 test/i18n.test.js 的豁免说明）。
-// i18n-exempt-cjk
-const STOP_WORDS = new Set([
-  '讲义', '课件', '资料', '往年题', '往年', '真题', '试题', '答案', '参考答案', '参考',
-  '作业', '习题', '练习', '复习', '期末', '期中', '考试', '上机', '教材', '教辅', '笔记',
-  '总结', '汇总', '基础', '重点', '难点', '典型', '题解', '课堂', '随堂', '课程', '讲稿',
-  '试卷', '大纲', '提纲', '解答', '例题', '自测题', '样卷', '样题', '知识点', '梳理', '附加',
-  '部分', '全套', '最新', '完整', '大学', '第一', '第二', '第三', '第四', '第五',
-]);
-// 文件名里常见的英文泛词（the/and 这类连接词与格式词）。
-const STOP_LATIN = new Set([
-  'the', 'and', 'for', 'with', 'via', 'pdf', 'doc', 'docx', 'ppt', 'pptx', 'zip', 'rar',
-  'png', 'jpg', 'chap', 'chapter', 'part', 'vol', 'unit', 'test', 'answer', 'answers',
-  'english', 'final', 'mid',
-]);
-
-const SEMANTIC_KEY_PATTERN = /[_\-.,+·、()（）[\]【】《》<>"'~!?=:;|\\/]+/g;
-
-function normalizeForTokens(raw) {
-  return String(raw || '')
-    .normalize('NFKC') // 全角括号/字母/数字统一成半角，否则「（１）」与「(1)」切法不同
-    .replace(SEMANTIC_KEY_PATTERN, ' ')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-/** 名称 → 主题 token 集合（中文 2/3-gram + 拉丁词；不读文件内容）。 */
-export function tokenizeNodeName(name, isFile = false) {
-  const tokens = new Set();
-  // 去掉文件扩展名。⚠️ 不能用 /\.[A-Za-z0-9]{1,5}$/ 这种「点 + 1~5 位」的写法：对
-  // 「试卷A.pdf」它先命中「.pdf」把 A 留在主题里，而「试卷A.PDF」又会因为大小写而
-  // 走到另一条分支，同一份资料在两种写法下切出不同 token。这里按最后一个点切开，
-  // 只要点后面是 1~5 位字母数字就当扩展名（「试卷A.pdf」→「试卷A」）。
-  const rawName = String(name || '');
-  const dot = rawName.lastIndexOf('.');
-  const stripped = isFile && dot > 0 && /^[A-Za-z0-9]{1,5}$/.test(rawName.slice(dot + 1))
-    ? rawName.slice(0, dot)
-    : rawName;
-  const normalized = normalizeForTokens(stripped);
-  // 按停用字把中文串切成片段，只在片段内部生成 n-gram（见 STOP_CHARS 的说明）。
-  // 连续的停用字算**一个**边界：「高等数学期末试卷」= 高 |(等)| 数学 |(期末)| 试卷，
-  // 不给「期末」留下被拆成单字再粘成「学期」的机会。
-  const segments = [];
-  let segment = [];
-  let inStopRun = false;
-  const flush = () => {
-    if (segment.length) segments.push(segment);
-    segment = [];
-  };
-  for (const word of normalized.split(' ')) {
-    const chars = [...word];
-    let latin = '';
-    for (const ch of chars) {
-      if (/[\u4e00-\u9fff]/.test(ch)) {
-        if (STOP_CHARS.has(ch)) {
-          if (!inStopRun) flush();
-          inStopRun = true;
-        } else {
-          segment.push(ch);
-          inStopRun = false;
-        }
-        if (latin) {
-          if (latin.length >= 3) tokens.add(latin);
-          latin = '';
-        }
-      } else if (/[a-z0-9]/.test(ch)) {
-        latin += ch;
-      } else if (latin) {
-        if (latin.length >= 3) tokens.add(latin);
-        latin = '';
-      }
-    }
-    if (latin.length >= 3) tokens.add(latin);
-    flush(); // 空格/标点本身就是词边界：不让 n-gram 跨过去
-    inStopRun = false;
-  }
-  for (const part of segments) {
-    // 单个字不成词，直接丢掉。「高等数学」被切成 高 | 数学 时，「高」留下不会帮忙，
-    // 反而会跟下一个片段的首字粘成「学期」这种跨词碎片（正是要剪掉的东西）。
-    // 真正的缩写「高数」「大物」本身就是一个片段，n-gram 天然覆盖。
-    for (let i = 0; i < part.length - 1; i += 1) tokens.add(part[i] + part[i + 1]);
-    // 3-gram 让「化工原理」这类整课名成为一个 token，分章资料才连得上。
-    for (let i = 0; i < part.length - 2; i += 1) {
-      tokens.add(part[i] + part[i + 1] + part[i + 2]);
-    }
-  }
-  for (const t of [...tokens]) {
-    if (STOP_WORDS.has(t) || STOP_LATIN.has(t) || /^(19|20)\d\d$/.test(t)) tokens.delete(t);
-  }
-  return tokens;
-}
-
-/**
- * 给节点补上主题 token（不改入参）。同目录兜底边靠 meta.folder_id，所以不做节点树回溯。
- */
-export function buildSemanticNodes(nodes) {
-  return nodes.map((n) => ({
-    id: n.id,
-    name: n.name,
-    type: n.type,
-    tokens: tokenizeNodeName(n.name, n.type === 'file'),
-    folderId: n.meta?.folder_id ?? null,
-  }));
-}
-
-/** 主题索引：文档频次 → idf、每个节点的主题 token 与总权重。buildSemanticEdges 的唯一前置。 */
-function buildThemeIndex(nodes) {
-  const docFreq = new Map();
-  for (const n of nodes) {
-    for (const t of n.tokens) docFreq.set(t, (docFreq.get(t) || 0) + 1);
-  }
-  const idf = (t) => Math.log(1 + nodes.length / (1 + (docFreq.get(t) || 1)));
-  // 库内套话（出现超过 MAX_SEMANTIC_DF 个文档的 token）不算主题：既不计入权重、也不计入
-  // 共享个数。少算一半都不行——只压权重时，「数学」这种 df≈68 的词只要命中一条就能把
-  // 全库数学类资料连成一个几百节点的巨簇（实测 908 节点里 282 个连成一片）。
-  const themeTokens = new Map();
-  for (const n of nodes) {
-    // 单字 token 不参与成簇：停用字切出的「案」「章」在库内是 df 80+ 的套话碎片
-    // （答案/第X章），两个文件各命中一个就能凑够 2 个共享 token，实测会把 908 个节点里的
-    // 331 个连成一簇。纯缩写（「高数.pdf」切完只剩「高」）由同目录弱边兜底接回去，
-    // 不走这条「单字也算主题」的路，否则「高」和「案」又能把全库连起来。
-    themeTokens.set(
-      n.id,
-      [...n.tokens].filter((t) => t.length >= 2 && (docFreq.get(t) || 0) <= MAX_SEMANTIC_DF)
-    );
-  }
-  const weights = new Map();
-  for (const n of nodes) weights.set(n.id, themeTokens.get(n.id).reduce((sum, t) => sum + idf(t), 0));
-  return { docFreq, idf, themeTokens, weights };
-}
-
-/** 候选对：只取「共享至少一个非套话主题 token」的节点对（按 id 去重）。 */
-function collectThemePairs(nodes, themeTokens) {
-  const postings = new Map(); // token → 含它的节点 id
-  for (const n of nodes) {
-    for (const t of themeTokens.get(n.id)) {
-      if (!postings.has(t)) postings.set(t, []);
-      postings.get(t).push(n.id);
-    }
-  }
-  const pairs = new Set();
-  for (const ids of postings.values()) {
-    for (let i = 0; i < ids.length; i += 1) {
-      for (let j = i + 1; j < ids.length; j += 1) {
-        pairs.add(ids[i] < ids[j] ? `${ids[i]}|${ids[j]}` : `${ids[j]}|${ids[i]}`);
-      }
-    }
-  }
-  return [...pairs].map((k) => k.split('|'));
-}
-
-/** 语义边：同类型节点之间，共享主题 token 达到阈值即连边（权重 = idf 加权重合度）。 */
-export function buildSemanticEdges(semanticNodes) {
-  const nodes = Array.isArray(semanticNodes) ? semanticNodes : [];
-  const { idf, themeTokens, weights } = buildThemeIndex(nodes);
-
-  const edges = [];
-  const connect = (a, b) => {
-    // 两个名称都只剩套话 token 时不存在主题，直接跳过（否则边界情况 0/0 会连出假边）。
-    const wa = weights.get(a.id);
-    const wb = weights.get(b.id);
-    if (!wa || !wb) return;
-    const shared = themeTokens.get(a.id).filter((t) => b.tokens.has(t));
-    if (shared.length < MIN_SHARED_TOKENS) return;
-    const smallerTheme = Math.min(themeTokens.get(a.id).length, themeTokens.get(b.id).length);
-    if (shared.length / smallerTheme < MIN_TOKEN_OVERLAP) return;
-    const sharedWeight = shared.reduce((sum, t) => sum + idf(t), 0);
-    if (sharedWeight / Math.min(wa, wb) < MIN_WEIGHTED_JACCARD) return;
-    edges.push({ source: a.id, target: b.id, weight: shared.length, tokens: shared });
-  };
-
-  // 候选对来自倒排表而不是全库两两比对：全量比对在 908 节点上实测 54 ms（本层唯一的
-  // 耗时点），而绝大多数节点对连一个主题 token 都不共享。判据一个字没改——这里只是把
-  // 「必然不满足 shared ≥ 2」的对提前排除。
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  for (const [aId, bId] of collectThemePairs(nodes, themeTokens)) {
-    const a = byId.get(aId);
-    const b = byId.get(bId);
-    // 只比同类型：跨类型时「文件夹名必是其子节点 token 的子集」，会连成星形巨簇。
-    if (a && b && a.type === b.type) connect(a, b);
-  }
-  const fileNodes = nodes.filter((n) => n.type === 'file');
-
-  // 兜底：文件名本身没有任何 token（例如「2019.6.18.pdf」这种纯日期）时，同目录至少还算
-  // 相关，连一条权重 1 的弱边。判据必须是「token 为空」而不是「主题为空」——按后者的话，
-  // 一个把「高」「案」这类单字全部过滤掉的纯缩写名会变成空壳，再多连几个同目录资料就能把
-  // 本来分属不同主题的簇桥接成巨簇（实测 908 个节点里 348 个连成一片）。
-  const byFolder = new Map();
-  for (const n of fileNodes) {
-    if (!n.folderId) continue;
-    if (!byFolder.has(n.folderId)) byFolder.set(n.folderId, []);
-    byFolder.get(n.folderId).push(n);
-  }
-  for (const siblings of byFolder.values()) {
-    if (siblings.length < 2) continue;
-    for (let i = 0; i < siblings.length; i += 1) {
-      for (let j = i + 1; j < siblings.length; j += 1) {
-        const a = siblings[i];
-        const b = siblings[j];
-        // 只有一边完全没有 token 时才连；两边都有内容就交给 connect 判断。
-        if (a.tokens.size && b.tokens.size) continue;
-        if (!a.tokens.size && !b.tokens.size) continue;
-        edges.push({ source: a.id, target: b.id, weight: 1, weak: true, tokens: [] });
-      }
-    }
-  }
-  return edges;
-}
-
-export function buildClusters(nodes, semanticEdges, semanticNodes) {
-  const labels = new Map((semanticNodes || []).map((n) => [n.id, n.tokens]));
-  const parent = new Map();
-  const find = (x) => {
-    let root = x;
-    while (parent.get(root) !== root) root = parent.get(root);
-    let cur = x;
-    while (parent.get(cur) !== root) {
-      const next = parent.get(cur);
-      parent.set(cur, root);
-      cur = next;
-    }
-    return root;
-  };
-  for (const n of nodes) parent.set(n.id, n.id);
-  for (const e of semanticEdges) {
-    if (!parent.has(e.source) || !parent.has(e.target)) continue;
-    const ra = find(e.source);
-    const rb = find(e.target);
-    if (ra !== rb) parent.set(ra, rb);
-  }
-  const groups = new Map();
-  for (const n of nodes) {
-    const root = find(n.id);
-    if (!groups.has(root)) groups.set(root, []);
-    groups.get(root).push(n.id);
-  }
-  const clusters = [];
-  for (const members of groups.values()) {
-    const labelCount = new Map();
-    for (const id of members) for (const t of labels.get(id) || []) labelCount.set(t, (labelCount.get(t) || 0) + 1);
-    const top = [...labelCount.entries()]
-      // 标签要代表整簇，不是「这一簇里恰好出现过的词」：要求覆盖三分之一的成员
-      // （51 个化学课件里 12 个提到的「生命科学」不该当这簇的名字）。
-      .filter(([, count]) => count >= Math.max(2, Math.ceil(members.length / 3)))
-      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
-      .slice(0, 2)
-      .map(([t]) => t);
-    clusters.push({ key: members[0], nodeIds: members, label: top.join(' · ') || null });
-  }
-  // 大簇在前：图例取前几个就够，顺序稳定（同尺寸按 key 排）才不会有每次渲染跳色的观感。
-  clusters.sort(
-    (a, b) =>
-      b.nodeIds.length - a.nodeIds.length ||
-      (a.nodeIds[0] < b.nodeIds[0] ? -1 : a.nodeIds[0] > b.nodeIds[0] ? 1 : 0)
-  );
-  return clusters;
-}
 
 /** 簇 → 色槽：固定顺序分配，超出的簇用中性兜底色。 */
 export const MAX_SEMANTIC_COLORS = 6;
@@ -608,24 +317,17 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
   }, [fullGraph, currentId]);
 
   /**
-   * 语义层：两档数据来源，输出同一种结构（nodes / edges / clusters / legend），
-   * 下游渲染（虚线边、簇色、图例、簇心布局）完全共用。
-   *   - content：边来自后端算好的内容向量相似度，簇标签 = 簇内最高频目录名；
-   *   - name：边来自文件名主题（本地纯函数），簇标签 = 共享 token。
-   * 都不写回 fullGraph —— d3 会就地改写它拿到的节点/边（见 localSubgraph 注释）。
+   * 语义层：内容视图的数据（虚线边 / 簇 / 图例），目录档直接返回 null。
+   * 不写回 fullGraph —— d3 会就地改写它拿到的节点/边（见 localSubgraph 注释）。
    */
   const semantics = useMemo(() => {
-    if (viewMode === 'folder') return null;
-    if (viewMode === 'content') {
-      if (!contentData) return null;
-      const { edges, clusters } = buildVectorGraph(fullGraph.nodes, contentData.edges, contentData.labels);
-      return { nodes: [], edges, clusters, legend: legendOf(clusters) };
-    }
-    const semanticNodes = buildSemanticNodes(fullGraph.nodes);
-    const edges = buildSemanticEdges(semanticNodes);
-    // 簇序即色槽序（buildClusters 已按规模排好）：图例第 i 项与画布上第 i 槽同色。
-    const clusters = buildClusters(fullGraph.nodes, edges, semanticNodes);
-    return { nodes: semanticNodes, edges, clusters, legend: legendOf(clusters) };
+    if (viewMode !== 'content' || !contentData) return null;
+    const { edges, clusters } = buildVectorGraph(
+      fullGraph.nodes,
+      contentData.edges,
+      contentData.labels
+    );
+    return { edges, clusters, legend: legendOf(clusters) };
   }, [viewMode, contentData, fullGraph]);
 
   // 当前视图范围内实际要画的语义边（局部视图只画两端都在场的边）。
@@ -694,12 +396,6 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
               icon={Sparkles}
             />
             <ViewModeButton
-              active={viewMode === 'name'}
-              onClick={() => setViewModePersistent(setViewMode, 'name')}
-              title={t('kg.modeName')}
-              icon={Hash}
-            />
-            <ViewModeButton
               active={viewMode === 'folder'}
               onClick={() => setViewModePersistent(setViewMode, 'folder')}
               title={t('kg.modeFolder')}
@@ -745,7 +441,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
           </div>
         ) : viewMode === 'content' && semantics.edges.length === 0 ? (
           // 索引建完了但没有任何向量边：可能是模型没装、或这批文件都是扫描件/老格式。
-          // 明确指向名称视图，否则看起来和「图谱坏了」一样。
+          // 明确给出提示，否则看起来和「图谱坏了」一样。
           <div className="flex h-full items-center justify-center px-4 text-center text-[12px] text-slate-500">
             {t('kg.contentEmpty')}
           </div>
