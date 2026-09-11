@@ -3,8 +3,13 @@ import { storageGet, storageSet, storageRemove } from './ui.js';
 // 浏览器侧 LLM 配置（ChatComposer 与 SettingsModal 共用同一份存储）。
 export const LLM_KEY = 'zyxf_llm';
 
-// 读取并清洗存储的配置：存储值损坏/非对象/字段非字符串时逐项回退空串，
-// 始终返回完整的 { apiKey, baseUrl, model } 结构。
+// 上游协议白名单，必须与后端 llmProtocols.js 的 PROTOCOLS 一致。
+export const LLM_PROTOCOLS = ['openai', 'anthropic'];
+export const DEFAULT_LLM_PROTOCOL = 'openai';
+const isProtocol = (v) => typeof v === 'string' && LLM_PROTOCOLS.includes(v);
+
+// 读取并清洗存储的配置：存储值损坏/非对象/字段非字符串时逐项回退，
+// 始终返回完整的 { apiKey, baseUrl, model, protocol } 结构（protocol 缺省 openai，兼容旧存储）。
 export const loadLlmCfg = () => {
   let raw = null;
   try {
@@ -17,9 +22,10 @@ export const loadLlmCfg = () => {
       apiKey: typeof raw.apiKey === 'string' ? raw.apiKey : '',
       baseUrl: typeof raw.baseUrl === 'string' ? raw.baseUrl : '',
       model: typeof raw.model === 'string' ? raw.model : '',
+      protocol: isProtocol(raw.protocol) ? raw.protocol : DEFAULT_LLM_PROTOCOL,
     };
   }
-  return { apiKey: '', baseUrl: '', model: '' };
+  return { apiKey: '', baseUrl: '', model: '', protocol: DEFAULT_LLM_PROTOCOL };
 };
 
 // ---- 变更广播 ----
@@ -43,6 +49,7 @@ export const saveLlmCfg = (cfg) => {
     apiKey: cfg.apiKey.trim(),
     baseUrl: cfg.baseUrl.trim(),
     model: cfg.model.trim(),
+    protocol: isProtocol(cfg.protocol) ? cfg.protocol : DEFAULT_LLM_PROTOCOL,
   };
   storageSet(LLM_KEY, JSON.stringify(next));
   notifyChange();

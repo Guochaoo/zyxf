@@ -74,42 +74,98 @@ describe('SettingsModal 语言下拉：点击空白收起', () => {
   });
 });
 
-// 智能对话配置：来源二选一（服务器 / 自定义），只有自定义才显示三个字段。
-describe('SettingsModal 智能对话配置：配置来源切换', () => {
+// 智能对话配置：来源二选一（服务器 / 自定义），只有自定义才显示字段。
+// 字段顺序：API 地址 → API 协议 → API Key → 模型；只有地址带通用格式占位提示。
+describe('SettingsModal 智能对话配置：配置来源与字段', () => {
   const radio = (name) => screen.getByRole('radio', { name });
   const savedCfg = () => {
     const raw = localStorage.getItem('zyxf_llm');
     return raw ? JSON.parse(raw) : null;
   };
+  const urlInput = () => screen.getByLabelText('API 地址');
+  const keyInput = () => screen.getByLabelText('API Key');
+  const modelInput = () => screen.getByLabelText('模型');
+  const protocolSelect = () => screen.getByRole('combobox', { name: 'API 协议' });
+  const customMode = () => fireEvent.click(radio('使用自定义配置'));
 
   test('本地无配置时默认选中「使用服务器配置」，且不显示自定义字段', () => {
     renderModal();
 
     expect(radio('使用服务器配置')).toBeChecked();
     expect(radio('使用自定义配置')).not.toBeChecked();
-    expect(screen.queryByPlaceholderText('sk-…')).toBeNull();
-    expect(screen.queryByPlaceholderText('glm-4.6 / deepseek-chat …')).toBeNull();
+    expect(screen.queryByLabelText('API Key')).toBeNull();
+    expect(screen.queryByRole('combobox')).toBeNull();
   });
 
-  test('选「使用自定义配置」才显示三个输入框，保存后写入本地存储', async () => {
+  test('字段自上而下为 地址 → 协议 → Key → 模型', () => {
     renderModal();
-    fireEvent.click(radio('使用自定义配置'));
+    customMode();
 
-    const key = screen.getByPlaceholderText('sk-…');
-    const url = screen.getByPlaceholderText('https://open.bigmodel.cn/api/paas/v4');
-    const model = screen.getByPlaceholderText('glm-4.6 / deepseek-chat …');
-    fireEvent.change(key, { target: { value: 'sk-test' } });
-    fireEvent.change(url, { target: { value: 'https://llm.test/v1' } });
-    fireEvent.change(model, { target: { value: 'glm-4.6' } });
+    const labels = [...document.querySelectorAll('.settings-field-label')].map((el) => el.textContent);
+    expect(labels).toEqual(['API 地址', 'API 协议', 'API Key', '模型']);
+  });
+
+  // 占位文字只在地址上保留一个通用格式示例，其余字段一律不给（免得被误当成已填的值）
+  test('只有地址有通用格式占位提示，Key 与模型没有', () => {
+    renderModal();
+    customMode();
+
+    expect(urlInput()).toHaveAttribute('placeholder', 'https://api.example.com/v1');
+    expect(keyInput()).not.toHaveAttribute('placeholder');
+    expect(modelInput()).not.toHaveAttribute('placeholder');
+    // 不应再出现具体厂商（智谱）的地址示例
+    expect(document.querySelector('[placeholder*="bigmodel"]')).toBeNull();
+  });
+
+  test('选「使用自定义配置」填完保存后写入本地存储（默认协议 OpenAI 兼容）', async () => {
+    renderModal();
+    customMode();
+
+    expect(protocolSelect().value).toBe('openai');
+    fireEvent.change(urlInput(), { target: { value: 'https://llm.test/v1' } });
+    fireEvent.change(keyInput(), { target: { value: 'sk-test' } });
+    fireEvent.change(modelInput(), { target: { value: 'glm-4.6' } });
 
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
 
     await waitFor(() =>
-      expect(savedCfg()).toEqual({ apiKey: 'sk-test', baseUrl: 'https://llm.test/v1', model: 'glm-4.6' })
+      expect(savedCfg()).toEqual({
+        apiKey: 'sk-test',
+        baseUrl: 'https://llm.test/v1',
+        model: 'glm-4.6',
+        protocol: 'openai',
+      })
     );
   });
 
-  test('已有完整本地配置时默认进入「使用自定义配置」并回填', () => {
+  test('协议选 Anthropic 兼容后保存，存储里 protocol 为 anthropic', async () => {
+    renderModal();
+    customMode();
+
+    fireEvent.change(urlInput(), { target: { value: 'https://api.anthropic.com/v1' } });
+    fireEvent.change(keyInput(), { target: { value: 'sk-ant' } });
+    fireEvent.change(modelInput(), { target: { value: 'claude-sonnet-4-5' } });
+    fireEvent.change(protocolSelect(), { target: { value: 'anthropic' } });
+
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => expect(savedCfg().protocol).toBe('anthropic'));
+  });
+
+  test('已有完整本地配置时默认进入「使用自定义配置」并回填（含协议）', () => {
+    localStorage.setItem(
+      'zyxf_llm',
+      JSON.stringify({ apiKey: 'sk-old', baseUrl: 'https://llm.old/v1', model: 'glm-4.6', protocol: 'anthropic' })
+    );
+    renderModal();
+
+    expect(radio('使用自定义配置')).toBeChecked();
+    expect(keyInput().value).toBe('sk-old');
+    expect(protocolSelect().value).toBe('anthropic');
+  });
+
+  // 旧存储没有 protocol 字段：读出来按 openai，不能因为缺字段就判定「未配置」
+  test('旧存储（无 protocol 字段）仍视为已配置，协议回落到 openai', () => {
     localStorage.setItem(
       'zyxf_llm',
       JSON.stringify({ apiKey: 'sk-old', baseUrl: 'https://llm.old/v1', model: 'glm-4.6' })
@@ -117,7 +173,7 @@ describe('SettingsModal 智能对话配置：配置来源切换', () => {
     renderModal();
 
     expect(radio('使用自定义配置')).toBeChecked();
-    expect(screen.getByPlaceholderText('sk-…').value).toBe('sk-old');
+    expect(protocolSelect().value).toBe('openai');
   });
 
   test('切回「使用服务器配置」并保存会清掉本地配置，且字段随之隐藏', async () => {
@@ -126,10 +182,10 @@ describe('SettingsModal 智能对话配置：配置来源切换', () => {
       JSON.stringify({ apiKey: 'sk-old', baseUrl: 'https://llm.old/v1', model: 'glm-4.6' })
     );
     renderModal();
-    expect(screen.getByPlaceholderText('sk-…')).toBeInTheDocument();
+    expect(keyInput()).toBeInTheDocument();
 
     fireEvent.click(radio('使用服务器配置'));
-    expect(screen.queryByPlaceholderText('sk-…')).toBeNull();
+    expect(screen.queryByLabelText('API Key')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
     await waitFor(() => expect(savedCfg()).toBeNull());
@@ -146,6 +202,6 @@ describe('SettingsModal 智能对话配置：配置来源切换', () => {
 
     await waitFor(() => expect(savedCfg()).toBeNull());
     expect(radio('使用服务器配置')).toBeChecked();
-    expect(screen.queryByPlaceholderText('sk-…')).toBeNull();
+    expect(screen.queryByLabelText('API Key')).toBeNull();
   });
 });

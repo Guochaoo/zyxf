@@ -89,11 +89,22 @@ export default function SettingsModal({ open, onClose }) {
     [t]
   );
 
+  // 字段顺序：地址 → 协议 → Key → 模型。除地址给一个**通用**格式示例外，其余不留占位文字
+  // （占位文字容易被误读成「已填的值」，且各家厂商地址不同，写具体厂商会误导）。
   const llmFields = useMemo(
     () => [
-      { key: 'apiKey', label: t('settings.ai.apiKey'), placeholder: 'sk-…', type: 'password' },
-      { key: 'baseUrl', label: t('settings.ai.baseUrl'), placeholder: 'https://open.bigmodel.cn/api/paas/v4', type: 'text' },
-      { key: 'model', label: t('settings.ai.model'), placeholder: 'glm-4.6 / deepseek-chat …', type: 'text' },
+      { key: 'baseUrl', label: t('settings.ai.baseUrl'), placeholder: 'https://api.example.com/v1', type: 'text' },
+      {
+        key: 'protocol',
+        label: t('settings.ai.protocol'),
+        type: 'select',
+        options: [
+          { value: 'openai', label: t('settings.ai.protocolOpenai') },
+          { value: 'anthropic', label: t('settings.ai.protocolAnthropic') },
+        ],
+      },
+      { key: 'apiKey', label: t('settings.ai.apiKey'), type: 'password' },
+      { key: 'model', label: t('settings.ai.model'), type: 'text' },
     ],
     [t]
   );
@@ -218,20 +229,37 @@ export default function SettingsModal({ open, onClose }) {
                   </div>
 
                   {cfgMode === 'custom' && (
-                    /* 字段放在浅底色块里：站点用色块 + 留白分隔，不靠描边（DESIGN.md §2 无界理念） */
+                    /* 字段顺序：地址 → 协议 → Key → 模型；分组靠留白（无界理念，不用色块也不用描边） */
                     <div className="settings-form">
-                      {llmFields.map(({ key, label, placeholder, type }) => (
+                      {llmFields.map(({ key, label, placeholder, type, options }) => (
                         <label key={key} className="settings-field">
                           <span className="settings-field-label">{label}</span>
-                          <input
-                            type={type}
-                            value={cfgDraft[key]}
-                            onChange={(e) => setCfgDraft((d) => ({ ...d, [key]: e.target.value }))}
-                            placeholder={placeholder}
-                            className="settings-input"
-                            spellCheck={false}
-                            autoComplete={key === 'apiKey' ? 'off' : undefined}
-                          />
+                          {type === 'select' ? (
+                            <span className="settings-select-wrap">
+                              <select
+                                className="settings-select"
+                                value={cfgDraft[key]}
+                                onChange={(e) => setCfgDraft((d) => ({ ...d, [key]: e.target.value }))}
+                              >
+                                {options.map((o) => (
+                                  <option key={o.value} value={o.value}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <ChevronDown size={16} strokeWidth={1.8} className="settings-select-icon" aria-hidden="true" />
+                            </span>
+                          ) : (
+                            <input
+                              type={type}
+                              value={cfgDraft[key]}
+                              onChange={(e) => setCfgDraft((d) => ({ ...d, [key]: e.target.value }))}
+                              placeholder={placeholder}
+                              className="settings-input"
+                              spellCheck={false}
+                              autoComplete={key === 'apiKey' ? 'off' : undefined}
+                            />
+                          )}
                         </label>
                       ))}
                     </div>

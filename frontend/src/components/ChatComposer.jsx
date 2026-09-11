@@ -175,7 +175,7 @@ export default function ChatComposer({ onOpenSettings }) {
     // serverAiEnabled 为 null（状态未知）时保持既有行为：带上用户配置。
     const llm =
       serverAiEnabled !== true && llmCfg.apiKey && llmCfg.baseUrl && llmCfg.model
-        ? { apiKey: llmCfg.apiKey, baseUrl: llmCfg.baseUrl, model: llmCfg.model }
+        ? { apiKey: llmCfg.apiKey, baseUrl: llmCfg.baseUrl, model: llmCfg.model, protocol: llmCfg.protocol }
         : undefined;
 
     const patchAi = (patch) =>
