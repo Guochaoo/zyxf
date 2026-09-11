@@ -164,7 +164,6 @@ const zh = {
   settings: {
     title: '设置',
     close: '关闭',
-    searchPlaceholder: '搜索设置',
     navAria: '设置板块',
     nav: {
       ai: '智能对话配置',
