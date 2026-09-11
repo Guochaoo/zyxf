@@ -176,6 +176,11 @@ export const semanticColorFor = (index) =>
  * 关键取舍：
  *   - **不再画目录层级边**（这正是「按内容组织」的含义）：文件挂在「内容细分」下，而不是挂在
  *     它所在的文件夹下；当前范围里的其他子目录仍作为节点挂到父目录，局部视图才能继续下钻。
+ *   - **学科节点是否存在，只看该学科目录在不在范围内**，与「它的文件在不在范围内」无关：
+ *     首页的局部范围只有目录、没有文件，若按文件判据就会一个学科都不显示（首页直接空态）。
+ *     学科节点代表整个学科，`size` 用分类里的总文件数。
+ *   - **细分/文件节点按「文件是否在范围内」决定**：首页因此是一张干净的学科地图，点进学科
+ *     才展开它的内容细分。
  *   - 学科节点与细分节点都可点击进入对应目录（meta.folderId）。
  *   - 未被索引的文件（扫描件/老格式）不在分类里，**不画**——画了没有归属边，只会变成游离点；
  *     它们在「目录视图」里照常可见。
@@ -183,16 +188,24 @@ export const semanticColorFor = (index) =>
  * @param nodes 当前视图范围内的图谱节点（buildGraph/localSubgraph 的产物）
  * @param taxonomy 后端 /taxonomy 响应
  * @param parentOf Map<folderId, parentFolderId|null>，用于把子目录接到父目录下
+ * @param anchorId 当前位置的节点 id（学科不在范围内时，细分/文件挂到它下面；默认根目录）
  */
-export function buildTopicGraph(nodes, taxonomy, { rootId = 'f0', parentOf } = {}) {
+export function buildTopicGraph(nodes, taxonomy, { rootId = 'f0', parentOf, anchorId } = {}) {
   const fileByNum = new Map();
   const folderByNum = new Map();
+  const inScope = new Set(nodes.map((n) => n.id));
   for (const n of nodes) {
     const f = String(n.id).match(/^file(\d+)$/);
     if (f) fileByNum.set(Number(f[1]), n);
     const d = String(n.id).match(/^f(\d+)$/);
     if (d && Number(d[1]) !== 0) folderByNum.set(Number(d[1]), n);
   }
+  // 锚点：当前位置节点优先（深层目录的局部图里可能既没有学科节点也没有根节点）
+  const anchor =
+    (anchorId && inScope.has(anchorId) && anchorId) ||
+    (inScope.has(rootId) && rootId) ||
+    [...folderByNum.values()][0]?.id ||
+    null;
 
   const groups = taxonomy?.groups || [];
   // 按 id 去重：目录节点先整体保留（导航入口 + 骨架锚点），学科节点再**就地覆盖**成分类节点，
@@ -205,25 +218,22 @@ export function buildTopicGraph(nodes, taxonomy, { rootId = 'f0', parentOf } = {
 
   for (const g of groups) {
     const subjectInScope = folderByNum.has(g.subjectId);
-    const subjectNodeId = subjectInScope ? `f${g.subjectId}` : rootId;
-    const subjectFiles = g.clusters.reduce(
-      (n, c) => n + c.fileIds.filter((id) => fileByNum.has(id)).length,
-      0
-    );
-    if (!subjectFiles) continue;
-
+    const subjectTotal = g.clusters.reduce((n, c) => n + c.fileIds.length, 0);
+    // 学科节点：只要该学科目录在范围内就画（与本地有没有它的文件无关）
     if (subjectInScope) {
       decoratedFolders.add(g.subjectId);
-      byId.set(subjectNodeId, {
-        id: subjectNodeId,
+      byId.set(`f${g.subjectId}`, {
+        id: `f${g.subjectId}`,
         name: g.subject,
         type: 'topic',
         kind: 'subject',
-        size: subjectFiles,
+        size: subjectTotal,
         meta: { folder_id: g.subjectId },
       });
-      links.push({ source: rootId, target: subjectNodeId });
+      if (anchor) links.push({ source: anchor, target: `f${g.subjectId}` });
     }
+    const parentId = subjectInScope ? `f${g.subjectId}` : anchor;
+    if (!parentId) continue;
 
     for (const c of g.clusters) {
       const present = c.fileIds.filter((id) => fileByNum.has(id));
@@ -234,7 +244,7 @@ export function buildTopicGraph(nodes, taxonomy, { rootId = 'f0', parentOf } = {
         for (const fileId of present) {
           const fileNode = fileByNum.get(fileId);
           byId.set(fileNode.id, fileNode);
-          links.push({ source: subjectNodeId, target: fileNode.id });
+          links.push({ source: parentId, target: fileNode.id });
         }
         continue;
       }
@@ -247,7 +257,7 @@ export function buildTopicGraph(nodes, taxonomy, { rootId = 'f0', parentOf } = {
         size: present.length,
         meta: { folder_id: g.subjectId },
       });
-      links.push({ source: subjectNodeId, target: clusterNodeId });
+      links.push({ source: parentId, target: clusterNodeId });
       for (const fileId of present) {
         const fileNode = fileByNum.get(fileId);
         byId.set(fileNode.id, fileNode);
@@ -262,7 +272,8 @@ export function buildTopicGraph(nodes, taxonomy, { rootId = 'f0', parentOf } = {
     if (decoratedFolders.has(id)) continue;
     const parent = parentOf?.get(id) ?? null;
     const parentInScope = parent != null && folderByNum.has(parent);
-    links.push({ source: parentInScope ? `f${parent}` : rootId, target: node.id });
+    if (!parentInScope && !anchor) continue;
+    links.push({ source: parentInScope ? `f${parent}` : anchor, target: node.id });
   }
 
   // 收口：边必须两端都在节点集里。d3 的 forceLink 遇到悬空端点会直接抛
@@ -376,18 +387,21 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
    */
   const canvasData = useMemo(() => {
     const forContent = viewMode === 'content' && taxonomy;
-    const build = (nodes, links) =>
+    const build = (nodes, links, anchor) =>
       forContent
-        ? buildTopicGraph(nodes, taxonomy, { parentOf: parentOfFolders })
+        ? buildTopicGraph(nodes, taxonomy, { parentOf: parentOfFolders, anchorId: anchor })
         : { nodes: nodes.map((n) => ({ ...n })), links: links.map((l) => ({ ...l })), clusters: [] };
     return {
-      local: build(localNodes, localLinks),
-      full: build(fullNodes, fullLinks),
+      local: build(localNodes, localLinks, nodeIdOf(currentId)),
+      full: build(fullNodes, fullLinks, 'f0'),
       clusters: forContent
-        ? buildTopicGraph(localNodes, taxonomy, { parentOf: parentOfFolders }).clusters
+        ? buildTopicGraph(localNodes, taxonomy, {
+            parentOf: parentOfFolders,
+            anchorId: nodeIdOf(currentId),
+          }).clusters
         : [],
     };
-  }, [viewMode, taxonomy, parentOfFolders, localNodes, localLinks, fullNodes, fullLinks]);
+  }, [viewMode, taxonomy, parentOfFolders, localNodes, localLinks, fullNodes, fullLinks, currentId]);
 
   /**
    * 内容档在分类数据到达前**不能**先用目录边画一次：局部子图里没有根节点（只含根的直接邻居），
@@ -397,8 +411,10 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
   const canvasReady = viewMode === 'folder' || Boolean(taxonomy);
   // 「空」的判据是**当前范围里一个分类节点都没有**（而不是节点数 ≤1：目录节点总会保留，
   // 拿节点数判断会永远不为空，提示就永远不出现）。
-  const canvasEmpty =
-    viewMode === 'content' && taxonomy && !canvasData.local.nodes.some((n) => n.type === 'topic');
+  // 还要区分两种空：整库索引就没东西（all）vs 只是当前位置没有已索引资料（here）——
+  // 后者在小文件夹里很常见，提示不该说成「索引里没有可用资料」。
+  const canvasEmpty = viewMode === 'content' && taxonomy && !canvasData.local.nodes.some((n) => n.type === 'topic');
+  const emptyKind = !canvasEmpty ? null : taxonomy.files > 0 ? 'here' : 'all';
 
   const onNavigate = useCallback(
     (node) => {
@@ -502,9 +518,9 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
             {contentState === 'error' ? t('kg.contentFailed') : t('kg.contentLoading')}
           </div>
         ) : canvasEmpty ? (
-          // 有分类数据但没聚出任何分类：模型没装、或这批文件都是扫描件/老格式
+          // 没聚出任何分类：整库索引为空（all）或只是当前位置没资料（here）
           <div className="flex h-full items-center justify-center px-4 text-center text-[12px] text-slate-500">
-            {t('kg.contentEmpty')}
+            {emptyKind === 'all' ? t('kg.contentEmpty') : t('kg.contentEmptyHere')}
           </div>
         ) : (
           <GraphCanvas

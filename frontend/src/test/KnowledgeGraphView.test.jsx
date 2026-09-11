@@ -81,6 +81,20 @@ describe('知识图谱视图（渲染层）', () => {
     document.documentElement.style.setProperty('--kg-c2', 'rgb(4, 5, 6)');
   });
 
+  test('首页（根目录）显示学科节点，而不是空态', async () => {
+    // 首页的局部范围只有目录、没有文件——学科节点的存在**不能**依赖「它的文件在范围内」，
+    // 否则 53 个学科全被跳过、首页直接显示「没有可用资料」（线上就是这么空掉的）。
+    const { container } = renderGraph(0);
+    await waitFor(() =>
+      expect([...container.querySelectorAll('text')].map((t) => t.textContent)).toContain('高数')
+    );
+    const texts = [...container.querySelectorAll('text')].map((t) => t.textContent);
+    expect(texts).toContain('足球'); // 两个学科都该在
+    // 首页不展开内容细分（那是点进学科之后的事），所以不该出现细分名，也不该显示空态
+    expect(texts).not.toContain('极限与导数');
+    expect(container.textContent).not.toMatch(/内容索引里还没有可用资料|这里还没有已建立内容索引/);
+  });
+
   test('内容视图按「学科 → 内容细分 → 文件」组织，标签用分类名', async () => {
     const { container } = renderGraph();
     // 等分类名上屏：内容档要先等分类数据到齐（只看 circle 会命中目录图的那一帧）
