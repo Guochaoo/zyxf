@@ -202,12 +202,46 @@ describe('POST /api/chat', () => {
     assert.equal(res.status, 200);
     const events = await readSse(res);
     assert.equal(events.at(-1).type, 'done');
-    // 配置被规范化（去尾斜杠）并传给 LLM 客户端
+    // 配置被规范化（去尾斜杠）并传给 LLM 客户端；未指定协议时按 openai
     assert.deepEqual(llmState.calls[0].config, {
       apiKey: 'client-key',
       baseUrl: 'https://llm.test/v1',
       model: 'test-model',
+      protocol: 'openai',
     });
+  });
+
+  test('client can pick the anthropic protocol (passed through to the LLM client)', async () => {
+    llmState.enabled = false;
+    llmState.script = [[{ type: 'delta', text: 'ok' }]];
+    const res = await request('POST', '/api/chat', {
+      headers: { 'x-forwarded-for': '203.0.113.134', ...userAuth() },
+      body: {
+        messages: [{ role: 'user', content: 'hi' }],
+        llm: {
+          apiKey: 'sk-ant',
+          baseUrl: 'https://api.anthropic.com/v1',
+          model: 'claude-sonnet-4-5',
+          protocol: 'anthropic',
+        },
+      },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(llmState.calls[0].config.protocol, 'anthropic');
+  });
+
+  // 显式填了不支持的协议时不静默降级（否则用户以为切了协议，实际还按 OpenAI 发）
+  test('unsupported protocol makes the client config invalid → 503', async () => {
+    llmState.enabled = false;
+    const res = await request('POST', '/api/chat', {
+      headers: { 'x-forwarded-for': '203.0.113.135', ...userAuth() },
+      body: {
+        messages: [{ role: 'user', content: 'hi' }],
+        llm: { apiKey: 'k', baseUrl: 'https://llm.test/v1', model: 'm', protocol: 'gemini' },
+      },
+    });
+    assert.equal(res.status, 503);
+    assert.equal(llmState.calls.length, 0);
   });
 
   // IMPROVE-10：服务端未配置时，自带 Key 的路径等于让本站代理任意公网 https 上游 → 必须登录。

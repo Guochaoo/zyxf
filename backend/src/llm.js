@@ -1,13 +1,25 @@
-// OpenAI 兼容 LLM 客户端（流式）。零依赖：Node 24 全局 fetch + ReadableStream。
+// OpenAI 兼容 / Anthropic 兼容 LLM 客户端（流式）。零依赖：Node 24 全局 fetch + ReadableStream。
 // 参照 imm.js 的外部服务调用模式：envOrThrow、非 2xx 抛结构化错误。
+// 协议差异（请求体、鉴权头、SSE 形状）收敛在 llmProtocols.js，本文件只负责取配置、发请求、转发事件。
 
 import net from 'node:net';
 import dns from 'node:dns';
 import { envStr } from './env.js';
+import {
+  isSupportedProtocol,
+  normalizeProtocol,
+  createSseSplitter,
+  createOpenAiReducer,
+  createAnthropicReducer,
+  buildOpenAiRequest,
+  buildAnthropicRequest,
+} from './llmProtocols.js';
 
 const LLM_API_KEY = envStr('LLM_API_KEY');
 const LLM_BASE_URL = envStr('LLM_BASE_URL').replace(/\/+$/, '');
 const LLM_MODEL = envStr('LLM_MODEL');
+// 服务端上游协议，缺省 OpenAI 兼容（OpenAI/GLM/DeepSeek 等同款接口）。
+const LLM_PROTOCOL = normalizeProtocol(envStr('LLM_PROTOCOL'));
 
 // 三个变量齐全才启用；缺失时聊天路由返回 503，不影响其他功能。
 // 导出为函数而非常量：测试通过 mock.module 整体替换本模块来控制启用态（见 test/setup.js）。
@@ -122,8 +134,9 @@ async function isSafeLlmBaseUrl(baseUrlRaw) {
 
 /**
  * 校验请求携带的客户端 LLM 配置（前端设置面板可让用户自带 Key）。
- * 三项齐全且合法才有效；baseUrl 仅允许 https（SSRF 防护）并去掉尾部斜杠。
- * 返回归一化后的 { apiKey, baseUrl, model } 或 null。
+ * 三项齐全且合法才有效；baseUrl 仅允许 https（SSRF 防护）并去掉尾部斜杠；
+ * protocol 缺省按 openai，显式填了不支持的值则整份配置作废（不静默降级，避免用户以为切了协议）。
+ * 返回归一化后的 { apiKey, baseUrl, model, protocol } 或 null。
  */
 export async function resolveClientLlmConfig(raw) {
   if (!raw || typeof raw !== 'object') return null;
@@ -134,6 +147,8 @@ export async function resolveClientLlmConfig(raw) {
   if (apiKey.length > MAX_KEY_LEN || baseUrlRaw.length > MAX_URL_LEN || model.length > MAX_MODEL_LEN) {
     return null;
   }
+  const protocolRaw = typeof raw.protocol === 'string' ? raw.protocol.trim() : '';
+  if (protocolRaw && !isSupportedProtocol(protocolRaw)) return null;
   if (!(await isSafeLlmBaseUrl(baseUrlRaw))) return null; // SSRF 拦截
   let baseUrl;
   try {
@@ -141,36 +156,11 @@ export async function resolveClientLlmConfig(raw) {
   } catch {
     return null;
   }
-  return { apiKey, baseUrl, model };
+  return { apiKey, baseUrl, model, protocol: normalizeProtocol(protocolRaw) };
 }
 
 /**
- * 校验组装的工具调用是否完整：function.arguments 必须是有效的 JSON 对象/字符串。
- * 流式断连可能留下被截断的半截 arguments，这类不完整的调用不应透传（BUG-12）。
- */
-function isCompleteToolCall(tc) {
-  if (!tc || typeof tc.function?.arguments !== 'string') return false;
-  try {
-    const parsed = JSON.parse(tc.function.arguments || '{}');
-    return typeof parsed === 'object' && parsed !== null;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * 对累积的 tool_call 增量做最终组装与完整性过滤。
- * 输入 pendingTools（index → tool_call 组装对象），返回按 index 排序且 arguments 完好的调用列表。
- */
-function finalizeToolCalls(pendingTools) {
-  return [...pendingTools.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([, v]) => v)
-    .filter(isCompleteToolCall);
-}
-
-/**
- * 流式对话补全。yield 事件：
+ * 流式对话补全。yield 事件（与上游协议无关）：
  *   { type: 'delta', text }                      — 文本增量
  *   { type: 'tool_calls', tool_calls: [...] }    — 完整的工具调用（流结束时产出）
  * config 可传请求级配置（覆盖 env，见 resolveClientLlmConfig）。
@@ -180,19 +170,18 @@ export async function* chatStream({ messages, tools, signal, config }) {
   const apiKey = config?.apiKey || LLM_API_KEY;
   const baseUrl = config?.baseUrl || LLM_BASE_URL;
   const model = config?.model || LLM_MODEL;
+  // 有请求级配置就用它自己的协议（缺省 openai，与 resolveClientLlmConfig 的归一化一致），
+  // 只有走服务端 env 时才看 LLM_PROTOCOL——否则用户没填协议时会静默继承服务端协议。
+  const isAnthropic = normalizeProtocol(config ? config.protocol : LLM_PROTOCOL) === 'anthropic';
 
-  const res = await fetch(`${baseUrl}/chat/completions`, {
+  const req = isAnthropic
+    ? buildAnthropicRequest({ baseUrl, apiKey, model, messages, tools })
+    : buildOpenAiRequest({ baseUrl, apiKey, model, messages, tools });
+
+  const res = await fetch(req.url, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      ...(tools?.length ? { tools, tool_choice: 'auto' } : {}),
-      stream: true,
-    }),
+    headers: req.headers,
+    body: JSON.stringify(req.body),
     signal,
   });
 
@@ -203,67 +192,36 @@ export async function* chatStream({ messages, tools, signal, config }) {
     throw err;
   }
 
-  // OpenAI 流式 tool_call 增量按 index 分片累积，流结束拼成完整调用。
-  const pendingTools = new Map();
-  let sawDone = false;
+  const decoder = new TextDecoder();
+  const splitter = createSseSplitter();
+  const reducer = isAnthropic ? createAnthropicReducer() : createOpenAiReducer();
   let producedOutput = false; // 是否已向客户端产出任何输出（文本或工具调用）
 
-  const decoder = new TextDecoder();
-  let buffer = '';
-  // 以换行切分并处理 SSE 数据块。返回本次应产出的事件；buffer/sawDone/producedOutput/pendingTools 由闭包共享。
-  // 抽成函数以复用同一套切分逻辑：流结束后也能处理 buffer 残留的末段（无换行的尾行）以及 decoder 最后 flush 出的字节。
-  const consumeBuffer = (text) => {
-    buffer += text;
-    const outputs = [];
-    let nl;
-    while ((nl = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.slice(0, nl).trim();
-      buffer = buffer.slice(nl + 1);
-      if (!line.startsWith('data:')) continue;
-      const payload = line.slice(5).trim();
-      if (payload === '[DONE]') {
-        sawDone = true;
-        continue;
-      }
-      let json;
-      try {
-        json = JSON.parse(payload);
-      } catch {
-        continue;
-      }
-      const delta = json.choices?.[0]?.delta;
-      if (!delta) continue;
-      if (delta.content) {
+  // 每段 SSE 载荷交给协议 reducer 变成统一事件；流的切分逻辑两种协议共用。
+  const emit = function* (payloads) {
+    for (const payload of payloads) {
+      for (const ev of reducer.feed(payload)) {
         producedOutput = true;
-        outputs.push({ type: 'delta', text: delta.content });
-      }
-      for (const frag of delta.tool_calls || []) {
-        const idx = frag.index ?? 0;
-        const acc = pendingTools.get(idx) || { id: '', type: 'function', function: { name: '', arguments: '' } };
-        if (frag.id) acc.id = frag.id;
-        if (frag.function?.name) acc.function.name += frag.function.name;
-        if (frag.function?.arguments) acc.function.arguments += frag.function.arguments;
-        pendingTools.set(idx, acc);
+        yield ev;
       }
     }
-    return outputs;
   };
 
   for await (const chunk of res.body) {
-    for (const out of consumeBuffer(decoder.decode(chunk, { stream: true }))) yield out;
+    yield* emit(splitter.push(decoder.decode(chunk, { stream: true })));
   }
   // 流结束：先 flush decoder（个别 provider 只在最后的 flush 中吐出字节），
-  // 再处理 buffer 中残留的无换行尾行（否则末尾的 data: 行会被丢弃）。
-  for (const out of consumeBuffer(decoder.decode())) yield out;
-
-  if (pendingTools.size > 0) {
-    const toolCalls = finalizeToolCalls(pendingTools);
-    if (toolCalls.length > 0) {
-      producedOutput = true;
-      yield { type: 'tool_calls', tool_calls: toolCalls };
-    }
+  // 再由 splitter.end() 处理残留的无换行尾行（否则末尾的 data: 行会被丢弃），
+  // 最后由 reducer 收尾产出工具调用。
+  const tail = decoder.decode();
+  if (tail) yield* emit(splitter.push(tail));
+  yield* emit(splitter.end());
+  for (const ev of reducer.finish()) {
+    producedOutput = true;
+    yield ev;
   }
-  if (!sawDone && !producedOutput) {
+
+  if (!reducer.sawDone && !producedOutput) {
     // 上游异常断流且没有任何输出时显式报错，避免前端无限等待。
     // 一旦已产出输出则优雅收尾（不再抛错），与注释意图一致（BUG-12）。
     const err = new Error('LLM 上游连接中断');
