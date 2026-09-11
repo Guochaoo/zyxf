@@ -181,6 +181,15 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
     await waitFor(() => expect(document.querySelector('.settings-select-menu')).toBeNull());
   });
 
+  // 下拉字段不能包在 <label> 里：label 会把点击转发给控件，导致「API 协议」整行都可点（区域过大）
+  test('点「API 协议」标签本身不会展开下拉，只有触发器可点', () => {
+    renderModal();
+    customMode();
+
+    fireEvent.click(screen.getByText('API 协议'));
+    expect(document.querySelector('.settings-select-menu')).toBeNull();
+  });
+
   test('已有完整本地配置时默认进入「使用自定义配置」并回填（含协议）', () => {
     localStorage.setItem(
       'zyxf_llm',
