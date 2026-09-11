@@ -197,6 +197,7 @@ const en = {
       model: 'Model',
       hint: 'URL, API Key and model must all be filled. Config is saved locally in this browser only.',
       hintServer: 'Use the model configured on the server; no key is stored in this browser.',
+      errorIncomplete: 'Not saved — all three fields are required. Fill in the ones highlighted above.',
       restore: 'Restore defaults',
       save: 'Save',
     },
