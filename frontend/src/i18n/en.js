@@ -241,6 +241,8 @@ const en = {
     title: 'Knowledge Graph',
     viewAll: 'View full graph',
     zoomIn: 'Zoom current graph',
+    semanticOn: 'Switch to semantic view (clustered by topic)',
+    semanticOff: 'Switch to folder view (hierarchy)',
     collapse: 'Collapse graph',
     expand: 'Expand graph',
     close: 'Close',

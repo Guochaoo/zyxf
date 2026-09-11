@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Globe, Maximize, X } from 'lucide-react';
+import { Globe, Maximize, Shuffle, X } from 'lucide-react';
 import {
   forceCenter,
   forceCollide,
   forceManyBody,
   forceLink,
   forceSimulation,
+  forceX,
+  forceY,
 } from 'd3-force';
 import { useFolderTree } from '../hooks/useFolderTree.js';
 import PanelHeader from './PanelHeader.jsx';
@@ -17,11 +19,17 @@ import { openFilePreview } from '../ui.js';
 const VIEW_W = 600;
 const VIEW_H = 420;
 
+// 簇心拉力强度：越大簇越紧、层级骨架越糊。0.05 是实测取值（见 GraphCanvas 的语义布局注释）。
+const SEMANTIC_PULL = 0.05;
+
 // 图谱区高度：原卡片高 295px，头部栏占 37px（p-1.5×2 + size-6 + 1px 分割线）。
 const GRAPH_H = '258px';
 
 // 收起状态跨页面导航保留（右栏组件会随路由卸载重建）。
 let collapsedPersistent = false;
+
+// 语义视图开关同样跨导航保留（理由同上：右栏组件会卸载重建）。
+let semanticPersistent = true;
 
 // Node ids: folders are `f<id>` (root is f0), files are `file<id>`.
 export const nodeIdOf = (currentId) => (currentId ? `f${currentId}` : 'f0');
@@ -81,6 +89,284 @@ function displayName(name) {
   return s.length > 16 ? `${s.slice(0, 16)}…` : s;
 }
 
+/* ---- 语义层：把「名称里的主题」变成边与簇 -------------------------------------
+ * 图谱原本只有目录层级边，语义组织必须先制造信号。全部走名称层（不读文件内容），
+ * 三个纯函数按顺序串起来：tokenizeNodeName → buildSemanticEdges → buildClusters。
+ *
+ * 阈值是拿真实库跑出来的（908 个节点 / 850 个文件），不是拍的：
+ *   - 只比同类型节点（文件↔文件、文件夹↔文件夹）。跨类型连边会把「文件夹名必是其后代
+ *     节点 token 子集」的结构变成星形全连通，必然塌成一个巨簇；
+ *   - 共享 token 只算「库内非套话」的那些（df ≤ MAX_SEMANTIC_DF），且至少 2 个：套话词
+ *     （数学/大学…）命中再多也不能证明同主题；
+ *   - 共享 token 要占较小的那个主题集合的 1/2 以上：否则长名称之间靠零散公共词连边；
+ *   - 再用 idf 加权的 Jaccard ≥ 0.6 卡一道：'西安'/'交通' 这类库内高频词即使命中多，
+ *     权重也被压低。实测这一组阈值把「265 节点的巨簇」拆成 ~100 个主题簇、最大 17。
+ */
+export const MAX_SEMANTIC_DF = 15; // 出现在超过这么多文档里的 token 视为库内套话，不参与连边
+export const MIN_SHARED_TOKENS = 2;
+export const MIN_TOKEN_OVERLAP = 0.5;
+export const MIN_WEIGHTED_JACCARD = 0.6;
+
+// 出现在「词与词交界」上的停用字。它们不删除 token，而是把中文串在**这里切开**，
+// 只在切出的片段内部生成 n-gram：「高等数学期末试卷」→ 高 | 数学 | 期末 | 试，
+// 于是留下「数学」这类真主题词，切掉「学期」这种跨词碎片——后者在库内出现频率极高
+// （任意「XX数学期中」与「XX物理期末」都会撞上），足以把不相关学科连成一片。
+// ⚠️ 判据是「单独成词时没有主题信息」，不是「常出现在套话里」。数/物/理/化/学 这类
+// 学科相关字一个都不能收——「数学」「有机化学」会被切碎；偶尔漏出「学期」这种跨词碎片
+// 由 STOP_WORDS 与 idf 加权兜底（库内高频词的权重被压低，连不成边）。
+// 与 和 及 或 的 之 等 中 第 年 级 版 次 末 卷 参 答 总 汇 复 讲
+const STOP_CHARS = new Set([
+  '\u4e0e', '\u548c', '\u53ca', '\u6216', '\u7684', '\u4e4b', '\u7b49', '\u4e2d', '\u7b2c', '\u5e74',
+  '\u7ea7', '\u7248', '\u6b21', '\u672b', '\u5377', '\u53c2', '\u7b54', '\u603b', '\u6c47', '\u590d',
+  '\u8bb2',
+]);
+
+// 泛词：文档性质 + 编排套话。这类词讲「这是什么类型的材料」，不讲「讲哪门课」。
+// ⚠️ 下面的中文数据不是界面文案、也不该随语言切换，i18n 的「源码里不许硬编码中文」规则
+// 对它不适用，故整段标注豁免（见 test/i18n.test.js 的豁免说明）。
+// i18n-exempt-cjk
+const STOP_WORDS = new Set([
+  '讲义', '课件', '资料', '往年题', '往年', '真题', '试题', '答案', '参考答案', '参考',
+  '作业', '习题', '练习', '复习', '期末', '期中', '考试', '上机', '教材', '教辅', '笔记',
+  '总结', '汇总', '基础', '重点', '难点', '典型', '题解', '课堂', '随堂', '课程', '讲稿',
+  '试卷', '大纲', '提纲', '解答', '例题', '自测题', '样卷', '样题', '知识点', '梳理', '附加',
+  '部分', '全套', '最新', '完整', '大学', '第一', '第二', '第三', '第四', '第五',
+]);
+// 文件名里常见的英文泛词（the/and 这类连接词与格式词）。
+const STOP_LATIN = new Set([
+  'the', 'and', 'for', 'with', 'via', 'pdf', 'doc', 'docx', 'ppt', 'pptx', 'zip', 'rar',
+  'png', 'jpg', 'chap', 'chapter', 'part', 'vol', 'unit', 'test', 'answer', 'answers',
+  'english', 'final', 'mid',
+]);
+
+const SEMANTIC_KEY_PATTERN = /[_\-.,+·、()（）[\]【】《》<>"'~!?=:;|\\/]+/g;
+
+function normalizeForTokens(raw) {
+  return String(raw || '')
+    .normalize('NFKC') // 全角括号/字母/数字统一成半角，否则「（１）」与「(1)」切法不同
+    .replace(SEMANTIC_KEY_PATTERN, ' ')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** 名称 → 主题 token 集合（中文 2/3-gram + 拉丁词；不读文件内容）。 */
+export function tokenizeNodeName(name, isFile = false) {
+  const tokens = new Set();
+  // 去掉文件扩展名。⚠️ 不能用 /\.[A-Za-z0-9]{1,5}$/ 这种「点 + 1~5 位」的写法：对
+  // 「试卷A.pdf」它先命中「.pdf」把 A 留在主题里，而「试卷A.PDF」又会因为大小写而
+  // 走到另一条分支，同一份资料在两种写法下切出不同 token。这里按最后一个点切开，
+  // 只要点后面是 1~5 位字母数字就当扩展名（「试卷A.pdf」→「试卷A」）。
+  const rawName = String(name || '');
+  const dot = rawName.lastIndexOf('.');
+  const stripped = isFile && dot > 0 && /^[A-Za-z0-9]{1,5}$/.test(rawName.slice(dot + 1))
+    ? rawName.slice(0, dot)
+    : rawName;
+  const normalized = normalizeForTokens(stripped);
+  // 按停用字把中文串切成片段，只在片段内部生成 n-gram（见 STOP_CHARS 的说明）。
+  // 连续的停用字算**一个**边界：「高等数学期末试卷」= 高 |(等)| 数学 |(期末)| 试卷，
+  // 不给「期末」留下被拆成单字再粘成「学期」的机会。
+  const segments = [];
+  let segment = [];
+  let inStopRun = false;
+  const flush = () => {
+    if (segment.length) segments.push(segment);
+    segment = [];
+  };
+  for (const word of normalized.split(' ')) {
+    const chars = [...word];
+    let latin = '';
+    for (const ch of chars) {
+      if (/[\u4e00-\u9fff]/.test(ch)) {
+        if (STOP_CHARS.has(ch)) {
+          if (!inStopRun) flush();
+          inStopRun = true;
+        } else {
+          segment.push(ch);
+          inStopRun = false;
+        }
+        if (latin) {
+          if (latin.length >= 3) tokens.add(latin);
+          latin = '';
+        }
+      } else if (/[a-z0-9]/.test(ch)) {
+        latin += ch;
+      } else if (latin) {
+        if (latin.length >= 3) tokens.add(latin);
+        latin = '';
+      }
+    }
+    if (latin.length >= 3) tokens.add(latin);
+    flush(); // 空格/标点本身就是词边界：不让 n-gram 跨过去
+    inStopRun = false;
+  }
+  for (const part of segments) {
+    // 单个字不成词，直接丢掉。「高等数学」被切成 高 | 数学 时，「高」留下不会帮忙，
+    // 反而会跟下一个片段的首字粘成「学期」这种跨词碎片（正是要剪掉的东西）。
+    // 真正的缩写「高数」「大物」本身就是一个片段，n-gram 天然覆盖。
+    for (let i = 0; i < part.length - 1; i += 1) tokens.add(part[i] + part[i + 1]);
+    // 3-gram 让「化工原理」这类整课名成为一个 token，分章资料才连得上。
+    for (let i = 0; i < part.length - 2; i += 1) {
+      tokens.add(part[i] + part[i + 1] + part[i + 2]);
+    }
+  }
+  for (const t of [...tokens]) {
+    if (STOP_WORDS.has(t) || STOP_LATIN.has(t) || /^(19|20)\d\d$/.test(t)) tokens.delete(t);
+  }
+  return tokens;
+}
+
+/**
+ * 给节点补上主题 token（不改入参）。同目录兜底边靠 meta.folder_id，所以不做节点树回溯。
+ */
+export function buildSemanticNodes(nodes) {
+  return nodes.map((n) => ({
+    id: n.id,
+    name: n.name,
+    type: n.type,
+    tokens: tokenizeNodeName(n.name, n.type === 'file'),
+    folderId: n.meta?.folder_id ?? null,
+  }));
+}
+
+/** 语义边：同类型节点之间，共享主题 token 达到阈值即连边（权重 = idf 加权重合度）。 */
+export function buildSemanticEdges(semanticNodes) {
+  const nodes = Array.isArray(semanticNodes) ? semanticNodes : [];
+  const docFreq = new Map();
+  for (const n of nodes) {
+    for (const t of n.tokens) docFreq.set(t, (docFreq.get(t) || 0) + 1);
+  }
+  const idf = (t) => Math.log(1 + nodes.length / (1 + (docFreq.get(t) || 1)));
+  // 库内套话（出现超过 MAX_SEMANTIC_DF 个文档的 token）不算主题：既不计入权重、也不计入
+  // 共享个数。少算一半都不行——只压权重时，「数学」这种 df≈68 的词只要命中一条就能把
+  // 全库数学类资料连成一个几百节点的巨簇（实测 908 节点里 282 个连成一片）。
+  const themeTokens = new Map();
+  for (const n of nodes) {
+    // 单字 token 不参与成簇：停用字切出的「案」「章」在库内是 df 80+ 的套话碎片
+    // （答案/第X章），两个文件各命中一个就能凑够 2 个共享 token，实测会把 908 个节点里的
+    // 331 个连成一簇。纯缩写（「高数.pdf」切完只剩「高」）由下面的同目录弱边兜底接回去，
+    // 不走这条「单字也算主题」的路，否则「高」和「案」又能把全库连起来。
+    themeTokens.set(
+      n.id,
+      [...n.tokens].filter((t) => t.length >= 2 && (docFreq.get(t) || 0) <= MAX_SEMANTIC_DF)
+    );
+  }
+  const weights = new Map();
+  for (const n of nodes) weights.set(n.id, themeTokens.get(n.id).reduce((sum, t) => sum + idf(t), 0));
+
+  const edges = [];
+  const connect = (a, b) => {
+    // 两个名称都只剩套话 token 时不存在主题，直接跳过（否则边界情况 0/0 会连出假边）。
+    const wa = weights.get(a.id);
+    const wb = weights.get(b.id);
+    if (!wa || !wb) return;
+    const shared = themeTokens.get(a.id).filter((t) => b.tokens.has(t));
+    if (shared.length < MIN_SHARED_TOKENS) return;
+    const smallerTheme = Math.min(themeTokens.get(a.id).length, themeTokens.get(b.id).length);
+    if (shared.length / smallerTheme < MIN_TOKEN_OVERLAP) return;
+    const sharedWeight = shared.reduce((sum, t) => sum + idf(t), 0);
+    if (sharedWeight / Math.min(wa, wb) < MIN_WEIGHTED_JACCARD) return;
+    edges.push({ source: a.id, target: b.id, weight: shared.length, tokens: shared });
+  };
+
+  const fileNodes = [];
+  const folderNodes = [];
+  for (const n of nodes) (n.type === 'file' ? fileNodes : folderNodes).push(n);
+
+  // 只比同类型：跨类型时「文件夹名必是其子节点 token 的子集」，会把整棵子树连成星形巨簇。
+  for (const list of [fileNodes, folderNodes]) {
+    for (let i = 0; i < list.length; i += 1) {
+      for (let j = i + 1; j < list.length; j += 1) connect(list[i], list[j]);
+    }
+  }
+
+  // 兜底：文件名本身没有任何 token（例如「2019.6.18.pdf」这种纯日期）时，同目录至少还算
+  // 相关，连一条权重 1 的弱边。判据必须是「token 为空」而不是「主题为空」——按后者的话，
+  // 一个把「高」「案」这类单字全部过滤掉的纯缩写名会变成空壳，再多连几个同目录资料就能把
+  // 本来分属不同主题的簇桥接成巨簇（实测 908 个节点里 348 个连成一片）。
+  const byFolder = new Map();
+  for (const n of fileNodes) {
+    if (!n.folderId) continue;
+    if (!byFolder.has(n.folderId)) byFolder.set(n.folderId, []);
+    byFolder.get(n.folderId).push(n);
+  }
+  for (const siblings of byFolder.values()) {
+    if (siblings.length < 2) continue;
+    for (let i = 0; i < siblings.length; i += 1) {
+      for (let j = i + 1; j < siblings.length; j += 1) {
+        const a = siblings[i];
+        const b = siblings[j];
+        // 只有一边完全没有 token 时才连；两边都有内容就交给 connect 判断。
+        if (a.tokens.size && b.tokens.size) continue;
+        if (!a.tokens.size && !b.tokens.size) continue;
+        edges.push({ source: a.id, target: b.id, weight: 1, weak: true, tokens: [] });
+      }
+    }
+  }
+  return edges;
+}
+
+export function buildClusters(nodes, semanticEdges, semanticNodes) {
+  const labels = new Map((semanticNodes || []).map((n) => [n.id, n.tokens]));
+  const parent = new Map();
+  const find = (x) => {
+    let root = x;
+    while (parent.get(root) !== root) root = parent.get(root);
+    let cur = x;
+    while (parent.get(cur) !== root) {
+      const next = parent.get(cur);
+      parent.set(cur, root);
+      cur = next;
+    }
+    return root;
+  };
+  for (const n of nodes) parent.set(n.id, n.id);
+  for (const e of semanticEdges) {
+    if (!parent.has(e.source) || !parent.has(e.target)) continue;
+    const ra = find(e.source);
+    const rb = find(e.target);
+    if (ra !== rb) parent.set(ra, rb);
+  }
+  const groups = new Map();
+  for (const n of nodes) {
+    const root = find(n.id);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root).push(n.id);
+  }
+  const clusters = [];
+  for (const members of groups.values()) {
+    const labelCount = new Map();
+    for (const id of members) for (const t of labels.get(id) || []) labelCount.set(t, (labelCount.get(t) || 0) + 1);
+    const top = [...labelCount.entries()]
+      // 标签要代表整簇，不是「这一簇里恰好出现过的词」：要求覆盖三分之一的成员
+      // （51 个化学课件里 12 个提到的「生命科学」不该当这簇的名字）。
+      .filter(([, count]) => count >= Math.max(2, Math.ceil(members.length / 3)))
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+      .slice(0, 2)
+      .map(([t]) => t);
+    clusters.push({ key: members[0], nodeIds: members, label: top.join(' · ') || null });
+  }
+  // 大簇在前：图例取前几个就够，顺序稳定（同尺寸按 key 排）才不会有每次渲染跳色的观感。
+  clusters.sort(
+    (a, b) =>
+      b.nodeIds.length - a.nodeIds.length ||
+      (a.nodeIds[0] < b.nodeIds[0] ? -1 : a.nodeIds[0] > b.nodeIds[0] ? 1 : 0)
+  );
+  return clusters;
+}
+
+/** 簇 → 色槽：固定顺序分配，超出的簇用中性兜底色。 */
+export const MAX_SEMANTIC_COLORS = 6;
+
+/** 读 CSS 变量（亮/暗主题各一套，见 index.css）。jsdom 无样式表时回落成 undefined。 */
+function cssVar(name) {
+  if (typeof window === 'undefined' || typeof getComputedStyle !== 'function') return undefined;
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || undefined;
+}
+
+export const semanticColorFor = (index) =>
+  index >= 0 && index < MAX_SEMANTIC_COLORS ? cssVar(`--kg-c${index + 1}`) : cssVar('--kg-cn');
+
 /**
  * 知识库 — force-directed graph of the library, forestry.md "Connected Pages"
  * style: circular nodes sized by degree, hover highlights neighbors,
@@ -93,6 +379,8 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
   // folder neighborhood zoomed (maximize). null = dialog closed.
   const [dialog, setDialog] = useState(null);
   const [collapsed, setCollapsed] = useState(collapsedPersistent);
+  // 语义视图：默认开启（本图谱存在的意义就是看主题关系），关闭则回到纯目录结构视图。
+  const [semantic, setSemantic] = useState(semanticPersistent);
   const { tree, rootFiles, loading } = useFolderTree();
 
   // Full graph only depends on the tree + root files: keep it stable across
@@ -109,6 +397,41 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
       fullLinks: fullGraph.links.map((l) => ({ ...l })),
     };
   }, [fullGraph, currentId]);
+
+  // 语义层只从名称派生，且不写回 fullGraph（d3 会就地改写它拿到的节点/边，见 localSubgraph 注释）。
+  const semantics = useMemo(() => {
+    if (!semantic) return null;
+    const semanticNodes = buildSemanticNodes(fullGraph.nodes);
+    const edges = buildSemanticEdges(semanticNodes);
+    // 簇序即色槽序（buildClusters 已按规模排好）：图例第 i 项与画布上第 i 槽同色。
+    const clusters = buildClusters(fullGraph.nodes, edges, semanticNodes);
+    // 图例只展示成员 ≥2 的簇：单点没有「聚成一类」的含义，列出来只是噪音。
+    const legend = clusters
+      .filter((cluster) => cluster.nodeIds.length > 1 && cluster.label)
+      .slice(0, MAX_SEMANTIC_COLORS)
+      .map((cluster, index) => ({
+        key: cluster.key,
+        label: cluster.label,
+        count: cluster.nodeIds.length,
+        color: semanticColorFor(index),
+      }));
+    return { nodes: semanticNodes, edges, clusters, legend };
+  }, [semantic, fullGraph]);
+
+  // 当前视图范围内实际要画的语义边（局部视图只画两端都在场的边）。
+  const semanticEdgesIn = useCallback(
+    (nodes) => {
+      if (!semantics) return [];
+      const scope = new Set(nodes.map((n) => n.id));
+      return semantics.edges.filter((e) => scope.has(e.source) && scope.has(e.target));
+    },
+    [semantics]
+  );
+  // 节点 → 所属簇（渲染上色用）；不传时退化成原来的「文件夹墨黑 / 文件白」。
+  const clusterNodes = semantics
+    ? semantics.clusters.slice(0, MAX_SEMANTIC_COLORS).map((c) => new Set(c.nodeIds))
+    : [];
+  const legend = semantics ? semantics.legend : [];
 
   const onNavigate = useCallback(
     (node) => {
@@ -156,6 +479,21 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
           <>
             <button
               type="button"
+              onClick={() =>
+                setSemantic((v) => {
+                  semanticPersistent = !v;
+                  return !v;
+                })
+              }
+              title={semantic ? t('kg.semanticOff') : t('kg.semanticOn')}
+              aria-label={semantic ? t('kg.semanticOff') : t('kg.semanticOn')}
+              aria-pressed={semantic}
+              className={ICON_BUTTON_CLASS}
+            >
+              <Shuffle className="h-[15px] w-[15px]" />
+            </button>
+            <button
+              type="button"
               onClick={() => setDialog('full')}
               title={t('kg.viewAll')}
               aria-label={t('kg.viewAll')}
@@ -194,6 +532,9 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
             currentId={currentId}
             onNavigate={onNavigate}
             height={GRAPH_H}
+            semanticEdges={semanticEdgesIn(localNodes)}
+            clusterNodes={clusterNodes}
+            legend={legend}
           />
         )}
       </div>
@@ -221,6 +562,9 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
               currentId={currentId}
               onNavigate={onNavigate}
               height="100%"
+              semanticEdges={semanticEdgesIn(dialog === 'local' ? localNodes : fullNodes)}
+              clusterNodes={clusterNodes}
+              legend={legend}
             />
           </div>
         </div>
@@ -241,14 +585,39 @@ export function buildDegrees(links) {
   return deg;
 }
 
-function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
+function GraphCanvas({ nodes, links, currentId, onNavigate, height, semanticEdges, clusterNodes, legend }) {
   const svgRef = useRef(null);
   const simRef = useRef(null);
   const dragRef = useRef(null);
   const [, setTick] = useState(0);
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   const [hovered, setHovered] = useState(null);
+  // 图例悬停：点亮某一簇（其余节点淡出），让「这簇到底是哪些资料」可查。
+  const [legendHover, setLegendHover] = useState(-1);
   const neighborsRef = useRef(new Set());
+  // 语义边的端点解析成节点引用（只读：仿真不绑定这些边，见下面 forceX/forceY 的注释）。
+  const semanticDraw = useMemo(() => {
+    if (!semanticEdges?.length) return [];
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    return semanticEdges
+      .map((e) => ({ source: byId.get(e.source), target: byId.get(e.target), weight: e.weight }))
+      .filter((e) => e.source && e.target);
+  }, [semanticEdges, nodes]);
+
+  const clusterColorFor = useMemo(() => {
+    const palette = [];
+    for (let i = 0; i < MAX_SEMANTIC_COLORS; i += 1) palette.push(semanticColorFor(i));
+    return (slot) => palette[slot];
+  }, []);
+
+  // 节点 id → 簇槽号（= 图例序号）：渲染上色、图例悬停过滤、簇心布局共用同一张表。
+  const slotOf = useMemo(() => {
+    const map = new Map();
+    clusterNodes.forEach((set, slot) => {
+      for (const id of set) map.set(id, slot);
+    });
+    return map;
+  }, [clusterNodes]);
 
   const degrees = useMemo(() => buildDegrees(links), [links]);
   const radiusOf = useCallback(
@@ -322,6 +691,43 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, links]);
+
+  /* 语义簇定位：按簇心把同簇节点轻轻拉开（forceX/forceY 指向各自簇心），目录层级边仍然
+   * 负责整体骨架。刻意**不**把语义边绑进 forceLink：那会让 d3 就地改写我们传入的语义边
+   * 端点（同 BUG-98 那类「共享对象被改写」的坑），而且语义边数量远多于目录边，会盖过层级布局。
+   * 强度取 0.05 是实测值：再大整张图会被拽成几个硬邦邦的圆团，层级结构看不出来。 */
+  useEffect(() => {
+    const sim = simRef.current;
+    if (!sim) return undefined;
+    const sums = new Map(); // slot → { x, y, count }
+    for (const n of nodes) {
+      const slot = slotOf.get(n.id);
+      if (slot === undefined) continue;
+      const acc = sums.get(slot) || { x: 0, y: 0, count: 0 };
+      if (Number.isFinite(n.x)) {
+        acc.x += n.x;
+        acc.y += n.y;
+      }
+      acc.count += 1;
+      sums.set(slot, acc);
+    }
+    if (!sums.size) {
+      sim.force('semanticX', null);
+      sim.force('semanticY', null);
+      return undefined;
+    }
+    const centerOf = (n) => {
+      const acc = sums.get(slotOf.get(n.id));
+      if (!acc) return [VIEW_W / 2, VIEW_H / 2];
+      return [acc.x / acc.count, acc.y / acc.count];
+    };
+    sim
+      .force('semanticX', forceX((n) => centerOf(n)[0]).strength(SEMANTIC_PULL))
+      .force('semanticY', forceY((n) => centerOf(n)[1]).strength(SEMANTIC_PULL));
+    sim.alpha(0.3).restart(); // 让新力生效（仿真此时已 stop）
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, slotOf]);
 
   // Recompute neighbors when hovering.
   const onHover = useCallback(
@@ -465,8 +871,55 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
       onPointerUp={onBackgroundUp}
       onPointerLeave={onBackgroundUp}
     >
+      {/* 图例：只列成员 ≥2 的簇（单点没有「聚成一类」的含义）。悬停可点亮该簇。 */}
+      {legend.length > 0 && (
+        <foreignObject x={6} y={6} width={VIEW_W - 12} height={VIEW_H - 12} pointerEvents="none">
+          <div className="flex max-w-[54%] flex-wrap gap-x-2.5 gap-y-1">
+            {legend.map((item, i) => (
+              <span
+                key={item.key}
+                className="flex items-center gap-1 rounded px-1 text-[9px] leading-4"
+                style={{
+                  color: 'var(--ink-2)',
+                  background: 'var(--kg-legend-bg)',
+                  opacity: legendHover >= 0 && legendHover !== i ? 0.4 : 1,
+                  pointerEvents: 'auto',
+                  cursor: 'default',
+                }}
+                onMouseEnter={() => setLegendHover(i)}
+                onMouseLeave={() => setLegendHover(-1)}
+              >
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: item.color || 'var(--ink-3)' }}
+                />
+                {displayName(item.label)}
+              </span>
+            ))}
+          </div>
+        </foreignObject>
+      )}
       {positioned && (
         <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
+          {/* 语义边画在层级边之前（更底层），虚线与目录实线区分：它表达「主题相关」，
+              不是「属于同一目录」。画层级边时按 hover 关联关系，语义边不做 hover 高亮。 */}
+          {semanticDraw.map((e, i) => {
+            const slot = slotOf.get(e.source.id);
+            const faded = legendHover >= 0 && slot !== legendHover;
+            return (
+              <line
+                key={`s-${i}`}
+                x1={e.source.x}
+                y1={e.source.y}
+                x2={e.target.x}
+                y2={e.target.y}
+                stroke={hovered ? 'var(--line-strong)' : 'var(--kg-semantic-line)'}
+                strokeWidth={0.8}
+                strokeDasharray="3 3"
+                opacity={hovered ? 0.12 : faded ? 0.06 : 0.5}
+              />
+            );
+          })}
           {links.map((l, i) => {
             const s = endpointId(l.source);
             const t = endpointId(l.target);
@@ -487,9 +940,13 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
           })}
           {nodes.map((n) => {
             const r = radiusOf(n);
-            const dim = hovered && !neighborsRef.current.has(n.id);
+            const slot = slotOf.get(n.id);
+            const inLegendCluster = legendHover < 0 || slot === legendHover;
+            const dim = (hovered && !neighborsRef.current.has(n.id)) || !inLegendCluster;
             const isFolder = n.type === 'folder';
             const isCurrent = n.id === current;
+            // 超出色板的簇不给颜色（用中性兜底），避免不同主题拿到同一个颜色看起来像同一类。
+            const clusterColor = slot !== undefined && slot < MAX_SEMANTIC_COLORS ? clusterColorFor(slot) : undefined;
             return (
               <g
                 key={n.id}
@@ -504,10 +961,12 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
                 {isCurrent && (
                   <circle r={r + 3} fill="none" stroke="var(--ink)" strokeWidth={1.2} opacity={0.5} />
                 )}
+                {/* 文件夹仍用实心、文件仍用空心（这一层语义不能被颜色抢掉）：
+                    有簇色时只换颜色，没有簇色时保持原来的墨黑/白。 */}
                 <circle
                   r={r}
-                  fill={isFolder ? 'var(--ink)' : 'var(--surface)'}
-                  stroke={isFolder ? 'var(--ink)' : 'var(--line-strong)'}
+                  fill={clusterColor || (isFolder ? 'var(--ink)' : 'var(--surface)')}
+                  stroke={clusterColor || (isFolder ? 'var(--ink)' : 'var(--line-strong)')}
                   strokeWidth={1}
                 />
                 {(hovered === n.id || showLabels) && (

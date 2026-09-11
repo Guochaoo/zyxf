@@ -240,6 +240,8 @@ const zh = {
     title: '知识图谱',
     viewAll: '查看全库图谱',
     zoomIn: '放大当前图谱',
+    semanticOn: '切换到语义视图（按主题聚类）',
+    semanticOff: '切换到目录视图（按文件夹层级）',
     collapse: '收起图谱',
     expand: '展开图谱',
     close: '关闭',

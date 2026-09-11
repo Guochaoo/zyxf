@@ -194,10 +194,13 @@ describe('i18n 字典一致性', () => {
 
   // 英文界面不该出现中文：源码里的中文只能来自字典或注释。
   // 曾有多处文案硬编码在组件里（错误提示、拖拽提示、'今日' 等），英文下会露中文。
+  // 例外：标记 i18n-exempt-cjk 的行及其后的连续「数据行」——那是分词/停用词表这类
+  // 领域数据（中文资料名切出来的 token），不是界面文案，也不该随语言切换。
   test('源码中不存在硬编码的中文文案（注释与 ICP 备案号除外）', async () => {
     const fs = await import('node:fs');
     const path = await import('node:path');
     const CJK = /[\u4e00-\u9fff]/;
+    const EXEMPT = 'i18n-exempt-cjk';
     const files = [];
     const walk = (dir) => {
       for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -211,14 +214,17 @@ describe('i18n 字典一致性', () => {
     const offenders = [];
     for (const f of files) {
       // 先整体剥离注释（含多行块注释），再按行找中文；行内 // 需在去 CR 之后匹配。
-      const stripped = fs
-        .readFileSync(f, 'utf8')
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .split('\n')
-        .map((l) => l.replace(/\r$/, '').replace(/\/\/.*$/, ''));
+      const rawLines = fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').split('\n');
+      const stripped = rawLines.map((l) => l.replace(/\r$/, '').replace(/\/\/.*$/, ''));
+      let exempting = false;
       stripped.forEach((code, i) => {
+        // 标记写在注释里（因此必须看**未剥离注释**的原始行）
+        if (rawLines[i].includes(EXEMPT)) exempting = true;
+        // 只由真正的空行收尾——标记行本身剥离注释后是空串，用 code.trim() 判断会把它自己算成结尾
+        if (!rawLines[i].trim()) exempting = false;
         if (!CJK.test(code)) return;
         if (code.includes('陕ICP备')) return; // 备案号按法规原样展示，不翻译
+        if (exempting) return;
         offenders.push(`${f}:${i + 1} ${code.trim().slice(0, 80)}`);
       });
     }
