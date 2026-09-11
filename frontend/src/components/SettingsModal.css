@@ -188,14 +188,14 @@
 }
 
 /* ---- 大模型配置 ---- */
-/* 字段分组：浅底色块承载字段，靠色块与留白分隔（无界理念，不用描边） */
+/* 字段分组：白底 + 留白分隔（无界理念，不用描边）；灰底交给输入框自己表达 */
 .settings-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 16px;
   border-radius: 14px;
-  background: var(--field);
+  background: var(--surface);
 }
 
 .settings-field {
@@ -211,19 +211,19 @@
   letter-spacing: 0.01em;
 }
 
-/* 站点统一做法：输入框用 shadow-as-border（rgba(23,23,23,.08) 0 0 0 1px），
-   聚焦时叠一圈品牌蓝光晕；不再用真实 CSS 边框。 */
+/* 输入框：灰底色块本身就是边界（无界），不再叠 shadow-as-border 细线；
+   聚焦只留品牌蓝光晕作为可见焦点指示。 */
 .settings-input {
   width: 100%;
   padding: 9px 12px;
   border: 0;
   border-radius: 10px;
-  background: var(--surface);
+  background: var(--field);
   font: inherit;
   font-size: 13px;
   color: var(--ink);
   outline: none;
-  box-shadow: var(--line) 0px 0px 0px 1px;
+  box-shadow: none;
   transition:
     box-shadow 150ms ease,
     background-color 150ms ease;
@@ -233,14 +233,8 @@
   color: var(--ink-3);
 }
 
-.settings-input:hover {
-  box-shadow: var(--line-strong) 0px 0px 0px 1px;
-}
-
 .settings-input:focus {
-  box-shadow:
-    var(--line-strong) 0px 0px 0px 1px,
-    hsla(212, 100%, 48%, 0.22) 0px 0px 0px 3px;
+  box-shadow: hsla(212, 100%, 48%, 0.22) 0px 0px 0px 3px;
 }
 
 .settings-hint {
