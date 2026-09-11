@@ -188,11 +188,12 @@
 }
 
 /* ---- 智能对话配置 ---- */
-/* 配置来源：两个小圆点单选（原生 radio 去外观后自绘，保留键盘/读屏语义） */
+/* 配置来源：两个小圆点单选，纵向排列（原生 radio 去外观后自绘，保留键盘/读屏语义） */
 .settings-modes {
   display: flex;
-  align-items: center;
-  gap: 20px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
 }
 
 .settings-mode {
@@ -286,12 +287,15 @@
   color: var(--ink-3);
 }
 
-/* ---- 按钮组（按钮本体复用站点 rb-btn-dark / rb-btn-ghost）---- */
+/* ---- 按钮组（按钮本体复用站点 rb-btn-dark / rb-btn-ghost）----
+   固定在右栏右下角：作为 .settings-content 的底部条（不在滚动区内，内容再长也不会被推走）。 */
 .settings-actions {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  padding: 12px 24px 18px;
 }
 
 /* ---- 账户信息 ---- */

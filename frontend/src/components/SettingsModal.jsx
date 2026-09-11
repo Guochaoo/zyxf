@@ -239,15 +239,6 @@ export default function SettingsModal({ open, onClose }) {
                   <p className="settings-hint">
                     {t(cfgMode === 'custom' ? 'settings.ai.hint' : 'settings.ai.hintServer')}
                   </p>
-                  {/* 按钮复用站点 CTA：深色 rb-btn-dark / 次级 rb-btn-ghost（与浏览页工具栏同款） */}
-                  <div className="settings-actions">
-                    <button type="button" onClick={clearAi} className="rb-btn-ghost h-[34px] px-3 text-sm">
-                      {t('settings.ai.restore')}
-                    </button>
-                    <button type="button" onClick={saveAi} className="rb-btn-dark h-[34px] px-4 text-sm">
-                      {t('settings.ai.save')}
-                    </button>
-                  </div>
                 </div>
               )}
 
@@ -323,6 +314,18 @@ export default function SettingsModal({ open, onClose }) {
                 </div>
               )}
             </div>
+            {/* 按钮复用站点 CTA：深色 rb-btn-dark / 次级 rb-btn-ghost（与浏览页工具栏同款）。
+                放在滚动区之外，固定在右栏右下角。 */}
+            {section === 'ai' && (
+              <div className="settings-actions">
+                <button type="button" onClick={clearAi} className="rb-btn-ghost h-[34px] px-3 text-sm">
+                  {t('settings.ai.restore')}
+                </button>
+                <button type="button" onClick={saveAi} className="rb-btn-dark h-[34px] px-4 text-sm">
+                  {t('settings.ai.save')}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
