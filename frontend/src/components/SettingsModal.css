@@ -211,14 +211,14 @@
   letter-spacing: 0.01em;
 }
 
-/* 输入框：灰底色块本身就是边界（无界），不再叠 shadow-as-border 细线；
-   聚焦只留品牌蓝光晕作为可见焦点指示。 */
+/* 输入框：浅灰底色块本身就是边界（无界），不再叠 shadow-as-border 细线；
+   聚焦只留品牌蓝光晕作为可见焦点指示。暗色下改用 --field，避免亮色块刺眼。 */
 .settings-input {
   width: 100%;
   padding: 9px 12px;
   border: 0;
   border-radius: 10px;
-  background: var(--field);
+  background: #f5f5f5;
   font: inherit;
   font-size: 13px;
   color: var(--ink);
@@ -231,6 +231,11 @@
 
 .settings-input::placeholder {
   color: var(--ink-3);
+}
+
+/* 暗色下 #f5f5f5 会变成刺眼亮块，改用 token 灰底 */
+[data-theme='dark'] .settings-input {
+  background: var(--field);
 }
 
 .settings-input:focus {
