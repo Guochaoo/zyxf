@@ -287,6 +287,21 @@ npm install
 npm run build        # 生成 dist/
 ```
 
+> **图片与图标是预处理的产物，不在构建里现做**。`frontend/public/images/*.webp`、`favicon.png`、
+> `apple-touch-icon.png` 由 [`frontend/scripts/optimize-assets.py`](../frontend/scripts/optimize-assets.py)
+> 生成（需要 `pillow`），已经提交进仓库，所以正常部署**不需要**跑它。只有替换了原图才需要：
+>
+> ```bash
+> pip install pillow
+> python frontend/scripts/optimize-assets.py   # 在仓库根目录执行
+> ```
+>
+> 脚本把案例图缩到 1200px 宽并转 **WebP**（原来是 2134×1600 的原图，四张合计 1.17 MB → 358 KB），
+> 图标缩到 64×64（favicon，107 KB → 6.8 KB）与 180×180（apple-touch-icon）。
+> ⚠️ **不要试图用 `pyftsubset` 子集化 `OPPO Sans 4.0.ttf`**：该字体授权第 2.2 条明文禁止修改字体
+> 或其任何组件，而子集化即属修改（详见 `docs/ISSUES.md` BUG-99）。要减小字体只能**换一款允许
+> 修改的字体**（如 Noto Sans SC / HarmonyOS Sans）再子集化。
+
 ### 4.2 nginx 站点配置
 
 在 `/etc/nginx/conf.d/zyxf.conf`（或宝塔已建站点的配置目录）写一份配置，把 `/` 静态托管与 `/api` 反代分开：
@@ -338,19 +353,36 @@ nginx -t && systemctl reload nginx
 
 #### 若站点由宝塔面板托管（当前生产就是这种）
 
-宝塔的站点模板（`/www/server/panel/vhost/nginx/<域名>.conf`）**不会**生成 SPA 回退，`/api` 反代由它 include 的 `proxy/<域名>/*.conf` 里的 `location ^~ /api` 提供。踩过的坑（BUG-97）：
+宝塔的站点模板（`/www/server/panel/vhost/nginx/<域名>.conf`）**不会**生成 SPA 回退，`/api` 反代由它 include 的 `proxy/<域名>/*.conf` 里的 `location ^~ /api` 提供。踩过的坑（BUG-97、BUG-100）：
+
+> ⚠️ **`frontend/nginx.conf` 只是模板，面板不会读它。** 生产实际生效的是本节的这些文件；只改仓库那份，线上不会有任何变化——BUG-78 的 CSP 修复、以及 `location /assets/` 的缓存头就是这样「改了但从未上线」的。为便于同步，仓库另存了一份**可直接落到面板**的完整版本：[`frontend/nginx.bt-rewrite.conf`](../frontend/nginx.bt-rewrite.conf)（内容 = 下面这些 location 的合集）。
 
 - **刷新任何前端路由都是 404**（`/folder/6`、`/dashboard`、`/about`、`/settings`）。原因就是缺 `location / { try_files $uri $uri/ /index.html; }`：这些路径在 `dist/` 里没有对应文件，必须交给 `index.html`。**别改 vhost 本体**（面板保存设置时会重写它），把这段写进面板的「**伪静态**」，即：
 
   ```bash
-  # 面板：网站 → 设置 → 伪静态；等价于直接写这个文件（默认为空）
+  # 面板：网站 → 设置 → 伪静态；等价于直接写这个文件
+  # 完整内容（含下面的缓存 / 安全头 / 资源 404）见 frontend/nginx.bt-rewrite.conf
   F=/www/server/panel/vhost/rewrite/zyxf.top.conf
-  printf 'location / {\n    try_files $uri $uri/ /index.html;\n}\n' > "$F"
-  nginx -t && /www/server/nginx/sbin/nginx -s reload
+  cp /opt/zyxf/frontend/nginx.bt-rewrite.conf "$F"
+  /www/server/nginx/sbin/nginx -t && /www/server/nginx/sbin/nginx -s reload
   ```
 
-- 宝塔的 nginx **不是 systemd 服务**（`systemctl reload nginx` 会报 `nginx.service is not active`），reload 用 `/www/server/nginx/sbin/nginx -s reload`；配置测试用 `nginx -t`（路径 `/www/server/nginx/conf/nginx.conf`）。
-- `location /` 不会吃掉 API：`^~ /api` 是最长前缀匹配，优先级高于 `location /`。改完顺手验一下 `/api/health` 仍是 JSON、以及 `curl -sI https://<域名>/folder/1` 是 200。
+- **静态资源必须有 `Cache-Control`**（BUG-100）。宝塔默认对 `/assets/`、`/fonts/`、`/favicon.png` **一个缓存头都不下发**，浏览器于是退回「10% × (Date − Last-Modified)」的启发式缓存：带 hash 的构建产物无法长缓存，21.7 MB 的字体每次冷启动都要重新协商。必须补两类 location：
+  - `location /assets/`（**文件名带内容 hash**）→ `Cache-Control: public, max-age=31536000, immutable` + `try_files $uri =404`；
+  - `location ~* \.(?:ttf|otf|woff2?|png|jpe?g|webp|gif|svg|ico)$`（**文件名无 hash**）→ `max-age=604800`。⚠️ `/fonts/`、`/images/` 不在 `/assets/` 覆盖范围内，少了这条正则，字体与图片依然没有缓存头。
+- **安全头必须逐 location 重复声明**。`add_header` **不会被子级 `location` 继承**，任何自己写了 `add_header` 的 location 都会屏蔽 server 级的 HSTS。所以上面每个 location 都要把 `Strict-Transport-Security` / `X-Content-Type-Options` / `Referrer-Policy` / CSP 再写一遍。
+- **`index.html` 必须 `Cache-Control: no-cache`**（BUG-100）。它没有内容 hash，而缓存里的旧 HTML 会引用构建后**已被删除**的 chunk 文件名；那次请求会落到 SPA 回退拿到 HTML，浏览器按 `type="module"` 解析失败 → **整页白屏**。这是发版后最容易复现的线上事故。
+- **不存在的 `/assets/*` 必须回 404**，不能回落到 `index.html`。回 200 + `text/html` 同样会让模块脚本因 MIME 不符而拒绝执行。
+- **CSP 先以 `Content-Security-Policy-Report-Only` 上线**（仓库 `frontend/nginx.conf` 与 `nginx.bt-rewrite.conf` 现在都是 Report-Only）。⚠️ `script-src` **必须放行 `https://g.alicdn.com`**：`OfficeViewer.jsx` 会从那里注入 WPS WebOffice SDK，该脚本随后再 `appendChild` 加载同目录的 `wps.js`——漏了这条，**在线预览会整块失效**。用真实浏览器把预览 / 上传 / 图谱 / AI 对话都点一遍、确认控制台无违规后，再把每处 `-Report-Only` 去掉（每个文件里有 4 处，缺一处那一类路径就没有策略）。
+- **`X-Forwarded-For` 必须覆盖而不是追加**。宝塔的 `proxy/<域名>/*.conf` 默认写的是 `$proxy_add_x_forwarded_for`（追加），而 `backend/src/index.js` 的 `app.set('trust proxy', 1)` 明确要求 nginx 用 `$remote_addr` 覆盖，否则客户端自带的 XFF 会一并传进后端，限流按伪造 IP 计数（BUG-36 的前提被破坏）。改成：
+
+  ```bash
+  sed -i 's/\$proxy_add_x_forwarded_for/\$remote_addr/' \
+    /www/server/panel/vhost/nginx/proxy/zyxf.top/*.conf
+  ```
+
+- 宝塔的 nginx **不是 systemd 服务**（`systemctl reload nginx` 会报 `nginx.service is not active`），reload 用 `/www/server/nginx/sbin/nginx -s reload`；配置测试用 `/www/server/nginx/sbin/nginx -t`（路径 `/www/server/nginx/conf/nginx.conf`）。
+- `location /` 不会吃掉 API：`^~ /api` 是最长前缀匹配，优先级高于 `location /`；上面的正则 location 优先级高于 `location /`、低于 `^~ /api`，因此也不影响 SPA 深链。改完顺手验一下 `/api/health` 仍是 JSON、`curl -sI https://<域名>/folder/1` 是 200、`curl -sI https://<域名>/assets/nope.js` 是 404。
 
 ---
 

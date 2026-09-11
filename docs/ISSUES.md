@@ -15,9 +15,17 @@
 
 ```yaml
 更新日期: 2026-09-11
-条目总数: 135        # 缺陷 93 + 改进 42
-待处理: 12           # 缺陷 2 + 改进 10（26 暂缓；31/32 已建档、待决策后修；33 可访问性权衡；34 视觉一致性；38 名称层语义（代码已移除、教训保留）；39 内容级索引；40 内容分类组织；41 上传后的增量与前端刷新；42 小内存服务器的内存尖峰）
-已归档: 123          # 缺陷 91 + 改进 32
+条目总数: 141        # 缺陷 96 + 改进 45
+待处理: 13           # 缺陷 3 + 改进 10（26 暂缓；31/32 已建档、待决策后修；33 可访问性权衡；34 视觉一致性；38 名称层语义（代码已移除、教训保留）；39 内容级索引；40 内容分类组织；41 上传后的增量与前端刷新；42 小内存服务器的内存尖峰；93/94 设计规范审计只建档；99 首屏 21.7 MB 字体（**受授权限制，无法子集化**，待决策））
+已归档: 128          # 缺陷 93 + 改进 35
+# 本批（线上首屏性能实测与修复）：对 https://zyxf.top 做实测，首屏关键路径合计 23.05 MB，其中
+#   单个 OPPO Sans TTF 占 21.7 MB——去掉它首屏只剩约 314 KB（BUG-99）。**但 OPPO Sans 授权第 2.2 条
+#   明文禁止修改字体或其任何组件，子集化即属修改，故无法瘦身**；人类决定暂时保留，条目挂起待决策。
+#   已落地的六条：BUG-100（生产 nginx 三条规则未生效：静态资源无 Cache-Control、安全头全缺、
+#   不存在的 /assets/* 回 200+HTML）已按宝塔「伪静态」重新落地并线上验证；BUG-101（favicon
+#   512×512/107 KB → 64×64/6.8 KB）；IMPROVE-43（markdown/motion/graph 移出首屏关键路径，
+#   并抽出独立的 react chunk）、44（删掉渲染阻塞的 Google Fonts 外链，About 页改用自托管字体）、
+#   45（关于页 4 张图 1.17 MB → 358 KB WebP + 懒加载）。首屏（不含字体）由约 313 KB 降到约 160 KB。
 # 本批（部署到弱服务器）：实测「单核双线程」下的表现——CPU 不是瓶颈（索引期间接口 p95 2ms、
 #   嵌入 29ms/文件），内存才是（100MB+ 教材把峰值推到 976MB 且高水位不回落）。已加单文件体积
 #   闸门 INDEX_MAX_FILE_MB（默认 50MB，实测峰值 976MB→104MB），并给出删平台库省 240MB、
@@ -56,7 +64,7 @@
 
 ### 1.1 缺陷
 
-上一轮审计新发现的 11 条缺陷已全部处置并归档（BUG-54～61、64/66/67/79/85～90 见 [2.1 已修复缺陷](#21-已修复缺陷)（89））；设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；设置页改造批新发现的 **1 条**（BUG-95）当轮修复并归档；本轮（预览/下载故障复盘）新发现的 **1 条**（BUG-96）也已当轮修复；随后 SPA 深链批与知识图谱批各新发现 **1 条**（BUG-97、BUG-98），均当轮修复。
+上一轮审计新发现的 11 条缺陷已全部处置并归档（BUG-54～61、64/66/67/79/85～90 见 [2.1 已修复缺陷](#21-已修复缺陷)（93））；设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；设置页改造批新发现的 **1 条**（BUG-95）当轮修复并归档；本轮（预览/下载故障复盘）新发现的 **1 条**（BUG-96）也已当轮修复；随后 SPA 深链批与知识图谱批各新发现 **1 条**（BUG-97、BUG-98），均当轮修复；最后一批（线上首屏性能实测）新发现 **3 条**：BUG-100（生产 nginx 三条规则未生效）与 BUG-101（favicon 107 KB）当轮修复并线上验证，**BUG-99（首屏 21.7 MB 字体）受字体授权限制无法子集化，挂起待决策**。
 
 > 审计方式：上一轮为 9 路并行只读审计（安全/后端正确性/后端基础设施/性能/前端状态/前端组件/重复与死代码/工程配置与文档），再由人工逐条读码复核、剔除误报，另做了 4 路针对「SQL 与接口契约 / 前端状态与可访问性 / 安全与文件处理 / 冗余与工程配置」的复核审计。本轮是 4 路并行只读审计 + 2 路对抗性复核，逐段核对 `docs/DESIGN.md` 与代码（色值 / 字号 / 圆角 / 断点 / 组件行为 / 生成产物），发现 2 条真实缺陷（BUG-91、BUG-92）与 1 条视觉一致性改进（IMPROVE-34），其余差异均为文档描述过时（已在 DESIGN.md 内修正）。
 
@@ -76,11 +84,24 @@
 - **修法（二选一）**：① 把这几处改成字面量类名（`lg:duration-[320ms] lg:ease-[cubic-bezier(0.22,1,0.36,1)]`），或把这几个类名加进 `tailwind.config.js` 的 `safelist`；② 更稳的做法是绕开类名，直接用内联样式驱动：`style={{ transitionDuration: `${SIDEBAR_MS}ms`, transitionTimingFunction: SIDEBAR_EASE }}`（保留 `transition-transform` / `transition-opacity` 这类字面量类）。⚠️ `KnowledgeGraph` / `ChatComposer` 的 `duration-[360ms]` 是字面量，别一起改坏。
 - **验证**：`npm run build` 后 grep 产物 CSS，应能搜到 `320ms` 与 `cubic-bezier(0.22,1,0.36,1)`；手动收起/展开左栏，确认是 320ms 的从容滑动而不是 150ms 的急停（可临时把 `SIDEBAR_MS` 调到 1200 对比）。
 
+#### BUG-99 · 首屏要传 23 MB，其中 21.7 MB 是同一个未子集化的字体文件
+**影响范围**：`frontend/public/fonts/OPPO Sans 4.0.ttf` · `frontend/src/index.css`（前端 · 性能）
+
+- **现状**：`index.css:5-11` 把 `OPPOSans` 声明为全站字体（`index.css:40-51` 的 `body/button/input/textarea/select` 都用它），源文件 `frontend/public/fonts/OPPO Sans 4.0.ttf` 实测 **22,741,096 字节（21.7 MB）**，是 `font-weight: 100 900` 的整包 TTF（**未子集化、未转 WOFF2**）。线上实测首屏关键路径各资源传输量：字体 **21.7 MB** + 主 JS 144.8 KB(gzip) + markdown chunk 39.1 KB + CSS 14.1 KB + graph chunk 5.5 KB + favicon 107 KB + HTML 0.95 KB = **23.05 MB**；**去掉字体只剩约 314 KB**。
+- **服务器带宽不是瓶颈**：同一台机器实测该字体连续下载 **2.5~3.4 MB/s**（8 MB range 用时 2.49 s、全量 22.7 MB 用时 9.1 s），接口 TTFB 稳定在 0.16~0.29 s——**问题纯粹是这 21.7 MB 的体积**。按 4G 实测 2.5 MB/s 算首次访问光字体就要 **~9 秒**，弱网（5 Mbps）**~35 秒**，`font-display: swap` 只能让文字先用回退字体画出来、随后还会跳一次字体。
+- **顺带**：`index.css:17-23` 把 `'SF Mono'` 也指向同一个 TTF（为了让 liveline 图表的 canvas 文字不变样）。浏览器按 URL 去重不会多下一次，但它让「等宽」字样实际渲染成非等宽——附带的语义问题，不是性能问题。
+- **影响**：这是本站**唯一**的性能瓶颈。除字体外的首屏资源（约 314 KB）已经很干净，`manualChunks` 拆分、路由懒加载、gzip 都已到位；因此「首页慢」的所有体感都来自这一个文件，修它的收益是 21.7 MB → 目标 < 2 MB（约 10 倍以上）。
+- **⛔ 授权障碍（2026-09-11 查证，这就是本条至今未修的原因）**：`frontend/public/fonts/OPPO Sans 4.0 License Notice.txt` 第 2 条「GRANT OF LICENSE」的条件 2）写明 **"YOU may not make any modifications to OPPO Sans Fonts or any of their individual components."**——**子集化（subsetting）就是修改**，转 WOFF2 同样是修改，因此本字体**不能瘦身**，只能整包用或整包不用。仓库里保留了授权原文与版权声明（条件 1）与 4）要求署名并随附协议）。人类决定**暂时保留 OPPO Sans**，因此本条挂起，修法改成下面「换字体」与「不用字体」两条。
+- **修法（按收益排序，均已排除子集化）**：① **换一款授权允许修改的中文字体再做子集化**（首选）：Noto Sans SC / 思源黑体（SIL OFL 1.1）、HarmonyOS Sans（可商用且允许修改）都是整包几十 MB 但**允许子集**，按「常用汉字 + 拉丁 + 数字 + 标点」子集后约 **1~2 MB**，能保住现在「自定义中文字体」的观感。⚠️ 子集必须覆盖站内实际出现的字，**漏字会显示成缺字方块**；资源库文件名是用户输入，罕见字回退系统字体是可接受的代价，但要知情。② **直接删掉这两个 @font-face**：回退链里的 `-apple-system / PingFang SC / Microsoft YaHei` 已覆盖 macOS / Windows / 移动端，收益整整 21.7 MB，代价只是中文字形随平台不同。③ **只给英文与数字做子集**（站内主要视觉是标题和数字），中文交给系统字体，体积可压到几十 KB——但同样需要换一款允许修改的字体。
+- **一个被否掉的方向（留档避免重复调研）**：曾考虑「gzip / Brotli 预压缩 + `gzip_static`」，实测该 TTF **gzip 后仍有 16.36 MB（原 21.7 MB 的 71.9%）**——TTF 的 glyf 表本身就近似熵编码，压缩收益远不足以解决问题，且 Brotli 需要额外模块。这条路不解决问题。
+- **⚠️ 与 BUG-100 的耦合**：无论走哪条路，产物都要放进**内容哈希路径**（如 `/assets/oppo-sans.<hash>.woff2`）或至少挪到 `/assets/` 下。`/fonts/` **不在**仓库 `frontend/nginx.conf` 的 `location /assets/` 覆盖范围内，所以照搬仓库配置也救不了这个字体（见 BUG-100 的修法里那条按扩展名匹配的规则）。
+- **验证**：`npm run build` 后目标字体应 < 2 MB；`curl -o NUL -w '%{size_download}'` 复核线上首屏各资源之和应 < 500 KB；手机 4G 实测首屏应回到 1~2 秒量级；子集化后通读一遍站内中文（含文件名列表、图谱节点名、设置弹窗）确认无缺字方块。
+
 ---
 
 ### 1.2 改进建议
 
-上一轮审计新发现的 14 条改进项里，已处置 13 条（13/14/15/16/17/18/19/20/21/22/23/24/25，见 [2.2 已关闭改进项](#22-已关闭改进项)（29））；另有 **1 条暂缓**（26）、**2 条来自复核审计、本轮只建档待决策**（31/32）、**1 条设计取舍记账**（33：表单控件无聚焦视觉），以及本轮（设计规范审计）新增的 **1 条**（34：聊天未知类型徽章被品牌色覆盖规则染黑）。这几条都写全背景，便于以后接手时不必重新调研。
+上一轮审计新发现的 14 条改进项里，已处置 13 条（13/14/15/16/17/18/19/20/21/22/23/24/25，见 [2.2 已关闭改进项](#22-已关闭改进项)（35））；另有 **1 条暂缓**（26）、**2 条来自复核审计、本轮只建档待决策**（31/32）、**1 条设计取舍记账**（33：表单控件无聚焦视觉），以及设计规范审计新增的 **1 条**（34：聊天未知类型徽章被品牌色覆盖规则染黑）。最后一批（线上首屏性能实测）新增的 **3 条**（IMPROVE-43/44/45：首屏关键路径、Google Fonts 外链、关于页图片）已当轮修复并**线上验证**。这几条都写全背景，便于以后接手时不必重新调研。
 
 #### IMPROVE-31 · 预览凭证（IMM WebOffice token）匿名可签发，且与下载共用配额
 **影响范围**：`backend/src/routes/files.js` · `backend/src/imm.js` · `frontend/src/components/Preview/index.jsx`（后端 · 配额 / 安全）
@@ -201,7 +222,7 @@
 
 > 归档表只作索引（编号 / 严重度 / 类别 / 标题 / 位置 / 日期）。修法依据、踩坑与验证方式写在**代码注释**里（`grep -rn "BUG-54" backend/src`）与 commit message 中。
 
-### 2.1 已修复缺陷（91）
+### 2.1 已修复缺陷（93）
 
 | 编号 | 严重度 | 类别 | 标题 | 修复位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -296,8 +317,10 @@
 | BUG-96 | P1 | 后端 | 下载签名 URL 带了 OSS 拒绝的 `response-content-type`：所有「下载」按钮一律 400 失败（`InvalidRequest: Can not override response header on content-type`） | `backend/src/oss.js` | 2026-09-11 |
 | BUG-97 | P1 | 部署·运维 | 生产 nginx（宝塔托管）缺 SPA 回退：刷新/直开任意前端路由（`/folder/6`、`/dashboard`、`/settings`…）都 404 | `/www/server/panel/vhost/rewrite/zyxf.top.conf`, `docs/DEPLOY.md` | 2026-09-11 |
 | BUG-98 | P1 | 前端 | 知识图谱在「进文件夹再回主页」后只剩一个点：d3-force 就地改写共享 memo 的 link 端点（字符串→对象）与节点坐标，字符串比较全部失配、度数记到 `"[object Object]"` | `frontend/src/components/KnowledgeGraph.jsx` | 2026-09-11 |
+| BUG-100 | P1 | 部署·运维 | 生产 nginx 未落仓库 `frontend/nginx.conf`：静态资源无 `Cache-Control`、安全头（CSP / nosniff / Referrer-Policy）全缺、不存在的 `/assets/*` 回 200+HTML（会让发版后白屏） | `/www/server/panel/vhost/rewrite/zyxf.top.conf`, `frontend/nginx.conf`, `frontend/nginx.bt-rewrite.conf`, `docs/DEPLOY.md` | 2026-09-11 |
+| BUG-101 | P2 | 前端 | favicon 是 512×512 / 107 KB，比除字体外全部首屏 JS+CSS 的一半还多 | `frontend/public/favicon.png`, `frontend/scripts/optimize-assets.py` | 2026-09-11 |
 
-### 2.2 已关闭改进项（32）
+### 2.2 已关闭改进项（35）
 
 | 编号 | 严重度 | 类别 | 标题 | 处理位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -333,3 +356,6 @@
 | IMPROVE-35 | P2 | 前端 | 白屏兜底把原始错误与堆栈直接展示给终端用户 | `frontend/src/bootError.js`, `frontend/src/main.jsx`, `frontend/src/test/bootError.test.js` | 2026-09-11 |
 | IMPROVE-36 | P1 | 文档·运维 | 部署指南的最小权限策略只有 `oss:*`，照做必然缺 `imm:GenerateWebofficeToken`（该动作还不支持资源级授权，策略需 `Resource: *`） | `docs/DEPLOY.md` | 2026-09-11 |
 | IMPROVE-37 | P1 | 文档·运维 | 部署指南未说明「轮换 AccessKey 后必须同步服务器 `.env`」：漏做后 OSS 回 `InvalidAccessKeyId`，上传/下载/预览全线失效而接口仍返回 200 | `docs/DEPLOY.md` | 2026-09-11 |
+| IMPROVE-43 | P1 | 性能 | `react-markdown` 与 `d3-force` 被 App 静态 import 进首屏关键路径（路由已懒加载，右栏两个面板没跟上）；顺带把 React 抽成独立 chunk，否则 rollup 会把它塞进任一 manual chunk 并重新拖回首屏 | `frontend/src/App.jsx`, `frontend/vite.config.js` | 2026-09-11 |
+| IMPROVE-44 | P1 | 性能 | 首页被一个 Google Fonts 外链**渲染阻塞**，而它全站只服务「关于」页一行标题；国内不可达时会一直挂到 TCP 超时才渲染 | `frontend/index.html`, `frontend/src/pages/AboutPage.jsx`, `frontend/nginx.conf` | 2026-09-11 |
+| IMPROVE-45 | P2 | 性能 | 「关于」页 4 张图合计 1.17 MB：无懒加载、无宽高、PNG 未转格式 | `frontend/public/images/`, `frontend/src/pages/AboutPage.jsx`, `frontend/scripts/optimize-assets.py` | 2026-09-11 |
