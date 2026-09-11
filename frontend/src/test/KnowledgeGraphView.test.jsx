@@ -189,6 +189,43 @@ describe('内容视图：向量边成簇（纯函数）', () => {
     expect(edges).toHaveLength(2); // 线照画
     expect(clusters.every((c) => c.nodeIds.length === 1)).toBe(true); // 但不合并
   });
+
+  test('桥接文件不能把两团单向拉近：非互为最近邻的强边不成簇', () => {
+    // 夹具要点：K=4，所以每个节点最多认 4 个最近邻，第 5 个强邻居就不再是「互为」——
+    // 节点 9 是那种「跟谁都像」的资料（和 1..5 都强相似），但它自己的前 4 名里没有 5，
+    // 于是 9—5 这条强边只画线、不把两团合并。
+    const wide = [
+      { id: 1, name: '一号.pdf' },
+      { id: 2, name: '二号.pdf' },
+      { id: 3, name: '三号.pdf' },
+      { id: 4, name: '四号.pdf' },
+      { id: 5, name: '五号.pdf' },
+      { id: 9, name: '九号.pdf' },
+    ];
+    const edges = [
+      // 1..4 内部近乎重复 → 必然成簇
+      { source: 1, target: 2, weight: 0.99 },
+      { source: 1, target: 3, weight: 0.98 },
+      { source: 1, target: 4, weight: 0.97 },
+      { source: 2, target: 3, weight: 0.96 },
+      { source: 2, target: 4, weight: 0.96 },
+      { source: 3, target: 4, weight: 0.95 },
+      // 9 与 1..4 以及 5 都强相似，但排名里 5 最靠后
+      { source: 9, target: 1, weight: 0.99 },
+      { source: 9, target: 2, weight: 0.98 },
+      { source: 9, target: 3, weight: 0.97 },
+      { source: 9, target: 4, weight: 0.96 },
+      { source: 9, target: 5, weight: 0.94 },
+    ];
+    const { edges: drawn, clusters } = buildVectorGraph(wide, edges, {});
+    // 所有强边都画出来（连线与成簇是两件事）
+    expect(drawn).toHaveLength(edges.length);
+    // 1..4 与 9 互为最近邻 → 合并成一簇；5 只被 9 单向认领（9 的前 4 名里没有 5）→ 不并入
+    const withOne = clusters.find((c) => c.nodeIds.includes('file1'));
+    expect(withOne.nodeIds.sort()).toEqual(['file1', 'file2', 'file3', 'file4', 'file9']);
+    const five = clusters.find((c) => c.nodeIds.includes('file5'));
+    expect(five.nodeIds).toEqual(['file5']);
+  });
 });
 
 describe('名称层语义：主题边与弱边（纯函数）', () => {

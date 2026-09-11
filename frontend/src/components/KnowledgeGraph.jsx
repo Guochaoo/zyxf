@@ -445,17 +445,18 @@ export const semanticColorFor = (index) =>
   index >= 0 && index < MAX_SEMANTIC_COLORS ? cssVar(`--kg-c${index + 1}`) : cssVar('--kg-cn');
 
 /**
- * 内容视图：把后端给的「最相似邻居」边收敛进来。
- * 后端已做 top-K 截断与阈值过滤（见 routes/indexing.js 的 /semantics），这里只做三件事：
- *   1. 只保留两端都在当前视图范围内的边；
- *   2. 成簇——阈值以上的边取连通分量；
- *   3. 簇标签取簇内最高频的目录名（不调 LLM 也能读出「这一簇是什么」）。
+ * 内容视图：把后端给的相似边收敛成「可读的簇」。
  *
- * ⚠️ 成簇阈值 0.78 是在真实向量上标定的，不是拍的：346 个文件的相似度分布里，
- *   0.75 → 最大簇 112 个成员（链式效应把跨学科的「南卷汇」试卷集串成一坨），
- *   0.78 → 最大 46、0.80 → 最大 23。取 0.78 兼顾「该合的合上」与「不该合的不合」。
+ * 成簇判据 = 相似度 ≥ VECTOR_LINK_THRESHOLD **且互为 top-K 最近邻**。
+ * 两个条件缺一不可，阈值是在真实向量上标定的（518 个文件 / 2943 条边）：
+ *   - 只用单阈值：0.78 时最大簇 125 个成员（数学类试题资料靠「试卷」这一文体逐级串起来），
+ *     0.82 时仍有 64 个、纯度只有 25%——链式效应靠调阈值解决不掉；
+ *   - 加上「互为 top-4」后最大簇降到 17，且 线性代数/思政/概率论/流体力学 这些真主题
+ *     仍是 100% 纯度的整簇。原因是桥接文件不再能把两团单向拉近：它必须也在对方的
+ *     前 4 名里，而弱连接的关系通常不是相互的。
  */
-export const VECTOR_LINK_THRESHOLD = 0.78;
+export const VECTOR_LINK_THRESHOLD = 0.84;
+export const VECTOR_MUTUAL_K = 4;
 
 /** 后端回的是数据库 file_id（数字），图谱节点 id 是 «file<id>»：两端必须归一，否则一条边都接不上。 */
 export const vectorNodeId = (id) => (String(id).startsWith('file') ? String(id) : `file${id}`);
@@ -464,11 +465,29 @@ export function buildVectorGraph(nodes, edges, labels) {
   // 两边都过 vectorNodeId：节点在图谱里是 'file11'，后端回的是 11，不归一就一条边都接不上
   const scope = new Set(nodes.map((n) => vectorNodeId(n.id)));
   const inScope = (edges || [])
-    .map((e) => ({ ...e, source: vectorNodeId(e.source), target: vectorNodeId(e.target) }))
+    .map((e) => ({
+      source: vectorNodeId(e.source),
+      target: vectorNodeId(e.target),
+      weight: Number(e.weight) || 0,
+    }))
     .filter((e) => scope.has(e.source) && scope.has(e.target));
-  const clustered = inScope.filter((e) => e.weight >= VECTOR_LINK_THRESHOLD);
 
-  const parent = new Map(nodes.map((n) => [vectorNodeId(n.id), vectorNodeId(n.id)]));
+  // 每个节点的邻居表（按相似度降序），用于「互为 top-K」判定
+  const neighbors = new Map();
+  for (const id of scope) neighbors.set(id, []);
+  for (const e of inScope) {
+    neighbors.get(e.source)?.push({ id: e.target, weight: e.weight });
+    neighbors.get(e.target)?.push({ id: e.source, weight: e.weight });
+  }
+  for (const list of neighbors.values()) list.sort((a, b) => b.weight - a.weight);
+  const inTopK = (id, other) =>
+    (neighbors.get(id) || []).slice(0, VECTOR_MUTUAL_K).some((n) => n.id === other);
+
+  const clustered = inScope.filter(
+    (e) => e.weight >= VECTOR_LINK_THRESHOLD && inTopK(e.source, e.target) && inTopK(e.target, e.source)
+  );
+
+  const parent = new Map([...scope].map((id) => [id, id]));
   const find = (x) => {
     let root = x;
     while (parent.get(root) !== root) root = parent.get(root);
@@ -481,17 +500,15 @@ export function buildVectorGraph(nodes, edges, labels) {
     return root;
   };
   for (const e of clustered) {
-    if (!parent.has(e.source) || !parent.has(e.target)) continue;
     const ra = find(e.source);
     const rb = find(e.target);
     if (ra !== rb) parent.set(ra, rb);
   }
   const groups = new Map();
-  for (const n of nodes) {
-    const key = vectorNodeId(n.id);
-    const root = find(key);
+  for (const id of scope) {
+    const root = find(id);
     if (!groups.has(root)) groups.set(root, []);
-    groups.get(root).push(key);
+    groups.get(root).push(id);
   }
   const clusters = [];
   for (const ids of groups.values()) {
