@@ -15,9 +15,11 @@
 
 ```yaml
 更新日期: 2026-09-11
-条目总数: 125        # 缺陷 90 + 改进 35
+条目总数: 126        # 缺陷 90 + 改进 36
 待处理: 7            # 缺陷 2 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性）
-已归档: 118          # 缺陷 88 + 改进 30
+已归档: 119          # 缺陷 88 + 改进 31
+# 本批（预览故障复盘）：线上「预览服务出错」定位为 RAM 用户缺 imm:GenerateWebofficeToken 授权（照 2.2 的策略
+#   建用户必然缺这条），DEPLOY.md 补上 IMM 授权 statement / IMM_PROJECT 说明 / 排查表三处（IMPROVE-36，已关闭）。
 # 本批（设置页改造）：修复 BUG-95（保存不校验三项齐全——提示文案承诺了却没人执行），并调左栏样式
 #   （灰底 #ECECEE + 「设置」标题、条目交互统一为「往白靠」两档，见 DESIGN.md §4）；另把白屏兜底
 #   改成「友好提示 + 刷新按钮，堆栈只在开发环境展开」（IMPROVE-35，抽到 bootError.js 并补测试）。
@@ -202,7 +204,7 @@
 | BUG-92 | P1 | 后端 | 文件夹改名/移动的 OSS 复制无补偿：孤儿对象会被下一次 sync 当成新文件导入 | `backend/src/routes/folders.js` | 2026-09-11 |
 | BUG-95 | P2 | 前端 | 自定义 LLM 配置保存不校验三项齐全：提示文案承诺「三项都填才生效」，实际会写入半份配置 | `frontend/src/components/SettingsModal.jsx` | 2026-09-11 |
 
-### 2.2 已关闭改进项（30）
+### 2.2 已关闭改进项（31）
 
 | 编号 | 严重度 | 类别 | 标题 | 处理位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -236,3 +238,4 @@
 | IMPROVE-20 | P2 | 前后端 | `/api/search` 每类截断 20 条却被前端当总数展示 | `backend/src/searchService.js`, `backend/src/routes/search.js`, `frontend/src/components/SearchBar.jsx` | 2026-09-11 |
 | IMPROVE-24 | P2 | 前端 | `useFolderTree` 未去重：同一变更发两次 GET | `frontend/src/hooks/useFolderTree.js`, `frontend/src/test/useFolderTree.test.jsx` | 2026-09-11 |
 | IMPROVE-35 | P2 | 前端 | 白屏兜底把原始错误与堆栈直接展示给终端用户 | `frontend/src/bootError.js`, `frontend/src/main.jsx`, `frontend/src/test/bootError.test.js` | 2026-09-11 |
+| IMPROVE-36 | P1 | 文档·运维 | 部署指南的最小权限策略只有 `oss:*`，照做必然缺 `imm:GenerateWebofficeToken`，在线预览全站失败且前端只显示泛化文案 | `docs/DEPLOY.md` | 2026-09-11 |
