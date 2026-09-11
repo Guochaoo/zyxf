@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SettingsModal from '../components/SettingsModal.jsx';
 
@@ -8,6 +8,27 @@ import SettingsModal from '../components/SettingsModal.jsx';
 function renderModal() {
   return render(<SettingsModal open onClose={() => {}} />);
 }
+
+// jsdom 没有 matchMedia：默认按「非手机」渲染（即桌面端左右分栏）。
+// 需要验证手机端两级结构时，用下面的 mockMobile() 让 max-width:640px 匹配。
+const realMatchMedia = window.matchMedia;
+function mockMobile() {
+  window.matchMedia = (query) => ({
+    matches: query.includes('max-width: 640px'),
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    dispatchEvent() {
+      return false;
+    },
+  });
+}
+afterEach(() => {
+  window.matchMedia = realMatchMedia;
+});
 
 // 进入「外观」板块（语言下拉所在处）。
 async function goToAppearance() {
@@ -252,5 +273,62 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
     await waitFor(() => expect(savedCfg()).toBeNull());
     expect(radio('使用服务器配置')).toBeChecked();
     expect(screen.queryByLabelText('API Key')).toBeNull();
+  });
+});
+
+
+// 手机端是两级结构（仿原生 App 设置页）：一级是设置列表，点进某个板块才显示其内容。
+describe('SettingsModal 手机端：两级结构', () => {
+  const row = (name) => screen.getByRole('button', { name });
+
+  test('一级只显示设置列表；点行进二级显示该板块内容，返回后回到列表', () => {
+    mockMobile();
+    localStorage.setItem(
+      'zyxf_llm',
+      JSON.stringify({ apiKey: 'sk-1', baseUrl: 'https://llm.test/v1', model: 'glm-4.6' })
+    );
+    renderModal();
+
+    // 一级：居中标题是「设置」，三个列表行都在，板块内容与底部操作条都不渲染
+    expect(screen.getByText('设置')).toBeInTheDocument();
+    expect(row('智能对话配置')).toBeInTheDocument();
+    expect(row('账户信息')).toBeInTheDocument();
+    expect(row('外观')).toBeInTheDocument();
+    expect(screen.queryByLabelText('API Key')).toBeNull();
+    expect(screen.queryByRole('button', { name: '保存' })).toBeNull();
+    expect(screen.getByRole('button', { name: '关闭' })).toBeInTheDocument();
+
+    // 进二级：内容出现、列表收起、左上角按钮变成「返回」
+    fireEvent.click(row('智能对话配置'));
+    expect(screen.getByLabelText('API Key')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '账户信息' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '关闭' })).toBeNull();
+
+    // 返回一级
+    fireEvent.click(screen.getByRole('button', { name: '返回' }));
+    expect(screen.queryByLabelText('API Key')).toBeNull();
+    expect(row('账户信息')).toBeInTheDocument();
+    expect(screen.getByText('设置')).toBeInTheDocument();
+  });
+
+  test('二级页面的标题跟随所选板块，内容整页展示不再往下拆', () => {
+    mockMobile();
+    renderModal();
+
+    fireEvent.click(row('外观'));
+    expect(screen.queryByText('设置')).toBeNull();
+    expect(screen.getAllByText('外观').length).toBeGreaterThan(0);
+    expect(screen.getByText('界面主题')).toBeInTheDocument();
+    expect(screen.getByText('字体和语言')).toBeInTheDocument();
+  });
+
+  test('桌面端（不匹配手机断点）仍是左右分栏，不出现返回按钮', () => {
+    renderModal();
+
+    fireEvent.click(row('外观'));
+    expect(screen.getByText('字体和语言')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '返回' })).toBeNull();
+    expect(screen.getByRole('button', { name: '关闭' })).toBeInTheDocument();
   });
 });

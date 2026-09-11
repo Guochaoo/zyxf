@@ -131,6 +131,12 @@
   outline: none;
 }
 
+/* 手机端列表行专用的元素（居中页面标题、行尾状态图标），桌面端隐藏 */
+.settings-mobile-title,
+.settings-nav-arrow {
+  display: none;
+}
+
 /* ---- 右栏 ---- */
 .settings-content {
   flex: 1;
@@ -553,9 +559,9 @@
 
 /* 语言下拉与协议下拉共用 .settings-popover / .settings-popover-option 样式 */
 
-/* ---- 窄屏（≤640px）：手机上设置就是**整屏页面**——卡片铺满视口（无留白、无圆角、无投影），
-   内部改成上下布局：标题栏 = 「关闭 + 搜索」一行 + 「导航」一行（横排胶囊），
-   下方是内容与底部固定按钮条。固定 220px 侧栏若保留，会把右栏挤成一条竖线、底部按钮溢出。 ---- */
+/* ---- 窄屏（≤640px）：整屏页面，视觉仿原生 App 设置页 ——
+   灰底页面 + 白色圆角分组卡片；顶部条是「左侧圆形按钮 + 居中标题」，
+   导航变成一张白卡片里的列表行，区块内容各成一张卡片，底部操作条也是一张卡片。 ---- */
 @media (max-width: 640px) {
   .settings-backdrop {
     padding: 0;
@@ -569,57 +575,109 @@
     max-height: none;
     border-radius: 0;
     box-shadow: none;
+    background: var(--page); /* 页面底色转灰，分区靠白色卡片表达 */
   }
 
   .settings-layout {
     flex-direction: column;
   }
 
-  /* 标题栏：关闭按钮与导航同一行（导航可横向滚动），不再占用两行 */
+  /* 顶部条 + 导航：包在白卡片外的顶部区域，导航自己是一张白卡片 */
   .settings-sidebar {
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     width: auto;
-    padding: 10px 12px;
+    padding: 10px 12px 0;
+    background: transparent;
     border-right: 0;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 0;
     overflow-y: visible; /* 侧栏改成顶部条后不再单独滚动 */
   }
 
+  /* 整行：左侧圆形关闭按钮（绝对定位）+ 居中标题 */
   .settings-sidebar-top {
-    position: static; /* 整屏布局下与导航胶囊同排，不再绝对定位到右上角 */
-    flex: 0 0 auto;
+    position: relative;
+    flex: 1 1 100%;
+    justify-content: center;
+    min-height: 40px;
     padding: 0;
   }
 
+  .settings-mobile-title {
+    display: block;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .settings-close {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 36px;
+    height: 36px;
+    margin-top: -18px;
+    border-radius: 999px;
+    background: var(--hover);
+    color: var(--ink);
+  }
+
+  /* 导航：白卡片 + 列表行（图标 + 文案 + 右侧状态图标） */
   .settings-nav {
-    flex: 1;
-    min-width: 0;
-    flex-direction: row;
-    gap: 4px;
-    overflow-x: auto;
+    flex: 1 1 100%;
+    flex-direction: column;
+    gap: 0;
+    padding: 4px;
+    border-radius: 16px;
+    background: var(--surface);
+    overflow: visible;
   }
 
   .settings-nav-item {
-    flex: 0 0 auto;
-    width: auto;
-    padding: 8px 10px;
-    font-size: 13px;
-    white-space: nowrap;
+    width: 100%;
+    gap: 12px;
+    padding: 13px 12px;
+    border-radius: 12px;
+    font-size: 15px;
   }
 
-  .settings-content-title {
-    padding: 14px 16px 8px;
-    font-size: 17px;
+  .settings-nav-item svg:first-child {
+    width: 20px;
+    height: 20px;
+    color: var(--ink);
+  }
+
+  .settings-nav-arrow {
+    display: block;
+    margin-left: auto;
+    color: var(--ink-3);
+  }
+
+  /* 内容区（二级页面）：板块名已在顶部条上，这里不再重复标题 */
+  .settings-content {
+    background: transparent;
   }
 
   .settings-content-body {
-    padding: 4px 16px 12px;
+    padding: 10px 12px 12px;
   }
 
+  /* 每个板块 = 一张白卡片 */
+  .settings-section {
+    gap: 18px;
+    padding: 14px;
+    border-radius: 16px;
+    background: var(--surface);
+  }
+
+  /* 底部操作条：同样是一张白卡片，钉在页面底部 */
   .settings-actions {
-    padding: 10px 16px 14px;
+    margin: 0 12px 12px;
+    padding: 12px;
+    border-radius: 16px;
+    background: var(--surface);
   }
 }
 
