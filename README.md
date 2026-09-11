@@ -67,6 +67,24 @@ cd frontend && npm install && npm run dev
 | `LLM_PROTOCOL` |  | 上游协议：`openai-completions`（默认，OpenAI/GLM/DeepSeek 等 `/chat/completions` 接口）/ `openai-responses`（OpenAI `/responses`）/ `anthropic-messages`（Anthropic `/messages`）。旧值 `openai` / `anthropic` 仍兼容。前端设置里的「API 协议」可让用户用自带 Key 覆盖它 |
 | `DM_ACCESS_KEY_ID` / `DM_ACCESS_KEY_SECRET` / `DM_ACCOUNT_NAME` |  | 三者齐备才启用用户注册（阿里云邮件推送 DirectMail 发送邮箱验证码），留空则注册发码接口返回 503 |
 | `DM_FROM_ALIAS` |  | 发件人显示名（默认「仲英学辅」） |
+| `EMBED_MODEL_DIR` |  | 本地嵌入模型目录（默认 `backend/models/bge-small-zh-v1.5`）；模型文件不入库，获取方式见[部署文档 §6](docs/DEPLOY.md)。缺模型时只抽正文不出向量，图谱内容视图不可用，其余功能不受影响 |
+| `INDEX_POLL_MS` / `INDEX_DAILY_LIMIT` |  | 索引 worker 的空闲轮询间隔（默认 8s）/ 每日嵌入调用上限（默认 2000，防误操作长时间占满 CPU） |
+
+## 内容索引（知识图谱「内容视图」的数据来源）
+
+图谱默认按**内容**聚类：后台把资料正文抽出来、算成向量，再按向量相似度连线成簇。
+覆盖率取决于资料本身（实测本库 850 个文件）：
+
+| 类别 | 数量 | 说明 |
+|---|---|---|
+| 有文本层（PDF/docx/pptx/txt/pptm） | ~430 | 正常进入内容视图 |
+| 扫描件与图片版 Office | ~230 | 判定为 `image_only`，只参与名称层语义（需 OCR，见 `docs/ISSUES.md` 的 IMPROVE-39） |
+| `.doc` / `.ppt` / 压缩包 | ~190 | `unsupported`：老二进制格式没有纯 JS 解析路径 |
+| 三者合计 | 约 **49%** 进内容视图 | 覆盖率上限由资料本身决定，OCR 是下一轮的事 |
+
+- 索引是**后台异步**做的：上传、`/api/sync` 后自动入队，单并发处理，不阻塞请求。
+- 进度与失败原因：`GET /api/index/status`；管理员可用 `POST /api/index/rebuild` 重建。
+- 降级：没装模型时只抽正文；没有向量数据时图谱内容视图给出提示并可一键切回名称视图。
 
 ## 项目结构
 
@@ -80,9 +98,13 @@ zyxf/
 │   │   ├── oss.js         # OSS 直传 / 下载签名
 │   │   ├── imm.js         # IMM WebOffice 预览令牌
 │   │   ├── searchService.js / searchMatch.js   # 智能搜索（路由与 AI 工具共用）
+│   │   ├── textExtract.js / ooxml.js           # 正文抽取（PDF/OOXML/纯文本，含扫描件判定）
+│   │   ├── embed.js                            # 本地嵌入（bge-small-zh ONNX，可缺失降级）
+│   │   ├── indexPipeline.js                    # 内容索引队列与 worker
 │   │   ├── llm.js         # LLM 流式客户端（OpenAI / Anthropic，可选启用）
 │   │   ├── llmProtocols.js # 上游协议适配（请求体与 SSE 形状翻译，纯函数）
-│   │   └── routes/        # auth / folders / files / search / chat / stats / sync
+│   │   └── routes/        # auth / folders / files / search / chat / stats / sync / indexing
+│   ├── models/            # 本地嵌入模型（gitignore，按需下载）
 │   └── test/
 ├── frontend/              # React 前端
 │   ├── src/

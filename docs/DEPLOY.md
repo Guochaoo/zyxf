@@ -105,6 +105,14 @@ DM_FROM_ALIAS=
 
 # 可选：下载日志保留天数（含 ip/ua，默认 400 天）
 DOWNLOAD_LOG_RETENTION_DAYS=
+
+# 可选：内容索引（知识图谱「内容视图」）——见 §6
+# 本地嵌入模型目录（默认 backend/models/bge-small-zh-v1.5）
+EMBED_MODEL_DIR=
+# worker 空闲轮询间隔（毫秒，默认 8000）
+INDEX_POLL_MS=
+# 每日嵌入调用上限（默认 2000）：防一次误操作长时间占满 CPU
+INDEX_DAILY_LIMIT=
 ```
 
 生成 JWT_SECRET：
@@ -361,7 +369,70 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 
 ---
 
-## 6. 校验清单
+## 6. 内容索引（知识图谱「内容视图」）
+
+知识图谱默认按**内容**聚类：后台 worker 把资料正文抽出来、用本地模型算成向量，再按向量相似度连线成簇。这一步**可选**——模型缺失时会退化成「只抽正文不出向量」，图谱自动回到名称视图，其他功能不受影响。
+
+### 6.1 下载嵌入模型（约 23 MB，不进仓库）
+
+`backend/models/` 已在 `.gitignore` 里。模型用 [Xenova/bge-small-zh-v1.5](https://huggingface.co/Xenova/bge-small-zh-v1.5) 的量化版（512 维中文嵌入）：
+
+```bash
+cd /opt/zyxf/backend
+mkdir -p models/bge-small-zh-v1.5 && cd models/bge-small-zh-v1.5
+BASE=https://huggingface.co/Xenova/bge-small-zh-v1.5/resolve/main
+curl -fL -o model_quantized.onnx   $BASE/onnx/model_quantized.onnx   # 22.9 MB
+curl -fL -o tokenizer.json         $BASE/tokenizer.json
+curl -fL -o tokenizer_config.json  $BASE/tokenizer_config.json
+curl -fL -o config.json            $BASE/config.json
+sudo chown -R www:www /opt/zyxf/backend/models   # 与 2.1 节同一口径
+```
+
+> ⚠️ 模型目录必须对服务用户可读，否则 `embed.js` 的 `isEmbeddingEnabled()` 会返回 false：进程不报错，只是永远不出向量（`/api/index/status` 的 `embedding.enabled` 会是 false）。
+
+### 6.2 依赖体积
+
+`onnxruntime-node` 的 npm 包里带**全平台**原生库（含 CUDA/DirectML），装完 `node_modules` 约 **282 MB**；运行只用得上其中 `win32/x64` 或 `linux/x64` 那一个（几十 MB）。这是为了避开「下载 vs 本地编译」的不确定性而接受的代价；不想要这么大的部署体积，可以只抽正文（不装模型、不删依赖也能跑，只是内容视图不可用）。
+
+### 6.3 建立索引
+
+首次部署后库里已有资料，需要跑一次全量索引：
+
+```bash
+# 方式一：管理员账号重置密码拿 token 后调用（重建接口要求管理员）
+TOKEN=$(curl -s -X POST https://zyxf.top/api/auth/login \
+  -H 'content-type: application/json' \
+  -d '{"username":"'"$ADMIN_USER"'","password":"'"$ADMIN_PASSWORD"'"}' | jq -r .token)
+curl -s -X POST https://zyxf.top/api/index/rebuild -H "authorization: Bearer $TOKEN" | jq
+
+# 方式二：在服务器上直接入队（不经过 HTTP）
+cd /opt/zyxf/backend && node -e "
+const { enqueueAll } = await import('./src/indexPipeline.js');
+console.log('queued', enqueueAll());
+" --input-type=module
+```
+
+之后**新增资料无需手动操作**：上传接口与 `/api/sync` 都会自动入队。
+
+### 6.4 观察进度与排错
+
+```bash
+curl -s https://zyxf.top/api/index/status | jq '{totals, usage, pending}'
+# 管理员登录后还会返回失败的 20 条（含文件名与错误原因）
+journalctl -u zyxf -f | grep '\[index\]'
+```
+
+| 现象 | 原因 | 解决 |
+|---|---|---|
+| `embedding.enabled=false` | 模型文件缺失或目录不可读 | 按 6.1 下载并 `chown www:www` |
+| 索引停在某个文件、日志报「索引超时」 | 单个对象过大/上游慢（单任务上限 120s） | 正常，会重试 3 次后记 `failed` 并继续后面的文件 |
+| `last_error` 是「已达当日索引配额」 | 触到 `INDEX_DAILY_LIMIT` | 次日自动继续，或临时调大该值重启 |
+| 内容视图显示「索引里还没有可用资料」 | 库里可抽取的文本太少（扫描件/老格式占比高） | 属预期：扫描件需 OCR，见 `docs/ISSUES.md` |
+| 重复重建时 CPU 一直高 | `force` 全量重建会重新下载解析每个文件 | 用增量重建（默认 `force=false` 只排没抽过的） |
+
+---
+
+## 7. 校验清单
 
 - [ ] 后端目录对服务用户可写（`sudo -u www test -w /opt/zyxf/backend`），`journalctl -u zyxf` 无 `SQLITE_CANTOPEN`
 - [ ] `https://zyxf.top` 能看到首页
@@ -369,10 +440,11 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 - [ ] 上传一个 PDF → 不报 CORS 错
 - [ ] 点击 PDF → 能预览（需先开通 IMM、把 bucket 绑到 IMM 项目、并给该 RAM 用户 `imm:GenerateWebofficeToken`；报「预览服务暂不可用」时先看 `journalctl -u zyxf` 里的真实错误码）
 - [ ] 点「下载」→ 文件名是原中文文件名
+- [ ] 知识图谱默认档是「内容视图」：有向量数据时显示簇图例，没有时给出可读提示（不报错、不白屏）
 
 ---
 
-## 7. 日常运维
+## 8. 日常运维
 
 - 后端日志：`journalctl -u zyxf -f`
 - 后端重启：`systemctl restart zyxf`
@@ -401,7 +473,7 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 
 ---
 
-## 8. 常见坑
+## 9. 常见坑
 
 | 现象 | 原因 | 解决 |
 |---|---|---|

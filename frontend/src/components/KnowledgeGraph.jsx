@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Globe, Maximize, Shuffle, X } from 'lucide-react';
+import { Globe, Hash, Maximize, Shuffle, Sparkles, X } from 'lucide-react';
 import {
   forceCenter,
   forceCollide,
@@ -15,6 +15,7 @@ import { useFolderTree } from '../hooks/useFolderTree.js';
 import PanelHeader from './PanelHeader.jsx';
 import { ICON_BUTTON_CLASS, EASE_COLLAPSE } from './ui.js';
 import { openFilePreview } from '../ui.js';
+import { getKgSemantics } from '../api.js';
 
 const VIEW_W = 600;
 const VIEW_H = 420;
@@ -28,8 +29,57 @@ const GRAPH_H = '258px';
 // 收起状态跨页面导航保留（右栏组件会随路由卸载重建）。
 let collapsedPersistent = false;
 
-// 语义视图开关同样跨导航保留（理由同上：右栏组件会卸载重建）。
-let semanticPersistent = true;
+// 语义视图模式跨导航保留（理由同上：右栏组件会卸载重建）。
+// 三档：content = 按文件内容向量聚类；name = 按文件名主题聚类；folder = 只看目录层级。
+export const VIEW_MODES = ['content', 'name', 'folder'];
+const DEFAULT_VIEW_MODE = 'content';
+let viewModePersistent = DEFAULT_VIEW_MODE;
+
+/**
+ * 内容视图数据在模块级去重：整库向量边是全局数据，右栏组件随路由卸载重建，
+ * 用一个共享的在途 Promise 保证「同时挂载/来回切档只发一次请求」。
+ */
+let kgSemanticsInflight = null;
+function loadKgSemantics() {
+  if (!kgSemanticsInflight) {
+    kgSemanticsInflight = getKgSemantics()
+      .catch(() => null)
+      .then((data) => {
+        // 失败时清掉缓存，下次切档可重试（成功的结果整会话复用）
+        if (!data) kgSemanticsInflight = null;
+        return data;
+      });
+  }
+  return kgSemanticsInflight;
+}
+
+/** 仅供测试：清掉内容视图的共享缓存。 */
+export function __resetKgSemanticsCache() {
+  kgSemanticsInflight = null;
+}
+
+/** 切档并跨导航记住（右栏组件会随路由卸载重建）。 */
+function setViewModePersistent(setter, mode) {
+  viewModePersistent = mode;
+  setter(mode);
+}
+
+/** 档位按钮：与前两个图标按钮同款外观，用 aria-pressed 表达当前档（三档单选）。 */
+function ViewModeButton({ active, onClick, title, icon: Icon }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      aria-pressed={active}
+      className={`${ICON_BUTTON_CLASS}${active ? ' text-ink' : ''}`}
+      style={active ? { background: 'var(--surface)' } : undefined}
+    >
+      <Icon className="h-[15px] w-[15px]" />
+    </button>
+  );
+}
 
 // Node ids: folders are `f<id>` (root is f0), files are `file<id>`.
 export const nodeIdOf = (currentId) => (currentId ? `f${currentId}` : 'f0');
@@ -395,6 +445,93 @@ export const semanticColorFor = (index) =>
   index >= 0 && index < MAX_SEMANTIC_COLORS ? cssVar(`--kg-c${index + 1}`) : cssVar('--kg-cn');
 
 /**
+ * 内容视图：把后端给的「最相似邻居」边收敛进来。
+ * 后端已做 top-K 截断与阈值过滤（见 routes/indexing.js 的 /semantics），这里只做三件事：
+ *   1. 只保留两端都在当前视图范围内的边；
+ *   2. 成簇——阈值以上的边取连通分量；
+ *   3. 簇标签取簇内最高频的目录名（不调 LLM 也能读出「这一簇是什么」）。
+ *
+ * ⚠️ 成簇阈值 0.78 是在真实向量上标定的，不是拍的：346 个文件的相似度分布里，
+ *   0.75 → 最大簇 112 个成员（链式效应把跨学科的「南卷汇」试卷集串成一坨），
+ *   0.78 → 最大 46、0.80 → 最大 23。取 0.78 兼顾「该合的合上」与「不该合的不合」。
+ */
+export const VECTOR_LINK_THRESHOLD = 0.78;
+
+/** 后端回的是数据库 file_id（数字），图谱节点 id 是 «file<id>»：两端必须归一，否则一条边都接不上。 */
+export const vectorNodeId = (id) => (String(id).startsWith('file') ? String(id) : `file${id}`);
+
+export function buildVectorGraph(nodes, edges, labels) {
+  // 两边都过 vectorNodeId：节点在图谱里是 'file11'，后端回的是 11，不归一就一条边都接不上
+  const scope = new Set(nodes.map((n) => vectorNodeId(n.id)));
+  const inScope = (edges || [])
+    .map((e) => ({ ...e, source: vectorNodeId(e.source), target: vectorNodeId(e.target) }))
+    .filter((e) => scope.has(e.source) && scope.has(e.target));
+  const clustered = inScope.filter((e) => e.weight >= VECTOR_LINK_THRESHOLD);
+
+  const parent = new Map(nodes.map((n) => [vectorNodeId(n.id), vectorNodeId(n.id)]));
+  const find = (x) => {
+    let root = x;
+    while (parent.get(root) !== root) root = parent.get(root);
+    let cur = x;
+    while (parent.get(cur) !== root) {
+      const next = parent.get(cur);
+      parent.set(cur, root);
+      cur = next;
+    }
+    return root;
+  };
+  for (const e of clustered) {
+    if (!parent.has(e.source) || !parent.has(e.target)) continue;
+    const ra = find(e.source);
+    const rb = find(e.target);
+    if (ra !== rb) parent.set(ra, rb);
+  }
+  const groups = new Map();
+  for (const n of nodes) {
+    const key = vectorNodeId(n.id);
+    const root = find(key);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root).push(key);
+  }
+  const clusters = [];
+  for (const ids of groups.values()) {
+    const counted = new Map();
+    for (const id of ids) {
+      const label = labels?.[id] ?? labels?.[Number(String(id).replace(/^file/, ''))];
+      if (label) counted.set(label, (counted.get(label) || 0) + 1);
+    }
+    const top = [...counted.entries()]
+      .filter(([, count]) => count >= Math.max(2, Math.ceil(ids.length / 3)))
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+      .slice(0, 1)
+      .map(([t]) => t);
+    clusters.push({ key: ids[0], nodeIds: ids, label: top[0] || null });
+  }
+  clusters.sort(
+    (a, b) =>
+      b.nodeIds.length - a.nodeIds.length ||
+      (a.nodeIds[0] < b.nodeIds[0] ? -1 : a.nodeIds[0] > b.nodeIds[0] ? 1 : 0)
+  );
+  return { edges: inScope, clusters };
+}
+
+/**
+ * 图例：只列成员 ≥2 且有标签的簇（单点没有「聚成一类」的含义，列出来只是噪音），
+ * 取前 MAX_SEMANTIC_COLORS 个（色槽数量与画布上色一致）。
+ */
+function legendOf(clusters) {
+  return clusters
+    .filter((cluster) => cluster.nodeIds.length > 1 && cluster.label)
+    .slice(0, MAX_SEMANTIC_COLORS)
+    .map((cluster, index) => ({
+      key: cluster.key,
+      label: cluster.label,
+      count: cluster.nodeIds.length,
+      color: semanticColorFor(index),
+    }));
+}
+
+/**
  * 知识库 — force-directed graph of the library, forestry.md "Connected Pages"
  * style: circular nodes sized by degree, hover highlights neighbors,
  * zoom reveals labels; pan/zoom/drag; full-library view in a modal.
@@ -406,9 +543,37 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
   // folder neighborhood zoomed (maximize). null = dialog closed.
   const [dialog, setDialog] = useState(null);
   const [collapsed, setCollapsed] = useState(collapsedPersistent);
-  // 语义视图：默认开启（本图谱存在的意义就是看主题关系），关闭则回到纯目录结构视图。
-  const [semantic, setSemantic] = useState(semanticPersistent);
+  // 视图模式：content（默认，按内容向量聚类）/ name（按文件名主题）/ folder（纯目录层级）
+  const [viewMode, setViewMode] = useState(viewModePersistent);
+  // 内容视图的数据：整库级别，只在切到 content 档时拉一次。
+  // ⚠️ 用「模块级在途 Promise + 显式 refresh」而不是把 contentState 放进 effect 依赖：
+  // 后者会在 setLoading 时立即重跑 effect，cleanup 把 cancelled 置真，数据回来就被丢掉
+  // （表现是内容视图永远停在「正在读取内容索引」，但网络请求其实成功了）。
+  const [contentData, setContentData] = useState(null);
+  const [contentState, setContentState] = useState('idle'); // idle | loading | ready | error
   const { tree, rootFiles, loading } = useFolderTree();
+
+  useEffect(() => {
+    if (viewMode !== 'content') return undefined;
+    let alive = true;
+    setContentState((prev) => (prev === 'idle' || prev === 'error' ? 'loading' : prev));
+    loadKgSemantics()
+      .then((data) => {
+        if (!alive) return;
+        if (!data) {
+          setContentState('error');
+          return;
+        }
+        setContentData(data);
+        setContentState('ready');
+      })
+      .catch(() => {
+        if (alive) setContentState('error');
+      });
+    return () => {
+      alive = false;
+    };
+  }, [viewMode]);
 
   // Full graph only depends on the tree + root files: keep it stable across
   // folder navigation so browsing doesn't re-walk/re-allocate the whole library.
@@ -425,25 +590,26 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
     };
   }, [fullGraph, currentId]);
 
-  // 语义层只从名称派生，且不写回 fullGraph（d3 会就地改写它拿到的节点/边，见 localSubgraph 注释）。
+  /**
+   * 语义层：两档数据来源，输出同一种结构（nodes / edges / clusters / legend），
+   * 下游渲染（虚线边、簇色、图例、簇心布局）完全共用。
+   *   - content：边来自后端算好的内容向量相似度，簇标签 = 簇内最高频目录名；
+   *   - name：边来自文件名主题（本地纯函数），簇标签 = 共享 token。
+   * 都不写回 fullGraph —— d3 会就地改写它拿到的节点/边（见 localSubgraph 注释）。
+   */
   const semantics = useMemo(() => {
-    if (!semantic) return null;
+    if (viewMode === 'folder') return null;
+    if (viewMode === 'content') {
+      if (!contentData) return null;
+      const { edges, clusters } = buildVectorGraph(fullGraph.nodes, contentData.edges, contentData.labels);
+      return { nodes: [], edges, clusters, legend: legendOf(clusters) };
+    }
     const semanticNodes = buildSemanticNodes(fullGraph.nodes);
     const edges = buildSemanticEdges(semanticNodes);
     // 簇序即色槽序（buildClusters 已按规模排好）：图例第 i 项与画布上第 i 槽同色。
     const clusters = buildClusters(fullGraph.nodes, edges, semanticNodes);
-    // 图例只展示成员 ≥2 的簇：单点没有「聚成一类」的含义，列出来只是噪音。
-    const legend = clusters
-      .filter((cluster) => cluster.nodeIds.length > 1 && cluster.label)
-      .slice(0, MAX_SEMANTIC_COLORS)
-      .map((cluster, index) => ({
-        key: cluster.key,
-        label: cluster.label,
-        count: cluster.nodeIds.length,
-        color: semanticColorFor(index),
-      }));
-    return { nodes: semanticNodes, edges, clusters, legend };
-  }, [semantic, fullGraph]);
+    return { nodes: semanticNodes, edges, clusters, legend: legendOf(clusters) };
+  }, [viewMode, contentData, fullGraph]);
 
   // 当前视图范围内实际要画的语义边（局部视图只画两端都在场的边）。
   const semanticEdgesIn = useCallback(
@@ -504,21 +670,24 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
       >
         {!empty && (
           <>
-            <button
-              type="button"
-              onClick={() =>
-                setSemantic((v) => {
-                  semanticPersistent = !v;
-                  return !v;
-                })
-              }
-              title={semantic ? t('kg.semanticOff') : t('kg.semanticOn')}
-              aria-label={semantic ? t('kg.semanticOff') : t('kg.semanticOn')}
-              aria-pressed={semantic}
-              className={ICON_BUTTON_CLASS}
-            >
-              <Shuffle className="h-[15px] w-[15px]" />
-            </button>
+            <ViewModeButton
+              active={viewMode === 'content'}
+              onClick={() => setViewModePersistent(setViewMode, 'content')}
+              title={t('kg.modeContent')}
+              icon={Sparkles}
+            />
+            <ViewModeButton
+              active={viewMode === 'name'}
+              onClick={() => setViewModePersistent(setViewMode, 'name')}
+              title={t('kg.modeName')}
+              icon={Hash}
+            />
+            <ViewModeButton
+              active={viewMode === 'folder'}
+              onClick={() => setViewModePersistent(setViewMode, 'folder')}
+              title={t('kg.modeFolder')}
+              icon={Shuffle}
+            />
             <button
               type="button"
               onClick={() => setDialog('full')}
@@ -551,6 +720,17 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
         {loading || empty ? (
           <div className="flex h-full items-center justify-center text-[12px] text-slate-500">
             {loading ? t('common.loading') : t('kg.empty')}
+          </div>
+        ) : viewMode === 'content' && !semantics ? (
+          // 内容视图的数据还没到（首次拉向量边）：给明确反馈，不要显示成「没有数据」
+          <div className="flex h-full items-center justify-center px-4 text-center text-[12px] text-slate-500">
+            {contentState === 'error' ? t('kg.contentFailed') : t('kg.contentLoading')}
+          </div>
+        ) : viewMode === 'content' && semantics.edges.length === 0 ? (
+          // 索引建完了但没有任何向量边：可能是模型没装、或这批文件都是扫描件/老格式。
+          // 明确指向名称视图，否则看起来和「图谱坏了」一样。
+          <div className="flex h-full items-center justify-center px-4 text-center text-[12px] text-slate-500">
+            {t('kg.contentEmpty')}
           </div>
         ) : (
           <GraphCanvas
