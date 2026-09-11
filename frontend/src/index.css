@@ -7,8 +7,9 @@
    npm-managed source (@fontpkg/oppo-sans-4-0), so it is never committed.
    21.7 MB -> 2.7 MB with the 100-900 weight axis intact; BUG-99.
    Licence forbids modifying the font itself, so the source stays untouched in
-   node_modules and only this derived web build ships (attribution kept in
-   public/fonts/OPPO Sans 4.0 License Notice.txt). */
+   node_modules and only this derived web build ships. The licence text is kept at
+   public/licenses/OPPO-Sans-4.0-License.txt and linked from the footer, which is
+   what the OPPO Sans licence asks for (prominent notice + retained agreement). */
 @font-face {
   font-family: 'OPPOSans';
   src: url('./assets/fonts/opposans-subset.woff2') format('woff2');

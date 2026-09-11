@@ -306,6 +306,13 @@ const zh = {
     largeFileHint: '文件较大（>{{size}}），建议在 WiFi 下预览或直接下载',
     downloadFailedHint: '下载失败，请关闭后重新打开',
   },
+  // 页脚署名条（与 ICP 备案号同行）。字体署名是 OPPO Sans 授权的硬性要求：条件 1
+  // 「prominent notice」+ 条件 4「retain the copyright notice and this Agreement」，
+  // 于是必须真的可达，不能只把协议文本丢在一个没人知道的 URL 上。见 docs/ISSUES.md BUG-99。
+  footer: {
+    font: '字体',
+  },
+
   common: {
     cancel: '取消',
     save: '保存',
