@@ -3,7 +3,7 @@
 > **文档定位**：本文档描述 zyxf（仲英学辅资料库）**已经实现**的界面规范，每条都能在代码里找到出处。设计语言受 Vercel 启发（压缩字距、shadow-as-border、多值阴影栈），但 Vercel 官网里本项目**未落实**的内容（Workflow Pipeline、Trust Bar、Metric Cards、Image Treatment、多档断点表、英文示例文案等）不再收录——避免后来者照着做不存在的组件。
 >
 > **品牌与硬约束**
-> - **品牌字体**：OPPO Sans 4.0（`frontend/public/fonts/OPPO Sans 4.0.ttf`，`@font-face` 名 `OPPOSans`，字重 100–900）。Geist 并未落地到本项目，保留的只是它的排版原则：压缩、三档字重、紧字距。
+> - **品牌字体**：OPPO Sans 4.0（`@font-face` 名 `OPPOSans`，字重 100–900）。源字体经 npm 管理（`@fontpkg/oppo-sans-4-0`，**不入库**），构建期由 `frontend/scripts/build-font.mjs` 子集化为 `src/assets/fonts/opposans-subset.woff2`（21.7 MB → 2.7 MB，字重轴保留）。Geist 并未落地到本项目，保留的只是它的排版原则：压缩、三档字重、紧字距。
 > - **品牌标识**：`favicon.png` 与品牌名（仲英学辅资料库 / 仲英书院学业辅导中心 / 仲英学辅）逐字保留，不翻译、不改写。
 > - **文案语言**：简体中文 / English 双语，全部走 i18next 字典（`frontend/src/i18n/zh.js`、`en.js`）——**源码里不得硬编码中文**（`frontend/src/test/i18n.test.js` 强制）。品牌名、语言自身的名字（中文 / English）不翻译。
 > - **主题**：亮 / 暗 / 跟随系统三态，由 `useTheme()` 写 `<html data-theme>` 驱动 CSS 变量（`index.css` 的 `[data-theme='dark']`）。组件一律消费 token，因此**不需要为暗色另写样式**。
