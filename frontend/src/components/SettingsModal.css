@@ -578,3 +578,60 @@
 
 /* 语言下拉与协议下拉共用 .settings-popover / .settings-popover-option 样式 */
 
+/* ---- 窄屏（≤640px）：固定左右分栏会把右栏挤成一条竖线（文字竖排、底部按钮溢出），
+   改为「关闭 + 搜索 + 导航横排」的上下布局；卡片铺满遮罩内的可用区域（100vw/vh - 32px）。 ---- */
+@media (max-width: 640px) {
+  .settings-card {
+    width: 100%;
+    height: 100%;
+    border-radius: 14px;
+  }
+
+  .settings-layout {
+    flex-direction: column;
+  }
+
+  .settings-sidebar {
+    width: auto;
+    padding: 10px 12px 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    overflow-y: visible; /* 侧栏改成顶部条后不再单独滚动 */
+  }
+
+  .settings-sidebar-top {
+    padding: 0 0 8px;
+  }
+
+  .settings-search {
+    margin-bottom: 8px;
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+  }
+
+  .settings-nav-item {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 8px 12px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .settings-content-title {
+    padding: 14px 16px 8px;
+    font-size: 17px;
+  }
+
+  .settings-content-body {
+    padding: 4px 16px 12px;
+  }
+
+  .settings-actions {
+    padding: 10px 16px 14px;
+  }
+}
+
