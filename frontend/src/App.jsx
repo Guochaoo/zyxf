@@ -9,12 +9,17 @@ import BrowsePage from './pages/BrowsePage.jsx';
 const AuthPage = lazy(() => import('./pages/AuthPage.jsx'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
 const AboutPage = lazy(() => import('./pages/AboutPage.jsx'));
+// 右栏两个面板同样按需加载（IMPROVE-43）：KnowledgeGraph 静态依赖 d3-force、
+// ChatComposer 经 Chat/parts 依赖 react-markdown。它们原先被静态 import，于是
+// 这两个库进了入口的同步依赖图并出现在 index.html 的 modulepreload 里——只看
+// 文件列表、不开图谱也不用 AI 的访客照样要下载约 45 KB(gzip)。改成 lazy 后
+// 只有真的渲染右栏（browse 路由 + lg 屏）才会去取。
+const KnowledgeGraph = lazy(() => import('./components/KnowledgeGraph.jsx'));
+const ChatComposer = lazy(() => import('./components/ChatComposer.jsx'));
 import StaggeredMenu from './components/StaggeredMenu.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import SearchBar from './components/SearchBar.jsx';
 import FolderTree from './components/FolderTree.jsx';
-import KnowledgeGraph from './components/KnowledgeGraph.jsx';
-import ChatComposer from './components/ChatComposer.jsx';
 import useMediaQuery from './hooks/useMediaQuery.js';
 import useTheme from './hooks/useTheme.js';
 import useLocale from './hooks/useLocale.js';
@@ -262,8 +267,10 @@ export default function App() {
         <div className="fixed inset-y-0 right-0 z-10 hidden flex-col gap-4 overflow-hidden pr-2 pt-[61.5px] lg:flex lg:w-[300px]">
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
             <div className="flex min-h-0 flex-1 flex-col gap-[15px]">
-              <KnowledgeGraph currentId={folderId} onFullChange={setGraphFull} />
-              <ChatComposer onOpenSettings={openSettings} />
+              <Suspense fallback={null}>
+                <KnowledgeGraph currentId={folderId} onFullChange={setGraphFull} />
+                <ChatComposer onOpenSettings={openSettings} />
+              </Suspense>
             </div>
           </div>
         </div>
