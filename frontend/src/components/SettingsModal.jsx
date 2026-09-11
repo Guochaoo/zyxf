@@ -175,6 +175,50 @@ export default function SettingsModal({ open, onClose }) {
     }
   }, [open]);
 
+  // ---- 系统返回（手机边缘左滑 / 浏览器返回键）----
+  // 设置是覆盖在资料库之上的弹窗，没有自己的历史条目，于是返回手势会直接退出整个站点。
+  // 这里在打开期间往历史里压一条「哨兵」占位，返回手势先弹出它：
+  //   手机端二级页面 → 回到一级设置列表（并补回哨兵，所以「再返回一次」才关闭设置）；
+  //   一级列表 / 桌面端   → 关闭设置，回到资料库。
+  const sentinelOn = useRef(false);
+  // popstate 回调要读最新值，用 ref 承载，避免把监听器绑成 panel/isMobile 的依赖、每次渲染重绑。
+  const backStateRef = useRef({ isMobile, panel, onClose });
+  useEffect(() => {
+    backStateRef.current = { isMobile, panel, onClose };
+  });
+
+  useEffect(() => {
+    if (!open) return undefined;
+    if (!sentinelOn.current) {
+      window.history.pushState({ zyxfSettings: true }, '');
+      sentinelOn.current = true;
+    }
+    return () => {
+      // 关闭时把哨兵摘掉，否则用户之后的一次返回会落在一条重复的历史条目上（按了没反应）
+      if (sentinelOn.current) {
+        sentinelOn.current = false;
+        window.history.back();
+      }
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPopState = () => {
+      const { isMobile: mobile, panel: current, onClose: close } = backStateRef.current;
+      sentinelOn.current = false; // 哨兵已被弹出
+      if (mobile && current !== null) {
+        setPanel(null);
+        window.history.pushState({ zyxfSettings: true }, '');
+        sentinelOn.current = true;
+        return;
+      }
+      close();
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [open]);
+
   // 打开时锁定页面滚动，配合遮罩阻断背景操作。
   useEffect(() => {
     if (!open) return undefined;

@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SettingsModal from '../components/SettingsModal.jsx';
 
@@ -41,6 +41,8 @@ const langMenu = () => document.querySelector('.settings-lang-menu');
 
 beforeEach(() => {
   localStorage.clear();
+  // jsdom 的历史遍历是异步的，会在用例之间串场：把 back() 变成 no-op，需要断言时在用例内单独 spy。
+  vi.spyOn(window.history, 'back').mockImplementation(() => {});
 });
 
 describe('SettingsModal 语言下拉：点击空白收起', () => {
@@ -330,5 +332,72 @@ describe('SettingsModal 手机端：两级结构', () => {
     expect(screen.getByText('字体和语言')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '返回' })).toBeNull();
     expect(screen.getByRole('button', { name: '关闭' })).toBeInTheDocument();
+  });
+});
+
+// 系统返回（手机边缘左滑 / 浏览器返回键）：打开时压入哨兵历史，返回先被设置弹窗消费，
+// 不至于直接退出整个站点。手机端二级先回一级，一级再关闭设置。
+describe('SettingsModal 系统返回手势', () => {
+  const row = (name) => screen.getByRole('button', { name });
+
+  beforeEach(() => {
+    vi.spyOn(window.history, 'pushState');
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test('打开设置时压入一条哨兵历史（返回手势先落在弹窗上）', () => {
+    renderModal();
+    expect(window.history.pushState).toHaveBeenCalledWith({ zyxfSettings: true }, '');
+  });
+
+  test('手机端：二级页面第一次返回回到一级，再返回才关闭设置', () => {
+    mockMobile();
+    // 预置一份完整配置，否则默认是「使用服务器配置」态、字段不渲染
+    localStorage.setItem(
+      'zyxf_llm',
+      JSON.stringify({ apiKey: 'sk-1', baseUrl: 'https://llm.test/v1', model: 'glm-4.6' })
+    );
+    const onClose = vi.fn();
+    render(<SettingsModal open onClose={onClose} />);
+
+    fireEvent.click(row('智能对话配置'));
+    expect(screen.getByLabelText('API Key')).toBeInTheDocument();
+
+    // 第一次返回：回到一级列表，弹窗不关，并补回哨兵
+    fireEvent.popState(window);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('API Key')).toBeNull();
+    expect(row('账户信息')).toBeInTheDocument();
+
+    // 第二次返回：关闭设置
+    fireEvent.popState(window);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('手机端：一级列表返回直接关闭设置', () => {
+    mockMobile();
+    const onClose = vi.fn();
+    render(<SettingsModal open onClose={onClose} />);
+
+    fireEvent.popState(window);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('桌面端：没有二级页面，返回即关闭设置', () => {
+    const onClose = vi.fn();
+    render(<SettingsModal open onClose={onClose} />);
+
+    fireEvent.popState(window);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // 关闭时必须把哨兵摘掉，否则用户之后的一次返回会落在重复条目上（按了没反应）
+  test('关闭设置时把哨兵从历史里摘掉', () => {
+    const { unmount } = renderModal();
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    unmount();
+    expect(back).toHaveBeenCalled();
   });
 });
