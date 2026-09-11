@@ -24,13 +24,13 @@ const GRAPH_H = '258px';
 let collapsedPersistent = false;
 
 // Node ids: folders are `f<id>` (root is f0), files are `file<id>`.
-const nodeIdOf = (currentId) => (currentId ? `f${currentId}` : 'f0');
+export const nodeIdOf = (currentId) => (currentId ? `f${currentId}` : 'f0');
 
 // d3-force 在模拟运行后会把 l.source/l.target 从字符串 id 改写为节点对象，
 // 取端点 id 前先归一化。
-const endpointId = (n) => (typeof n === 'object' ? n.id : n);
+export const endpointId = (n) => (typeof n === 'object' ? n.id : n);
 
-function buildGraph(tree, rootFiles, rootName) {
+export function buildGraph(tree, rootFiles, rootName) {
   const nodes = [{ id: 'f0', name: rootName, type: 'folder', isRoot: true }];
   const links = [];
   const walk = (folder, parentId) => {
@@ -52,16 +52,27 @@ function buildGraph(tree, rootFiles, rootName) {
 }
 
 // Keep only the current node and its direct neighbors (forestry-style local graph).
-function localSubgraph(nodes, links, currentId) {
+//
+// ⚠️ 返回的是**拷贝**：d3-force 的 forceLink/forceSimulation 会就地改写传入的
+// link.source/target（字符串 id → 节点对象）与节点的 x/y。而 fullGraph 是跨导航复用的
+// memo，若把它的对象直接交给模拟，第二次进同一处就会踩到已被改写过的端点：
+// 原来 `l.source === current` 的字符串比较全部失配 → 局部子图退化成「只剩当前节点」（主页
+// 那条一刷新/一返回就只剩一个点的现象就是它），同时 buildDegrees 会把度数记到
+// "[object Object]" 上，半径全变 2px。拷贝 + 端点归一化后每次都从干净的字符串 id 开始。
+export function localSubgraph(nodes, links, currentId) {
   const current = nodeIdOf(currentId);
   const ids = new Set([current]);
   for (const l of links) {
-    if (l.source === current) ids.add(l.target);
-    if (l.target === current) ids.add(l.source);
+    const s = endpointId(l.source);
+    const t = endpointId(l.target);
+    if (s === current) ids.add(t);
+    if (t === current) ids.add(s);
   }
   return {
-    nodes: nodes.filter((n) => ids.has(n.id)),
-    links: links.filter((l) => ids.has(l.source) && ids.has(l.target)),
+    nodes: nodes.filter((n) => ids.has(n.id)).map((n) => ({ ...n })),
+    links: links
+      .filter((l) => ids.has(endpointId(l.source)) && ids.has(endpointId(l.target)))
+      .map((l) => ({ ...l, source: endpointId(l.source), target: endpointId(l.target) })),
   };
 }
 
@@ -92,8 +103,10 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
     return {
       localNodes: local.nodes,
       localLinks: local.links,
-      fullNodes: fullGraph.nodes,
-      fullLinks: fullGraph.links,
+      // 全库弹窗同样给拷贝：否则它自己的 forceSimulation 会把 fullGraph 的端点改写成对象、
+      // 并把位置写进同一批节点对象，和局部图互相踩（同一类问题的另一种表现）。
+      fullNodes: fullGraph.nodes.map((n) => ({ ...n })),
+      fullLinks: fullGraph.links.map((l) => ({ ...l })),
     };
   }, [fullGraph, currentId]);
 
@@ -216,11 +229,14 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
   );
 }
 
-function buildDegrees(links) {
+export function buildDegrees(links) {
   const deg = {};
   for (const l of links) {
-    deg[l.source] = (deg[l.source] || 0) + 1;
-    deg[l.target] = (deg[l.target] || 0) + 1;
+    // 端点可能是字符串 id，也可能已被 d3-force 改写成节点对象（见 localSubgraph 的注释）
+    const s = endpointId(l.source);
+    const t = endpointId(l.target);
+    deg[s] = (deg[s] || 0) + 1;
+    deg[t] = (deg[t] || 0) + 1;
   }
   return deg;
 }
