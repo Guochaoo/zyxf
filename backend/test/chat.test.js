@@ -202,12 +202,12 @@ describe('POST /api/chat', () => {
     assert.equal(res.status, 200);
     const events = await readSse(res);
     assert.equal(events.at(-1).type, 'done');
-    // 配置被规范化（去尾斜杠）并传给 LLM 客户端；未指定协议时按 openai
+    // 配置被规范化（去尾斜杠）并传给 LLM 客户端；未指定协议时按 openai-completions
     assert.deepEqual(llmState.calls[0].config, {
       apiKey: 'client-key',
       baseUrl: 'https://llm.test/v1',
       model: 'test-model',
-      protocol: 'openai',
+      protocol: 'openai-completions',
     });
   });
 
@@ -222,12 +222,27 @@ describe('POST /api/chat', () => {
           apiKey: 'sk-ant',
           baseUrl: 'https://api.anthropic.com/v1',
           model: 'claude-sonnet-4-5',
-          protocol: 'anthropic',
+          protocol: 'anthropic-messages',
         },
       },
     });
     assert.equal(res.status, 200);
-    assert.equal(llmState.calls[0].config.protocol, 'anthropic');
+    assert.equal(llmState.calls[0].config.protocol, 'anthropic-messages');
+  });
+
+  // 旧客户端/旧存储里存的是 openai / anthropic：别名要映射到规范名，不能作废整份配置
+  test('legacy protocol aliases are normalized (openai → openai-completions)', async () => {
+    llmState.enabled = false;
+    llmState.script = [[{ type: 'delta', text: 'ok' }]];
+    const res = await request('POST', '/api/chat', {
+      headers: { 'x-forwarded-for': '203.0.113.136', ...userAuth() },
+      body: {
+        messages: [{ role: 'user', content: 'hi' }],
+        llm: { apiKey: 'k', baseUrl: 'https://llm.test/v1', model: 'm', protocol: 'openai' },
+      },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(llmState.calls[0].config.protocol, 'openai-completions');
   });
 
   // 显式填了不支持的协议时不静默降级（否则用户以为切了协议，实际还按 OpenAI 发）

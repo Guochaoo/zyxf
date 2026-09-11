@@ -9,10 +9,7 @@ import {
   isSupportedProtocol,
   normalizeProtocol,
   createSseSplitter,
-  createOpenAiReducer,
-  createAnthropicReducer,
-  buildOpenAiRequest,
-  buildAnthropicRequest,
+  PROTOCOL_IMPLS,
 } from './llmProtocols.js';
 
 const LLM_API_KEY = envStr('LLM_API_KEY');
@@ -170,13 +167,12 @@ export async function* chatStream({ messages, tools, signal, config }) {
   const apiKey = config?.apiKey || LLM_API_KEY;
   const baseUrl = config?.baseUrl || LLM_BASE_URL;
   const model = config?.model || LLM_MODEL;
-  // 有请求级配置就用它自己的协议（缺省 openai，与 resolveClientLlmConfig 的归一化一致），
+  // 有请求级配置就用它自己的协议（缺省 openai-completions，与 resolveClientLlmConfig 的归一化一致），
   // 只有走服务端 env 时才看 LLM_PROTOCOL——否则用户没填协议时会静默继承服务端协议。
-  const isAnthropic = normalizeProtocol(config ? config.protocol : LLM_PROTOCOL) === 'anthropic';
+  const protocol = normalizeProtocol(config ? config.protocol : LLM_PROTOCOL);
+  const { buildRequest, createReducer } = PROTOCOL_IMPLS[protocol];
 
-  const req = isAnthropic
-    ? buildAnthropicRequest({ baseUrl, apiKey, model, messages, tools })
-    : buildOpenAiRequest({ baseUrl, apiKey, model, messages, tools });
+  const req = buildRequest({ baseUrl, apiKey, model, messages, tools });
 
   const res = await fetch(req.url, {
     method: 'POST',
@@ -194,10 +190,10 @@ export async function* chatStream({ messages, tools, signal, config }) {
 
   const decoder = new TextDecoder();
   const splitter = createSseSplitter();
-  const reducer = isAnthropic ? createAnthropicReducer() : createOpenAiReducer();
+  const reducer = createReducer();
   let producedOutput = false; // 是否已向客户端产出任何输出（文本或工具调用）
 
-  // 每段 SSE 载荷交给协议 reducer 变成统一事件；流的切分逻辑两种协议共用。
+  // 每段 SSE 载荷交给协议 reducer 变成统一事件；流的切分逻辑各协议共用。
   const emit = function* (payloads) {
     for (const payload of payloads) {
       for (const ev of reducer.feed(payload)) {
