@@ -15,11 +15,11 @@
 
 ```yaml
 更新日期: 2026-09-11
-条目总数: 116        # 缺陷 87 + 改进 29
-待处理: 5            # 缺陷 0 + 改进 5
-已归档: 111          # 缺陷 87 + 改进 24
-# 本轮（第四批审计）新增并已归档：BUG-81～92、IMPROVE-14；IMPROVE-13/18/19/22/23/25 由待处理转入归档，
-# IMPROVE-15 后端部分已落地（目录树快照缓存），前端去重并入 IMPROVE-24。
+条目总数: 117        # 缺陷 87 + 改进 30
+待处理: 1            # 缺陷 0 + 改进 1（IMPROVE-26，暂缓）
+已归档: 116          # 缺陷 87 + 改进 29
+# 第五批（本轮）：IMPROVE-15/16/17/20/24 落地并归档 —— 目录树快照与前端去重、密码哈希改 scrypt、
+# 子树搬迁阈值、搜索截断契约；剩余 IMPROVE-26 因有破坏性风险暂缓。
 # 条目总数 = 待处理 + 已归档；已归档数 = 2.1 与 2.2 两张表的行数之和。
 ```
 
@@ -37,39 +37,7 @@
 
 ### 1.2 改进建议
 
-本轮审计新发现的 14 条改进项里，已处置 9 条（13/14/15/18/19/21/22/23/25，见 [2.2 已关闭改进项](#22-已关闭改进项)（24）），**剩余 5 条**见下；每条都写全背景，便于以后接手时不必重新调研。
-
-#### IMPROVE-16 · 登录/注册用 bcryptjs 同步哈希，单次独占事件循环 40–50 ms
-**影响范围**：`backend/src/routes/auth.js` · `backend/package.json`（后端 · 性能）
-
-- **现状**：`bcrypt.compareSync` / `bcrypt.hashSync`（bcryptjs 是纯 JS 实现），本机实测 `hashSync(10)` ≈47 ms、`compareSync` ≈42 ms，且是在路由处理函数里同步执行的。
-- **影响**：每次登录/注册期间，事件循环被独占 40–50 ms，所有并发 API（`/api/health`、下载签名、搜索、上传）一并排队；配合「多出口 IP 叠加」的爆破脚本，可把这种抖动放大成持续的服务降级。`registerLimiter` 是 15 次/分钟/IP，量级不高，但登录路径本身是公开的。
-- **修法**：改用 `await bcrypt.compare/hash`（bcryptjs 提供 Promise 版，内部仍走同一套算法，只是让出事件循环）或换原生 bcrypt / argon2 异步实现。注意 login 的 DUMMY_HASH 时间对齐逻辑（BUG-70）必须保持：两条分支都要 await 一次比较。
-- **验证**：`test/authHardening.test.js` 全绿；本机压测「并发打 /api/health 的同时打 /login」，health 的 p95 不再随登录抖动。
-
-#### IMPROVE-17 · 文件夹改名/移动要逐个搬运整棵子树的 OSS 对象，无规模阈值
-**影响范围**：`backend/src/routes/folders.js`（后端 · 性能）
-
-- **现状**：`planFolderSubtreeMove` 取整棵子树后对每个文件 `copy` → 再逐个 `delete`，`batchOss` 并发固定 10。
-- **影响**：含 1000 个文件的文件夹改名 ≈ 400 次串行网络往返（copy + delete 各一轮），请求易超 nginx 默认 60 s 超时；且 BUG-92 之后虽然不再可能产生环或「DB 指向不存在的对象」，但中途失败仍会留下新键孤儿对象（需要人工清理或后续补偿任务）。`sync` 会把孤儿对象当新文件导入。
-- **修法**：两条路线取其一——① 设定子树规模阈值（如 200 个对象），超限返回 409 并提示改用「批量/后台迁移」；② 改为后台迁移任务：请求只落一条迁移记录（`pending_moves`），由任务推进 copy → 改库 → 删旧，并在同步导入前跳过未完成迁移涉及的键。
-- **验证**：用例「超过阈值的子树改名返回 409」；若走 ② 则补「迁移中断后重跑不产生重复条目」。
-
-#### IMPROVE-20 · `/api/search` 每类截断 20 条，前端却把它当总数展示
-**影响范围**：`backend/src/searchService.js` · `backend/src/routes/search.js` · `frontend/src/components/SearchBar.jsx`（后端 · 接口契约 / 前端 · 展示契约）
-
-- **现状**：`searchLibrary(q, { limit = 20 })` 对 folders 与 files 各自 `slice(0, limit)`，路由只回传两个数组；前端 `SearchBar` 用 `folders.length + files.length` 渲染 `search.resultsCount`（「N 个结果」）。实测命中超过 20 时界面写死「20 个结果」。
-- **影响**：用户以为库里只有 20 条匹配而漏掉资料；与 BUG-24（类型分布截断）属同一类「截断值与 UI 展示契约不一致」问题。
-- **修法**：路由回传命中总数（`total`）或至少一个 `truncated: true` 标志；前端在截断时显示「显示 20 / 共 N 条」，未截断保持现状。若担心多一次计数开销，可在 `rank()` 之后用「未 slice 的数组长度」得到总数（本来就已全量算完，无额外扫描）。
-- **验证**：`SearchBar` 用例断言截断提示文案与总数；后端用例断言响应结构（含 `total`）。
-
-#### IMPROVE-24 · `useFolderTree` 的文档承诺与实现不符（同一变更仍发两次请求）
-**影响范围**：`frontend/src/hooks/useFolderTree.js` · `frontend/src/components/FolderTree.jsx` · `frontend/src/components/KnowledgeGraph.jsx`（前端 · 重复逻辑）
-
-- **现状**：hook 注释声称它解决了「原来各自实现了一遍 fetch + alive 守卫 + 事件监听、同一变更触发两次相同 GET」，但实现只是把重复代码搬进 hook——侧边栏 `FolderTree` 与知识图谱 `KnowledgeGraph` 各挂一个 hook 实例、各持一份 state、各自监听 `folders-changed`，同一变更依旧发两次 `/api/folders/tree`（大库时是实打实的翻倍开销；后端自 IMPROVE-15 起有 30 s 快照，第二次请求命中缓存但**仍是一次完整 HTTP 往返**）。
-- **影响**：目录树相关的每次写操作都多一次请求；注释还会让后续维护者以为已经优化过。
-- **修法**：把 tree 提升为模块级共享存储（`useSyncExternalStore` + 模块级 cache/inflight/订阅集合，模块加载时监听一次 `folders-changed`），两个消费方只订阅；`loadFolderTree()` 共享同一个 in-flight Promise，同一变更只发一次请求。注意保留 BUG-82 的请求序号守卫，并让订阅者在变更后拿到同一份新快照。
-- **验证**：用例用请求计数 mock 断言「两个消费方同时挂载 + 触发一次 folders-changed 只发一次 GET」。
+本轮审计新发现的 14 条改进项里，已处置 13 条（13/14/15/16/17/18/19/20/21/22/23/24/25，见 [2.2 已关闭改进项](#22-已关闭改进项)（29）），**仅剩 1 条**（26，暂缓，见下）；这条写全背景，便于以后接手时不必重新调研。
 
 #### IMPROVE-26 · sync 只回收「死根子树」，挂在活根下的空文件夹永不剪枝（**暂缓，改动有破坏性风险**）
 **影响范围**：`backend/src/routes/sync.js`（后端 · 同步）
@@ -177,7 +145,7 @@
 | BUG-91 | P1 | 后端 | `PATCH /api/folders/:id` 的环校验与写库之间隔了 OSS 往返：并发可写入 parent 环 | `backend/src/routes/folders.js`, `backend/test/auditFixes.test.js` | 2026-09-11 |
 | BUG-92 | P1 | 后端 | 文件夹改名/移动的 OSS 复制无补偿：孤儿对象会被下一次 sync 当成新文件导入 | `backend/src/routes/folders.js` | 2026-09-11 |
 
-### 2.2 已关闭改进项（24）
+### 2.2 已关闭改进项（29）
 
 | 编号 | 严重度 | 类别 | 标题 | 处理位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -205,3 +173,8 @@
 | IMPROVE-22 | P2 | 前端 | `api.js` 注释仍描述已被替换掉的同步限流口径 | `frontend/src/api.js` | 2026-09-11 |
 | IMPROVE-23 | P1 | 前端 | `gsap` 以静态导入常驻首屏（菜单动画本可惰性加载） | `frontend/src/components/StaggeredMenu.jsx`, `frontend/vite.config.js` | 2026-09-11 |
 | IMPROVE-25 | P2 | 前端 | 零引用导出与未使用解构（`useLocale().title`、`App.jsx` 的 `locale`、`imm.js` 的 `immProject`、`clearTheme`、`LOCALES`、`ossPublicHost`） | `frontend/src/hooks/useLocale.js`, `frontend/src/App.jsx`, `frontend/src/ui.js`, `frontend/src/i18n/index.js`, `backend/src/imm.js`, `backend/src/oss.js` | 2026-09-11 |
+| IMPROVE-15 | P1 | 后端 | `GET /folders/tree` 每次全量重建整库树（前端去重部分并入 IMPROVE-24） | `backend/src/routes/folders.js`, `backend/src/treeCache.js`, `backend/test/auditFixes.test.js` | 2026-09-11 |
+| IMPROVE-16 | P1 | 后端 | 登录/注册的密码哈希独占事件循环 40–50 ms | `backend/src/password.js`, `backend/src/routes/auth.js`, `backend/src/db.js`, `backend/test/authHardening.test.js` | 2026-09-11 |
+| IMPROVE-17 | P2 | 后端 | 文件夹改名/移动逐对象搬运子树，无规模阈值 | `backend/src/routes/folders.js`, `backend/test/auditFixes.test.js` | 2026-09-11 |
+| IMPROVE-20 | P2 | 前后端 | `/api/search` 每类截断 20 条却被前端当总数展示 | `backend/src/searchService.js`, `backend/src/routes/search.js`, `frontend/src/components/SearchBar.jsx` | 2026-09-11 |
+| IMPROVE-24 | P2 | 前端 | `useFolderTree` 未去重：同一变更发两次 GET | `frontend/src/hooks/useFolderTree.js`, `frontend/src/test/useFolderTree.test.jsx` | 2026-09-11 |

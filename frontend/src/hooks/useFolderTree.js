@@ -2,7 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { getFolderTree } from '../api.js';
 
 /**
- * 整棵文件夹树的模块级共享存储（IMPROVE-24）。
+ * 整棵文件夹树的模块级共享存储（IMPROVE-24，含 IMPROVE-15 的前端去重）。
  *
  * 侧边栏 FolderTree 与知识图谱 KnowledgeGraph 都要这棵树，但它们各自实例化一次 hook：
  * 各持一份 state、各自监听 'folders-changed'，同一次变更会发两次完全相同的
@@ -59,6 +59,7 @@ const getSnapshot = () => cache;
 /**
  * 读取整棵文件夹树（含根级文件），并跟随全局 'folders-changed' 自动刷新。
  * 挂载时按需触发加载（并发挂载的多个消费方共享同一个请求）。
+ * 服务端侧同一份数据已有 30 s 快照（IMPROVE-15），这里负责「不重复发第二次请求」。
  *
  * @returns {{ tree: Array|null, rootFiles: Array, loading: boolean }}
  */
