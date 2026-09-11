@@ -2,12 +2,12 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
-// 图谱的数据来源（模块级共享 store）：这里给固定树，避免真实网络请求。
+// 图谱的数据来源（模块级共享 store）：固定树 + 固定的内容分类，避免真实网络请求。
 const getFolderTreeMock = vi.fn();
-const getKgSemanticsMock = vi.fn();
+const getKgTaxonomyMock = vi.fn();
 vi.mock('../api.js', () => ({
   getFolderTree: (...a) => getFolderTreeMock(...a),
-  getKgSemantics: (...a) => getKgSemanticsMock(...a),
+  getKgTaxonomy: (...a) => getKgTaxonomyMock(...a),
   default: { get: vi.fn(), post: vi.fn() },
 }));
 vi.mock('../ui.js', async (importOriginal) => ({
@@ -17,13 +17,13 @@ vi.mock('../ui.js', async (importOriginal) => ({
 
 const {
   default: KnowledgeGraph,
-  buildVectorGraph,
-  VECTOR_LINK_THRESHOLD,
+  buildTopicGraph,
+  labelOfNode,
   __resetKgSemanticsCache,
 } = await import('../components/KnowledgeGraph.jsx');
 const { __resetFolderTreeStore } = await import('../hooks/useFolderTree.js');
 
-// 树：两个高数资料（同一主题）+ 一个足球资料，另有一个纯日期名用来验证「同目录兜底」。
+// 两个学科目录：高数（三个文件，内容分成两个细分）与 足球（一个文件）
 const tree = [
   {
     id: 1,
@@ -32,14 +32,35 @@ const tree = [
     files: [
       { id: 11, name: '高等数学期末试卷A.pdf', folder_id: 1 },
       { id: 12, name: '高等数学期中复习资料B.pdf', folder_id: 1 },
-      { id: 13, name: '2019.6.18.pdf', folder_id: 1 }, // token 为空
+      { id: 13, name: '极限与导数练习.pdf', folder_id: 1 },
     ],
   },
   { id: 2, name: '足球', children: [], files: [{ id: 21, name: '足球专项理论课.pdf', folder_id: 2 }] },
 ];
 
+// 后端分类：高数 → 「极限与导数」(11/12) + 「期中复习」(13)；足球 → 「体育理论」(21)
+const taxonomy = {
+  enabled: true,
+  model: 'bge-small-zh-v1.5',
+  llm: true,
+  cached: true,
+  files: 4,
+  groups: [
+    {
+      subjectId: 1,
+      subject: '高数',
+      clusters: [
+        { key: '1:0', name: '极限与导数', fileIds: [11, 12] },
+        { key: '1:1', name: '期中复习', fileIds: [13] },
+      ],
+    },
+    { subjectId: 2, subject: '足球', clusters: [{ key: '2:0', name: '体育理论', fileIds: [21] }] },
+  ],
+  labels: { 'cluster:1:0': '极限与导数', 'cluster:1:1': '期中复习', 'cluster:2:0': '体育理论', 'folder:1': '高数', 'folder:2': '足球' },
+};
+
 function renderGraph(currentId = 1) {
-  // currentId=1：局部子图 = 该文件夹 + 它的父级 + 自己的文件，语义边才有两端都在场
+  // currentId=1：局部子图 = 该文件夹 + 它的父级 + 自己的文件
   return render(
     <MemoryRouter>
       <KnowledgeGraph currentId={currentId} />
@@ -50,169 +71,129 @@ function renderGraph(currentId = 1) {
 describe('知识图谱视图（渲染层）', () => {
   beforeEach(() => {
     __resetFolderTreeStore();
-    __resetKgSemanticsCache(); // 内容视图数据是模块级共享的，用例之间必须清掉
+    __resetKgSemanticsCache(); // 分类缓存与档位记忆都是模块级的，用例之间必须清掉
     getFolderTreeMock.mockReset();
     getFolderTreeMock.mockResolvedValue({ tree, files: [] });
-    // 内容视图的默认桩：没有向量数据（正是「模型未装/尚未索引」时的真实响应形状）
-    getKgSemanticsMock.mockReset();
-    getKgSemanticsMock.mockResolvedValue({ enabled: true, files: 0, edges: [], labels: {}, hint: '尚未建立内容索引' });
+    getKgTaxonomyMock.mockReset();
+    getKgTaxonomyMock.mockResolvedValue(taxonomy);
     // jsdom 不加载 index.css，手写一份簇色变量，断言「节点颜色来自 --kg-cN」。
     document.documentElement.style.setProperty('--kg-c1', 'rgb(1, 2, 3)');
     document.documentElement.style.setProperty('--kg-c2', 'rgb(4, 5, 6)');
   });
 
-  test('默认内容视图：没有向量数据时给出可读提示，而不是空白（也不是「暂无图谱数据」）', async () => {
-    renderGraph();
-    const modeBtn = await screen.findByRole('button', { name: '内容视图：按资料内容聚类' });
-    expect(modeBtn.getAttribute('aria-pressed')).toBe('true'); // 默认档就是内容视图
-    // 索引里没有可用资料 → 明确给出提示与下一步，而不是一片空白
-    expect(await screen.findByText(/内容索引里还没有可用资料/)).toBeTruthy();
+  test('内容视图按「学科 → 内容细分 → 文件」组织，标签用分类名', async () => {
+    const { container } = renderGraph();
+    // 等分类名上屏：内容档要先等分类数据到齐（只看 circle 会命中目录图的那一帧）
+    await waitFor(() =>
+      expect([...container.querySelectorAll('text')].map((t) => t.textContent)).toContain('极限与导数')
+    );
+    const texts = [...container.querySelectorAll('text')].map((t) => t.textContent);
+    expect(texts.some((t) => t.includes('高数'))).toBe(true);
+
+    // 同一内容细分用同色（分类节点实心填充、其下文件同色描边）
+    const tinted = [...container.querySelectorAll('circle')].filter((c) =>
+      /rgb\(1, 2, 3\)|rgb\(4, 5, 6\)/.test(`${c.getAttribute('fill')} ${c.getAttribute('stroke')}`)
+    );
+    expect(tinted.length).toBeGreaterThan(0);
+    // 图例已移除：画布上不该再出现 foreignObject
+    expect(container.querySelector('foreignObject')).toBeNull();
   });
 
-  test('切到目录视图：语义边与图例都消失，目录层级边仍在', async () => {
-    // 先给一份有向量边的数据：否则内容档只显示提示、画布不渲染，测不到「切档后仍在画」
-    getKgSemanticsMock.mockResolvedValue({
-      enabled: true,
-      model: 'bge-small-zh-v1.5',
-      files: 3,
-      edges: [
-        { source: 11, target: 12, weight: 0.93 },
-        { source: 11, target: 13, weight: 0.91 },
-      ],
-      labels: { 11: '高数', 12: '高数', 13: '高数' },
-    });
+  test('切到目录视图：回到文件夹层级（分类节点消失）', async () => {
     const { container } = renderGraph();
-    await waitFor(() => expect(container.querySelector('foreignObject')).toBeTruthy());
+    await waitFor(() =>
+      expect([...container.querySelectorAll('text')].map((t) => t.textContent)).toContain('极限与导数')
+    );
 
     fireEvent.click(screen.getByRole('button', { name: '目录视图：只看文件夹层级' }));
-    await waitFor(() => expect(container.querySelector('foreignObject')).toBeNull());
-
-    const dashed = [...container.querySelectorAll('line')].filter(
-      (l) => l.getAttribute('stroke-dasharray') === '3 3'
+    await waitFor(() =>
+      expect([...container.querySelectorAll('text')].map((t) => t.textContent)).not.toContain('极限与导数')
     );
-    expect(dashed).toHaveLength(0);
-    // 目录层级边必须还在：这一档只关语义层，不能把整张图关掉
+    // 目录层级边仍在：这一档只换组织方式，不能把整张图关掉
     expect(container.querySelectorAll('line').length).toBeGreaterThan(0);
   });
 
-  test('内容视图拿到向量边后：画虚线边、图例并按簇上色', async () => {
-    // 三个文件互相相似（>0.9）：应呈现为一个簇
-    getKgSemanticsMock.mockResolvedValue({
-      enabled: true,
-      model: 'bge-small-zh-v1.5',
-      files: 3,
-      edges: [
-        { source: 11, target: 12, weight: 0.93 },
-        { source: 11, target: 13, weight: 0.91 },
-        { source: 12, target: 13, weight: 0.9 },
-      ],
-      labels: { 11: '高数', 12: '高数', 13: '高数' },
-    });
-    // 内容视图数据是模块级共享缓存：换桩数据前必须清掉，否则会用上一个用例的结果
+  test('分类数据为空时给出提示，而不是空白', async () => {
+    getKgTaxonomyMock.mockResolvedValue({ enabled: true, groups: [], labels: {}, files: 0 });
     __resetKgSemanticsCache();
-    const { container } = renderGraph();
+    renderGraph();
+    expect(await screen.findByText(/内容索引里还没有可用资料/)).toBeTruthy();
+  });
 
-    await waitFor(() => expect(container.querySelector('foreignObject')).toBeTruthy());
-    // 内容视图的簇标签取「簇内最高频目录名」
-    expect(container.querySelector('foreignObject').textContent).toContain('高数');
-    const dashed = [...container.querySelectorAll('line')].filter(
-      (l) => l.getAttribute('stroke-dasharray') === '3 3'
-    );
-    expect(dashed.length).toBeGreaterThan(0);
-    // 节点按簇上色（inline fill 来自 --kg-cN）
-    const colored = [...container.querySelectorAll('circle')].filter((c) =>
-      /rgb\(1, 2, 3\)|rgb\(4, 5, 6\)/.test(c.getAttribute('fill') || '')
-    );
-    expect(colored.length).toBeGreaterThan(0);
+  test('分类接口失败时提示可切目录视图', async () => {
+    getKgTaxonomyMock.mockRejectedValue(new Error('offline'));
+    __resetKgSemanticsCache();
+    renderGraph();
+    expect(await screen.findByText(/内容索引读取失败/)).toBeTruthy();
   });
 });
 
-describe('内容视图：向量边成簇（纯函数）', () => {
+describe('内容分类建图（纯函数）', () => {
   const nodes = [
-    { id: 1, name: 'a.pdf', type: 'file' },
-    { id: 2, name: 'b.pdf', type: 'file' },
-    { id: 3, name: 'c.pdf', type: 'file' },
-    { id: 4, name: 'd.pdf', type: 'file' },
+    { id: 'f0', name: '首页', type: 'folder', isRoot: true },
+    { id: 'f1', name: '高数', type: 'folder' },
+    { id: 'f2', name: '足球', type: 'folder' },
+    { id: 'file11', name: 'a.pdf', type: 'file', meta: { folder_id: 1 } },
+    { id: 'file12', name: 'b.pdf', type: 'file', meta: { folder_id: 1 } },
+    { id: 'file13', name: 'c.pdf', type: 'file', meta: { folder_id: 1 } },
+    { id: 'file21', name: 'd.pdf', type: 'file', meta: { folder_id: 2 } },
   ];
-  const labels = { 1: '高数', 2: '高数', 3: '高数', 4: '足球' };
+  const parentOf = new Map([[1, null], [2, null]]);
 
-  test('只保留当前范围内的边（局部视图不会画到范围外的邻居）', () => {
-    const all = [
-      { source: 1, target: 2, weight: 0.9 },
-      { source: 1, target: 9, weight: 0.95 }, // 9 不在范围内
-    ];
-    const { edges } = buildVectorGraph(nodes, all, labels);
-    expect(edges).toHaveLength(1);
-    // 端点统一成图谱节点 id 形式（file<id>），否则永远接不上节点
-    expect(edges[0]).toMatchObject({ source: 'file1', target: 'file2' });
+  test('学科节点挂根目录，细分挂学科，文件挂细分', () => {
+    const { nodes: out, links } = buildTopicGraph(nodes, taxonomy, { parentOf });
+    const ids = out.map((n) => n.id);
+    expect(ids).toContain('f1'); // 学科节点复用目录节点（可点击进入）
+    expect(ids).toContain('k:1:0'); // 细分节点
+    expect(ids).toContain('file11');
+    // 根 → 学科 → 细分 → 文件
+    expect(links).toContainEqual({ source: 'f0', target: 'f1' });
+    expect(links).toContainEqual({ source: 'f1', target: 'k:1:0' });
+    expect(links).toContainEqual({ source: 'k:1:0', target: 'file11' });
+    // 目录层级边不该出现：文件不再挂在文件夹下
+    expect(links.some((l) => l.source === 'f1' && l.target === 'file11')).toBe(false);
   });
 
-  test('超过阈值的边把成员聚成一簇，标签取簇内最高频目录名', () => {
-    const { clusters } = buildVectorGraph(
-      nodes,
-      [
-        { source: 1, target: 2, weight: 0.9 },
-        { source: 2, target: 3, weight: 0.88 },
-      ],
-      labels
-    );
-    const big = clusters.find((c) => c.nodeIds.includes('file1'));
-    expect(big.nodeIds.sort()).toEqual(['file1', 'file2', 'file3']);
-    expect(big.label).toBe('高数');
-    // 离群文件自成一簇、没有标签（不会被硬塞进别人的簇）
-    const lone = clusters.find((c) => c.nodeIds.includes('file4'));
-    expect(lone.nodeIds).toEqual(['file4']);
-    expect(lone.label).toBeNull();
+  test('只画当前范围内的文件；不在范围里的分类不产生节点', () => {
+    const onlyHighMath = nodes.filter((n) => n.id !== 'file21' && n.id !== 'f2');
+    const { nodes: out } = buildTopicGraph(onlyHighMath, taxonomy, { parentOf });
+    const ids = out.map((n) => n.id);
+    expect(ids).not.toContain('file21');
+    expect(ids.some((id) => id.startsWith('k:2:'))).toBe(false);
   });
 
-  test('低于阈值的相似度只画线、不成簇（避免链式把整库串成一坨）', () => {
-    const weak = VECTOR_LINK_THRESHOLD - 0.01;
-    const { edges, clusters } = buildVectorGraph(
-      nodes,
-      [
-        { source: 1, target: 2, weight: weak },
-        { source: 2, target: 3, weight: weak },
-      ],
-      labels
-    );
-    expect(edges).toHaveLength(2); // 线照画
-    expect(clusters.every((c) => c.nodeIds.length === 1)).toBe(true); // 但不合并
+  test('未被索引的文件不进图（画了只会变成游离点）', () => {
+    const withScanner = [...nodes, { id: 'file99', name: '扫描件.pdf', type: 'file', meta: { folder_id: 1 } }];
+    const { nodes: out } = buildTopicGraph(withScanner, taxonomy, { parentOf });
+    expect(out.map((n) => n.id)).not.toContain('file99');
   });
 
-  test('桥接文件不能把两团单向拉近：非互为最近邻的强边不成簇', () => {
-    // 夹具要点：K=4，所以每个节点最多认 4 个最近邻，第 5 个强邻居就不再是「互为」——
-    // 节点 9 是那种「跟谁都像」的资料（和 1..5 都强相似），但它自己的前 4 名里没有 5，
-    // 于是 9—5 这条强边只画线、不把两团合并。
-    const wide = [
-      { id: 1, name: '一号.pdf' },
-      { id: 2, name: '二号.pdf' },
-      { id: 3, name: '三号.pdf' },
-      { id: 4, name: '四号.pdf' },
-      { id: 5, name: '五号.pdf' },
-      { id: 9, name: '九号.pdf' },
-    ];
-    const edges = [
-      // 1..4 内部近乎重复 → 必然成簇
-      { source: 1, target: 2, weight: 0.99 },
-      { source: 1, target: 3, weight: 0.98 },
-      { source: 1, target: 4, weight: 0.97 },
-      { source: 2, target: 3, weight: 0.96 },
-      { source: 2, target: 4, weight: 0.96 },
-      { source: 3, target: 4, weight: 0.95 },
-      // 9 与 1..4 以及 5 都强相似，但排名里 5 最靠后
-      { source: 9, target: 1, weight: 0.99 },
-      { source: 9, target: 2, weight: 0.98 },
-      { source: 9, target: 3, weight: 0.97 },
-      { source: 9, target: 4, weight: 0.96 },
-      { source: 9, target: 5, weight: 0.94 },
-    ];
-    const { edges: drawn, clusters } = buildVectorGraph(wide, edges, {});
-    // 所有强边都画出来（连线与成簇是两件事）
-    expect(drawn).toHaveLength(edges.length);
-    // 1..4 与 9 互为最近邻 → 合并成一簇；5 只被 9 单向认领（9 的前 4 名里没有 5）→ 不并入
-    const withOne = clusters.find((c) => c.nodeIds.includes('file1'));
-    expect(withOne.nodeIds.sort()).toEqual(['file1', 'file2', 'file3', 'file4', 'file9']);
-    const five = clusters.find((c) => c.nodeIds.includes('file5'));
-    expect(five.nodeIds).toEqual(['file5']);
+  test('只有一个文件的细分不建节点，但文件不能丢：直接挂到学科下', () => {
+    const { nodes: out, links } = buildTopicGraph(nodes, taxonomy, { parentOf });
+    // 「期中复习」只有一个文件（13）→ 不建 k:1:1，文件直接挂学科
+    expect(out.map((n) => n.id)).not.toContain('k:1:1');
+    expect(links).toContainEqual({ source: 'f1', target: 'file13' });
+    // 足球的细分也只有一个文件 → 同样不建节点，文件挂学科
+    expect(out.map((n) => n.id)).not.toContain('k:2:0');
+    expect(links).toContainEqual({ source: 'f2', target: 'file21' });
+    expect(out.map((n) => n.id)).toContain('f2');
+    // 关键：已建索引的文件一个都不该消失
+    for (const id of ['file11', 'file12', 'file13', 'file21']) {
+      expect(out.map((n) => n.id)).toContain(id);
+    }
+  });
+
+  test('学科不在当前范围时，它的细分挂到根目录（局部视图仍然可见）', () => {
+    const noFolderNodes = nodes.filter((n) => !String(n.id).match(/^f\d+$/) || n.id === 'f0');
+    const { nodes: out, links } = buildTopicGraph(noFolderNodes, taxonomy, { parentOf });
+    expect(out.map((n) => n.id)).toContain('k:1:0');
+    expect(links).toContainEqual({ source: 'f0', target: 'k:1:0' });
+  });
+
+  test('labelOfNode 从后端 labels 里取学科与细分的可读名字', () => {
+    expect(labelOfNode('f1', taxonomy.labels)).toBe('高数');
+    expect(labelOfNode('k:1:0', taxonomy.labels)).toBe('极限与导数');
+    expect(labelOfNode('k:9:9', taxonomy.labels)).toBeNull();
+    expect(labelOfNode('file11', taxonomy.labels)).toBeNull();
   });
 });

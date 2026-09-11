@@ -414,12 +414,36 @@ console.log('queued', enqueueAll());
 
 之后**新增资料无需手动操作**：上传接口与 `/api/sync` 都会自动入队。
 
-### 6.4 观察进度与排错
+### 6.4 内容分类（图谱「内容视图」的组织方式）
+
+图谱内容档按 `学科分类 → 内容细分 → 文件` 组织：大类是顶层学科目录，细分是该学科目录内按内容向量 k-means 的结果，细分名字由 LLM 起一次。
+
+- **首次访问会自动现算**：k-means 很快（约 50 ms），但 LLM 命名要按簇各调一次（本库 84 个细分约 50 次调用 / 273 秒）。结果写进 `taxonomy_cache`，之后请求毫秒级返回。
+- **想提前算好**（避免第一个访问的人等）：
+  ```bash
+  cd /opt/zyxf/backend && node -e "
+  const { getTaxonomy } = await import('./src/semanticTaxonomy.js');
+  const t = await getTaxonomy({ refresh: true });
+  console.log('groups', t.groups.length, 'llm', t.llm);
+  " --input-type=module
+  ```
+- **改了算法或想让 LLM 重新命名**：管理员 `POST /api/index/taxonomy/refresh`，或上面那条命令。
+- **没配 LLM 时**（`LLM_*` 三件套缺失）不会报错：细分名回落到「文件名里本细分独有的词」，仍起不出就不显示名字，结构照常可用。
+
+| 现象 | 原因 | 解决 |
+|---|---|---|
+| 细分节点没有名字 | 未配 LLM，且文件名里也找不出该细分独有的词 | 属预期；配好 `LLM_*` 后调一次 refresh 即可 |
+| 分类里看不到某些文件 | 它们没进内容索引（扫描件/老格式，占本库 39%） | 属预期：这些文件在「目录视图」里按文件夹浏览 |
+| 首次打开内容视图卡十几秒 | 正在现算分类 + LLM 命名 | 用上面那条命令预生成，或等首次算完（结果已缓存） |
+| 新增资料后分类没变 | 分类指纹未失效（缓存按「向量数量 + 最新时间」判定） | 管理员调一次 `/api/index/taxonomy/refresh` |
+
+### 6.5 观察进度与排错
 
 ```bash
 curl -s https://zyxf.top/api/index/status | jq '{totals, usage, pending}'
+curl -s https://zyxf.top/api/index/taxonomy | jq '{files, cached, llm, groups: (.groups|length)}'
 # 管理员登录后还会返回失败的 20 条（含文件名与错误原因）
-journalctl -u zyxf -f | grep '\[index\]'
+journalctl -u zyxf -f | grep -E '\[index\]|\[taxonomy\]'
 ```
 
 | 现象 | 原因 | 解决 |

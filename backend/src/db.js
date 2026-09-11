@@ -196,6 +196,16 @@ CREATE TABLE IF NOT EXISTS index_usage (
   day   TEXT PRIMARY KEY,       -- YYYY-MM-DD（本地时区）
   units INTEGER NOT NULL DEFAULT 0
 );
+
+-- 内容分类缓存：k-means 很快（50 ms），但细分命名要调 LLM（几十次、十几秒），
+-- 必须缓存下来，不能每次请求都问一遍。fingerprint 变了（新文件/新向量）自动重算。
+CREATE TABLE IF NOT EXISTS taxonomy_cache (
+  id          INTEGER PRIMARY KEY CHECK (id = 1),
+  version     INTEGER NOT NULL,
+  fingerprint TEXT NOT NULL,
+  payload     TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+);
 `);
 
 export function ensureAdmin(username, password) {

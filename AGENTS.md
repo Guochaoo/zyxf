@@ -26,7 +26,7 @@ zyxf/
 │   │   ├── pages/         # BrowsePage / DashboardPage / AuthPage（登录+注册） / AboutPage
 │   │   │                  #   页面级子模块：pages/Browse/、pages/Dashboard/（容器 + 数据 hook + 纯展示件）
 │   │   ├── components/    # 文件列表 / 预览 / 知识图谱 / 智能对话 / 菜单等
-│   │   │                  #   知识图谱的内容语义层（向量边收敛 / 成簇 / 配色）是同文件内导出的纯函数，见 §5
+│   │   │                  #   知识图谱的内容分类建图（学科/细分/文件三级）是同文件内导出的纯函数，见 §5
 │   │   └── test/          # vitest 测试（图谱：KnowledgeGraph.test.jsx 测纯函数、KnowledgeGraphView.test.jsx 测渲染）
 ├── docs/
 │   ├── DEPLOY.md          # 部署指南（systemd + nginx + HTTPS）
@@ -119,7 +119,8 @@ zyxf/
 
 ## 5. 前端纯函数与 i18n 边界
 
-- **可测的逻辑要写成导出的纯函数**，与组件同文件放（如 `KnowledgeGraph.jsx` 的向量边收敛 / 成簇 / 配色），便于 `frontend/src/test` 直接单测；组件里只留取数与渲染。
+- **可测的逻辑要写成导出的纯函数**，与组件同文件放（如 `KnowledgeGraph.jsx` 的内容分类建图 `buildTopicGraph`），便于 `frontend/src/test` 直接单测；组件里只留取数与渲染。
+- **图谱的建图纯函数必须自洽**：返回的边两端都要在返回的节点集里（局部子图可能不含根节点，而分类图的边都从根出发 —— d3 的 forceLink 遇到悬空端点会抛 `node not found` 并让整个画布崩掉）。
 - **i18n 只覆盖界面文案**：源码里不得硬编码中文文案（`test/i18n.test.js` 会扫）。唯一的例外是**领域数据**——分词停用字/词表这类"中文资料名切出来的 token"，不随语言切换，需在数据行上方用 `// i18n-exempt-cjk` 标注豁免（标记后到下一个空行之间的行都跳过检查）。
 
 ## 6. 内容索引与本地模型
@@ -127,3 +128,4 @@ zyxf/
 - **可选依赖要能降级**：`backend/models/` 里的嵌入模型不入库（.gitignore），缺失时 `isEmbeddingEnabled()` 返回 false、只抽正文不出向量，**不能因此让启动或上传失败**；运维可见性靠 `/api/index/status` 的 `embedding.error`。
 - **抽取是后台异步的**：新增 OSS 对象（上传 / `/api/sync`）只入队，由 `indexPipeline.js` 的 worker 单并发消化；不要在请求链路里下载解析（单个大 PDF 实测 154 MB / 20 s，会把请求拖死）。
 - **有成本的步骤要有配额**：嵌入等按天计数的动作走 `index_usage` 表（默认 2000/天），超限当轮跳过并在 status 里说明原因。
+- **LLM 只在整批、可缓存的地方用**：内容分类的细分命名按「簇」调用一次、结果落 `taxonomy_cache`（含 version + fingerprint，数据变了自动重算），不要按文件调用；没有 LLM 时必须能优雅回落（本处回落到文件名里的独有词，仍起不出就不显示名字）。
