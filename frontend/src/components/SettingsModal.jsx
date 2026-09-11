@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Bot, Check, ChevronDown, ChevronRight, CircleUserRound, Monitor, Moon, Palette, Play, Sun, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronLeft, ChevronRight, CircleUserRound, Monitor, Moon, Palette, Sun, X } from 'lucide-react';
 import { loadLlmCfg, saveLlmCfg, clearLlmCfg } from '../llmConfig.js';
 import { useAuth } from '../auth.jsx';
 import useTheme from '../hooks/useTheme.js';
@@ -236,9 +236,8 @@ export default function SettingsModal({ open, onClose }) {
                 onClick={inSubPage ? () => setPanel(null) : onClose}
               >
                 {isMobile ? (
-                  /* 手机端统一用「实心左三角」返回图标（参照 App 的「返回首页」）：
-                     lucide 没有 triangle-left，用 Play（同一个三角形）水平镜像 + 填充得到 */
-                  <Play size={22} strokeWidth={0} fill="currentColor" aria-hidden="true" />
+                  /* 手机端统一用「箭头的头」本身（‹ 那种 V 形，不带杆）：一级是关闭、二级是返回 */
+                  <ChevronLeft size={22} strokeWidth={2} aria-hidden="true" />
                 ) : (
                   <X size={20} strokeWidth={1.8} aria-hidden="true" />
                 )}
