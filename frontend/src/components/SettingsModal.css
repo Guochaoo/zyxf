@@ -40,15 +40,28 @@
   display: flex;
 }
 
-/* ---- 左栏 ---- */
+/* ---- 左栏 ----
+   底色与资料库左栏同款灰（--app-sidebar，#ECECEE），靠表面色差与右栏白底分区，
+   不再画分割细线（无界）；手机端整屏布局下改回透明，见文件末尾的媒体查询。 */
 .settings-sidebar {
   display: flex;
   flex-direction: column;
   width: 220px;
   flex-shrink: 0;
   padding: 14px 12px;
-  border-right: 1px solid var(--line);
+  background: var(--app-sidebar);
   overflow-y: auto;
+}
+
+/* 左栏标题（桌面端）：与右栏板块标题同一行高与 18px 起点，两栏标题对齐 */
+.settings-sidebar-title {
+  flex-shrink: 0;
+  padding: 4px 10px 12px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ink);
+  letter-spacing: 0.01em;
 }
 
 /* 关闭按钮固定在卡片右上角（内容列的标题左对齐，右上角是空白，不会压到文字）；
@@ -122,8 +135,9 @@
   color: var(--ink);
 }
 
+/* 选中条目：在灰底左栏上改用白底块（比 --hover 的加深更清楚，与手机端「灰页面 + 白卡片」同构） */
 .settings-nav-item--active {
-  background: var(--hover);
+  background: var(--surface);
   color: var(--ink);
 }
 
@@ -131,8 +145,7 @@
   outline: none;
 }
 
-/* 手机端列表行专用的元素（居中页面标题、行尾状态图标），桌面端隐藏 */
-.settings-mobile-title,
+/* 手机端列表行专用的元素（行尾状态图标），桌面端隐藏 */
 .settings-nav-arrow {
   display: none;
 }
@@ -594,8 +607,6 @@
     width: auto;
     padding: 0 12px;
     background: transparent;
-    border-right: 0;
-    border-bottom: 0;
     overflow-y: visible; /* 侧栏改成顶部条后不再单独滚动 */
   }
 
@@ -613,7 +624,6 @@
   }
 
   .settings-mobile-title {
-    display: block;
     font-size: 17px;
     font-weight: 600;
     line-height: 1.2; /* 固定行高，避免跟随系统字体把行撑高 */

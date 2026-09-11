@@ -230,8 +230,10 @@ export default function SettingsModal({
     >
       <div className="settings-card" onClick={(e) => e.stopPropagation()}>
         <div className="settings-layout">
-          {/* 左栏（手机端 = 顶部条 + 设置列表）：关闭 / 返回 + 垂直导航 */}
+          {/* 左栏（手机端 = 顶部条 + 设置列表）：关闭 / 返回 + 标题 + 垂直导航 */}
           <aside className="settings-sidebar">
+            {/* 桌面端左栏标题：与右栏板块标题对齐；手机端用顶部条的居中标题，不重复渲染 */}
+            {!isMobile && <h2 className="settings-sidebar-title">{t('settings.title')}</h2>}
             <div className="settings-sidebar-top">
               <button
                 type="button"
@@ -247,8 +249,10 @@ export default function SettingsModal({
                   <X size={20} strokeWidth={1.8} aria-hidden="true" />
                 )}
               </button>
-              {/* 手机端顶部条的居中标题（桌面端隐藏，见 CSS）：一级显示页面名，二级显示板块名 */}
-              <span className="settings-mobile-title">{inSubPage ? currentLabel : t('settings.title')}</span>
+              {/* 手机端顶部条的居中标题：一级显示页面名，二级显示板块名（桌面端由左栏标题承担） */}
+              {isMobile && (
+                <span className="settings-mobile-title">{inSubPage ? currentLabel : t('settings.title')}</span>
+              )}
             </div>
             {!inSubPage && (
               <nav className="settings-nav" aria-label={t('settings.navAria')}>

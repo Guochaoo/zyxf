@@ -349,4 +349,20 @@ describe('SettingsModal 手机端：两级结构', () => {
     expect(screen.queryByRole('button', { name: '返回' })).toBeNull();
     expect(screen.getByRole('button', { name: '关闭' })).toBeInTheDocument();
   });
+
+  // 桌面端左栏顶部新增「设置」标题；手机端仍用顶部条的居中标题，两者互斥渲染（同一个词只出现一次）
+  test('桌面端左栏有「设置」标题，手机端顶部标题不渲染', () => {
+    renderModal();
+
+    expect(document.querySelector('.settings-sidebar-title')).toHaveTextContent('设置');
+    expect(document.querySelector('.settings-mobile-title')).toBeNull();
+  });
+
+  test('手机端一级用顶部条标题，不渲染桌面端左栏标题', () => {
+    mockMobile();
+    renderModal();
+
+    expect(screen.getByText('设置')).toBeInTheDocument();
+    expect(document.querySelector('.settings-sidebar-title')).toBeNull();
+  });
 });
