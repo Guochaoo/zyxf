@@ -298,6 +298,12 @@
   padding: 12px 24px 18px;
 }
 
+/* 次级按钮在本条里跟主按钮配对展示，圆角对齐到 rb-btn-dark 的 14px（其他页面的
+   ghost 仍是 6px，属站点既有规范，不在此处统一） */
+.settings-actions .rb-btn-ghost {
+  border-radius: 14px;
+}
+
 /* ---- 账户信息 ---- */
 .settings-rows {
   margin: 0;
