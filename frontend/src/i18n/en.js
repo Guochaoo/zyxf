@@ -247,6 +247,7 @@ const en = {
     contentFailed: 'Could not load the content index — try the folder view',
     contentEmpty: 'The content index has no usable files yet (scans or unsupported formats) — try the folder view',
     contentEmptyHere: 'Nothing indexed here yet — try the folder view',
+    indexing: 'Building the content index ({{count}} pending)…',
     collapse: 'Collapse graph',
     expand: 'Expand graph',
     close: 'Close',

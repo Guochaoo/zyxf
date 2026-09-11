@@ -206,81 +206,136 @@ async function llmNames(subject, clusters, names, summaries = []) {
   }
 }
 
-/* ---------------- 组装分类 ---------------- */
-
-function subjectOf(file) {
-  // 文件的顶层学科目录：沿 parent_id 上溯到根
-  let folderId = file.folder_id;
-  let top = null;
-  let guard = 0;
-  while (folderId && guard < 50) {
-    const row = db.prepare('SELECT id, name, parent_id FROM folders WHERE id = ?').get(folderId);
-    if (!row) break;
-    top = row;
-    folderId = row.parent_id;
-    guard += 1;
-  }
-  return top ? { id: top.id, name: top.name } : { id: 0, name: '根目录' };
-}
+/* ---------------- 组装分类（按学科缓存） ---------------- */
 
 /**
- * 计算整库的内容分类（不写库）。
- * @returns {{ version, labels: Record<string, string>, groups: Array, files: number }}
- *   groups: [{ subjectId, subject, clusters: [{ key, name, fileIds }] }]
+ * 把文件按「顶层学科目录」分桶。
+ * folders 只有几十行，一次读进内存后自己上溯，避免每个文件都查库（原实现是 N 次查询）。
  */
-export async function deriveTaxonomy({ useLlm = true } = {}) {
+function loadSubjectBuckets() {
+  const folders = db.prepare('SELECT id, name, parent_id FROM folders').all();
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  const topOf = (folderId) => {
+    let cur = folderId ? byId.get(folderId) : null;
+    let top = null;
+    let guard = 0;
+    while (cur && guard < 50) {
+      top = cur;
+      cur = cur.parent_id ? byId.get(cur.parent_id) : null;
+      guard += 1;
+    }
+    return top;
+  };
+
   const rows = db
     .prepare(
-      `SELECT e.file_id id, e.vec, e.dim, f.name, f.folder_id
+      `SELECT e.file_id id, e.vec, e.dim, e.created_at vec_at, f.name, f.folder_id
        FROM file_embeddings e JOIN files f ON f.id = e.file_id`
     )
     .all();
-  if (!rows.length) {
-    return { version: TAXONOMY_VERSION, model: MODEL_NAME, labels: {}, groups: [], files: 0 };
-  }
 
-  const bySubject = new Map();
-  const meta = new Map();
+  const buckets = new Map();
   for (const r of rows) {
-    const subject = subjectOf(r);
-    const key = subject.id;
-    if (!bySubject.has(key)) bySubject.set(key, { ...subject, rows: [] });
-    bySubject.get(key).rows.push(r);
-    meta.set(r.id, r);
+    const top = topOf(r.folder_id);
+    const key = top ? top.id : 0;
+    if (!buckets.has(key)) buckets.set(key, { id: key, name: top ? top.name : '根目录', files: [] });
+    buckets.get(key).files.push(r);
+  }
+  for (const b of buckets.values()) {
+    b.files.sort((x, y) => x.id - y.id); // 稳定顺序：同样输入必须得到同样分类
+    // 指纹只覆盖本学科的向量集合：新增/删除/重算都会变，其他学科的变化不会影响它
+    const sig = b.files.map((f) => `${f.id}@${f.vec_at}`).join(',');
+    let h = 2166136261;
+    for (let i = 0; i < sig.length; i += 1) {
+      h ^= sig.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    b.fingerprint = `${TAXONOMY_VERSION}:${(h >>> 0).toString(16)}`;
+  }
+  return buckets;
+}
+
+/** 算一个学科的分类（k-means + 命名），不写库。 */
+async function buildSubjectGroup(bucket, { useLlm, llmBudget }) {
+  const list = bucket.files;
+  // 向量在 loadSubjectBuckets 里一次读完（BLOB），只有真要重算的学科才解析成 Float32Array
+  const vectors = list.map((f) => blobToFloat32(f.vec));
+  const k =
+    list.length < MIN_FILES_FOR_SPLIT
+      ? 1
+      : Math.max(1, Math.min(MAX_CLUSTERS, Math.round(list.length / FILES_PER_CLUSTER)));
+  const { assign } = kmeans(vectors, k);
+  const clusters = Array.from({ length: k }, (_, c) => list.map((_, i) => i).filter((i) => assign[i] === c));
+  const names = list.map((f) => f.name);
+
+  let labels = fallbackNames(clusters, names);
+  if (useLlm && llmBudget.left > 0 && k > 1) {
+    llmBudget.left -= 1;
+    const fromLlm = await llmNames(bucket.name, clusters, names);
+    if (fromLlm) labels = labels.map((f, i) => fromLlm[i] || f);
   }
 
+  // 细分按成员数排序（稳定）；单成员的细分不建节点、文件直接挂在学科下
+  const built = clusters
+    .map((members, c) => ({ members, name: labels[c] || null }))
+    .filter((c) => c.members.length > 0)
+    .sort((a, b) => b.members.length - a.members.length || a.members[0] - b.members[0])
+    .map((c, idx) => ({
+      key: `${bucket.id}:${idx}`,
+      name: c.name,
+      fileIds: c.members.map((i) => list[i].id),
+    }));
+
+  return { subjectId: bucket.id, subject: bucket.name, clusters: built };
+}
+
+function readCachedGroup(subjectId, fingerprint) {
+  const row = db
+    .prepare('SELECT version, fingerprint, payload FROM taxonomy_subjects WHERE subject_id = ?')
+    .get(subjectId);
+  if (!row || row.version !== TAXONOMY_VERSION || row.fingerprint !== fingerprint) return null;
+  try {
+    return JSON.parse(row.payload);
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedGroup(subjectId, fingerprint, group) {
+  try {
+    db.prepare(
+      `INSERT INTO taxonomy_subjects (subject_id, version, fingerprint, payload, created_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(subject_id) DO UPDATE SET version = excluded.version,
+         fingerprint = excluded.fingerprint, payload = excluded.payload, created_at = excluded.created_at`
+    ).run(subjectId, TAXONOMY_VERSION, fingerprint, JSON.stringify(group), Date.now());
+  } catch (e) {
+    console.warn('[taxonomy] 学科缓存写入失败（不影响本次返回）:', e.message);
+  }
+}
+
+/**
+ * 计算整库的内容分类：**按学科读写缓存**。
+ * 命中缓存的学科直接复用（连 k-means 都不跑），只有指纹变了的学科才重算 + 重新 LLM 命名。
+ * @returns {{ version, labels, groups, files, rebuilt, reused, llm }}
+ */
+export async function deriveTaxonomy({ useLlm = true, refresh = false } = {}) {
+  const buckets = loadSubjectBuckets();
+  const llmBudget = { left: MAX_LLM_CALLS };
   const out = [];
-  let llmBudget = MAX_LLM_CALLS;
-  for (const [key, group] of bySubject) {
-    const list = group.rows.slice().sort((a, b) => a.id - b.id); // 稳定顺序
-    const vectors = list.map((r) => blobToFloat32(r.vec));
-    const k =
-      list.length < MIN_FILES_FOR_SPLIT
-        ? 1
-        : Math.max(1, Math.min(MAX_CLUSTERS, Math.round(list.length / FILES_PER_CLUSTER)));
-    const { assign } = kmeans(vectors, k);
-    const clusters = Array.from({ length: k }, (_, c) => list.map((_, i) => i).filter((i) => assign[i] === c));
-    const names = list.map((r) => r.name);
+  let rebuilt = 0;
+  let reused = 0;
 
-    let labels = fallbackNames(clusters, names);
-    if (useLlm && llmBudget > 0 && k > 1) {
-      llmBudget -= 1;
-      const fromLlm = await llmNames(group.name, clusters, names);
-      if (fromLlm) labels = labels.map((f, i) => fromLlm[i] || f);
+  for (const bucket of [...buckets.values()].sort((a, b) => a.id - b.id)) {
+    let group = refresh ? null : readCachedGroup(bucket.id, bucket.fingerprint);
+    if (group) {
+      reused += 1;
+    } else {
+      group = await buildSubjectGroup(bucket, { useLlm, llmBudget });
+      writeCachedGroup(bucket.id, bucket.fingerprint, group);
+      rebuilt += 1;
     }
-
-    // 细分按成员数排序（稳定），单成员的细分不建节点、文件直接挂在学科下
-    const built = clusters
-      .map((members, c) => ({ members, name: labels[c] || null }))
-      .filter((c) => c.members.length > 0)
-      .sort((a, b) => b.members.length - a.members.length || a.members[0] - b.members[0])
-      .map((c, idx) => ({
-        key: `${key}:${idx}`,
-        name: c.name,
-        fileIds: c.members.map((i) => list[i].id),
-      }));
-
-    out.push({ subjectId: key, subject: group.name, clusters: built });
+    out.push(group);
   }
 
   // 大类按文件数降序、根目录排最后
@@ -298,51 +353,23 @@ export async function deriveTaxonomy({ useLlm = true } = {}) {
     llm: isLlmEnabled() && useLlm,
     labels,
     groups: out,
-    files: rows.length,
+    files: bucketsValuesFileCount(buckets),
+    rebuilt,
+    reused,
   };
 }
 
-export function isTaxonomyAvailable() {
-  return isEmbeddingEnabled();
-}
-
-/** 指纹：向量集合变了（新增/重算）或算法版本变了就失效。用「数量 + 最新时间 + 版本」足够便宜。 */
-function fingerprint() {
-  const row = db
-    .prepare('SELECT COUNT(*) c, COALESCE(MAX(created_at), 0) t FROM file_embeddings')
-    .get();
-  return `${TAXONOMY_VERSION}:${row.c}:${row.t}`;
+function bucketsValuesFileCount(buckets) {
+  let n = 0;
+  for (const b of buckets.values()) n += b.files.length;
+  return n;
 }
 
 /**
- * 读取分类：命中缓存直接返回；否则重算并落库。
- * 分类是整库级别、变化很慢的数据，缓存让「切档看图」不再触发 k-means 与 LLM 调用。
+ * 读取分类（对外入口）。`refresh` 只用于管理员强制重算；
+ * 日常请求靠每学科指纹自动判断，命中即返回。
  */
 export async function getTaxonomy({ refresh = false, useLlm = true } = {}) {
-  const fp = fingerprint();
-  if (!refresh) {
-    const cached = db.prepare('SELECT version, fingerprint, payload FROM taxonomy_cache WHERE id = 1').get();
-    if (cached && cached.version === TAXONOMY_VERSION && cached.fingerprint === fp) {
-      try {
-        const payload = JSON.parse(cached.payload);
-        payload.cached = true;
-        return payload;
-      } catch {
-        /* 缓存坏了就重算 */
-      }
-    }
-  }
-  const payload = await deriveTaxonomy({ useLlm });
-  try {
-    db.prepare(
-      `INSERT INTO taxonomy_cache (id, version, fingerprint, payload, created_at) VALUES (1, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET version = excluded.version, fingerprint = excluded.fingerprint,
-         payload = excluded.payload, created_at = excluded.created_at`
-    ).run(TAXONOMY_VERSION, fp, JSON.stringify({ ...payload, cached: false }), Date.now());
-  } catch (e) {
-    console.warn('[taxonomy] 缓存写入失败（不影响本次返回）:', e.message);
-  }
-  return { ...payload, cached: false };
+  const payload = await deriveTaxonomy({ useLlm, refresh });
+  return { ...payload, cached: payload.rebuilt === 0 && payload.reused > 0 };
 }
-
-export const TAXONOMY_CONST = { FILES_PER_CLUSTER, MIN_FILES_FOR_SPLIT };
