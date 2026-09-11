@@ -246,6 +246,7 @@ const zh = {
     contentFailed: '内容索引读取失败，可切到目录视图',
     contentEmpty: '内容索引里还没有可用资料（扫描件或暂不支持格式），可切到目录视图',
     contentEmptyHere: '这里还没有已建立内容索引的资料，可切到目录视图',
+    indexing: '正在建立内容索引（{{count}} 个待处理）…',
     collapse: '收起图谱',
     expand: '展开图谱',
     close: '关闭',

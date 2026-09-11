@@ -81,6 +81,29 @@ describe('知识图谱视图（渲染层）', () => {
     document.documentElement.style.setProperty('--kg-c2', 'rgb(4, 5, 6)');
   });
 
+  test('分类数据变化（folders-changed）后重新拉取，并显示索引进行中的提示', async () => {
+    // 第一次：还有待索引文件（刚上传），应显示「正在建立内容索引」
+    getKgTaxonomyMock.mockResolvedValue({ ...taxonomy, pending: 3 });
+    const { container, rerender } = render(
+      <MemoryRouter>
+        <KnowledgeGraph currentId={1} />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText(/正在建立内容索引/)).toBeTruthy();
+
+    // 上传完成 → 广播变更：应该重新请求（模块级缓存要被清掉，否则新文件永远不出现）
+    const callsBefore = getKgTaxonomyMock.mock.calls.length;
+    getKgTaxonomyMock.mockResolvedValue({ ...taxonomy, pending: 0 });
+    fireEvent(window, new Event('folders-changed'));
+    await waitFor(() =>
+      expect(getKgTaxonomyMock.mock.calls.length).toBeGreaterThan(callsBefore)
+    );
+    // pending 归零后提示消失
+    await waitFor(() => expect(screen.queryByText(/正在建立内容索引/)).toBeNull());
+    expect(container.querySelectorAll('circle').length).toBeGreaterThan(0);
+    rerender(<div />);
+  });
+
   test('首页（根目录）显示学科节点，而不是空态', async () => {
     // 首页的局部范围只有目录、没有文件——学科节点的存在**不能**依赖「它的文件在范围内」，
     // 否则 53 个学科全被跳过、首页直接显示「没有可用资料」（线上就是这么空掉的）。

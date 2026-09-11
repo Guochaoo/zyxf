@@ -95,9 +95,9 @@ cd frontend && npm install && npm run dev
 
 后两类没有内容语义，只能靠**目录视图**浏览，所以内容视图覆盖约 **61%** 的资料——上限由资料本身决定，OCR 是下一轮的事。
 
-- 索引是**后台异步**做的：上传、`/api/sync` 后自动入队，单并发处理，不阻塞请求。
+- 索引是**后台异步**做的：上传、`/api/sync` 后自动入队，单并发处理，不阻塞请求。图谱会显示「正在建立内容索引（N 个待处理）…」并每 5 秒自动刷新，直到新资料进入分类。
 - 进度与失败原因：`GET /api/index/status`；管理员可用 `POST /api/index/rebuild` 重建。
-- 语义分类：`GET /api/index/taxonomy`（结果缓存，首次现算含 LLM 命名）；管理员可用 `POST /api/index/taxonomy/refresh` 强制重算。
+- 语义分类：`GET /api/index/taxonomy`（**按学科缓存**，新增一个文件只重算它所在的学科）；管理员可用 `POST /api/index/taxonomy/refresh` 强制全部重算。
 - 降级：没装模型时只抽正文；没有分类数据时图谱内容视图给出提示，可一键切到目录视图（图谱只有这两档）。
 
 ## 项目结构

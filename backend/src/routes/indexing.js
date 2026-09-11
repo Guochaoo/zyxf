@@ -58,6 +58,9 @@ router.get('/taxonomy', taxonomyLimiter, wrapAsync(async (req, res) => {
     llm: Boolean(taxonomy.llm),
     cached: Boolean(taxonomy.cached),
     files: taxonomy.files,
+    // 索引是异步的：刚上传的文件在向量生成前不会出现在分类里。
+    // 把待处理数回给前端，让它提示「正在建立索引」并稍后自动重拉，而不是让用户以为文件丢了。
+    pending: pendingCount(),
     groups: taxonomy.groups,
     labels,
   });

@@ -38,6 +38,7 @@ let viewModePersistent = DEFAULT_VIEW_MODE;
 /**
  * 内容分类数据在模块级去重：分类是整库级别的数据，右栏组件随路由卸载重建，
  * 用一个共享的在途 Promise 保证「同时挂载/来回切档只发一次请求」。
+ * 上传/同步/改名后由 `folders-changed` 事件清掉它（见下面的 effect），否则新文件永远不出现。
  */
 let kgTaxonomyInflight = null;
 function loadKgTaxonomy() {
@@ -50,6 +51,11 @@ function loadKgTaxonomy() {
       });
   }
   return kgTaxonomyInflight;
+}
+
+/** 清掉分类缓存，让下一次读取重新请求（索引是异步的，所以可能要清多次）。 */
+export function invalidateKgTaxonomy() {
+  kgTaxonomyInflight = null;
 }
 
 /** 仅供测试：清掉分类共享缓存与档位记忆。 */
@@ -329,11 +335,26 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
   const [viewMode, setViewMode] = useState(viewModePersistent);
   const [taxonomy, setTaxonomy] = useState(null);
   const [contentState, setContentState] = useState('idle'); // idle | loading | ready | error
+  // 数据代际：上传/同步等变更（folders-changed）后自增，驱动重新拉取分类
+  const [dataEpoch, setDataEpoch] = useState(0);
+  // 索引还没跑完时（刚上传），隔几秒自动重拉，直到 pending 归零
+  const pendingRetryRef = useRef(0);
   const { tree, rootFiles, loading } = useFolderTree();
+
+  useEffect(() => {
+    const onChanged = () => {
+      invalidateKgTaxonomy();
+      pendingRetryRef.current = 0;
+      setDataEpoch((v) => v + 1);
+    };
+    window.addEventListener('folders-changed', onChanged);
+    return () => window.removeEventListener('folders-changed', onChanged);
+  }, []);
 
   useEffect(() => {
     if (viewMode !== 'content') return undefined;
     let alive = true;
+    let retry = null;
     setContentState((prev) => (prev === 'idle' || prev === 'error' ? 'loading' : prev));
     loadKgTaxonomy()
       .then((data) => {
@@ -344,14 +365,24 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
         }
         setTaxonomy(data);
         setContentState('ready');
+        // 还有待索引的文件（刚上传/刚同步）：分类迟一点才完整，隔几秒自动再来一次。
+        // 上限约 1 分钟——之后交给用户手动刷新，不无限轮询。
+        if (data.pending > 0 && pendingRetryRef.current < 12) {
+          pendingRetryRef.current += 1;
+          retry = setTimeout(() => {
+            invalidateKgTaxonomy();
+            setDataEpoch((v) => v + 1);
+          }, 5000);
+        }
       })
       .catch(() => {
         if (alive) setContentState('error');
       });
     return () => {
       alive = false;
+      if (retry) clearTimeout(retry);
     };
-  }, [viewMode]);
+  }, [viewMode, dataEpoch]);
 
   // Full graph only depends on the tree + root files: keep it stable across
   // folder navigation so browsing doesn't re-walk/re-allocate the whole library.
@@ -532,6 +563,17 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
             clusterNodes={canvasData.clusters.map((c) => new Set(c.nodeIds))}
             labels={labels}
           />
+        )}
+        {/* 索引还在跑（刚上传/刚同步）：新资料还没进分类，明确说出来，避免以为文件没上传成功 */}
+        {viewMode === 'content' && taxonomy?.pending > 0 && !collapsed && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-1 flex justify-center">
+            <span
+              className="rounded px-1.5 py-0.5 text-[10px] leading-4"
+              style={{ color: 'var(--ink-2)', background: 'var(--inset)' }}
+            >
+              {t('kg.indexing', { count: taxonomy.pending })}
+            </span>
+          </div>
         )}
       </div>
 

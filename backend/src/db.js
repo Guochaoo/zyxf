@@ -197,15 +197,19 @@ CREATE TABLE IF NOT EXISTS index_usage (
   units INTEGER NOT NULL DEFAULT 0
 );
 
--- 内容分类缓存：k-means 很快（50 ms），但细分命名要调 LLM（几十次、十几秒），
--- 必须缓存下来，不能每次请求都问一遍。fingerprint 变了（新文件/新向量）自动重算。
-CREATE TABLE IF NOT EXISTS taxonomy_cache (
-  id          INTEGER PRIMARY KEY CHECK (id = 1),
+-- 内容分类缓存：k-means 很快（每学科几十 ms），但细分命名要调 LLM（每次几秒），必须缓存。
+-- **按学科一行**而不是整库一行：整库指纹一有新文件就整库失效 → 上传 1 个文件要重新命名
+-- 全部 50+ 个细分（实测 273 秒，还是在请求里同步跑）。k-means 本来就按学科独立，
+-- 所以按学科缓存天然成立：上传一个文件只重算它所在的那个学科。
+CREATE TABLE IF NOT EXISTS taxonomy_subjects (
+  subject_id  INTEGER PRIMARY KEY,  -- 顶层学科目录 id（0 = 根目录下的文件）
   version     INTEGER NOT NULL,
   fingerprint TEXT NOT NULL,
   payload     TEXT NOT NULL,
   created_at  INTEGER NOT NULL
 );
+-- 旧版整库单行缓存已被上面按学科的表取代（纯缓存，无数据价值）
+DROP TABLE IF EXISTS taxonomy_cache;
 `);
 
 export function ensureAdmin(username, password) {
