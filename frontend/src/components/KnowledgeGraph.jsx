@@ -229,9 +229,8 @@ export function buildSemanticNodes(nodes) {
   }));
 }
 
-/** 语义边：同类型节点之间，共享主题 token 达到阈值即连边（权重 = idf 加权重合度）。 */
-export function buildSemanticEdges(semanticNodes) {
-  const nodes = Array.isArray(semanticNodes) ? semanticNodes : [];
+/** 主题索引：文档频次 → idf、每个节点的主题 token 与总权重。buildSemanticEdges 的唯一前置。 */
+function buildThemeIndex(nodes) {
   const docFreq = new Map();
   for (const n of nodes) {
     for (const t of n.tokens) docFreq.set(t, (docFreq.get(t) || 0) + 1);
@@ -244,7 +243,7 @@ export function buildSemanticEdges(semanticNodes) {
   for (const n of nodes) {
     // 单字 token 不参与成簇：停用字切出的「案」「章」在库内是 df 80+ 的套话碎片
     // （答案/第X章），两个文件各命中一个就能凑够 2 个共享 token，实测会把 908 个节点里的
-    // 331 个连成一簇。纯缩写（「高数.pdf」切完只剩「高」）由下面的同目录弱边兜底接回去，
+    // 331 个连成一簇。纯缩写（「高数.pdf」切完只剩「高」）由同目录弱边兜底接回去，
     // 不走这条「单字也算主题」的路，否则「高」和「案」又能把全库连起来。
     themeTokens.set(
       n.id,
@@ -253,6 +252,33 @@ export function buildSemanticEdges(semanticNodes) {
   }
   const weights = new Map();
   for (const n of nodes) weights.set(n.id, themeTokens.get(n.id).reduce((sum, t) => sum + idf(t), 0));
+  return { docFreq, idf, themeTokens, weights };
+}
+
+/** 候选对：只取「共享至少一个非套话主题 token」的节点对（按 id 去重）。 */
+function collectThemePairs(nodes, themeTokens) {
+  const postings = new Map(); // token → 含它的节点 id
+  for (const n of nodes) {
+    for (const t of themeTokens.get(n.id)) {
+      if (!postings.has(t)) postings.set(t, []);
+      postings.get(t).push(n.id);
+    }
+  }
+  const pairs = new Set();
+  for (const ids of postings.values()) {
+    for (let i = 0; i < ids.length; i += 1) {
+      for (let j = i + 1; j < ids.length; j += 1) {
+        pairs.add(ids[i] < ids[j] ? `${ids[i]}|${ids[j]}` : `${ids[j]}|${ids[i]}`);
+      }
+    }
+  }
+  return [...pairs].map((k) => k.split('|'));
+}
+
+/** 语义边：同类型节点之间，共享主题 token 达到阈值即连边（权重 = idf 加权重合度）。 */
+export function buildSemanticEdges(semanticNodes) {
+  const nodes = Array.isArray(semanticNodes) ? semanticNodes : [];
+  const { idf, themeTokens, weights } = buildThemeIndex(nodes);
 
   const edges = [];
   const connect = (a, b) => {
@@ -269,16 +295,17 @@ export function buildSemanticEdges(semanticNodes) {
     edges.push({ source: a.id, target: b.id, weight: shared.length, tokens: shared });
   };
 
-  const fileNodes = [];
-  const folderNodes = [];
-  for (const n of nodes) (n.type === 'file' ? fileNodes : folderNodes).push(n);
-
-  // 只比同类型：跨类型时「文件夹名必是其子节点 token 的子集」，会把整棵子树连成星形巨簇。
-  for (const list of [fileNodes, folderNodes]) {
-    for (let i = 0; i < list.length; i += 1) {
-      for (let j = i + 1; j < list.length; j += 1) connect(list[i], list[j]);
-    }
+  // 候选对来自倒排表而不是全库两两比对：全量比对在 908 节点上实测 54 ms（本层唯一的
+  // 耗时点），而绝大多数节点对连一个主题 token 都不共享。判据一个字没改——这里只是把
+  // 「必然不满足 shared ≥ 2」的对提前排除。
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  for (const [aId, bId] of collectThemePairs(nodes, themeTokens)) {
+    const a = byId.get(aId);
+    const b = byId.get(bId);
+    // 只比同类型：跨类型时「文件夹名必是其子节点 token 的子集」，会连成星形巨簇。
+    if (a && b && a.type === b.type) connect(a, b);
   }
+  const fileNodes = nodes.filter((n) => n.type === 'file');
 
   // 兜底：文件名本身没有任何 token（例如「2019.6.18.pdf」这种纯日期）时，同目录至少还算
   // 相关，连一条权重 1 的弱边。判据必须是「token 为空」而不是「主题为空」——按后者的话，
