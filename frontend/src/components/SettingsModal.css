@@ -583,7 +583,7 @@
   }
 
   /* 顶部条 + 导航：包在白卡片外的顶部区域，导航自己是一张白卡片。
-     上方只留 2px（标题行自身会把文字居中），标题行到列表卡片留 14px —— 视觉上「上紧下松」。
+     标题行**不加上内边距**（行高 40px 自会把文字与圆按钮居中），标题行到列表卡片留 14px。
      index.html 没开 viewport-fit=cover，故不需要 env(safe-area-inset-*)：常规浏览与 iOS
      独立窗口下，浏览器本来就把布局视口排在状态栏/刘海之下。 */
   .settings-sidebar {
@@ -592,7 +592,7 @@
     align-items: center;
     gap: 14px;
     width: auto;
-    padding: 2px 12px 0;
+    padding: 0 12px;
     background: transparent;
     border-right: 0;
     border-bottom: 0;
