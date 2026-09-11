@@ -249,6 +249,7 @@ const en = {
     loadingAria: 'Clear',
     failed: 'Search failed, please retry',
     retry: 'Retry',
+    resultsTruncated: 'Showing only the first {{count}} results',
   },
   tree: {
     title: 'Browse',

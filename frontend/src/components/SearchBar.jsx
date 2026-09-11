@@ -232,7 +232,11 @@ export default function SearchBar({ className = '' }) {
             </div>
           )}
           <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-400">
-            {err ? t('search.failed') : t('search.resultsCount', { count: total })}
+            {err
+              ? t('search.failed')
+              : results?.truncated
+                ? t('search.resultsTruncated', { count: total })
+                : t('search.resultsCount', { count: total })}
           </div>
         </div>,
         document.body

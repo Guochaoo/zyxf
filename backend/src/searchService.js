@@ -76,26 +76,32 @@ function buildFolderPaths(folders) {
   return paths;
 }
 
+// 排序 + 截断。返回 { items, total }：total 是命中总数（截断前），
+// 供接口回传「显示 20 / 共 N 条」，避免前端把截断值当总数展示（IMPROVE-20）。
 function rank(items, limit) {
-  return items
+  const sorted = items
     .filter(Boolean)
-    .sort((a, b) => b.score - a.score || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
-    .slice(0, limit)
-    .map(({ score, ...item }) => item);
+    .sort((a, b) => b.score - a.score || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return {
+    items: sorted.slice(0, limit).map(({ score, ...item }) => item),
+    total: sorted.length,
+  };
 }
 
 /**
  * 全库智能检索（名称前缀/子串、汉字缩写、拼音、文件夹路径）。
  * 同时服务 /api/search 路由与 AI 聊天的 search_files 工具。
+ * @returns {{ folders: object[], files: object[], truncated: boolean }}
+ *   folders/files 已按 limit 截断；truncated 表示两类中至少一类被截断。
  */
 export function searchLibrary(q, { limit = 20 } = {}) {
   const query = (q || '').trim().toLowerCase().slice(0, MAX_QUERY_LEN);
-  if (!query) return { folders: [], files: [] };
+  if (!query) return { folders: [], files: [], truncated: false };
 
   const { folders, files } = getLibrarySnapshot();
   const folderPaths = buildFolderPaths(folders);
 
-  const rankedFolders = rank(
+  const matchedFolders = rank(
     folders.map((f) => {
       const score = matchScore(query, f.name);
       return score == null ? null : { ...f, type: 'folder', score };
@@ -103,7 +109,7 @@ export function searchLibrary(q, { limit = 20 } = {}) {
     limit
   );
 
-  const rankedFiles = rank(
+  const matchedFiles = rank(
     files.map((f) => {
       const path = f.folder_id ? folderPaths.get(f.folder_id) : '';
       let score = matchScore(query, f.name);
@@ -116,7 +122,11 @@ export function searchLibrary(q, { limit = 20 } = {}) {
     limit
   );
 
-  return { folders: rankedFolders, files: rankedFiles };
+  return {
+    folders: matchedFolders.items,
+    files: matchedFiles.items,
+    truncated: matchedFolders.total > matchedFolders.items.length || matchedFiles.total > matchedFiles.items.length,
+  };
 }
 
 /** 顶层目录清单（id + 名称），给 AI 的 system prompt 定向用。 */

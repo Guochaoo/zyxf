@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
 import { app } from '../src/index.js';
 import { mimeOf } from '../src/mime.js';
+import { MAX_SUBTREE_MOVE_ITEMS } from '../src/routes/folders.js';
 import { ALLOWED_EXTS, isExtAllowed } from '../src/extPolicy.js';
 import { ossObjectStore } from './setup.js';
 
@@ -360,6 +361,58 @@ describe('IMPROVE-15：目录树快照缓存与写路径失效', () => {
     } finally {
       process.env.NODE_ENV = prev;
     }
+  });
+});
+
+describe('IMPROVE-20：搜索结果带截断标志', () => {
+  test('命中超过每类上限时 truncated=true，且两类各自最多 20 条', async () => {
+    for (let i = 0; i < 25; i++) {
+      insertFile({ name: `trunc${i}.pdf`, ossKey: `zyxf-test/trunc${i}.pdf`, ext: 'pdf' });
+    }
+    const r = await request('GET', '/api/search?q=trunc');
+    assert.equal(r.status, 200);
+    assert.equal(r.body.files.length, 20, '每类最多 20 条');
+    assert.equal(r.body.truncated, true);
+  });
+
+  test('未截断时 truncated=false；空查询结构一致', async () => {
+    insertFile({ name: 'only.pdf', ossKey: 'zyxf-test/only.pdf', ext: 'pdf' });
+    const one = await request('GET', '/api/search?q=only');
+    assert.equal(one.body.truncated, false);
+    assert.equal(one.body.files.length, 1);
+
+    const empty = await request('GET', '/api/search?q=');
+    assert.deepEqual(empty.body, { folders: [], files: [], truncated: false });
+  });
+});
+
+describe('IMPROVE-17：子树搬迁的规模阈值', () => {
+  test('超过阈值时 409 且不写库；阈值内仍可正常改名', async () => {
+    const token = await adminToken();
+    const parent = insertFolder('容量测试');
+    // 阈值内：2 个文件 + 1 个文件夹 = 3 项，正常改名
+    insertFile({ name: 'a.pdf', folderId: parent, ossKey: 'zyxf-test/容量测试/a.pdf', ext: 'pdf' });
+    insertFile({ name: 'b.pdf', folderId: parent, ossKey: 'zyxf-test/容量测试/b.pdf', ext: 'pdf' });
+    const ok = await request('PATCH', `/api/folders/${parent}`, { token, body: { name: '改过了' } });
+    assert.equal(ok.status, 200);
+    assert.equal(db.prepare('SELECT name FROM folders WHERE id = ?').get(parent).name, '改过了');
+
+    // 构造超过阈值的子树
+    const big = insertFolder('大目录', null);
+    const ins = db.prepare(
+      'INSERT INTO files (folder_id, name, oss_key, size, mime_type, ext, created_at) VALUES (?, ?, ?, 10, ?, ?, ?)'
+    );
+    const N = MAX_SUBTREE_MOVE_ITEMS + 1;
+    for (let i = 0; i < N; i++) {
+      ins.run(big, `f${i}.pdf`, `zyxf-test/大目录/f${i}.pdf`, mimeOf('pdf'), 'pdf', Date.now());
+    }
+    const rejected = await request('PATCH', `/api/folders/${big}`, { token, body: { name: '不该成功' } });
+    assert.equal(rejected.status, 409);
+    assert.equal(db.prepare('SELECT name FROM folders WHERE id = ?').get(big).name, '大目录');
+    // 移动分支同样受限
+    const moved = await request('PATCH', `/api/folders/${big}`, { token, body: { parent_id: parent } });
+    assert.equal(moved.status, 409);
+    assert.equal(db.prepare('SELECT parent_id FROM folders WHERE id = ?').get(big).parent_id, null);
   });
 });
 
