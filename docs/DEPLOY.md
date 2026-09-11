@@ -380,9 +380,11 @@ nginx -t && systemctl reload nginx
   /www/server/nginx/sbin/nginx -t && /www/server/nginx/sbin/nginx -s reload
   ```
 
-- **静态资源必须有 `Cache-Control`**（BUG-100）。宝塔默认对 `/assets/`、`/fonts/`、`/favicon.png` **一个缓存头都不下发**，浏览器于是退回「10% × (Date − Last-Modified)」的启发式缓存：带 hash 的构建产物无法长缓存，21.7 MB 的字体每次冷启动都要重新协商。必须补两类 location：
-  - `location /assets/`（**文件名带内容 hash**）→ `Cache-Control: public, max-age=31536000, immutable` + `try_files $uri =404`；
-  - `location ~* \.(?:ttf|otf|woff2?|png|jpe?g|webp|gif|svg|ico)$`（**文件名无 hash**）→ `max-age=604800`。⚠️ `/fonts/`、`/images/` 不在 `/assets/` 覆盖范围内，少了这条正则，字体与图片依然没有缓存头。
+- **静态资源必须有 `Cache-Control`**（BUG-100）。宝塔默认对 `/assets/`、`/fonts/`、`/favicon.png` **一个缓存头都不下发**，浏览器于是退回「10% × (Date − Last-Modified)」的启发式缓存：带 hash 的构建产物无法长缓存，字体每次冷启动都要重新协商。必须补两类 location：
+  - `location ^~ /assets/`（**文件名带内容 hash**，含 `opposans-subset-<hash>.woff2`）→ `Cache-Control: public, max-age=31536000, immutable` + `try_files $uri =404`；
+  - `location ~* \.(?:ttf|otf|woff2?|png|jpe?g|webp|gif|svg|ico)$`（**文件名无 hash**，如 `/favicon.png`、`/images/*.webp`）→ `max-age=604800`。
+  - ⚠️ **`^~` 不能省**：nginx 的**正则 location 优先级高于普通前缀 location**，而上面那条扩展名正则也含 `woff2`——写成普通 `location /assets/` 时 `/assets/*.woff2` 会被正则抢走、只拿到 7 天（线上实测确认过）。`^~` 的含义是「本前缀命中后不再检查正则」。
+  - ⚠️ `/images/` 与 `/fonts/`（授权声明）不在 `/assets/` 覆盖范围内，少了那条正则，它们依然没有任何缓存头。
 - **安全头必须逐 location 重复声明**。`add_header` **不会被子级 `location` 继承**，任何自己写了 `add_header` 的 location 都会屏蔽 server 级的 HSTS。所以上面每个 location 都要把 `Strict-Transport-Security` / `X-Content-Type-Options` / `Referrer-Policy` / CSP 再写一遍。
 - **`index.html` 必须 `Cache-Control: no-cache`**（BUG-100）。它没有内容 hash，而缓存里的旧 HTML 会引用构建后**已被删除**的 chunk 文件名；那次请求会落到 SPA 回退拿到 HTML，浏览器按 `type="module"` 解析失败 → **整页白屏**。这是发版后最容易复现的线上事故。
 - **不存在的 `/assets/*` 必须回 404**，不能回落到 `index.html`。回 200 + `text/html` 同样会让模块脚本因 MIME 不符而拒绝执行。
