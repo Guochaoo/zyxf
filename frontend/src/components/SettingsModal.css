@@ -1,6 +1,6 @@
 /* SettingsModal — 左右分栏设置的中央弹窗（参照系统设置卡片）。
    遮罩复用菜单的 rb-frost-backdrop 磨砂玻璃；卡片固定尺寸，左右两栏：
-   左栏为关闭按钮 + 搜索 + 垂直导航，右栏为标题 + 内容。 */
+   左栏为关闭按钮 + 垂直导航，右栏为标题 + 内容（底部固定操作条）。 */
 
 .settings-backdrop {
   position: fixed;
@@ -81,38 +81,6 @@
 .settings-close:focus-visible {
   outline: none;
   color: var(--ink);
-}
-
-/* 搜索框 */
-.settings-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  margin-bottom: 10px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  color: var(--ink-3);
-  transition: border-color 150ms ease;
-}
-
-.settings-search:focus-within {
-  border-color: var(--line-strong);
-}
-
-.settings-search-input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  font-size: 13px;
-  color: var(--ink);
-  outline: none;
-}
-
-.settings-search-input::placeholder {
-  color: var(--ink-3);
 }
 
 /* 垂直导航 */
@@ -600,10 +568,9 @@
     flex-direction: column;
   }
 
-  /* 标题栏：关闭按钮与搜索框同排，导航横排在下一行（flex-wrap + flex-basis 100% 换行） */
+  /* 标题栏：关闭按钮与导航同一行（导航可横向滚动），不再占用两行 */
   .settings-sidebar {
     flex-direction: row;
-    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     width: auto;
@@ -614,17 +581,13 @@
   }
 
   .settings-sidebar-top {
+    flex: 0 0 auto;
     padding: 0;
   }
 
-  .settings-search {
+  .settings-nav {
     flex: 1;
     min-width: 0;
-    margin-bottom: 0;
-  }
-
-  .settings-nav {
-    flex-basis: 100%; /* 独占一行 */
     flex-direction: row;
     gap: 4px;
     overflow-x: auto;

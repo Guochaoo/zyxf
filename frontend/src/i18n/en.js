@@ -166,7 +166,6 @@ const en = {
   settings: {
     title: 'Settings',
     close: 'Close',
-    searchPlaceholder: 'Search settings',
     navAria: 'Settings sections',
     nav: {
       ai: 'AI Chat Settings',

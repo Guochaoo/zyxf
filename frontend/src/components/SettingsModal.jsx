@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Bot, ChevronDown, CircleUserRound, Monitor, Moon, Palette, Search, Sun, X } from 'lucide-react';
+import { Bot, ChevronDown, CircleUserRound, Monitor, Moon, Palette, Sun, X } from 'lucide-react';
 import { loadLlmCfg, saveLlmCfg, clearLlmCfg } from '../llmConfig.js';
 import { useAuth } from '../auth.jsx';
 import useTheme from '../hooks/useTheme.js';
@@ -108,7 +108,6 @@ export default function SettingsModal({ open, onClose }) {
   const [llmCfg, setLlmCfg] = useState(loadLlmCfg);
   const [cfgDraft, setCfgDraft] = useState(loadLlmCfg);
   const [cfgMode, setCfgMode] = useState(() => modeOf(loadLlmCfg()));
-  const [query, setQuery] = useState('');
 
   // 语言响应式的常量数组（切换语言时随 t 刷新）。
   const themeOptions = useMemo(
@@ -159,13 +158,12 @@ export default function SettingsModal({ open, onClose }) {
     [t]
   );
 
-  // 每次打开时，将已提交配置载入草稿、重置到首个板块、清空搜索、收起语言下拉。
+  // 每次打开时，将已提交配置载入草稿、重置到首个板块、收起语言下拉。
   useEffect(() => {
     if (open) {
       setLlmCfg(loadLlmCfg());
       setCfgDraft(loadLlmCfg());
       setCfgMode(modeOf(loadLlmCfg()));
-      setQuery('');
       setLangOpen(false);
     }
   }, [open]);
@@ -220,22 +218,12 @@ export default function SettingsModal({ open, onClose }) {
     >
       <div className="settings-card" onClick={(e) => e.stopPropagation()}>
         <div className="settings-layout">
-          {/* 左栏：关闭 / 搜索 / 垂直导航 */}
+          {/* 左栏：关闭 + 垂直导航（原先还有一个「搜索设置」输入框，但它不过滤任何内容，已移除） */}
           <aside className="settings-sidebar">
             <div className="settings-sidebar-top">
               <button type="button" className="settings-close" aria-label={t('settings.close')} title={t('settings.close')} onClick={onClose}>
                 <X size={20} strokeWidth={1.8} aria-hidden="true" />
               </button>
-            </div>
-            <div className="settings-search">
-              <Search size={15} strokeWidth={1.8} aria-hidden="true" />
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t('settings.searchPlaceholder')}
-                className="settings-search-input"
-              />
             </div>
             <nav className="settings-nav" aria-label={t('settings.navAria')}>
               {navItems.map(({ id, label, icon: Icon }) => (
