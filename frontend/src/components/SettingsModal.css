@@ -18,9 +18,9 @@
 
 /* ---- Card（固定尺寸；视口更小时按 100vw/vh - 32px 收窄） ---- */
 .settings-card {
-  width: 840px;
+  width: 800px;
   max-width: calc(100vw - 32px);
-  height: 620px;
+  height: 580px;
   max-height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
