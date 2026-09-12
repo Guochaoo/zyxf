@@ -14,16 +14,15 @@
 ## 当前进度
 
 ```yaml
-更新日期: 2026-09-11
-条目总数: 140        # 缺陷 98 + 改进 42
-待处理: 8            # 缺陷 3 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；93/94 设计规范审计只建档；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index）
-已归档: 132          # 缺陷 95 + 改进 37
-# 本批（公开仓库前审计）：全量扫描工作区与全部提交的密钥/敏感文件——.env、data.db、
-#   证书、日志、云 AK、私钥、PAT 从未入库，无泄露。唯一发现 BUG-103：部署文档把服务器
-#   真实公网 IP 写进了仓库与全部历史——文档改用 RFC 5737 保留段占位，历史用 git-filter-repo
-#   replace-text 全量替换，顺带用 mailmap 把 14 个错署到 guochao@users.noreply.github.com
-#   （该地址归属另一账号）的提交统一为 Guochaoo 的邮箱。随后补 Apache-2.0 LICENSE
-#   （IMPROVE-47）并把仓库切为 public。
+更新日期: 2026-09-12
+条目总数: 141        # 缺陷 98 + 改进 43
+待处理: 8            # 缺陷 3 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index）
+已归档: 133          # 缺陷 95 + 改进 38
+# 本批（卸载宝塔迁移系统组件，2026-09-12）：Node 24 与 nginx 换成系统级安装（NodeSource
+#   v24.21 + apt nginx 1.18，配置 = frontend/nginx.conf 落地 /etc/nginx/conf.d/zyxf.conf），
+#   证书改 certbot 签发 /etc/letsencrypt（续期 timer 已启用、dry-run 通过），宝塔彻底卸载
+#   （8888 无监听、cron 已清、/www 残留 ~800MB 待用户定夺，配置备份 /root/bt-backup-20260912.tar.gz）。
+#   全程经阿里云 swas-open RunCommand 代跑（云助手 agent 在实例重启后才恢复）。
 # 授权（IMPROVE-46，已关闭）：**子集化属于第 2 条「embed, bundle ... with any software」的授权范围**
 #   ——CJK 字体要嵌进 Web 就必须子集化，这是行使嵌入权的正常方式；条件 2）的「不得修改」针对的是
 #   改动字形设计，不是挑选要发布哪些字形。真正约束我们的是条件 1）显著署名 与 条件 4）随附协议：
@@ -36,7 +35,7 @@
 
 ### 1.1 缺陷
 
-设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；设置页改造批新发现的 **1 条**（BUG-95）当轮修复并归档；预览/下载故障复盘批新发现的 **1 条**（BUG-96）也已当轮修复；随后 SPA 深链批与知识图谱批各新发现 **1 条**（BUG-97、BUG-98），均当轮修复；线上首屏性能实测批新发现 **3 条**：BUG-100（生产 nginx 三条规则未生效）、BUG-101（favicon 107 KB）与 **BUG-99（首屏 21.7 MB 字体）**，均已当轮修复并线上验证（BUG-99 的最终做法见 [2.1 已修复缺陷](#21-已修复缺陷)（94））。最后把内容索引那批合入 main 时发生**部署事故**，新增 **BUG-102**，当轮 revert 处置、条目保留待解。随后为仓库公开做敏感信息全量审计：唯一发现 **BUG-103**（部署文档把服务器真实公网 IP 写进仓库与历史），当轮修复并历史改写；同轮补 Apache-2.0 LICENSE（**IMPROVE-47**）。
+设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；设置页改造批新发现的 **1 条**（BUG-95）当轮修复并归档；预览/下载故障复盘批新发现的 **1 条**（BUG-96）也已当轮修复；随后 SPA 深链批与知识图谱批各新发现 **1 条**（BUG-97、BUG-98），均当轮修复；线上首屏性能实测批新发现 **3 条**：BUG-100（生产 nginx 三条规则未生效）、BUG-101（favicon 107 KB）与 **BUG-99（首屏 21.7 MB 字体）**，均已当轮修复并线上验证（BUG-99 的最终做法见 [2.1 已修复缺陷](#21-已修复缺陷)（94））。最后把内容索引那批合入 main 时发生**部署事故**，新增 **BUG-102**，当轮 revert 处置、条目保留待解。随后为仓库公开做敏感信息全量审计：唯一发现 **BUG-103**（部署文档把服务器真实公网 IP 写进仓库与历史），当轮修复并历史改写；同轮补 Apache-2.0 LICENSE（**IMPROVE-47**）。2026-09-12 落地 **IMPROVE-48**：Node/nginx 迁系统级并彻底卸载宝塔面板，全程经阿里云 swas-open RunCommand 代跑。
 
 #### BUG-93 · 下载热力图的星期标签比格子错开一天（周一开头的网格配了周日开头的字典）
 **影响范围**：`frontend/src/pages/Dashboard/ActivityHeatmap.jsx` · `frontend/src/i18n/zh.js` · `frontend/src/i18n/en.js`（前端 · 正确性 / i18n）
@@ -222,7 +221,7 @@
 | BUG-99 | P1 | 前端·性能 | 首屏要传 21.7 MB 字体（唯一瓶颈）：源字体改走 npm，构建期子集化到 GB2312，**21.69 MB → 2.72 MB** 且 `fvar` 字重轴（100–700）保留；协议原文移至 `public/licenses/` 并在首页页脚给出署名链接 | `frontend/scripts/build-font.mjs`, `frontend/src/index.css`, `frontend/package.json`, `frontend/src/pages/BrowsePage.jsx`, `frontend/public/licenses/` | 2026-09-11 |
 | BUG-103 | P2 | 安全·信息泄露 | 部署文档把服务器真实公网 IP 写进仓库（全历史 196 处）：文档改用 RFC 5737 保留段占位并加「勿写入真实 IP」提醒；历史用 git-filter-repo replace-text 全量替换，顺带 mailmap 修正 14 个错误署名提交。注意 GitHub 侧 refs/pull/* 仍钉住改写前对象，彻底清除需 Support GC | `docs/DEPLOY.md`, git 历史（filter-repo） | 2026-09-11 |
 
-### 2.2 已关闭改进项（37）
+### 2.2 已关闭改进项（38）
 
 | 编号 | 严重度 | 类别 | 标题 | 处理位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -263,3 +262,4 @@
 | IMPROVE-45 | P2 | 性能 | 「关于」页 4 张图合计 1.17 MB：无懒加载、无宽高、PNG 未转格式 | `frontend/public/images/`, `frontend/src/pages/AboutPage.jsx`, `frontend/scripts/optimize-assets.py` | 2026-09-11 |
 | IMPROVE-46 | P2 | 授权·合规 | OPPO Sans 子集化的授权依据与署名义务：确认子集化属于第 2 条「embed, bundle」授权范围（CJK webfont 的技术前提），真正约束的是条件 1）/4）的两条署名义务，已落实到页脚署名链接与随附协议 | `frontend/public/licenses/OPPO-Sans-4.0-License.txt`, `frontend/src/pages/BrowsePage.jsx`, `frontend/scripts/build-font.mjs`, `docs/DEPLOY.md` | 2026-09-11 |
 | IMPROVE-47 | P2 | 合规·开源 | 公开仓库前缺 LICENSE：补 Apache-2.0 协议文件，README 增加许可证小节 | `LICENSE`, `README.md` | 2026-09-11 |
+| IMPROVE-48 | P2 | 部署·收敛 | 彻底卸载宝塔面板：Node/nginx 迁系统级（NodeSource 24.21 + apt nginx 1.18，配置 = `frontend/nginx.conf` 落地 `/etc/nginx/conf.d/zyxf.conf`），证书改 certbot 自动续期；踩坑：宝塔同名 init 脚本与 nginx-common 的 conffile 冲突（`--force-confnew`）、卸载脚本会顺手停掉系统 nginx、Git Bash 传脚本需 `MSYS_NO_PATHCONV=1` | `deploy/zyxf.service`, `.github/workflows/deploy.yml`, `frontend/nginx.conf`, `docs/DEPLOY.md` | 2026-09-12 |
