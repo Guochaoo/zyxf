@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
 import { app } from '../src/index.js';
 import { mimeOf } from '../src/mime.js';
-import { MAX_SUBTREE_MOVE_ITEMS } from '../src/routes/folders.js';
+import { MAX_SUBTREE_MOVE_ITEMS } from '../src/services/folders.js';
 import { ALLOWED_EXTS, isExtAllowed } from '../src/extPolicy.js';
 import { ossObjectStore } from './setup.js';
 
