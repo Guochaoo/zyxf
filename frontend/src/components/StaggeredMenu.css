@@ -4,6 +4,9 @@
   height: 100%;
   z-index: 40;
   pointer-events: none;
+  /* 面板宽度单一来源：面板/预层的 width 与 GitHub Star 按钮的 left 锚点都引用它，
+     断点变化时两者自动保持同步。 */
+  --sm-panel-w: clamp(240px, 30vw, 340px);
 }
 
 .staggered-menu-wrapper.fixed-wrapper {
@@ -111,17 +114,17 @@
   outline: none;
 }
 
-/* ---- GitHub Star 按钮（挂在面板顶部，随面板滑入滑出）----
-   absolute 于面板左上：top 与 header 里的开关垂直持平（header top 5px +
-   48px 行高内居中 34px），left 用面板自身字号的 2em = 面板内边距，
-   与条目（资料库…）左缘对齐。滑动动画由面板时间线承载——打开时从开关
-   按钮（header z 更高）下方「流出」，关闭时流回。
-   颜色规则带 #root .staggered-menu-panel 前缀 + important：面板内有
-   `* { color: var(--ink) !important }` 的全局墨色染色，必须显式压回。 */
+/* ---- GitHub Star 按钮（wrapper 锚定，gsap 驱动从开关下方流出/流回）----
+   终位 left = 100% - 面板宽 + 2em，与面板条目（资料库…）左缘同源对齐
+   （面板宽引用 --sm-panel-w，断点变化自动同步）；top 12px 与开关垂直持平。
+   关闭态 opacity 0 + pointer-events none + tabIndex -1（组件按 active 切换）；
+   打开时 gsap 时间线驱动 x + opacity 从开关按钮下方流出，关闭时流回。
+   z-index 15：面板(10) 之上、header(20) 之下——滑出起点藏在开关后面。 */
 .sm-gh-star {
   position: absolute;
   top: 12px;
-  left: 2em;
+  left: calc(100% - var(--sm-panel-w) + 2em); /* 2em = 面板内边距（自身继承 16px 字号） */
+  z-index: 15;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -135,7 +138,13 @@
   line-height: 1;
   text-decoration: none;
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
   transition: background 0.2s, box-shadow 0.2s;
+}
+
+.staggered-menu-wrapper[data-open] .sm-gh-star {
+  pointer-events: auto;
 }
 
 .sm-gh-star:hover {
@@ -175,20 +184,26 @@
   align-items: center;
 }
 
-/* 面板内 `* { color: var(--ink) !important }` 会把按钮文字一起染成墨色（黑底黑字），
-   文字三件套必须与 svg 一样用 important 压回白色。 */
-#root .staggered-menu-panel .sm-gh-star,
-#root .staggered-menu-panel .sm-gh-star .sm-gh-star-label,
-#root .staggered-menu-panel .sm-gh-star .sm-gh-star-num {
-  color: #ffffff !important;
-}
-
-#root .staggered-menu-panel .sm-gh-star svg {
+/* 图标 fill 直接写在 path 上：fill: currentColor 会以「未解析关键字」继承到
+   path，在 path 自己的 color 上解析——祖先的墨色染色规则（.app-theme svg、
+   面板 * 规则）会把它们染黑（BUG-107/108 的根因）。 */
+#root .sm-gh-star svg {
   width: 1rem;
   height: 1rem;
   flex: 0 0 auto;
-  color: #ffffff !important;
-  fill: currentColor; /* logo svg 不带 fill-current 类，缺这条会落回默认黑色 */
+}
+
+#root .sm-gh-star .sm-gh-star-logo path {
+  fill: #ffffff;
+}
+
+#root .sm-gh-star .sm-gh-star-star path {
+  fill: #9ca3af;
+  transition: fill 0.3s ease;
+}
+
+#root .sm-gh-star:hover .sm-gh-star-star path {
+  fill: #fde047;
 }
 
 .sm-gh-star-label {
@@ -201,15 +216,6 @@
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-}
-
-#root .staggered-menu-panel .sm-gh-star .sm-gh-star-star {
-  color: #9ca3af !important;
-  transition: color 0.3s ease;
-}
-
-#root .staggered-menu-panel .sm-gh-star:hover .sm-gh-star-star {
-  color: #fde047 !important;
 }
 
 .sm-gh-star-num {
@@ -281,7 +287,7 @@
   position: absolute;
   top: 0;
   right: 0;
-  width: clamp(240px, 30vw, 340px);
+  width: var(--sm-panel-w);
   height: 100%;
   background: var(--surface);
   backdrop-filter: blur(12px);
@@ -310,7 +316,7 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: clamp(240px, 30vw, 340px);
+  width: var(--sm-panel-w);
   pointer-events: none;
   z-index: 5;
   opacity: 0;
@@ -662,9 +668,12 @@ button.sm-account-action {
 }
 
 @media (max-width: 1024px) {
+  .staggered-menu-wrapper {
+    --sm-panel-w: clamp(280px, 48vw, 340px);
+  }
+
   .staggered-menu-panel,
   .sm-prelayers {
-    width: clamp(280px, 48vw, 340px);
     left: auto;
     right: 0;
   }
@@ -677,6 +686,10 @@ button.sm-account-action {
 }
 
 @media (max-width: 640px) {
+  .staggered-menu-wrapper {
+    --sm-panel-w: clamp(240px, 78vw, 340px);
+  }
+
   .staggered-menu-header {
     left: 6.5%;
     width: 92%;
@@ -685,7 +698,6 @@ button.sm-account-action {
 
   .staggered-menu-panel,
   .sm-prelayers {
-    width: clamp(240px, 78vw, 340px);
     left: auto;
     right: 0;
   }

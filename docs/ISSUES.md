@@ -15,9 +15,9 @@
 
 ```yaml
 更新日期: 2026-09-12
-条目总数: 155        # 缺陷 103 + 改进 52
+条目总数: 156        # 缺陷 104 + 改进 52
 待处理: 10           # 缺陷 4 + 改进 6（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index；104 为测试套件偶发登录失败；58 为测试覆盖缺口补齐清单）
-已归档: 145          # 缺陷 99 + 改进 46
+已归档: 146          # 缺陷 100 + 改进 46
 # 本批（卸载宝塔迁移系统组件，2026-09-12）：Node 24 与 nginx 换成系统级安装（NodeSource
 #   v24.21 + apt nginx 1.18，配置 = frontend/nginx.conf 落地 /etc/nginx/conf.d/zyxf.conf），
 #   证书改 certbot 签发 /etc/letsencrypt（续期 timer 已启用、dry-run 通过），宝塔彻底卸载：
@@ -50,6 +50,9 @@
 #   同日面板内锚定改造（按钮挂进面板顶部实现流出/流回）引入 BUG-108：面板
 #   `* { color: var(--ink) !important }` 吞掉按钮文字色（只给 svg 加了覆盖、
 #   漏了 a/label/num），黑底黑字只剩空胶囊，当轮补齐覆盖修复。
+#   随后交互打磨批把按钮移回 wrapper 锚定（面板宽抽 --sm-panel-w 变量）并改
+#   gsap 从开关下方流出/流回动画，定位更深层根因 **BUG-109**（fill: currentColor
+#   以未解析关键字继承、在 path 自己的 color 上解析被染墨），fill 直接写 path 根治。
 ```
 
 ---
@@ -270,6 +273,7 @@
 | BUG-106 | P0 | 前端 | IMPROVE-52 回归：gsap 加载后开关按钮的 hover/pointerdown/focus 都会重跑 ensureGsap→preparePanel，菜单开着时触发会把面板打回屏外、图标/文字复位，而 React 开合态不变（毛玻璃遮罩留存、白色面板消失）；Windows 下开菜单→点任务栏切窗→回来把鼠标移向开关即 100% 复现。修复 = preparePanel 开着直接跳过 + 打开时间线自带 panel/prelayer opacity（首次打开 gsap 迟到时不依赖预置先跑）；补 hover 回归测试 | `frontend/src/components/StaggeredMenu.jsx`, `frontend/src/test/StaggeredMenu.test.jsx` | 2026-09-12 |
 | BUG-107 | P2 | 前端 | GitHub Star 按钮（同轮新增）logo svg 丢了模板的 fill-current 取色类，fill 落回默认黑色，黑底上图标恒黑；修复在 `#root .sm-gh-star svg` 补 `fill: currentColor` | `frontend/src/components/GithubStarButton.jsx`, `frontend/src/components/StaggeredMenu.css` | 2026-09-12 |
 | BUG-108 | P2 | 前端 | Star 按钮改面板内锚定后文字被面板全局墨色染色吞掉：`#root .staggered-menu-panel * { color: var(--ink) !important }` 命中按钮 a/label/num（黑底黑字只剩空胶囊），当轮只给 svg 加了 important 覆盖漏了文字三件套；补齐 a/label/num 的 important 白色覆盖 | `frontend/src/components/StaggeredMenu.css` | 2026-09-12 |
+| BUG-109 | P2 | 前端 | BUG-108 修复后 logo 仍黑：`fill: currentColor` 以**未解析关键字**继承到 path，在 path 自己的 color 上解析——面板 `* { color: var(--ink) !important }` 直接命中 path，fill 解析成墨色，svg 层的 color/fill 覆盖够不着（金星同机制被染墨色）。修复 = 按钮移回面板外（wrapper 锚定 + gsap 从开关下方流出/流回动画，顺带实现交互诉求）并在 path 上直接写 fill | `frontend/src/components/StaggeredMenu.css`, `frontend/src/components/StaggeredMenu.jsx`, `frontend/src/components/GithubStarButton.jsx` | 2026-09-12 |
 
 ### 2.2 已关闭改进项（46）
 

@@ -93,17 +93,29 @@ describe('StaggeredMenu 关闭态面板不可聚焦', () => {
   });
 });
 
-// GitHub Star 按钮常驻面板顶部（随面板滑入滑出），star 数来自挂载时的一次
-// GitHub API 请求（fetch 已在文件级 stub），失败则隐藏数字块、按钮本体保留。
+// GitHub Star 按钮常驻 wrapper 内（面板条目左缘延长位），star 数来自挂载时的一次
+// GitHub API 请求（fetch 已在文件级 stub），失败则隐藏数字块、按钮本体保留；
+// 开合动画由 gsap 时间线驱动（从开关按钮下方流出/流回），关闭态不可聚焦。
 describe('StaggeredMenu GitHub Star 按钮', () => {
-  test('挂在面板内、链接正确并显示拉取到的 star 数', async () => {
+  test('常驻 wrapper 内、链接正确并显示拉取到的 star 数', async () => {
     renderMenu();
     const star = document.querySelector('.sm-gh-star');
     expect(star).not.toBeNull();
-    expect(star.closest('#staggered-menu-panel')).not.toBeNull();
+    expect(star.closest('.staggered-menu-wrapper')).not.toBeNull();
     expect(star.getAttribute('href')).toBe('https://github.com/Guochaoo/zyxf');
     expect(star.getAttribute('target')).toBe('_blank');
     await waitFor(() => expect(document.querySelector('.sm-gh-star-num').textContent).toBe('7'));
+  });
+
+  test('关闭态 tabIndex -1 且 aria-hidden，打开后可聚焦', async () => {
+    renderMenu();
+    const star = document.querySelector('.sm-gh-star');
+    expect(star.getAttribute('tabIndex')).toBe('-1');
+    expect(star.getAttribute('aria-hidden')).toBe('true');
+
+    document.querySelector('.sm-toggle').click();
+    await waitFor(() => expect(star.getAttribute('tabIndex')).toBe('0'));
+    expect(star.getAttribute('aria-hidden')).toBeNull();
   });
 
   test('star 数请求失败时隐藏数字块，按钮本体仍在', async () => {
