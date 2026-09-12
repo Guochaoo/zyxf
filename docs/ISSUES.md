@@ -15,18 +15,33 @@
 
 ```yaml
 更新日期: 2026-09-12
-条目总数: 141        # 缺陷 98 + 改进 43
-待处理: 8            # 缺陷 3 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index）
-已归档: 133          # 缺陷 95 + 改进 38
+条目总数: 152        # 缺陷 100 + 改进 52
+待处理: 10           # 缺陷 4 + 改进 6（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index；104 为测试套件偶发登录失败；58 为测试覆盖缺口补齐清单）
+已归档: 142          # 缺陷 96 + 改进 46
 # 本批（卸载宝塔迁移系统组件，2026-09-12）：Node 24 与 nginx 换成系统级安装（NodeSource
 #   v24.21 + apt nginx 1.18，配置 = frontend/nginx.conf 落地 /etc/nginx/conf.d/zyxf.conf），
-#   证书改 certbot 签发 /etc/letsencrypt（续期 timer 已启用、dry-run 通过），宝塔彻底卸载
-#   （8888 无监听、cron 已清、/www 残留 ~800MB 待用户定夺，配置备份 /root/bt-backup-20260912.tar.gz）。
+#   证书改 certbot 签发 /etc/letsencrypt（续期 timer 已启用、dry-run 通过），宝塔彻底卸载：
+#   面板/8888/防火墙服务(BT-FirewallServices)/监控报表服务(site_total)/cron 全部清除，
+#   /www 删除、swap 迁至 /swapfile（fstab 已同步）。配置备份 /root/bt-backup-20260912.tar.gz。
+#   另：OSS_ENDPOINT 切换为标准域名 xjtu-zyxf.oss-cn-beijing.aliyuncs.com（预览实测正常），
+#   oss.zyxf.top 自定义域名及其 DigiCert 证书退役解绑（IMPROVE-50 已归档）。
 #   全程经阿里云 swas-open RunCommand 代跑（云助手 agent 在实例重启后才恢复）。
 # 授权（IMPROVE-46，已关闭）：**子集化属于第 2 条「embed, bundle ... with any software」的授权范围**
 #   ——CJK 字体要嵌进 Web 就必须子集化，这是行使嵌入权的正常方式；条件 2）的「不得修改」针对的是
 #   改动字形设计，不是挑选要发布哪些字形。真正约束我们的是条件 1）显著署名 与 条件 4）随附协议：
 #   已落实为首页页脚署名链接 + public/licenses/ 里的协议原文。源字体在 node_modules 保持原样。
+# 本批（架构与性能优化，2026-09-12）：后端热路径缓存化（IMPROVE-51：prepareOnce / stats TTL
+#   缓存 / libraryCaches 统一失效入口 / PRAGMA+BEGIN IMMEDIATE）、前端渲染与加载治理（IMPROVE-52：
+#   图谱直写 DOM、聊天 delta 缓冲、行与热力图 memo、gsap 首交互预取、字体拆常用/生僻两层
+#   ——首屏字体 2.86MB→1.53MB）、后端抽 service 层（IMPROVE-53）、自研轻量数据层（IMPROVE-54）、
+#   App 拆分 + ErrorBoundary + 管理端弹窗站内化（IMPROVE-55）。评估后不做两项（IMPROVE-56/57，
+#   判定依据见归档表）。测试套件发现预存在的偶发登录失败，建档 BUG-104 待查。
+# 本批（测试套件审计修复，2026-09-12）：审计优先级 1-3 已修——后端抽 test/helpers.js
+#   （adminToken fail-fast 即 BUG-104 修法①、消六文件重复基建、拆 chat/发码两个零余量
+#   限流配额、mailState finally、registerViaCode fail-fast）；前端新增 resource.test.js
+#   11 用例锁死数据层全部语义（顺带修出 cache:false 不清缓存的真缺陷）、修 Dashboard
+#   mockReset 隐患与失真竞态用例、四页级测试接入 __resetResourceStore、删死桩/永真断言。
+#   优先级 4（覆盖缺口补齐清单）建档 IMPROVE-58 待处理。
 ```
 
 ---
@@ -35,7 +50,7 @@
 
 ### 1.1 缺陷
 
-设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；设置页改造批新发现的 **1 条**（BUG-95）当轮修复并归档；预览/下载故障复盘批新发现的 **1 条**（BUG-96）也已当轮修复；随后 SPA 深链批与知识图谱批各新发现 **1 条**（BUG-97、BUG-98），均当轮修复；线上首屏性能实测批新发现 **3 条**：BUG-100（生产 nginx 三条规则未生效）、BUG-101（favicon 107 KB）与 **BUG-99（首屏 21.7 MB 字体）**，均已当轮修复并线上验证（BUG-99 的最终做法见 [2.1 已修复缺陷](#21-已修复缺陷)（94））。最后把内容索引那批合入 main 时发生**部署事故**，新增 **BUG-102**，当轮 revert 处置、条目保留待解。随后为仓库公开做敏感信息全量审计：唯一发现 **BUG-103**（部署文档把服务器真实公网 IP 写进仓库与历史），当轮修复并历史改写；同轮补 Apache-2.0 LICENSE（**IMPROVE-47**）。2026-09-12 落地 **IMPROVE-48**：Node/nginx 迁系统级并彻底卸载宝塔面板，全程经阿里云 swas-open RunCommand 代跑。
+设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；设置页改造批新发现的 **1 条**（BUG-95）当轮修复并归档；预览/下载故障复盘批新发现的 **1 条**（BUG-96）也已当轮修复；随后 SPA 深链批与知识图谱批各新发现 **1 条**（BUG-97、BUG-98），均当轮修复；线上首屏性能实测批新发现 **3 条**：BUG-100（生产 nginx 三条规则未生效）、BUG-101（favicon 107 KB）与 **BUG-99（首屏 21.7 MB 字体）**，均已当轮修复并线上验证（BUG-99 的最终做法见 [2.1 已修复缺陷](#21-已修复缺陷)（94））。最后把内容索引那批合入 main 时发生**部署事故**，新增 **BUG-102**，当轮 revert 处置、条目保留待解。随后为仓库公开做敏感信息全量审计：唯一发现 **BUG-103**（部署文档把服务器真实公网 IP 写进仓库与历史），当轮修复并历史改写；同轮补 Apache-2.0 LICENSE（**IMPROVE-47**）。2026-09-12 落地 **IMPROVE-48**：Node/nginx 迁系统级并彻底卸载宝塔面板，全程经阿里云 swas-open RunCommand 代跑。同日架构与性能优化批在连跑测试时发现**预存在的偶发登录失败**（干净检出同样复现），按 BUG-104 建档待查。
 
 #### BUG-93 · 下载热力图的星期标签比格子错开一天（周一开头的网格配了周日开头的字典）
 **影响范围**：`frontend/src/pages/Dashboard/ActivityHeatmap.jsx` · `frontend/src/i18n/zh.js` · `frontend/src/i18n/en.js`（前端 · 正确性 / i18n）
@@ -69,11 +84,21 @@
 - **处置（2026-09-11）**：按人类要求把内容索引 / 知识图谱整批**移出 dev 与 main**（revert 提交 `0d30475`），原 9 个提交完整保存在分支 **`feature/content-index`**（tip `d6e3f34`）。本批的纯前端性能修复与 nginx 修复不依赖它，保留并已重新部署成功（线上 `/api/index/status` 返回 404，确认内容索引未上线）。**⚠️ 下次合并 `feature/content-index` 前必须先解掉本条**，否则会重演这次事故。
 - **验证**：在服务器上（无代理、`registry.npmmirror.com`）跑 `npm install` 应成功；随后 `systemctl restart zyxf` 能起来且 `/api/health` 返回 200；若走方案 ②，故意让 onnxruntime 装不上时后端仍能启动，且 `/api/index/status` 的 `embedding.enabled` 为 false 并给出原因。
 
+#### BUG-104 · 全量测试套件偶发失败：某次 admin 登录未返回 token，下游用例以「未认证 / undefined」连锁失败
+**影响范围**：`backend/test/auditFixes.test.js` · `backend/test/statsAndMime.test.js` · `backend/src/routes/auth.js`（后端 · 稳定性 / 测试基建）
+
+- **现状**：`npm test`（node --test，21 个测试文件并行进程）约 4–6% 的完整运行出现同一签名的失败：文件内某一次 `adminToken()` / `adminLogin()`（`POST /api/auth/login`，username=admin）没拿到 token，后续请求变成无认证。已知两种表现：(a) auditFixes 的 cleanup-upload 用例拿到 401（期望 400）；(b) statsAndMime 注册后按 id 查行得 undefined，测试侧 `SELECT ... WHERE id = undefined` 抛 `Provided value cannot be bound to SQLite parameter 1`；另观测过一次 17 条用例连锁失败的同签名运行。**干净检出（不含 2026-09-12 优化批）同样复现（15 轮 1 次；含优化批 77 轮 3 次）——与本轮优化无关，属预存在的不稳定**。
+- **已排除**：登录限流（每测试文件独立进程 + MemoryStore；`loginLimiter` 为 10 次/15 分/（IP+账号）且 `skipSuccessfulRequests`，auditFixes 全文件 20 次成功登录远低于洪泛桶 100）；users 表测试间污染（beforeEach 不动 users、进程隔离、auditFixes 无 users 写操作）；scrypt 资源（maxmem 256 MB、单请求单次哈希）；JWT/clock（参数固定）。**怀疑方向（未定位）**：高并发进程（≈核数-1）下登录路径的某种资源性失败（scrypt 32 MB 分配 / libuv 线程池 / bcryptjs 启动期迁移），或 express-rate-limit `skipSuccessfulRequests` 减量与过期清理的交互；登录失败的真实状态码（401/429/500）尚未捕获——helper 直接把 `body.token`（undefined）透传给了后续请求。
+- **影响**：CI/本地验证偶发红灯且失败输出误导（TypeError 掩盖真实原因），不能放心把它当回归门禁。
+- **已做的缓解**：statsAndMime 两条用例先断言注册响应 status/body 再取值，把 TypeError 转成可读断言信息。
+- **修法建议**：① helper 加诊断——token 缺失时打印登录响应的 status/body 并 fail fast，抓到真实失败码即可定位方向；② 若是限流器：给测试环境加限流阈值开关或放宽；③ 若是资源竞争：降 `--test-concurrency` 或登录串行化；④ 无论根因，helper 必须显式断言登录成功，禁止 undefined token 流向后续请求。
+- **验证**：修复后连续 30 次 `npm test` 全绿；人为注入登录失败时，失败信息能直接读出原因。
+
 ---
 
 ### 1.2 改进建议
 
-上一轮审计新发现的 14 条改进项里，已处置 13 条（13/14/15/16/17/18/19/20/21/22/23/24/25，见 [2.2 已关闭改进项](#22-已关闭改进项)（35））；另有 **1 条暂缓**（26）、**2 条来自复核审计、本轮只建档待决策**（31/32）、**1 条设计取舍记账**（33：表单控件无聚焦视觉），以及设计规范审计新增的 **1 条**（34：聊天未知类型徽章被品牌色覆盖规则染黑）。最后一批（线上首屏性能实测）新增的 **3 条**（IMPROVE-43/44/45：首屏关键路径、Google Fonts 外链、关于页图片）已当轮修复并**线上验证**。这几条都写全背景，便于以后接手时不必重新调研。
+上一轮审计新发现的 14 条改进项里，已处置 13 条（13/14/15/16/17/18/19/20/21/22/23/24/25，见 [2.2 已关闭改进项](#22-已关闭改进项)（35））；另有 **1 条暂缓**（26）、**2 条来自复核审计、本轮只建档待决策**（31/32）、**1 条设计取舍记账**（33：表单控件无聚焦视觉），以及设计规范审计新增的 **1 条**（34：聊天未知类型徽章被品牌色覆盖规则染黑）。最后一批（线上首屏性能实测）新增的 **3 条**（IMPROVE-43/44/45：首屏关键路径、Google Fonts 外链、关于页图片）已当轮修复并**线上验证**。这几条都写全背景，便于以后接手时不必重新调研。2026-09-12 全量测试审计批新增 **1 条**（IMPROVE-58：覆盖缺口补齐清单，审计优先级 1-3 的失真/重复/冗余/零余量问题已当轮修复，见提交 5b72c5b 与 ab307da）。
 
 #### IMPROVE-31 · 预览凭证（IMM WebOffice token）匿名可签发，且与下载共用配额
 **影响范围**：`backend/src/routes/files.js` · `backend/src/imm.js` · `frontend/src/components/Preview/index.jsx`（后端 · 配额 / 安全）
@@ -115,13 +140,26 @@
 - **修法（二选一）**：① 把 `DEFAULT_TONE` 换成中性灰 `bg-[#808080]`，与 `archive` / 文件夹同色，语义上更贴「未知」；② 若要保留品牌蓝语义，则改用不受覆盖规则影响的内联样式或新增一个真正生效的蓝色 token（不要继续用 `bg-brand-*`——它在本项目里永远渲染为墨黑，见 `docs/DESIGN.md` §2）。
 - **验证**：在聊天里让助手引用一个未知后缀文件，确认徽章为中性灰且与其余族别色亮度一致；`npm test` 全绿（现有测试未断言该色调）。
 
+#### IMPROVE-58 · 测试覆盖缺口补齐清单（2026-09-12 全量审计批的遗留待办）
+**影响范围**：`backend/src/index.js` · `backend/src/db.js` · `backend/src/routes/stats.js` · `frontend/src/components/ErrorBoundary.jsx` · `frontend/src/components/ConfirmDialog.jsx`（测试 · 覆盖缺口）
+
+- **现状**：2026-09-12 对前后端 43 个测试文件做过全量审计（重复/冗余/失真/零余量限流/helper 不 fail-fast 等问题已在当批修复，见提交 5b72c5b、ab307da 与 BUG-104），但以下模块/端点仍**完全没有测试**，按风险排序：
+  1. `index.js:27-48` 生产启动自检（弱 JWT/弱密码/开放 CORS 拒绝启动）——安全底线逻辑。需子进程方案：`NODE_ENV=production` + 错误 env 启动，断言进程 exit 且输出原因。
+  2. `db.js` 的迁移分支：users.role 重建表（风险最高——迁移要正确搬移 email/token_epoch）、token_epoch/sort_order/email/uses 补列。fresh `:memory:` 库永远走不到这些分支。做法：用旧 schema 预建一个 DB 文件 → 跑 db.js → 断言迁移结果。
+  3. `GET /api/stats/heatmap`（含 days 钳制 [31,731]）与 statsCache 生产口径行为（TTL 命中 + libraryCaches 统一失效接线）——同批对树/搜索缓存都有生产口径验证（auditFixes.test.js 的 NODE_ENV 临时切换写法可复用），唯独缺 stats。
+  4. 前端新交互三件套 + hook：ErrorBoundary（抛错捕获/重试复位）、ConfirmDialog/NamePromptDialog（空值禁提交、重开重置初值）、useSettingsRoute 的手机端 push/replace 分支。
+  5. 次要（顺手补）：http.js wrapAsync 的 500 路径；folders 的 sort=size 与递归大小计算；chat 的 GET /status 与 sanitizeHistory 截断；files 改名的 deleteOld=false 分支（NFD→NFC 同 key 改名不得删真身）；password.js 的畸形 scrypt 串分支；reorder 的「order 必须是数组」400；前端 Preview/index 自身（URL 失败致命 vs 凭证失败降级）、InsightCards 的 densifyBySpline（手写单调样条，纯函数易测）、FolderTree 渲染、AboutPage、useItemDragDrop 的其余路径（after 重排/文件夹边缘/moveError 自动清除）。
+- **影响**：安全关键与迁移逻辑无回归保护，这些区域的后续重构只能靠手工验证；审计报告其余的跨文件重复用例合并（约 8 组）也未立项，做第 5 条时可顺带。
+- **修法**：按上面 1→4 的顺序补；4 里的组件测试参照 RenameDialog.test.jsx 的受控组件写法，hook 测试参照 resource.test.js 的 renderHook 写法。
+- **验证**：新增用例全绿、全量套件（含 --sequence.shuffle 乱序）无回归。
+
 ---
 
 ## 2. 已归档
 
 > 归档表只作索引（编号 / 严重度 / 类别 / 标题 / 位置 / 日期）。修法依据、踩坑与验证方式写在**代码注释**里（`grep -rn "BUG-54" backend/src`）与 commit message 中。
 
-### 2.1 已修复缺陷（95）
+### 2.1 已修复缺陷（96）
 
 | 编号 | 严重度 | 类别 | 标题 | 修复位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -220,8 +258,9 @@
 | BUG-101 | P2 | 前端 | favicon 是 512×512 / 107 KB，比除字体外全部首屏 JS+CSS 的一半还多 | `frontend/public/favicon.png`, `frontend/scripts/optimize-assets.py` | 2026-09-11 |
 | BUG-99 | P1 | 前端·性能 | 首屏要传 21.7 MB 字体（唯一瓶颈）：源字体改走 npm，构建期子集化到 GB2312，**21.69 MB → 2.72 MB** 且 `fvar` 字重轴（100–700）保留；协议原文移至 `public/licenses/` 并在首页页脚给出署名链接 | `frontend/scripts/build-font.mjs`, `frontend/src/index.css`, `frontend/package.json`, `frontend/src/pages/BrowsePage.jsx`, `frontend/public/licenses/` | 2026-09-11 |
 | BUG-103 | P2 | 安全·信息泄露 | 部署文档把服务器真实公网 IP 写进仓库（全历史 196 处）：文档改用 RFC 5737 保留段占位并加「勿写入真实 IP」提醒；历史用 git-filter-repo replace-text 全量替换，顺带 mailmap 修正 14 个错误署名提交。注意 GitHub 侧 refs/pull/* 仍钉住改写前对象，彻底清除需 Support GC | `docs/DEPLOY.md`, git 历史（filter-repo） | 2026-09-11 |
+| BUG-105 | P0 | 前端 | IMPROVE-52 重构回归：localSubgraph 返回 { nodes, links } 被误解构成 { localNodes, localLinks }，links=undefined 令 buildDegrees 抛 "links is not iterable"，图谱挂载即崩并打穿到 bootError 整页白屏；修复重命名解构 + App 右栏纳入 ErrorBoundary + 补组件挂载级回归测试（纯函数用例拦不住属性接线错误） | `frontend/src/components/KnowledgeGraph.jsx`, `frontend/src/App.jsx`, `frontend/src/test/KnowledgeGraph.test.jsx` | 2026-09-12 |
 
-### 2.2 已关闭改进项（38）
+### 2.2 已关闭改进项（46）
 
 | 编号 | 严重度 | 类别 | 标题 | 处理位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -263,3 +302,11 @@
 | IMPROVE-46 | P2 | 授权·合规 | OPPO Sans 子集化的授权依据与署名义务：确认子集化属于第 2 条「embed, bundle」授权范围（CJK webfont 的技术前提），真正约束的是条件 1）/4）的两条署名义务，已落实到页脚署名链接与随附协议 | `frontend/public/licenses/OPPO-Sans-4.0-License.txt`, `frontend/src/pages/BrowsePage.jsx`, `frontend/scripts/build-font.mjs`, `docs/DEPLOY.md` | 2026-09-11 |
 | IMPROVE-47 | P2 | 合规·开源 | 公开仓库前缺 LICENSE：补 Apache-2.0 协议文件，README 增加许可证小节 | `LICENSE`, `README.md` | 2026-09-11 |
 | IMPROVE-48 | P2 | 部署·收敛 | 彻底卸载宝塔面板：Node/nginx 迁系统级（NodeSource 24.21 + apt nginx 1.18，配置 = `frontend/nginx.conf` 落地 `/etc/nginx/conf.d/zyxf.conf`），证书改 certbot 自动续期；踩坑：宝塔同名 init 脚本与 nginx-common 的 conffile 冲突（`--force-confnew`）、卸载脚本会顺手停掉系统 nginx、Git Bash 传脚本需 `MSYS_NO_PATHCONV=1` | `deploy/zyxf.service`, `.github/workflows/deploy.yml`, `frontend/nginx.conf`, `docs/DEPLOY.md` | 2026-09-12 |
+| IMPROVE-50 | P2 | 部署·运维 | OSS 换标准域名免除证书年续：`OSS_ENDPOINT` 切 `xjtu-zyxf.oss-cn-beijing.aliyuncs.com`（IMM 的 SourceURI 走 `oss://` 与域名无关，预览实测正常）——迁移前 env 模板的「自定义域名是预览前提」结论不成立；`oss.zyxf.top` 绑定解绑、DNS CNAME 删除，两张 DigiCert 免费 DV（10-05/10-06 到期、不自动续期）退役 | `/opt/zyxf/.env`, `docs/ISSUES.md` | 2026-09-12 |
+| IMPROVE-51 | P1 | 性能 | 后端热路径缓存化：`prepareOnce` 预编译语句缓存（attachUser/stats 等每请求重复 prepare）、/api/stats 与 heatmap 30s TTL 缓存、缓存失效统一到 libraryCaches.js（不再寄居 searchService）、busy_timeout/synchronous PRAGMA + BEGIN IMMEDIATE | `backend/src/db.js`, `backend/src/statsCache.js`, `backend/src/libraryCaches.js`, `backend/src/routes/stats.js`, `backend/src/auth.js` | 2026-09-12 |
+| IMPROVE-52 | P1 | 性能 | 前端渲染与加载治理：知识图谱 tick/拖拽直写 DOM（去逐帧 setState）、流式聊天 delta 50ms 批量 flush（markdown 每 token 全量重解析 O(n²)→线性）、ItemList 行 memo + 热力图事件委托、gsap 改首交互预取、字体拆常用/生僻两层按 unicode-range 渐进加载（首屏 2.86MB→1.53MB）、SearchBar scroll rAF 节流；踩坑：CSS @import 必须在 @tailwind 之前、生僻层构建曾漏加一级汉字 | `frontend/src/components/KnowledgeGraph.jsx`, `frontend/src/components/ChatComposer.jsx`, `frontend/src/pages/Browse/ItemList.jsx`, `frontend/src/pages/Dashboard/ActivityHeatmap.jsx`, `frontend/src/components/StaggeredMenu.jsx`, `frontend/src/components/SearchBar.jsx`, `frontend/scripts/build-font.mjs` | 2026-09-12 |
+| IMPROVE-53 | P2 | 架构 | folders/files 路由抽 service 层：子树搬迁、递归大小、整树构建、面包屑、上传校验、下载记账移入 `src/services/`，路由只留参数解析/权限/HTTP 映射（行为不变，246 测试护航） | `backend/src/services/folders.js`, `backend/src/services/files.js`, `backend/src/routes/folders.js`, `backend/src/routes/files.js` | 2026-09-12 |
+| IMPROVE-54 | P2 | 架构 | 自研轻量数据层 `src/data/resource.js`（同 key 去重 + AbortController 取消 + 竞态守卫 + stale-while-revalidate 缓存 + invalidateResource 统一失效），替换五处手写 reqId 守卫；附带收益：返回目录即时呈现、切区间保留上一份数据；刻意不引 TanStack Query（零重依赖哲学） | `frontend/src/data/resource.js`, `frontend/src/hooks/useFolderTree.js`, `frontend/src/pages/Browse/useFolderContents.js`, `frontend/src/pages/DashboardPage.jsx`, `frontend/src/components/SearchBar.jsx`, `frontend/src/components/Preview/index.jsx`, `frontend/src/api.js` | 2026-09-12 |
+| IMPROVE-55 | P2 | 架构·健壮性 | 设置弹窗路由状态机抽 useSettingsRoute hook；新增 ErrorBoundary 包路由出口（懒 chunk 失败/渲染异常可原地重试，不再整树白屏）；管理端 window.prompt/confirm/alert 全部替换为 ConfirmDialog/NamePromptDialog + Toast（补 zh/en 文案）；顺带修 ItemList 早返回在 useMemo 之前的条件 hook 隐患 | `frontend/src/App.jsx`, `frontend/src/hooks/useSettingsRoute.js`, `frontend/src/components/ErrorBoundary.jsx`, `frontend/src/components/ConfirmDialog.jsx`, `frontend/src/components/NamePromptDialog.jsx`, `frontend/src/pages/BrowsePage.jsx`, `frontend/src/pages/Browse/ItemList.jsx` | 2026-09-12 |
+| IMPROVE-56 | P2 | 性能·评估 | `objectKeyForFile` 的 folder map 加 TTL 缓存——评估后不做：30s 陈旧 map 会算出错误 OSS key（文件夹改名后 30s 内向其子树上传即触发，key 与库不一致），正确性风险大于收益（folders 表规模小、每请求仅一次全表读） | `backend/src/storagePath.js` | 2026-09-12 |
+| IMPROVE-57 | P2 | 性能·评估 | `/folders/:id/contents` 加分页——评估后不做：单目录条目规模小，而 API 契约变更会波及前端全部列表逻辑；递归大小 CTE 已分批（BUG-08），当前无实测瓶颈 | `backend/src/routes/folders.js`, `backend/src/services/folders.js` | 2026-09-12 |

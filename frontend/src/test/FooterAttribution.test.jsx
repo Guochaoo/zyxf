@@ -6,13 +6,25 @@ import { MemoryRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '../i18n/index.js';
 
-const { default: BrowsePage } = await import('../pages/BrowsePage.jsx');
 const { AuthProvider } = await import('../auth.jsx');
 
-vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ folders: [], files: [] }), {
-  status: 200,
-  headers: { 'content-type': 'application/json' },
-})));
+// 审计：原先 stub 全局 fetch 是死代码（页面走 axios/XHR），且不 mock api 模块时
+// 每次运行都向 jsdom 默认 origin 发真实请求、靠连接失败进错误态。改为标准 mock。
+vi.mock('../api.js', () => ({
+  default: { get: vi.fn(), post: vi.fn() },
+  TOKEN_KEY: 'zyxf_token',
+  listFolder: vi.fn(() =>
+    Promise.resolve({ folder: { id: 0, name: '首页' }, breadcrumb: [], folders: [], files: [] })
+  ),
+  getFolderTree: vi.fn(() => Promise.resolve({ tree: [], files: [] })),
+  createFolder: vi.fn(),
+  deleteFolder: vi.fn(),
+  deleteFile: vi.fn(),
+  renameFile: vi.fn(),
+  renameFolder: vi.fn(),
+  getFileUrl: vi.fn(),
+}));
+const { default: BrowsePage } = await import('../pages/BrowsePage.jsx');
 
 function renderAt(path) {
   return render(

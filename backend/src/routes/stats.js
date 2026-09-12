@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { db } from '../db.js';
+import { db, prepareOnce } from '../db.js';
+import { getCachedStats, setCachedStats } from '../statsCache.js';
 
 const router = Router();
 
@@ -22,11 +23,10 @@ function dayLabel(ts) {
    which would split a calendar day across two buckets just after midnight.
    Table/column names come only from fixed literals in this module. */
 function countByDay(table, tsCol, todayStart, seriesStart) {
-  return db
-    .prepare(
-      `SELECT FLOOR((${tsCol} - ?) / ?) AS i, COUNT(*) AS c FROM ${table}
+  return prepareOnce(
+    `SELECT FLOOR((${tsCol} - ?) / ?) AS i, COUNT(*) AS c FROM ${table}
        WHERE ${tsCol} >= ? GROUP BY i`
-    )
+  )
     .all(todayStart, DAY, seriesStart);
 }
 
@@ -57,19 +57,31 @@ function dailySeries(days, todayStart) {
    heatmap — deliberately independent of the ?range= switch on GET /. */
 router.get('/heatmap', (req, res) => {
   const days = Math.min(Math.max(parseInt(req.query.days, 10) || 365, 31), 731);
-  res.json({ days, series: dailySeries(days, startOfToday()) });
+  // IMPROVE-51：统计聚合有 30 s TTL 缓存（statsCache.js），key 含 days 变体。
+  const key = `heatmap:${days}`;
+  const cached = getCachedStats(key);
+  if (cached) return res.json(cached);
+
+  const payload = { days, series: dailySeries(days, startOfToday()) };
+  setCachedStats(key, payload);
+  res.json(payload);
 });
 
 router.get('/', (req, res) => {
   const range = Math.min(Math.max(parseInt(req.query.range, 10) || 30, 7), 90);
+  // IMPROVE-51：key 含 range 变体（7..90，最多 84 个），payload 原样回传 range。
+  const key = `stats:${range}`;
+  const cached = getCachedStats(key);
+  if (cached) return res.json(cached);
+
   const todayStart = startOfToday();
   const yesterdayStart = todayStart - DAY;
   const sevenAgo = todayStart - 6 * DAY;
   const prevSevenStart = todayStart - 13 * DAY;
 
   // ---- Counters ----
-  const cnt = (sql, ...args) => db.prepare(sql).get(...args).c;
-  const sum = (sql, ...args) => db.prepare(sql).get(...args).s;
+  const cnt = (sql, ...args) => prepareOnce(sql).get(...args).c;
+  const sum = (sql, ...args) => prepareOnce(sql).get(...args).s;
 
   const today_downloads = cnt('SELECT COUNT(*) c FROM download_logs WHERE downloaded_at >= ?', todayStart);
   const yesterday_downloads = cnt(
@@ -96,9 +108,8 @@ router.get('/', (req, res) => {
   // ---- File type breakdown ----
   // 返回前 8 类明细 + 真实总类型数：前端只展示前 6 类，需要 total 才能算出准确
   // 的「其余 N 类」，否则类型超 8 时会低估（BUG-24）。
-  const typeRows = db
-    .prepare(
-      `SELECT
+  const typeRows = prepareOnce(
+    `SELECT
          ext AS ext,
          COUNT(*) AS count,
          COALESCE(SUM(size), 0) AS size
@@ -108,22 +119,18 @@ router.get('/', (req, res) => {
        GROUP BY ext
        ORDER BY count DESC
        LIMIT 8`
-    )
-    .all();
-  const type_total = db
-    .prepare(
-      `SELECT COUNT(DISTINCT COALESCE(NULLIF(LOWER(ext), ''), 'other')) c FROM files`
-    )
-    .get().c;
+  ).all();
+  const type_total = prepareOnce(
+    `SELECT COUNT(DISTINCT COALESCE(NULLIF(LOWER(ext), ''), 'other')) c FROM files`
+  ).get().c;
 
   // ---- Top downloads (last 30 days) ----
   // 按 file_id 分组（而非 file_id + file_name）：窗口内文件被重命名时应只出现
   // 一行，删除后也不会出现 null 元数据行（BUG-15）。
   // 文件名聚合：优先取当前 files 表里的持久 name（LEFT JOIN），无则取组内最新名字。
   const last30Start = todayStart - 29 * DAY;
-  const top_downloads = db
-    .prepare(
-      `SELECT
+  const top_downloads = prepareOnce(
+    `SELECT
          dl.file_id,
          COALESCE(f.name,
                   (SELECT dl2.file_name FROM download_logs dl2
@@ -139,24 +146,20 @@ router.get('/', (req, res) => {
        GROUP BY dl.file_id
        ORDER BY count DESC, file_name ASC
        LIMIT 10`
-    )
-    .all(last30Start);
+  ).all(last30Start);
 
   // ---- Recent uploads ----
-  const recent_uploads = db
-    .prepare(
-      `SELECT id, name, ext, size, folder_id, created_at
+  const recent_uploads = prepareOnce(
+    `SELECT id, name, ext, size, folder_id, created_at
        FROM files
        ORDER BY created_at DESC
        LIMIT 8`
-    )
-    .all();
+  ).all();
 
   // ---- Top root folders by size ----
   // Recursively aggregate descendants; SQLite supports recursive CTE.
-  const top_folders = db
-    .prepare(
-      `WITH RECURSIVE descendants(root_id, id) AS (
+  const top_folders = prepareOnce(
+    `WITH RECURSIVE descendants(root_id, id) AS (
          SELECT id, id FROM folders WHERE parent_id IS NULL
          UNION ALL
          SELECT d.root_id, fo.id
@@ -175,14 +178,13 @@ router.get('/', (req, res) => {
        GROUP BY r.id, r.name
        ORDER BY size DESC
        LIMIT 5`
-    )
-    .all();
+  ).all();
 
   // The library itself (folder tree, file names, sizes) is already publicly
   // browsable via GET /folders/tree and GET /folders/:id/contents, so these
   // name-containing lists reveal nothing guests can't already see; the /api
   // rate limiter covers anonymous scraping.
-  res.json({
+  const payload = {
     range,
     today_downloads,
     yesterday_downloads,
@@ -199,7 +201,9 @@ router.get('/', (req, res) => {
     top_downloads,
     recent_uploads,
     top_folders,
-  });
+  };
+  setCachedStats(key, payload);
+  res.json(payload);
 });
 
 export default router;

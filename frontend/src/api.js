@@ -115,13 +115,13 @@ export async function register({ username, email, password, code }) {
   return data;
 }
 
-export async function listFolder(id = 0, sort = 'name', order = 'asc') {
-  const { data } = await api.get(`/folders/${id}/contents`, { params: { sort, order } });
+export async function listFolder(id = 0, sort = 'name', order = 'asc', { signal } = {}) {
+  const { data } = await api.get(`/folders/${id}/contents`, { params: { sort, order }, signal });
   return data;
 }
 
-export async function getFolderTree() {
-  const { data } = await api.get('/folders/tree');
+export async function getFolderTree({ signal } = {}) {
+  const { data } = await api.get('/folders/tree', { signal });
   return data;
 }
 
@@ -169,15 +169,15 @@ export async function reorderItems(parentFolderId, order) {
   return data;
 }
 
-export async function getFileUrl(id, { download = false } = {}) {
-  const { data } = await api.get(`/files/${id}/url`, { params: download ? { download: 1 } : {} });
+export async function getFileUrl(id, { download = false, signal } = {}) {
+  const { data } = await api.get(`/files/${id}/url`, { params: download ? { download: 1 } : {}, signal });
   return data;
 }
 
 // WebOffice preview credentials (IMM GenerateWebofficeToken) for the official
 // WebOffice JS-SDK. Works for browser-uploaded files, mobile WebViews included.
-export async function getWebofficeToken(id) {
-  const { data } = await api.get(`/files/${id}/weboffice-token`);
+export async function getWebofficeToken(id, { signal } = {}) {
+  const { data } = await api.get(`/files/${id}/weboffice-token`, { signal });
   return data;
 }
 
@@ -191,15 +191,15 @@ export async function refreshWebofficeToken(id, accessToken, refreshToken) {
   return data;
 }
 
-export async function getStats(range = 30) {
-  const { data } = await api.get('/stats', { params: { range } });
+export async function getStats(range = 30, { signal } = {}) {
+  const { data } = await api.get('/stats', { params: { range }, signal });
   return data;
 }
 
 // Trailing-year daily activity for the dashboard heatmap — independent of
 // getStats' range switch.
-export async function getHeatmap() {
-  const { data } = await api.get('/stats/heatmap');
+export async function getHeatmap({ signal } = {}) {
+  const { data } = await api.get('/stats/heatmap', { signal });
   return data;
 }
 
@@ -212,8 +212,8 @@ export async function syncOss() {
   return data;
 }
 
-export async function search(q) {
-  const { data } = await api.get('/search', { params: { q } });
+export async function search(q, { signal } = {}) {
+  const { data } = await api.get('/search', { params: { q }, signal });
   return data;
 }
 

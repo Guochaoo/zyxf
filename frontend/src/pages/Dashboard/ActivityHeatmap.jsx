@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowDown } from 'lucide-react';
 import { ChartTooltip, IconBadge } from '../../components/InsightCards.jsx';
 
 // GitHub 式年度下载热力图（IMPROVE-01：从 DashboardPage 抽出）。自包含，只依赖传入的 rows。
+// IMPROVE-52：网格抽成 memo 子组件并改用事件委托——hover 状态原先让 ~365 个单元格
+// 整体重渲染，现在只有 tooltip 一小块 React 树随 hover 变化。
 
 const DAY_MS = 86400000;
 const ACCENT = '#3d9aff';
@@ -53,6 +55,71 @@ function buildWeeks(rows) {
   const max = cells.reduce((m, c) => Math.max(m, c.downloads), 0);
   return { weeks, months, max };
 }
+
+// 网格内容（月份轴 + 星期轴 + 单元格）。hover 不经过这里：单元格只带 data-*，
+// 交互由外层容器的事件委托处理，props 稳定时整个网格跳过重渲染。
+// 注意 memo 边界在「relative w-max」容器**之内**——单元格 offsetLeft/offsetTop 的
+// 定位基准是它，tooltip 也挂在这层（见下方外层组件）。
+const HeatGrid = memo(function HeatGrid({ visWeeks, months, max, cell, weekdays, monthNames, t }) {
+  return (
+    <>
+      <div className="mb-1 flex" style={{ gap: HEAT_GAP }}>
+        {months.map((m, w) => (
+          <span
+            key={w}
+            style={{ width: cell }}
+            className="whitespace-nowrap text-[10px] leading-none text-ink-3"
+          >
+            {m != null ? monthNames[m] : ''}
+          </span>
+        ))}
+      </div>
+      <div className="flex" style={{ gap: HEAT_GAP }}>
+        <div className="mr-1 flex flex-col" style={{ gap: HEAT_GAP }}>
+          {weekdays.map((name, i) => (
+            <span
+              key={name}
+              style={{ height: cell, lineHeight: `${cell}px` }}
+              className="text-[10px] text-ink-3"
+            >
+              {i % 2 === 0 ? name : ''}
+            </span>
+          ))}
+        </div>
+        {visWeeks.map((week, w) => (
+          <div key={w} className="flex flex-col" style={{ gap: HEAT_GAP }}>
+            {week.map((day) =>
+              day.inRange ? (
+                <span
+                  key={day.ts}
+                  data-cell=""
+                  data-ts={day.ts}
+                  style={{
+                    width: cell,
+                    height: cell,
+                    background: HEAT_LEVELS[heatLevel(day.downloads, max)],
+                  }}
+                  // 悬浮提示原先只有鼠标能触发，键盘/读屏完全拿不到每日数值（a11y）。
+                  // 单元格本身进 Tab 顺序，并用 aria-label 直接播报日期与下载数；
+                  // 焦点/悬停事件由外层容器统一委托（focusin 会冒泡）。
+                  tabIndex={0}
+                  role="img"
+                  aria-label={t('dashboard.heatmapCell', {
+                    date: fmtFullDate(day.ts),
+                    count: day.downloads,
+                  })}
+                  className="rounded-[2px] transition-shadow hover:ring-1 hover:ring-line-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
+                />
+              ) : (
+                <span key={day.ts} style={{ width: cell, height: cell }} />
+              )
+            )}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+});
 
 export default function ActivityHeatmap({ rows }) {
   const scrollRef = useRef(null);
@@ -124,22 +191,47 @@ export default function ActivityHeatmap({ rows }) {
     return { visWeeks: cutWeeks, visMonths: cutMonths };
   }, [box, cell, weeks, months]);
 
+  // ts → cell 数据，事件委托时按 data-ts 取回当日数值
+  const cellByTs = useMemo(() => {
+    const m = new Map();
+    for (const week of visWeeks) for (const c of week) if (c.inRange) m.set(c.ts, c);
+    return m;
+  }, [visWeeks]);
+
   /* tooltip x is clamped into the grid viewport so the ~150px tooltip never
      spills past the panel edges; it sits above the hovered cell (6px gap)
      and flips below it for the top rows, so the hovered cell itself is
      never covered */
-  const onCellEnter = (e, day) => {
-    const el = e.currentTarget;
-    const scroll = scrollRef.current;
-    if (!scroll) return;
-    const left = Math.min(Math.max(el.offsetLeft + cell / 2, 74), scroll.clientWidth - 74);
-    const above = el.offsetTop - 58;
-    setHover({
-      left,
-      top: above >= 0 ? above : el.offsetTop + cell + 6,
-      cell: day,
-    });
-  };
+  const showCell = useCallback(
+    (el) => {
+      const scroll = scrollRef.current;
+      if (!scroll) return;
+      const day = cellByTs.get(Number(el.dataset.ts));
+      if (!day) return;
+      const left = Math.min(Math.max(el.offsetLeft + cell / 2, 74), scroll.clientWidth - 74);
+      const above = el.offsetTop - 58;
+      setHover({
+        left,
+        top: above >= 0 ? above : el.offsetTop + cell + 6,
+        cell: day,
+      });
+    },
+    [cellByTs, cell]
+  );
+
+  // 事件委托（IMPROVE-52）：mouseover/focusin 从单元格冒泡到容器，外层统一
+  // 定位 tooltip；网格因此可以在 hover 变化时整体跳过重渲染。
+  const onOver = useCallback(
+    (e) => {
+      const el = e.target.closest?.('[data-cell]');
+      if (el) showCell(el);
+    },
+    [showCell]
+  );
+  const onOut = useCallback((e) => {
+    if (e.target.closest?.('[data-cell]')) setHover(null);
+  }, []);
+
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-control bg-surface">
       <div className="flex items-center justify-between gap-3 px-3 pb-1.5 pt-3">
@@ -161,66 +253,24 @@ export default function ActivityHeatmap({ rows }) {
         <div
           ref={scrollRef}
           className="flex min-h-0 flex-1 px-3 pb-3"
+          onMouseOver={onOver}
+          onMouseOut={onOut}
+          onFocus={onOver}
+          onBlur={onOut}
           onMouseLeave={() => setHover(null)}
         >
           {/* the weeks already fit the viewport (overflow is dropped from the
               left), so the grid just centers in whatever space is left */}
           <div className="relative mx-auto my-auto w-max">
-            <div className="mb-1 flex" style={{ gap: HEAT_GAP }}>
-              {visMonths.map((m, w) => (
-                <span
-                  key={w}
-                  style={{ width: cell }}
-                  className="whitespace-nowrap text-[10px] leading-none text-ink-3"
-                >
-                  {m != null ? monthNames[m] : ''}
-                </span>
-              ))}
-            </div>
-            <div className="flex" style={{ gap: HEAT_GAP }}>
-              <div className="mr-1 flex flex-col" style={{ gap: HEAT_GAP }}>
-                {weekdays.map((name, i) => (
-                  <span
-                    key={name}
-                    style={{ height: cell, lineHeight: `${cell}px` }}
-                    className="text-[10px] text-ink-3"
-                  >
-                    {i % 2 === 0 ? name : ''}
-                  </span>
-                ))}
-              </div>
-              {visWeeks.map((week, w) => (
-                <div key={w} className="flex flex-col" style={{ gap: HEAT_GAP }}>
-                  {week.map((day) =>
-                    day.inRange ? (
-                      <span
-                        key={day.ts}
-                        style={{
-                          width: cell,
-                          height: cell,
-                          background: HEAT_LEVELS[heatLevel(day.downloads, max)],
-                        }}
-                        // 悬浮提示原先只有鼠标能触发，键盘/读屏完全拿不到每日数值（a11y）。
-                        // 单元格本身进 Tab 顺序，并用 aria-label 直接播报日期与下载数；
-                        // 焦点进入时复用同一个 tooltip（blur 收起）。
-                        tabIndex={0}
-                        role="img"
-                        aria-label={t('dashboard.heatmapCell', {
-                          date: fmtFullDate(day.ts),
-                          count: day.downloads,
-                        })}
-                        className="rounded-[2px] transition-shadow hover:ring-1 hover:ring-line-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
-                        onMouseEnter={(e) => onCellEnter(e, day)}
-                        onFocus={(e) => onCellEnter(e, day)}
-                        onBlur={() => setHover(null)}
-                      />
-                    ) : (
-                      <span key={day.ts} style={{ width: cell, height: cell }} />
-                    )
-                  )}
-                </div>
-              ))}
-            </div>
+            <HeatGrid
+              visWeeks={visWeeks}
+              months={visMonths}
+              max={max}
+              cell={cell}
+              weekdays={weekdays}
+              monthNames={monthNames}
+              t={t}
+            />
             {hover && (
               <div
                 className="pointer-events-none absolute z-10 -translate-x-1/2"

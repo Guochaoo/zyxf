@@ -87,17 +87,23 @@ function toolCallEvent(q) {
 }
 
 describe('POST /api/chat', () => {
+  // 游客聊天限流 6 次/分/IP：匿名用例原先共用默认 IP，恰好 6/6 打满——
+  // 新增任何匿名用例都会把前面的用例顶进 429。每个用例独占一个 IP。
+  let nextAnonIp = 200; // 避开下方限流测试硬编码的 .120/.130/.131/.132
+  const anonXff = () => ({ 'x-forwarded-for': `203.0.113.${nextAnonIp++}` });
+
   test('returns 503 when the LLM is not configured', async () => {
-    const res = await request('POST', '/api/chat', { body: { messages: [{ role: 'user', content: 'hi' }] } });
+    const res = await request('POST', '/api/chat', { body: { messages: [{ role: 'user', content: 'hi' }] }, headers: anonXff() });
     assert.equal(res.status, 503);
   });
 
   test('rejects missing or malformed input (400)', async () => {
     llmState.enabled = true;
-    const noMessages = await request('POST', '/api/chat', { body: {} });
+    const noMessages = await request('POST', '/api/chat', { body: {}, headers: anonXff() });
     assert.equal(noMessages.status, 400);
     const endsWithAssistant = await request('POST', '/api/chat', {
       body: { messages: [{ role: 'assistant', content: 'hi' }] },
+      headers: anonXff(),
     });
     assert.equal(endsWithAssistant.status, 400);
   });
@@ -115,6 +121,7 @@ describe('POST /api/chat', () => {
 
     const res = await request('POST', '/api/chat', {
       body: { messages: [{ role: 'user', content: '有没有高数期末题' }] },
+      headers: anonXff(),
     });
     assert.equal(res.status, 200);
     assert.match(res.headers.get('content-type'), /text\/event-stream/);
@@ -147,6 +154,7 @@ describe('POST /api/chat', () => {
 
     const res = await request('POST', '/api/chat', {
       body: { messages: [{ role: 'user', content: '有没有量子力学资料' }] },
+      headers: anonXff(),
     });
     const events = await readSse(res);
     assert.equal(events.filter((e) => e.type === 'delta').length, 1);
@@ -162,6 +170,7 @@ describe('POST /api/chat', () => {
 
     const res = await request('POST', '/api/chat', {
       body: { messages: [{ role: 'user', content: 'hi' }] },
+      headers: anonXff(),
     });
     const events = await readSse(res);
     const err = events.find((e) => e.type === 'error');

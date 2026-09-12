@@ -7,7 +7,7 @@ import { tieredLimiter } from '../limiter.js';
 import { cleanObjectSegment, ossPrefix, placeholderKeyForFolderFromMap } from '../storagePath.js';
 import { normalizeExt } from '../extPolicy.js';
 import { mimeOf } from '../mime.js';
-import { invalidateLibraryCaches } from '../searchService.js';
+import { invalidateLibraryCaches } from '../libraryCaches.js';
 
 // 游客亦可触发同步（用于共享 OSS 桶的多部署刷新），按身份分层限流：
 // 游客 2 次/分钟 < 登录用户 5 次/分钟 < 管理员豁免（同下载/对话的既有约定）。

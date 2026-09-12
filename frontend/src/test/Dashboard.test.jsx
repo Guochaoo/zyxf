@@ -1,4 +1,4 @@
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -74,6 +74,7 @@ vi.mock('../api.js', () => {
 
 const { AuthProvider } = await import('../auth.jsx');
 const { default: App } = await import('../App.jsx');
+const { __resetResourceStore } = await import('../data/resource.js');
 
 function renderApp(initialPath = '/dashboard') {
   return render(
@@ -86,6 +87,12 @@ function renderApp(initialPath = '/dashboard') {
 }
 
 describe('DashboardPage', () => {
+  // IMPROVE-56 审计跟进：resource store 是模块级缓存，不重置的话从第 2 个用例起
+  // 测的是「陈旧缓存 + 后台刷新」而非全新挂载。
+  beforeEach(() => {
+    __resetResourceStore();
+  });
+
   // Regression: the compare card's tooltip rows evaluate formatValue eagerly
   // with undefined points; a non-null-safe formatter crashed the whole tree.
   test('renders with real-shaped stats without crashing', async () => {
@@ -121,10 +128,13 @@ describe('DashboardPage', () => {
     expect(document.querySelector('.bg-red svg.lucide-arrow-down')).toBeTruthy();
   });
 
-  // BUG-57：快速切区间时，先发的慢响应后到不得覆盖新区间的数据。
+  // BUG-57：区间切换的竞态防护（数据层键隔离 + 迟到响应守卫）。
+  // 审计修正：旧写法 mockReset 摧毁工厂默认实现（乱序运行会让后续用例崩），
+  // 且迟到响应在键切换前就落地、根本测不到竞态。改为数据层下真正可达的时序：
+  // 7 日响应在当前键上迟到落地必须生效；回 30 日后七日数据不得串键。
   test('过期响应不覆盖新区间统计', async () => {
     const { getStats } = await import('../api.js');
-    getStats.mockReset();
+    getStats.mockClear();
 
     const base = (range, today) => ({
       range,
@@ -145,30 +155,29 @@ describe('DashboardPage', () => {
     });
 
     let resolveSeven;
-    let call = 0;
-    getStats.mockImplementation(() => {
-      call += 1;
-      // 1) 首屏 30 天：立即返回；2) 7 天：挂起（模拟慢响应）；3) 30 天：立即返回新值
-      if (call === 2) return new Promise((res) => { resolveSeven = res; });
-      if (call === 3) return Promise.resolve(base(30, 999));
-      return Promise.resolve(base(30, 111));
-    });
+    // 按序三次调用：①首屏 30 日立即返回；②切 7 日后挂起（模拟慢响应）；
+    // ③回 30 日的后台 revalidate 返回新值。once 队列耗尽后工厂默认实现仍在，
+    // --sequence.shuffle 乱序不会影响其他用例。
+    getStats.mockImplementationOnce(() => Promise.resolve(base(30, 111)));
+    getStats.mockImplementationOnce(() => new Promise((res) => { resolveSeven = res; }));
+    getStats.mockImplementationOnce(() => Promise.resolve(base(30, 999)));
 
     renderApp();
     await waitFor(() => expect(screen.getByText('111 次下载')).toBeInTheDocument(), { timeout: 3000 });
 
     fireEvent.click(screen.getByRole('button', { name: '近 7 日' }));
-    await waitFor(() => expect(call).toBe(2));
+    await waitFor(() => expect(getStats).toHaveBeenCalledTimes(2));
 
-    // 迟到的 7 天响应（切回 30 天必须等它落地，否则控件在切换中禁用）
-    resolveSeven(base(7, 111));
-    await waitFor(() => expect(screen.getByRole('button', { name: '近 30 日' })).not.toBeDisabled());
+    // 迟到的 7 日响应：它仍属于当前键（stats:7），必须生效——
+    // 不能因为「响应晚」被误判为过期丢弃；期间 keepPrevious 保持 30 日旧值展示。
+    resolveSeven(base(7, 222));
+    await waitFor(() => expect(screen.getByText('222 次下载')).toBeInTheDocument());
 
+    // 回 30 日：命中缓存先呈现（瞬时），后台 revalidate 落地后换 999；
+    // 七日数据不得串到 30 日视图。
     fireEvent.click(screen.getByRole('button', { name: '近 30 日' }));
-    await waitFor(() => expect(call).toBe(3), { timeout: 3000 });
-    await waitFor(() => expect(screen.getByText('999 次下载')).toBeInTheDocument());
-
-    // 先到的旧响应不得回写数据；切换器高亮必须与展示的数据一致
+    await waitFor(() => expect(screen.getByText('999 次下载')).toBeInTheDocument(), { timeout: 3000 });
+    expect(screen.queryByText('222 次下载')).toBeNull();
     expect(screen.queryByText('111 次下载')).toBeNull();
     expect(screen.getByRole('button', { name: '近 30 日' })).toHaveAttribute('aria-pressed', 'true');
   });

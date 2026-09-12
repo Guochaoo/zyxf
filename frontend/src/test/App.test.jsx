@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import App from '../App.jsx';
 import { AuthProvider } from '../auth.jsx';
 
+const { __resetResourceStore } = await import('../data/resource.js');
+
 // The real SearchBar/StaggeredMenu rely on heavy animation; jsdom cannot run
 // them, so stub them with lightweight stand-ins. Nav lives in StaggeredMenu
 // on every layout, so the stub renders the menu items.
@@ -92,6 +94,8 @@ const { TOKEN_KEY } = await import('../api.js');
 beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
+  // IMPROVE-56 审计跟进：resource store 是模块级缓存，不重置的话从第 2 个用例起测的是「陈旧缓存 + 后台刷新」而非全新挂载。
+  __resetResourceStore();
 });
 
 function renderApp(initialPath = '/') {

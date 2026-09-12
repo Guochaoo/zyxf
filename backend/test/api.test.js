@@ -1,6 +1,7 @@
 import { describe, test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
+import { request, adminToken as adminLogin, setBaseUrl, clearLibraryTables } from './helpers.js';
 import { signToken } from '../src/auth.js';
 import { app } from '../src/index.js';
 import { ossObjectStore, mailState, ensureTestUser } from './setup.js';
@@ -11,6 +12,7 @@ let base;
 before(async () => {
   await new Promise((resolve) => (server = app.listen(0, resolve)));
   base = `http://127.0.0.1:${server.address().port}`;
+  setBaseUrl(base);
 });
 
 after(async () => {
@@ -21,36 +23,8 @@ after(async () => {
 // Fresh data for every test; the seeded admin user stays.
 beforeEach(() => {
   ossObjectStore.keys = [];
-  db.prepare('DELETE FROM download_logs').run();
-  db.prepare('DELETE FROM files').run();
-  db.prepare('DELETE FROM folders').run();
+  clearLibraryTables(db);
 });
-
-async function request(method, path, { token, body, headers } = {}) {
-  const res = await fetch(base + path, {
-    method,
-    headers: {
-      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {
-    /* no body */
-  }
-  return { status: res.status, body: data };
-}
-
-async function adminLogin() {
-  const { body } = await request('POST', '/api/auth/login', {
-    body: { username: 'admin', password: 'admin123' },
-  });
-  return body.token;
-}
 
 function userToken() {
   // attachUser 会回查用户行（BUG-51/52），普通用户 token 也必须对应真实账号
@@ -734,20 +708,23 @@ describe('sync', () => {
 });
 
 describe('POST /api/auth/register (+ /register/code)', () => {
-  // Unique XFF IP per test group so rate-limit buckets never collide.
-  const xff = { 'x-forwarded-for': '203.0.113.200' };
+  // 发码限流是 10 次/时/IP：原先整个 describe 共用 .200，恰好把 10 次用满，
+  // 任何新增用例都会把最后一条顶进 429。改为每次取用独立 IP，按用例隔离。
+  let nextXffIp = 200;
+  const freshXff = () => ({ 'x-forwarded-for': `203.0.113.${nextXffIp++}` });
 
   beforeEach(() => {
     db.prepare('DELETE FROM email_codes').run();
     db.prepare("DELETE FROM users WHERE role != 'admin'").run();
   });
 
-  async function requestCode(email, headers = xff) {
+  async function requestCode(email, headers = freshXff()) {
     return request('POST', '/api/auth/register/code', { body: { email }, headers });
   }
 
-  async function registerViaCode(email, headers = xff) {
-    await requestCode(email, headers);
+  async function registerViaCode(email, headers = freshXff()) {
+    const codeRes = await requestCode(email, headers);
+    assert.equal(codeRes.status, 200, `发码失败（HTTP ${codeRes.status}）：${JSON.stringify(codeRes.body)}`);
     const code = mailState.lastCode;
     return request('POST', '/api/auth/register', {
       body: { username: 'newbie', email, password: 'secret123', code },
@@ -772,9 +749,13 @@ describe('POST /api/auth/register (+ /register/code)', () => {
 
   test('mail disabled returns 503 on code request', async () => {
     mailState.enabled = false;
-    const { status } = await requestCode('disabled@test.dev');
-    assert.equal(status, 503);
-    mailState.enabled = true;
+    try {
+      const { status } = await requestCode('disabled@test.dev');
+      assert.equal(status, 503);
+    } finally {
+      // 断言失败也不能把 enabled 留在 false，否则后续注册用例全部连锁 503。
+      mailState.enabled = true;
+    }
   });
 
   test('bad email format returns 400', async () => {
@@ -793,7 +774,7 @@ describe('POST /api/auth/register (+ /register/code)', () => {
         password: 'secret123',
         code: mailState.lastCode,
       },
-      headers: xff,
+      headers: freshXff(),
     });
     const second = await requestCode('admin@example.dev');
     assert.equal(second.status, 409);
@@ -803,7 +784,7 @@ describe('POST /api/auth/register (+ /register/code)', () => {
     await requestCode('wrong@test.dev');
     const { status, body } = await request('POST', '/api/auth/register', {
       body: { username: 'wronger', email: 'wrong@test.dev', password: 'secret123', code: '000000' },
-      headers: xff,
+      headers: freshXff(),
     });
     assert.equal(status, 400);
     assert.equal(body.error, '验证码错误');
@@ -828,7 +809,7 @@ describe('POST /api/auth/register (+ /register/code)', () => {
     ).run(Date.now());
     const { status, body } = await request('POST', '/api/auth/register', {
       body: { username: 'newbie', email: 'dup@test.dev', password: 'secret123', code: mailState.lastCode },
-      headers: xff,
+      headers: freshXff(),
     });
     assert.equal(status, 409);
     // 用户名/邮箱冲突统一文案（不透露是哪个字段，避免成为存在性 oracle）
@@ -858,7 +839,7 @@ describe('POST /api/auth/register (+ /register/code)', () => {
         password: 'abc1234',
         code: mailState.lastCode,
       },
-      headers: xff,
+      headers: freshXff(),
     });
     assert.equal(status, 400);
     assert.equal(body.error, '密码至少 8 位，且不超过 72 字节（约 24 个汉字）');

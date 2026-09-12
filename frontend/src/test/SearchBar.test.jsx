@@ -10,6 +10,7 @@ vi.mock('../api.js', () => ({
 }));
 
 const { default: SearchBar } = await import('../components/SearchBar.jsx');
+const { __resetResourceStore } = await import('../data/resource.js');
 
 function renderBar() {
   return render(
@@ -24,6 +25,8 @@ const input = () => screen.getByPlaceholderText('搜索文字');
 describe('SearchBar 失败路径', () => {
   beforeEach(() => {
     searchMock.mockReset();
+    // IMPROVE-56 审计跟进：resource store 是模块级缓存，不重置的话从第 2 个用例起测的是「陈旧缓存 + 后台刷新」而非全新挂载。
+    __resetResourceStore();
   });
 
   test('查询失败时清掉上一次的结果并显示错误与重试（不再静默展示旧结果）', async () => {
@@ -52,11 +55,12 @@ describe('SearchBar 失败路径', () => {
     searchMock.mockResolvedValueOnce({ folders: [], files: [] });
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
 
-    await waitFor(() => expect(searchMock).toHaveBeenLastCalledWith('abc'));
+    // IMPROVE-54：search 现在带 { signal } 配置（数据层的 AbortController 取消）。
+    await waitFor(() => expect(searchMock).toHaveBeenLastCalledWith('abc', expect.anything()));
     await waitFor(() => expect(screen.getByText('无匹配结果')).toBeInTheDocument());
   });
 
-  test('请求失败时先清空旧结果：清空按钮仍可点（aria-label 不被 loading 覆盖）', async () => {
+  test('请求在途/完成后清除按钮仍可点（aria-label 不被 loading 覆盖）', async () => {
     searchMock.mockResolvedValue({ folders: [], files: [] });
     renderBar();
     fireEvent.change(input(), { target: { value: 'x' } });

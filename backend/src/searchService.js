@@ -1,6 +1,5 @@
-import { db } from './db.js';
+import { db, prepareOnce } from './db.js';
 import { matchScore } from './searchMatch.js';
-import { invalidateTreeCache } from './treeCache.js';
 
 // 路径命中的减分。名称直接命中的文件永远排在「因所在文件夹命中」的文件之前：名称直接命中最低分
 // 为 PINYIN(45)，而路径命中最高分为 PREFIX(100) - PATH_PENALTY。要保证 100 - PATH_PENALTY < 45，
@@ -21,11 +20,11 @@ function searchCacheEnabled() {
 }
 
 function loadFolders() {
-  return db.prepare('SELECT id, name, parent_id, created_at FROM folders').all();
+  return prepareOnce('SELECT id, name, parent_id, created_at FROM folders').all();
 }
 
 function loadFiles() {
-  return db.prepare('SELECT id, name, folder_id, size, ext, created_at FROM files').all();
+  return prepareOnce('SELECT id, name, folder_id, size, ext, created_at FROM files').all();
 }
 
 // 返回带文件夹路径信息的快照。命中缓存时直接复用上次加载的数组（结构与未命中完全一致）。
@@ -48,15 +47,8 @@ export function invalidateSearchCache() {
   searchCache.files = null;
 }
 
-/**
- * 写路径统一入口：让所有「全库快照类」缓存失效。
- * 搜索快照与目录树快照的失效条件是同一批（增删改文件/文件夹、sync 导入），
- * 分开调用迟早会漏一处（树没失效 = 侧边栏显示已删除的节点）。
- */
-export function invalidateLibraryCaches() {
-  invalidateSearchCache();
-  invalidateTreeCache();
-}
+// 「所有全库快照类缓存的统一失效入口」已独立到 libraryCaches.js——它要同时失效
+// 搜索快照、目录树与统计缓存，寄居在本模块会让新缓存类别找不到归口。
 
 // 文件夹 id → 不含根的完整路径（如「高数/第一章」）。visited 防御脏数据造成的父级环。
 function buildFolderPaths(folders) {

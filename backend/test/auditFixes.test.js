@@ -3,9 +3,10 @@
 import { describe, test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
+import { request, adminToken, setBaseUrl, clearLibraryTables } from './helpers.js';
 import { app } from '../src/index.js';
 import { mimeOf } from '../src/mime.js';
-import { MAX_SUBTREE_MOVE_ITEMS } from '../src/routes/folders.js';
+import { MAX_SUBTREE_MOVE_ITEMS } from '../src/services/folders.js';
 import { ALLOWED_EXTS, isExtAllowed } from '../src/extPolicy.js';
 import { ossObjectStore } from './setup.js';
 
@@ -15,6 +16,7 @@ let base;
 before(async () => {
   await new Promise((resolve) => (server = app.listen(0, resolve)));
   base = `http://127.0.0.1:${server.address().port}`;
+  setBaseUrl(base);
 });
 
 after(async () => {
@@ -24,35 +26,8 @@ after(async () => {
 
 beforeEach(() => {
   ossObjectStore.keys = [];
-  db.prepare('DELETE FROM download_logs').run();
-  db.prepare('DELETE FROM files').run();
-  db.prepare('DELETE FROM folders').run();
+  clearLibraryTables(db);
 });
-
-async function request(method, path, { token, body } = {}) {
-  const res = await fetch(base + path, {
-    method,
-    headers: {
-      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {
-    /* no body */
-  }
-  return { status: res.status, body: data };
-}
-
-async function adminToken() {
-  const { body } = await request('POST', '/api/auth/login', {
-    body: { username: 'admin', password: 'admin123' },
-  });
-  return body.token;
-}
 
 function insertFolder(name, parentId = null) {
   return db

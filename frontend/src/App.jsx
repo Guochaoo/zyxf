@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { Route, Routes, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Route, Routes, Link, Navigate, useNavigate } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './auth.jsx';
@@ -20,9 +20,12 @@ import StaggeredMenu from './components/StaggeredMenu.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import SearchBar from './components/SearchBar.jsx';
 import FolderTree from './components/FolderTree.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 import useMediaQuery from './hooks/useMediaQuery.js';
 import useTheme from './hooks/useTheme.js';
 import useLocale from './hooks/useLocale.js';
+// 设置弹窗路由状态机与 App.jsx 的拆分（IMPROVE-55）。
+import { useSettingsRoute } from './hooks/useSettingsRoute.js';
 import NoticeModal from './components/NoticeModal.jsx';
 import { EASE_COLLAPSE } from './components/ui.js';
 
@@ -38,7 +41,6 @@ export default function App() {
   // 语言切换（设置弹窗内的语言项）；页面标题由下方 effect 统一设置（IMPROVE-25）。
   useLocale();
   const { user, logout, ready } = useAuth();
-  const location = useLocation();
   const navigate = useNavigate();
   const isLg = useMediaQuery('(min-width: 1024px)');
   // 主题（亮/暗/跟随系统）：useTheme 内部写 <html> 的 data-theme 驱动 CSS 变量。
@@ -58,33 +60,16 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // ---- 设置：真实路由 /settings（手机端二级页面 = /settings/:section）----
-  // 做成路由而不是「弹窗 + 历史占位」，系统返回手势/返回键就由路由天然接管：
-  // /settings/ai → 返回 → /settings（一级列表）→ 返回 → 打开设置前的页面。
-  const isSettings = location.pathname === '/settings' || location.pathname.startsWith('/settings/');
-  const settingsSection = location.pathname.match(/^\/settings\/([\w-]+)/)?.[1] ?? null;
-  // 打开设置时把当前页面记进 history.state 作为「背景」：弹窗之外照常渲染原页面（弹窗路由的标准做法）。
-  const background = location.state?.background;
-  // 布局判断一律看「背景位置」——弹窗打开时路径是 /settings，但背后仍是资料库等页面。
-  const pageLocation = background ?? location;
-  const pagePath = pageLocation.pathname;
-  const isMobileSettings = useMediaQuery('(max-width: 640px)');
-
-  const openSettings = () => {
-    if (!isSettings) navigate('/settings', { state: { background: location } });
-  };
-  // 手机端点条目 = 进二级页面，用 push（返回手势才能回到列表）；桌面端只是切右栏，用 replace 不堆历史。
-  const openSettingsSection = (id) => {
-    navigate(`/settings/${id}`, { replace: !isMobileSettings, state: location.state });
-  };
-  // 手机端二级的「返回」按钮 = 回到一级列表；用 replace，之后一次返回直接回到原页面。
-  const backToSettingsList = () => {
-    navigate('/settings', { replace: true, state: location.state });
-  };
-  // 关闭设置 = 用背景位置替换掉设置条目，历史里不留 /settings 残影。
-  const closeSettings = () => {
-    const bg = location.state?.background;
-    navigate(bg ? { pathname: bg.pathname, search: bg.search, hash: bg.hash } : '/', { replace: true });
-  };
+  // 状态机在 useSettingsRoute（IMPROVE-55）；这里只取视图需要的部分。
+  const {
+    isSettings,
+    settingsSection,
+    pageLocation,
+    openSettings,
+    openSettingsSection,
+    backToSettingsList,
+    closeSettings,
+  } = useSettingsRoute();
 
   // 侧边栏开合的缓动曲线与时长（与 ChatComposer/KnowledgeGraph 的收缩动画一致）。
   const SIDEBAR_EASE = EASE_COLLAPSE;
@@ -94,6 +79,7 @@ export default function App() {
   // appears on browse routes only. Other pages are standalone.
   // 一律基于 pagePath（= 背景位置）：设置弹窗打开时路径是 /settings，但背后仍是原页面，
   // 布局不能跟着切走；直接访问 /settings 时背后渲染资料库，所以也归入 browse 布局。
+  const pagePath = pageLocation.pathname;
   const isBrowse = pagePath === '/' || pagePath.startsWith('/folder/') || pagePath.startsWith('/settings');
   const isDashboard = pagePath === '/dashboard';
   const isAbout = pagePath === '/about';
@@ -237,26 +223,31 @@ export default function App() {
           : 'px-3 pt-4 pb-2 sm:px-4 sm:pt-[10.5px] sm:pb-2'
         } ${mainLayout}`}
       >
-        <Suspense
-          fallback={
-            <div className="h-full flex items-center justify-center text-slate-400 py-24">
-              {t('app.loading')}
-            </div>
-          }
-        >
-          <Routes location={pageLocation}>
-            <Route path="/" element={<BrowsePage />} />
-            <Route path="/folder/:id" element={<BrowsePage />} />
-            {/* 直接访问 /settings 时，弹窗背后渲染资料库（否则会落到下面的通配重定向、把 URL 冲掉） */}
-            <Route path="/settings/*" element={<BrowsePage />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/about" element={<AboutPage />} />
-            {/* /login 与 /register 渲染同一 AuthPage 实例：切换不重挂载，仅表单区过渡 */}
-            <Route path="/login" element={<AuthPage />} />
-            <Route path="/register" element={<AuthPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
+        {/* 路由出口的 ErrorBoundary（IMPROVE-55）：懒 chunk 加载失败或页面渲染抛错
+            不再整树卸载白屏，给出可原地重试的界面。包在 Suspense 外层（标准顺序），
+            挂起走 Suspense 的 fallback、抛错走这里。 */}
+        <ErrorBoundary>
+          <Suspense
+            fallback={
+              <div className="h-full flex items-center justify-center text-slate-400 py-24">
+                {t('app.loading')}
+              </div>
+            }
+          >
+            <Routes location={pageLocation}>
+              <Route path="/" element={<BrowsePage />} />
+              <Route path="/folder/:id" element={<BrowsePage />} />
+              {/* 直接访问 /settings 时，弹窗背后渲染资料库（否则会落到下面的通配重定向、把 URL 冲掉） */}
+              <Route path="/settings/*" element={<BrowsePage />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/about" element={<AboutPage />} />
+              {/* /login 与 /register 渲染同一 AuthPage 实例：切换不重挂载，仅表单区过渡 */}
+              <Route path="/login" element={<AuthPage />} />
+              <Route path="/register" element={<AuthPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
       </main>
       {/* Right column — the original StaggeredMenu toggle button stays
           fixed at the top-right; the knowledge graph sits below it.
@@ -267,10 +258,14 @@ export default function App() {
         <div className="fixed inset-y-0 right-0 z-10 hidden flex-col gap-4 overflow-hidden pr-2 pt-[61.5px] lg:flex lg:w-[300px]">
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
             <div className="flex min-h-0 flex-1 flex-col gap-[15px]">
-              <Suspense fallback={null}>
-                <KnowledgeGraph currentId={folderId} onFullChange={setGraphFull} />
-                <ChatComposer onOpenSettings={openSettings} />
-              </Suspense>
+              {/* 右栏也进 ErrorBoundary（BUG-105 的教训）：图谱/对话崩溃不再打穿整页到
+                  bootError 白屏，只降级本栏并给出可重试的界面。 */}
+              <ErrorBoundary>
+                <Suspense fallback={null}>
+                  <KnowledgeGraph currentId={folderId} onFullChange={setGraphFull} />
+                  <ChatComposer onOpenSettings={openSettings} />
+                </Suspense>
+              </ErrorBoundary>
             </div>
           </div>
         </div>

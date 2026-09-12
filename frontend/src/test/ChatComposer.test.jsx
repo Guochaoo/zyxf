@@ -218,7 +218,8 @@ describe('ChatComposer', () => {
     await renderPanelAuthed();
     typeAndSend('你好');
     await waitFor(() => expect(seenSignal).toBeTruthy());
-    await waitFor(() => expect(screen.getByLabelText('聊天输入')).not.toBeDisabled());
+    // （审计：原先这里还 waitFor 输入框 not.toBeDisabled——输入框只在 loginRequired 时
+    // 才禁用，本场景恒为可输入，断言永真，已删。）
 
     // 流式期间垃圾桶保持可点（否则长回答生成中没有任何清空入口）
     const trash = screen.getByRole('button', { name: '清空会话历史' });

@@ -12,6 +12,24 @@ const dbPath =
 export const db = new DatabaseSync(dbPath);
 db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
+// WAL 下 NORMAL 保证掉电不丢已提交事务的一致性（只可能丢最后一次 checkpoint 前的
+// 持久性），换来写路径不做每次 fsync——本项目数据可再生（OSS 为准），这笔交换划算。
+db.exec('PRAGMA synchronous = NORMAL');
+// 写锁被其它连接（备份/手工 sqlite3 会话）占住时等待而不是立刻抛 SQLITE_BUSY。
+db.exec('PRAGMA busy_timeout = 5000');
+
+// 跨请求复用的预编译语句缓存：每次 db.prepare 都要重新编译 SQL，热路径
+// （attachUser 每个带 token 的请求回查用户行、stats 的计数辅助）重复 prepare 纯属浪费。
+// db 是进程级单例（测试按文件分进程），缓存与库实例同生命周期，安全。
+const stmtCache = new Map();
+export function prepareOnce(sql) {
+  let stmt = stmtCache.get(sql);
+  if (!stmt) {
+    stmt = db.prepare(sql);
+    stmtCache.set(sql, stmt);
+  }
+  return stmt;
+}
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
@@ -221,9 +239,11 @@ export function pruneDownloadLogs(retentionDays = DOWNLOAD_LOG_RETENTION_DAYS) {
 // node:sqlite has no `db.transaction()`; wrap a synchronous fn in
 // BEGIN/COMMIT/ROLLBACK and keep the call-return-later shape routes rely on
 // (`const tx = transaction(() => ...); tx();`).
+// BEGIN IMMEDIATE：写锁在事务开始就取得，锁冲突在入口处等 busy_timeout，
+// 而不是读到一半升级写锁时报错回滚整个事务。
 export function transaction(fn) {
   return (...args) => {
-    db.exec('BEGIN');
+    db.exec('BEGIN IMMEDIATE');
     try {
       const result = fn(...args);
       db.exec('COMMIT');
