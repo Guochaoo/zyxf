@@ -49,8 +49,8 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            # 统一用服务器上的 Node 24（前端构建 + 后端安装/运行都走它）。
-            export PATH="/www/server/nodejs/v24.20.0/bin:$PATH"
+            # Node 24 走系统包（NodeSource，/usr/bin/node，v24.21+）。
+            # 旧写法 export PATH="/www/server/nodejs/..." 随宝塔卸载已废弃（IMPROVE-48）。
             npm config set registry https://registry.npmmirror.com
 
             # 后端：装依赖
