@@ -32,8 +32,6 @@ import { EASE_COLLAPSE } from './components/ui.js';
 // Social links shown in the menu footer, static (brand names are not translated).
 const socialItems = [
   { label: 'Bilibili', link: 'https://space.bilibili.com/549612395' },
-  { label: 'Email', link: 'mailto:xjtuzyxf@163.com' },
-  { label: 'Wechat', link: 'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU4NTQ4NTg0Mg==&scene=110#wechat_redirect' },
 ];
 
 export default function App() {
