@@ -466,26 +466,6 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 
   建议加 crontab 每日备份，并**定期抽查**备份能打开（`sqlite3 ~/data.db.bak-xxxx '.tables'`）。
 
-### 随时看运行情况（三层监控，均不依赖宝塔）
-
-| 你想看什么 | 怎么看 |
-|---|---|
-| 站点挂没挂（半夜要能知道） | `.github/workflows/uptime.yml` 每 15 分钟从 GitHub 拨测 `/api/health`（连续 3 次失败才判死，防网络抖动误报），失败 = Actions 红灯 + 邮件通知（Watch 本仓库时，Actions 失败邮件默认开启）。⚠️ `schedule` 只在**默认分支 main** 上生效；且仓库 60 天无 push 会被 GitHub 自动停用定时任务，任意一次 push 即恢复 |
-| CPU / 内存 / 磁盘 / 流量总览 | 阿里云轻量应用服务器控制台自带的监控图表，无需装任何 agent——卸载宝塔后这就是资源总览的家 |
-| 服务 / 日志 / 资源细节 | 一键巡检（只读）：`ssh <user>@<server> 'bash -s' < deploy/status.sh`——输出系统负载、服务状态、本机健康检查、最近 20 行后端日志、nginx 配置校验、监听端口（顺带发现意外端口）、磁盘占用 Top5 |
-
-### 卸载宝塔（可选：迁移后彻底移除攻击面）
-
-> 顺序敏感：**Node 24 与生产 nginx 都在宝塔目录里**（`deploy/zyxf.service` 的
-> `ExecStart=/www/server/nodejs/v24.20.0/bin/node`；nginx 站点配置在 `/www/server/panel/vhost/`）。
-> 直接跑卸载脚本会删掉整个 `/www/server`，后端和 nginx 一起死。按下面顺序，每步验证通过再进下一步：
-
-1. **迁 Node 出宝塔目录**（NodeSource 装系统 Node 24）：`curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && apt install -y nodejs`；把 `deploy/zyxf.service` 的 `ExecStart` 改为 `/usr/bin/node`，`deploy.yml` 里的 `export PATH` 行删掉或指向系统路径。推 main 让部署跑一次，`systemctl status zyxf` + 健康检查通过后再继续。
-2. **迁 nginx 到系统包**：`apt install -y nginx`，把 `frontend/nginx.conf` 的 server 块落到 `/etc/nginx/conf.d/zyxf.conf`，并合并宝塔「伪静态」与 `proxy/<域名>/*.conf` 里的 `location ^~ /api`（两者合集 = 仓库的 [`frontend/nginx.bt-rewrite.conf`](../frontend/nginx.bt-rewrite.conf)）。证书路径沿用 `/etc/letsencrypt/live/zyxf.top/`（certbot 签发位置与宝塔无关）。
-3. **切流**：`nginx -t` 通过 → 停宝塔 nginx（先 `ss -tlnp | grep -E ':80|:443'` 看进程二进制路径；宝塔的走 `/etc/init.d/nginx stop`。它与系统 nginx **服务重名**，靠二进制路径区分）→ `systemctl enable --now nginx` → curl 验证首页 / 深链 / `/api/health` / 上传下载。
-4. **验证证书续期**：`certbot renew --dry-run`（`python3-certbot-nginx` 会按当前生效的 nginx 配置续期）。
-5. **卸载面板**：`tar -C / -czf ~/bt-backup.tar.gz www/server/panel/vhost`（留配置快照便于回滚）→ 官方 `bt-uninstall.sh` 选**彻底卸载** → `ss -tlnp` 确认 8888 等面板端口彻底消失，`systemctl status zyxf` 与健康检查正常。
-
 ---
 
 ## 8. 常见坑
