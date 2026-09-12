@@ -15,15 +15,13 @@
 
 ```yaml
 更新日期: 2026-09-11
-条目总数: 140        # 缺陷 98 + 改进 42
-待处理: 8            # 缺陷 3 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；93/94 设计规范审计只建档；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index）
-已归档: 132          # 缺陷 95 + 改进 37
-# 本批（公开仓库前审计）：全量扫描工作区与全部提交的密钥/敏感文件——.env、data.db、
-#   证书、日志、云 AK、私钥、PAT 从未入库，无泄露。唯一发现 BUG-103：部署文档把服务器
-#   真实公网 IP 写进了仓库与全部历史——文档改用 RFC 5737 保留段占位，历史用 git-filter-repo
-#   replace-text 全量替换，顺带用 mailmap 把 14 个错署到 guochao@users.noreply.github.com
-#   （该地址归属另一账号）的提交统一为 Guochaoo 的邮箱。随后补 Apache-2.0 LICENSE
-#   （IMPROVE-47）并把仓库切为 public。
+条目总数: 142        # 缺陷 98 + 改进 44
+待处理: 9            # 缺陷 3 + 改进 6（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；48 卸载宝塔迁移计划；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index）
+已归档: 133          # 缺陷 95 + 改进 38
+# 本批（公开后风险评估 + 监控落地，2026-09-12）：外部实测 :4000 / 宝塔 :8888 不可达、
+#   OSS 拒绝匿名列举、安全头齐全——开源未引入秘密泄露。为卸载宝塔铺路：落地三层监控
+#   （uptime.yml 拨测 / 轻量控制台资源图表 / deploy/status.sh 巡检，IMPROVE-49 已归档），
+#   建档 IMPROVE-48（Node 与 nginx 均在 /www/server 内，卸载前必须先迁移，见 DEPLOY.md §7）。
 # 授权（IMPROVE-46，已关闭）：**子集化属于第 2 条「embed, bundle ... with any software」的授权范围**
 #   ——CJK 字体要嵌进 Web 就必须子集化，这是行使嵌入权的正常方式；条件 2）的「不得修改」针对的是
 #   改动字形设计，不是挑选要发布哪些字形。真正约束我们的是条件 1）显著署名 与 条件 4）随附协议：
@@ -36,7 +34,7 @@
 
 ### 1.1 缺陷
 
-设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；设置页改造批新发现的 **1 条**（BUG-95）当轮修复并归档；预览/下载故障复盘批新发现的 **1 条**（BUG-96）也已当轮修复；随后 SPA 深链批与知识图谱批各新发现 **1 条**（BUG-97、BUG-98），均当轮修复；线上首屏性能实测批新发现 **3 条**：BUG-100（生产 nginx 三条规则未生效）、BUG-101（favicon 107 KB）与 **BUG-99（首屏 21.7 MB 字体）**，均已当轮修复并线上验证（BUG-99 的最终做法见 [2.1 已修复缺陷](#21-已修复缺陷)（94））。最后把内容索引那批合入 main 时发生**部署事故**，新增 **BUG-102**，当轮 revert 处置、条目保留待解。随后为仓库公开做敏感信息全量审计：唯一发现 **BUG-103**（部署文档把服务器真实公网 IP 写进仓库与历史），当轮修复并历史改写；同轮补 Apache-2.0 LICENSE（**IMPROVE-47**）。
+设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；设置页改造批新发现的 **1 条**（BUG-95）当轮修复并归档；预览/下载故障复盘批新发现的 **1 条**（BUG-96）也已当轮修复；随后 SPA 深链批与知识图谱批各新发现 **1 条**（BUG-97、BUG-98），均当轮修复；线上首屏性能实测批新发现 **3 条**：BUG-100（生产 nginx 三条规则未生效）、BUG-101（favicon 107 KB）与 **BUG-99（首屏 21.7 MB 字体）**，均已当轮修复并线上验证（BUG-99 的最终做法见 [2.1 已修复缺陷](#21-已修复缺陷)（94））。最后把内容索引那批合入 main 时发生**部署事故**，新增 **BUG-102**，当轮 revert 处置、条目保留待解。随后为仓库公开做敏感信息全量审计：唯一发现 **BUG-103**（部署文档把服务器真实公网 IP 写进仓库与历史），当轮修复并历史改写；同轮补 Apache-2.0 LICENSE（**IMPROVE-47**）。2026-09-12 对公开站点做外部风险评估（端口 / OSS 匿名访问 / 响应头实测，均无问题），落地监控三层替代（**IMPROVE-49**），并建档 **IMPROVE-48**（卸载宝塔的迁移前置：Node 与 nginx 均在宝塔目录内）。
 
 #### BUG-93 · 下载热力图的星期标签比格子错开一天（周一开头的网格配了周日开头的字典）
 **影响范围**：`frontend/src/pages/Dashboard/ActivityHeatmap.jsx` · `frontend/src/i18n/zh.js` · `frontend/src/i18n/en.js`（前端 · 正确性 / i18n）
@@ -115,6 +113,14 @@
 - **影响**：助手引用未知后缀文件（如 `.md`、未列入族别表的自定义后缀）时，胶囊上会出现一个突兀的黑色方块徽章，和同排其他族别色不一致；读起来像「强调」而不是「未知」。
 - **修法（二选一）**：① 把 `DEFAULT_TONE` 换成中性灰 `bg-[#808080]`，与 `archive` / 文件夹同色，语义上更贴「未知」；② 若要保留品牌蓝语义，则改用不受覆盖规则影响的内联样式或新增一个真正生效的蓝色 token（不要继续用 `bg-brand-*`——它在本项目里永远渲染为墨黑，见 `docs/DESIGN.md` §2）。
 - **验证**：在聊天里让助手引用一个未知后缀文件，确认徽章为中性灰且与其余族别色亮度一致；`npm test` 全绿（现有测试未断言该色调）。
+
+#### IMPROVE-48 · 卸载宝塔面板：Node 24 与生产 nginx 都在 /www/server 内，直接卸载会弄死服务
+**影响范围**：`deploy/zyxf.service` · `.github/workflows/deploy.yml` · `docs/DEPLOY.md`（部署 · 攻击面收敛）
+
+- **现状**：生产 nginx 由宝塔托管（DEPLOY.md §4「当前生产就是这种」），且 `zyxf.service` 的 `ExecStart=/www/server/nodejs/v24.20.0/bin/node`——**Node 也装在宝塔目录里**。部署已 100% 不依赖面板（GitHub Actions SSH 全自动），但面板本体仍在服务器上；宝塔历史高危漏洞多，是不再产生价值的纯增量攻击面。外部实测 :8888 不可达（2026-09-12），当前风险仅在于「未来配置失误暴露」或「面板 0day」。
+- **影响**：面板一旦暴露或被打穿，攻击者直接拿到 root 与 `.env` 全部凭证；平时也要为它持续打补丁。
+- **修法**：顺序敏感——① 先把 Node 迁出宝塔目录（NodeSource 装系统 Node 24），同步改 `deploy/zyxf.service` 的 ExecStart 与 `deploy.yml` 的 PATH，重启后健康检查过再继续；② `apt install nginx`，按 `frontend/nginx.conf` + `frontend/nginx.bt-rewrite.conf` 合成 `/etc/nginx/conf.d/zyxf.conf`（证书沿用 /etc/letsencrypt）；③ 停宝塔 nginx → `systemctl enable --now nginx` 切流 → 全站验证 → `certbot renew --dry-run`；④ 备份 `/www/server/panel/vhost` 后跑官方 `bt-uninstall.sh` 彻底卸载。逐步命令见 DEPLOY.md §7「卸载宝塔」。
+- **验证**：每步后 curl 首页 / 深链 / `/api/health` / 上传下载；卸载后 `ss -tlnp` 确认 8888 等端口消失、服务正常、次日 certbot 续期成功。
 
 ---
 
@@ -222,7 +228,7 @@
 | BUG-99 | P1 | 前端·性能 | 首屏要传 21.7 MB 字体（唯一瓶颈）：源字体改走 npm，构建期子集化到 GB2312，**21.69 MB → 2.72 MB** 且 `fvar` 字重轴（100–700）保留；协议原文移至 `public/licenses/` 并在首页页脚给出署名链接 | `frontend/scripts/build-font.mjs`, `frontend/src/index.css`, `frontend/package.json`, `frontend/src/pages/BrowsePage.jsx`, `frontend/public/licenses/` | 2026-09-11 |
 | BUG-103 | P2 | 安全·信息泄露 | 部署文档把服务器真实公网 IP 写进仓库（全历史 196 处）：文档改用 RFC 5737 保留段占位并加「勿写入真实 IP」提醒；历史用 git-filter-repo replace-text 全量替换，顺带 mailmap 修正 14 个错误署名提交。注意 GitHub 侧 refs/pull/* 仍钉住改写前对象，彻底清除需 Support GC | `docs/DEPLOY.md`, git 历史（filter-repo） | 2026-09-11 |
 
-### 2.2 已关闭改进项（37）
+### 2.2 已关闭改进项（38）
 
 | 编号 | 严重度 | 类别 | 标题 | 处理位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -263,3 +269,4 @@
 | IMPROVE-45 | P2 | 性能 | 「关于」页 4 张图合计 1.17 MB：无懒加载、无宽高、PNG 未转格式 | `frontend/public/images/`, `frontend/src/pages/AboutPage.jsx`, `frontend/scripts/optimize-assets.py` | 2026-09-11 |
 | IMPROVE-46 | P2 | 授权·合规 | OPPO Sans 子集化的授权依据与署名义务：确认子集化属于第 2 条「embed, bundle」授权范围（CJK webfont 的技术前提），真正约束的是条件 1）/4）的两条署名义务，已落实到页脚署名链接与随附协议 | `frontend/public/licenses/OPPO-Sans-4.0-License.txt`, `frontend/src/pages/BrowsePage.jsx`, `frontend/scripts/build-font.mjs`, `docs/DEPLOY.md` | 2026-09-11 |
 | IMPROVE-47 | P2 | 合规·开源 | 公开仓库前缺 LICENSE：补 Apache-2.0 协议文件，README 增加许可证小节 | `LICENSE`, `README.md` | 2026-09-11 |
+| IMPROVE-49 | P2 | 部署·可观测 | 卸宝塔的前置——监控三层替代：uptime.yml 每 15 分钟拨测 `/api/health`（3 连败=Actions 红灯+邮件）、轻量服务器控制台自带资源图表、deploy/status.sh 一键巡检 | `.github/workflows/uptime.yml`, `deploy/status.sh`, `docs/DEPLOY.md` | 2026-09-12 |

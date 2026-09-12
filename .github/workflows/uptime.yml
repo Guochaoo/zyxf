@@ -1,0 +1,28 @@
+name: Uptime
+
+# 拨测线上健康检查：每 15 分钟一次。schedule 只在默认分支 main 上生效——
+# 合入 main 后开始跑；dev 阶段可用 workflow_dispatch 手动验证。
+# 失败 = Actions 红灯 + 通知（Watch 本仓库时，Actions 失败邮件默认开启）。
+# ⚠️ GitHub 对 60 天无 push 的仓库会自动停用定时工作流，任意一次 push 即恢复。
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Health check（连续 3 次失败才判死，防网络抖动误报）
+        run: |
+          for i in 1 2 3; do
+            if curl -fsS --max-time 20 https://zyxf.top/api/health | grep -q '"ok":true'; then
+              echo "第 $i 次尝试：正常"
+              exit 0
+            fi
+            echo "第 $i 次尝试失败"
+            [ "$i" = 3 ] || sleep 30
+          done
+          exit 1
