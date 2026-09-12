@@ -15,8 +15,8 @@
 
 ```yaml
 更新日期: 2026-09-12
-条目总数: 141        # 缺陷 98 + 改进 43
-待处理: 8            # 缺陷 3 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index）
+条目总数: 142        # 缺陷 98 + 改进 44
+待处理: 9            # 缺陷 3 + 改进 6（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；50 OSS 域名证书 10-05 到期；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index）
 已归档: 133          # 缺陷 95 + 改进 38
 # 本批（卸载宝塔迁移系统组件，2026-09-12）：Node 24 与 nginx 换成系统级安装（NodeSource
 #   v24.21 + apt nginx 1.18，配置 = frontend/nginx.conf 落地 /etc/nginx/conf.d/zyxf.conf），
@@ -115,6 +115,14 @@
 - **影响**：助手引用未知后缀文件（如 `.md`、未列入族别表的自定义后缀）时，胶囊上会出现一个突兀的黑色方块徽章，和同排其他族别色不一致；读起来像「强调」而不是「未知」。
 - **修法（二选一）**：① 把 `DEFAULT_TONE` 换成中性灰 `bg-[#808080]`，与 `archive` / 文件夹同色，语义上更贴「未知」；② 若要保留品牌蓝语义，则改用不受覆盖规则影响的内联样式或新增一个真正生效的蓝色 token（不要继续用 `bg-brand-*`——它在本项目里永远渲染为墨黑，见 `docs/DESIGN.md` §2）。
 - **验证**：在聊天里让助手引用一个未知后缀文件，确认徽章为中性灰且与其余族别色亮度一致；`npm test` 全绿（现有测试未断言该色调）。
+
+#### IMPROVE-50 · OSS 自定义域名证书 2026-10-05 到期，阿里云免费 DV 不自动续期
+**影响范围**：`/opt/zyxf/.env（OSS_ENDPOINT）` · 阿里云 SSL 证书控制台（部署 · 运维）
+
+- **现状**：`.env` 的 `OSS_ENDPOINT=https://oss.zyxf.top`，浏览器直传/直读和 IMM 预览都走它。该域名当前绑定的阿里云免费 DV 证书（cert-38cqrv，DigiCert「Encryption Everywhere DV TLS CA - G2」签发，2026-07-08 ~ **2026-10-06**）实测在服役。阿里云免费 DV 证书**不自动续期**，需每年手动重新申请再部署到 OSS。
+- **影响**：2026-10-06 起浏览器访问 OSS 会报证书过期——上传 / 下载 / 文档预览全部失败；且后端签名接口照常返回 200（签名是本地算的），表象与「AccessKey 失效」的坑同款，容易误判成代码问题。
+- **修法（9 月底前二选一）**：① 保留自定义域名：SSL 控制台重新申请一张免费 DV（域名填 `oss.zyxf.top`）→ 部署到 OSS（OSS 控制台 → Bucket `xjtu-zyxf` → 域名管理 → 替换证书绑定）；② 切换标准域名 `https://xjtu-zyxf.oss-cn-beijing.aliyuncs.com`（走阿里云通配符证书、永续免维护）——但 docs 曾记录「自定义域名是 IMM WebOffice 预览的前提」，切换后必须实测预览，通过才改 `.env` 并 `systemctl restart zyxf`；通过的话主站域名那张 cert-hb5xp3（zyxf.top/www.zyxf.top，2026-10-05 到期）就可以一并删除。
+- **验证**：`echo | openssl s_client -connect oss.zyxf.top:443 -servername oss.zyxf.top | openssl x509 -noout -enddate` 到期日应晚于当前 30 天以上；浏览器实际上传 + 预览各一遍。
 
 ---
 
