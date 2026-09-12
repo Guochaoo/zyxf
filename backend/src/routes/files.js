@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import path from 'node:path';
-import { db } from '../db.js';
+import { db, prepareOnce } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { buildPostPolicy, copyOssObject, deleteOssObjectIfExists, signedGetUrl } from '../oss.js';
 import { generateWebofficeToken, refreshWebofficeToken } from '../imm.js';
@@ -8,7 +8,7 @@ import { mimeOf } from '../mime.js';
 import { findSibling, folderExists, isUniqueError, nextSortOrder } from '../dbHelpers.js';
 import { objectKeyForFile, ossPrefix, parseOptionalFolderId } from '../storagePath.js';
 import { isExtAllowed, normalizeExt, PREVIEWABLE_EXTS, shouldForceDownload } from '../extPolicy.js';
-import { invalidateLibraryCaches } from '../searchService.js';
+import { invalidateLibraryCaches } from '../libraryCaches.js';
 import { adminBypassLimiter } from '../limiter.js';
 import { wrapAsync, serviceError } from '../http.js';
 
@@ -70,8 +70,8 @@ const findFileByName = (name, folderId, excludeId) =>
 // 报 409，前端 cleanup-upload 又因该 key 已被引用而拒绝清理 → 内容被换且不可恢复。
 const findFileByOssKey = (key, excludeId = null) =>
   excludeId == null
-    ? db.prepare('SELECT id FROM files WHERE oss_key = ?').get(key)
-    : db.prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?').get(key, excludeId);
+    ? prepareOnce('SELECT id FROM files WHERE oss_key = ?').get(key)
+    : prepareOnce('SELECT id FROM files WHERE oss_key = ? AND id != ?').get(key, excludeId);
 
 const KEY_TAKEN_ERROR = '该存储路径已被占用（同名或等价名称的文件已存在）';
 
@@ -108,7 +108,7 @@ function getFileOr404(req, res) {
     res.status(400).json({ error: '无效的文件 ID' });
     return null;
   }
-  const file = db.prepare('SELECT * FROM files WHERE id = ?').get(id);
+  const file = prepareOnce('SELECT * FROM files WHERE id = ?').get(id);
   if (!file) {
     res.status(404).json({ error: '资源不存在' });
     return null;
@@ -139,12 +139,11 @@ router.post('/', requireAdmin, wrapAsync(async (req, res) => {
   }
   const so = nextSortOrder(db, 'files', 'folder_id', v.pid);
   try {
-    const info = db
-      .prepare(
-        `INSERT INTO files (folder_id, name, oss_key, size, mime_type, ext, uploader, sort_order, created_at)
+    const info = prepareOnce(
+      `INSERT INTO files (folder_id, name, oss_key, size, mime_type, ext, uploader, sort_order, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
+    )
+    .run(
         v.pid,
         v.trimmed,
         oss_key,
@@ -181,7 +180,7 @@ router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => 
     const ip = req.ip || req.socket?.remoteAddress || '';
     const ua = String(req.headers['user-agent'] || '').slice(0, 256);
     if (shouldLogDownload(file.id, ip)) {
-      db.prepare(
+      prepareOnce(
         'INSERT INTO download_logs (file_id, file_name, downloaded_at, ip, ua) VALUES (?, ?, ?, ?, ?)'
       ).run(file.id, file.name, Date.now(), ip || null, ua || null);
     }
@@ -279,7 +278,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
     }
 
     const newKey = objectKeyForFile(db, file.folder_id, newName);
-    if (db.prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?').get(newKey, id)) {
+    if (prepareOnce('SELECT id FROM files WHERE oss_key = ? AND id != ?').get(newKey, id)) {
       return res.status(409).json({ error: '目标存储路径已存在同名文件' });
     }
 
@@ -288,7 +287,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
         file,
         newKey,
         () =>
-          db.prepare('UPDATE files SET name = ?, ext = ?, oss_key = ? WHERE id = ?').run(
+          prepareOnce('UPDATE files SET name = ?, ext = ?, oss_key = ? WHERE id = ?').run(
             newName,
             ext || null,
             newKey,
@@ -316,13 +315,13 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
   // 而 OSS key 是 cleanObjectSegment 归一化后比较，两者不等价（历史脏数据、Unicode
   // 归一化差异都能制造同名不同 name 的情况）。缺这步会先 copyOssObject 覆盖目标对象、
   // 再因 UNIQUE(oss_key) 抛 500——目标文件的内容被换掉而 DB 行还指向旧 key。
-  if (db.prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?').get(newKey, id)) {
+  if (prepareOnce('SELECT id FROM files WHERE oss_key = ? AND id != ?').get(newKey, id)) {
     return res.status(409).json({ error: '目标存储路径已存在同名文件' });
   }
   try {
     await copyUpdateDelete(file, newKey, () => {
       const so = nextSortOrder(db, 'files', 'folder_id', target);
-      db.prepare('UPDATE files SET folder_id = ?, oss_key = ?, sort_order = ? WHERE id = ?').run(
+      prepareOnce('UPDATE files SET folder_id = ?, oss_key = ?, sort_order = ? WHERE id = ?').run(
         target,
         newKey,
         so,
@@ -345,7 +344,7 @@ router.delete('/:id', requireAdmin, wrapAsync(async (req, res) => {
   } catch (e) {
     return serviceError(res, e, 'OSS 删除失败');
   }
-  db.prepare('DELETE FROM files WHERE id = ?').run(file.id);
+  prepareOnce('DELETE FROM files WHERE id = ?').run(file.id);
   invalidateLibraryCaches();
   res.json({ ok: true });
 }));
@@ -373,7 +372,7 @@ router.post('/cleanup-upload', requireAdmin, wrapAsync(async (req, res) => {
   }
   // 已被 files 行引用的对象不能删：注册失败后的清理不该动到已入库文件的对象
   // （并发或同名上传会让两者的 key 相同），否则等于把线上文件的存储对象删掉。
-  if (db.prepare('SELECT id FROM files WHERE oss_key = ?').get(oss_key)) {
+  if (prepareOnce('SELECT id FROM files WHERE oss_key = ?').get(oss_key)) {
     return res.status(409).json({ error: '该对象已被文件记录引用，拒绝清理' });
   }
   try {

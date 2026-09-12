@@ -94,10 +94,13 @@ describe('BUG-26: MIME 以扩展名派生值为权威', () => {
 
   test('客户端不传 mime_type 时同样落库派生值', async () => {
     const token = await adminLogin();
-    await registerFile(token, { name: 'nomime.docx' });
+    const r = await registerFile(token, { name: 'nomime.docx' });
+    // 先断言注册成功：偶发的登录/注册失败会以「row 为 undefined」的 TypeError 呈现，
+    // 真实原因（下游 401/409）被掩盖（见 docs/ISSUES.md 的偶发登录失败条目）。
+    assert.equal(r.status, 200, `注册应成功，实际 ${r.status}: ${JSON.stringify(r.body)}`);
     const row = db.prepare("SELECT mime_type FROM files WHERE name = 'nomime.docx'").get();
     assert.equal(
-      row.mime_type,
+      row?.mime_type,
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     );
   });
@@ -105,6 +108,7 @@ describe('BUG-26: MIME 以扩展名派生值为权威', () => {
   test('URL 响应的 MIME 与落库值一致（同源）', async () => {
     const token = await adminLogin();
     const created = await registerFile(token, { name: 'same.txt', mime_type: 'text/x-wrong' });
+    assert.equal(created.status, 200, `注册应成功，实际 ${created.status}: ${JSON.stringify(created.body)}`);
     const stored = db.prepare('SELECT mime_type FROM files WHERE id = ?').get(created.body.id);
     const { body } = await request('GET', `/api/files/${created.body.id}/url`);
     assert.equal(body.mime_type, stored.mime_type);

@@ -1,12 +1,12 @@
 import { Router } from 'express';
-import { db, transaction } from '../db.js';
+import { db, prepareOnce, transaction } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { copyOssObject, deleteOssObjectIfExists, putEmptyOssObject } from '../oss.js';
 import { buildFolderIndex, findSibling, folderExists, groupByKey, isUniqueError, nextSortOrder } from '../dbHelpers.js';
 import { wrapAsync, serviceError } from '../http.js';
 import { objectKeyForFileFromMap, parseOptionalFolderId, placeholderKeyForFolder, placeholderKeyForFolderFromMap } from '../storagePath.js';
-import { invalidateLibraryCaches } from '../searchService.js';
-import { getCachedTree, setCachedTree, invalidateTreeCache } from '../treeCache.js';
+import { invalidateLibraryCaches } from '../libraryCaches.js';
+import { getCachedTree, setCachedTree } from '../treeCache.js';
 
 const router = Router();
 
@@ -61,7 +61,7 @@ const sortByName = (rows, desc) =>
 
 function getFolder(id) {
   if (id === 0 || id === '0' || id == null) return { id: 0, name: '首页', parent_id: null };
-  return db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
+  return prepareOnce('SELECT * FROM folders WHERE id = ?').get(id);
 }
 
 // A folder with the same name in the same parent, optionally excluding one id.
@@ -100,7 +100,7 @@ function computeFolderSizes(folderIds) {
 function collectFolderTree(folderId) {
   // Query 1: all folders once, then group children by parent in memory.
   const { folderMap, childrenOf } = buildFolderIndex(
-    db.prepare('SELECT id, name, parent_id FROM folders').all()
+    prepareOnce('SELECT id, name, parent_id FROM folders').all()
   );
 
   // DFS pre-order from the root folder, preserving the original walk order.
@@ -115,7 +115,7 @@ function collectFolderTree(folderId) {
 
   // Query 2: all files once, grouped by folder_id for O(1) lookup.
   const filesByFolder = groupByKey(
-    db.prepare('SELECT id, folder_id, name, oss_key FROM files').all(),
+    prepareOnce('SELECT id, folder_id, name, oss_key FROM files').all(),
     (f) => f.folder_id ?? null
   );
 
@@ -163,7 +163,7 @@ function planFolderSubtreeMove(folderId, { parentOverrides, nameOverrides } = {}
     newKey: objectKeyForFileFromMap(file.folder_id, file.name, folderMap, parentOverrides, nameOverrides),
   }));
   // 循环外 prepare 一次复用：原实现对子树里每个文件都重新解析一次 SQL。
-  const keyTakenByOther = db.prepare('SELECT id FROM files WHERE oss_key = ? AND id != ?');
+  const keyTakenByOther = prepareOnce('SELECT id FROM files WHERE oss_key = ? AND id != ?');
   for (const move of fileMoves) {
     if (keyTakenByOther.get(move.newKey, move.id)) {
       return { conflict: true };
@@ -195,7 +195,7 @@ function relocateFolderSubtree(folderId, { parentOverrides, nameOverrides, updat
   if (plan.conflict) return { conflict: true };
   if (plan.tooLarge) return { tooLarge: true, size: plan.size };
 
-  const updateFile = db.prepare('UPDATE files SET oss_key = ? WHERE id = ?');
+  const updateFile = prepareOnce('UPDATE files SET oss_key = ? WHERE id = ?');
   const tx = transaction(() => {
     updateFolder();
     for (const move of plan.fileMoves) updateFile.run(move.newKey, move.id);
@@ -209,7 +209,7 @@ function getBreadcrumb(id) {
   if (!id || id === 0) return crumbs;
   const chain = [];
   const seen = new Set();
-  let cur = db.prepare('SELECT id, name, parent_id FROM folders WHERE id = ?').get(id);
+  let cur = prepareOnce('SELECT id, name, parent_id FROM folders WHERE id = ?').get(id);
   let depth = 0;
   const MAX_DEPTH = 50;
   while (cur) {
@@ -219,7 +219,7 @@ function getBreadcrumb(id) {
     if (depth > MAX_DEPTH) break;
     if (seen.has(cur.parent_id)) break;
     seen.add(cur.parent_id);
-    cur = db.prepare('SELECT id, name, parent_id FROM folders WHERE id = ?').get(cur.parent_id);
+    cur = prepareOnce('SELECT id, name, parent_id FROM folders WHERE id = ?').get(cur.parent_id);
   }
   return crumbs.concat(chain);
 }
@@ -234,8 +234,8 @@ router.get('/tree', (_req, res) => {
   const cached = getCachedTree();
   if (cached) return res.json(cached);
 
-  const folders = db.prepare('SELECT id, name, parent_id, sort_order FROM folders').all();
-  const files = db.prepare('SELECT id, name, ext, size, folder_id, sort_order FROM files').all();
+  const folders = prepareOnce('SELECT id, name, parent_id, sort_order FROM folders').all();
+  const files = prepareOnce('SELECT id, name, ext, size, folder_id, sort_order FROM files').all();
 
   // Replicate SQL ORDER BY sort_order, name COLLATE NOCASE; id is a stable
   // tiebreak for rows equal on both (undefined order in the original SQL).
@@ -295,8 +295,7 @@ router.get('/:id/contents', (req, res) => {
   // Manual mode: also include id as tiebreaker; non-manual: secondary by name then id
   const tieBreak =
     sort === SORT_FIELDS.manual ? `, id ${order}` : `, name COLLATE NOCASE ASC, id ASC`;
-  const folders = db
-    .prepare(
+  const folders = prepareOnce(
       `SELECT id, name, sort_order, created_at FROM folders WHERE ${parentClause} ORDER BY ${folderSortKey} ${order}${tieBreak}`
     )
     .all(...args)
@@ -317,8 +316,7 @@ router.get('/:id/contents', (req, res) => {
   }
 
   // oss_key is internal storage layout — not exposed to (anonymous) clients.
-  const files = db
-    .prepare(
+  const files = prepareOnce(
       `SELECT id, name, size, mime_type, ext, sort_order, created_at FROM files WHERE ${folderClause} ORDER BY ${sort} ${order}${tieBreak}`
     )
     .all(...args)
@@ -372,7 +370,7 @@ router.post('/', requireAdmin, wrapAsync(async (req, res, next) => {
     try {
       await putEmptyOssObject(placeholderKeyForFolder(db, info.lastInsertRowid));
     } catch (e) {
-      db.prepare('DELETE FROM folders WHERE id = ?').run(info.lastInsertRowid);
+      prepareOnce('DELETE FROM folders WHERE id = ?').run(info.lastInsertRowid);
       throw e;
     }
     invalidateLibraryCaches();
@@ -424,7 +422,7 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
         nameOverrides: new Map([[id, newName]]),
         updateFolder: () => {
           if (findFolderInParent(newName, parentId, id)) throw new UniqueFolderNameError();
-          db.prepare('UPDATE folders SET name = ? WHERE id = ?').run(newName, id);
+          prepareOnce('UPDATE folders SET name = ? WHERE id = ?').run(newName, id);
         },
       });
     } catch (e) {
@@ -464,12 +462,12 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res) => {
           while (cur != null && !seen.has(cur)) {
             if (cur === id) throw new MoveTargetError('不能移动到自身的子文件夹中');
             seen.add(cur);
-            cur = db.prepare('SELECT parent_id FROM folders WHERE id = ?').get(cur)?.parent_id ?? null;
+            cur = prepareOnce('SELECT parent_id FROM folders WHERE id = ?').get(cur)?.parent_id ?? null;
           }
         }
         if (findFolderInParent(folder.name, newParent, id)) throw new UniqueFolderNameError();
         const so = nextSortOrder(db, 'folders', 'parent_id', newParent);
-        db.prepare('UPDATE folders SET parent_id = ?, sort_order = ? WHERE id = ?').run(newParent, so, id);
+        prepareOnce('UPDATE folders SET parent_id = ?, sort_order = ? WHERE id = ?').run(newParent, so, id);
       },
     });
   } catch (e) {
@@ -507,8 +505,8 @@ router.post('/reorder', requireAdmin, (req, res) => {
   // Validate every entry belongs to the claimed parent folder.
   // 两条语句在循环外 prepare 一次复用（原实现逐项重新解析 SQL）。
   const parentOf = {
-    file: db.prepare('SELECT folder_id p FROM files WHERE id = ?'),
-    folder: db.prepare('SELECT parent_id p FROM folders WHERE id = ?'),
+    file: prepareOnce('SELECT folder_id p FROM files WHERE id = ?'),
+    folder: prepareOnce('SELECT parent_id p FROM folders WHERE id = ?'),
   };
   for (const it of order.filter(isReorderItem)) {
     const f = parentOf[it.type].get(Number(it.id));
@@ -522,8 +520,8 @@ router.post('/reorder', requireAdmin, (req, res) => {
   // Backend uses interleaved indexes for both, which is fine because UI orders by sort_order globally
   // among each type, and we want the user-visible ordering to match the array.
   const updateStmt = {
-    file: db.prepare('UPDATE files SET sort_order = ? WHERE id = ?'),
-    folder: db.prepare('UPDATE folders SET sort_order = ? WHERE id = ?'),
+    file: prepareOnce('UPDATE files SET sort_order = ? WHERE id = ?'),
+    folder: prepareOnce('UPDATE folders SET sort_order = ? WHERE id = ?'),
   };
   const tx = transaction(() => {
     for (let i = 0; i < order.length; i++) {
@@ -560,7 +558,7 @@ router.delete('/:id', requireAdmin, wrapAsync(async (req, res) => {
     return serviceError(res, e, 'OSS 删除失败');
   }
 
-  db.prepare('DELETE FROM folders WHERE id = ?').run(id);
+  prepareOnce('DELETE FROM folders WHERE id = ?').run(id);
   invalidateLibraryCaches();
   res.json({ ok: true, removed_files: keys.length });
 }));
