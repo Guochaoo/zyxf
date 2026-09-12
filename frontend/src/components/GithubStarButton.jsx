@@ -1,12 +1,12 @@
-import { forwardRef, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
-// 菜单打开时出现在开关左侧的 GitHub Star 按钮（视觉与 .sm-toggle 成对：
-// 黑底胶囊、34px 高、14px 圆角；扫光与金星 hover 来自上游模板）。
+// 菜单面板顶部（absolute）的 GitHub Star 按钮：随面板滑入滑出——打开时从开关按钮
+// 下方「流出」，关闭时流回；left 取面板内边距 2em，与面板条目（资料库…）左缘对齐。
 // 「Star on GitHub」是品牌短语，与菜单里的社交渠道一样不做翻译。
 const REPO_URL = 'https://github.com/Guochaoo/zyxf';
 const REPO_API = 'https://api.github.com/repos/Guochaoo/zyxf';
 
-// 模块级缓存：反复开合菜单只发一次请求；失败不缓存，下次打开再试。
+// 模块级缓存：组件随面板常驻渲染，挂载即请求一次，反复开合菜单不重复发；失败不缓存。
 let starsCache = null;
 
 // 测试隔离用：清空模块级 star 数缓存。
@@ -14,7 +14,7 @@ export function __resetStarsForTest() {
   starsCache = null;
 }
 
-const GithubStarButton = forwardRef(function GithubStarButton({ href = REPO_URL }, ref) {
+function GithubStarButton() {
   const [stars, setStars] = useState(starsCache);
 
   useEffect(() => {
@@ -33,7 +33,7 @@ const GithubStarButton = forwardRef(function GithubStarButton({ href = REPO_URL 
   }, []);
 
   return (
-    <a ref={ref} className="sm-gh-star" href={href} target="_blank" rel="noopener noreferrer">
+    <a className="sm-gh-star" href={REPO_URL} target="_blank" rel="noopener noreferrer">
       <span className="sm-gh-star-shine" aria-hidden="true" />
       <span className="sm-gh-star-inner">
         <svg className="sm-gh-star-logo" viewBox="0 0 438.549 438.549" aria-hidden="true">
@@ -55,6 +55,6 @@ const GithubStarButton = forwardRef(function GithubStarButton({ href = REPO_URL 
       )}
     </a>
   );
-});
+}
 
 export default GithubStarButton;

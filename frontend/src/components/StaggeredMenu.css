@@ -27,7 +27,6 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.5rem;
   padding: 0 1rem;
   background: transparent;
   pointer-events: none;
@@ -112,12 +111,17 @@
   outline: none;
 }
 
-/* ---- GitHub Star 按钮（菜单打开时挂在开关左侧，与 .sm-toggle 成对）----
-   同为黑底白字胶囊：34px 最小高、14px 圆角、同一组 hover 阴影；
-   扫光与金星变黄来自上游模板。#root 前缀用于压过 index.css 的
-   `.app-theme svg { color: var(--ink) }` 全局图标染色。 */
+/* ---- GitHub Star 按钮（挂在面板顶部，随面板滑入滑出）----
+   absolute 于面板左上：top 与 header 里的开关垂直持平（header top 5px +
+   48px 行高内居中 34px），left 用面板自身字号的 2em = 面板内边距，
+   与条目（资料库…）左缘对齐。滑动动画由面板时间线承载——打开时从开关
+   按钮（header z 更高）下方「流出」，关闭时流回。
+   颜色规则带 #root .staggered-menu-panel 前缀 + important：面板内有
+   `* { color: var(--ink) !important }` 的全局墨色染色，必须显式压回。 */
 .sm-gh-star {
-  position: relative;
+  position: absolute;
+  top: 12px;
+  left: 2em;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -127,13 +131,11 @@
   border-radius: 14px;
   background: #000000;
   color: #ffffff;
-  font-size: 0.875rem;
   font-weight: 600;
   line-height: 1;
   text-decoration: none;
   cursor: pointer;
   transition: background 0.2s, box-shadow 0.2s;
-  animation: sm-gh-star-in 0.24s ease-out;
 }
 
 .sm-gh-star:hover {
@@ -149,17 +151,6 @@
     rgba(0, 0, 0, 0.25) 0px 0px 0px 1px,
     rgba(0, 0, 0, 0.2) 0px 2px 4px,
     0 0 0 2px #ffffff, 0 0 0 4px #000000;
-}
-
-@keyframes sm-gh-star-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 .sm-gh-star-shine {
@@ -184,17 +175,17 @@
   align-items: center;
 }
 
-#root .sm-gh-star svg {
+#root .staggered-menu-panel .sm-gh-star svg {
   width: 1rem;
   height: 1rem;
   flex: 0 0 auto;
-  color: #ffffff;
+  color: #ffffff !important;
   fill: currentColor; /* logo svg 不带 fill-current 类，缺这条会落回默认黑色 */
 }
 
 .sm-gh-star-label {
   margin-left: 0.25rem;
-  color: #ffffff;
+  font-size: 0.875rem;
   white-space: nowrap;
 }
 
@@ -204,17 +195,17 @@
   gap: 0.25rem;
 }
 
-#root .sm-gh-star .sm-gh-star-star {
-  color: #9ca3af;
+#root .staggered-menu-panel .sm-gh-star .sm-gh-star-star {
+  color: #9ca3af !important;
   transition: color 0.3s ease;
 }
 
-#root .sm-gh-star:hover .sm-gh-star-star {
-  color: #fde047;
+#root .staggered-menu-panel .sm-gh-star:hover .sm-gh-star-star {
+  color: #fde047 !important;
 }
 
 .sm-gh-star-num {
-  color: #ffffff;
+  font-size: 0.875rem;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.05em;

@@ -162,9 +162,6 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   const textCycleAnimRef = useRef(null);
   const colorTweenRef = useRef(null);
   const toggleBtnRef = useRef(null);
-  // GitHub Star 按钮只在菜单打开时挂在开关左侧；它也在面板之外，必须参与
-  // click-outside 豁免，否则 mousedown 先收起菜单会把按钮卸载、链接点不中。
-  const ghStarRef = useRef(null);
   const busyRef = useRef(false);
   // 打开动画的开合轮次：await gsap 期间用户可能已经点了关闭（甚至又点开），
   // 回来的时间线只有在「仍是同一轮且仍是打开态」时才允许播放。
@@ -463,7 +460,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     closeMenu();
   };
 
-  useClickOutside(closeOnClickAway && open, closeMenu, panelRef, toggleBtnRef, ghStarRef);
+  useClickOutside(closeOnClickAway && open, closeMenu, panelRef, toggleBtnRef);
 
   useImperativeHandle(
     ref,
@@ -491,7 +488,6 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
         ))}
       </div>
       <header className="staggered-menu-header" aria-label="Main navigation header">
-        {open && !hideToggleButton && <GithubStarButton ref={ghStarRef} />}
         {!hideToggleButton && (
           <button
             ref={toggleBtnRef}
@@ -532,6 +528,9 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
         // 使可聚焦性与 aria-hidden 一致。
         inert={open ? undefined : ''}
       >
+        {/* GitHub Star 按钮挂在面板顶部（absolute），随面板滑入滑出——
+            打开时从开关按钮（header z 更高）下方「流出」，关闭时流回。 */}
+        {!hideToggleButton && <GithubStarButton />}
         <div className="sm-panel-inner">
           <ul className="sm-panel-list" role="list" data-numbering={displayItemNumbering || undefined}>
             {items && items.length ? (

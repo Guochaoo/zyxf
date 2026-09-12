@@ -93,29 +93,24 @@ describe('StaggeredMenu 关闭态面板不可聚焦', () => {
   });
 });
 
-// GitHub Star 按钮只在菜单打开时挂在开关左侧；star 数来自打开时的一次
+// GitHub Star 按钮常驻面板顶部（随面板滑入滑出），star 数来自挂载时的一次
 // GitHub API 请求（fetch 已在文件级 stub），失败则隐藏数字块、按钮本体保留。
 describe('StaggeredMenu GitHub Star 按钮', () => {
-  test('打开菜单后出现并显示拉取到的 star 数，关闭后移除', async () => {
+  test('挂在面板内、链接正确并显示拉取到的 star 数', async () => {
     renderMenu();
-    expect(document.querySelector('.sm-gh-star')).toBeNull();
-
-    document.querySelector('.sm-toggle').click();
-    const star = () => document.querySelector('.sm-gh-star');
-    await waitFor(() => expect(star()).not.toBeNull());
-    expect(star().getAttribute('href')).toBe('https://github.com/Guochaoo/zyxf');
-    expect(star().getAttribute('target')).toBe('_blank');
+    const star = document.querySelector('.sm-gh-star');
+    expect(star).not.toBeNull();
+    expect(star.closest('#staggered-menu-panel')).not.toBeNull();
+    expect(star.getAttribute('href')).toBe('https://github.com/Guochaoo/zyxf');
+    expect(star.getAttribute('target')).toBe('_blank');
     await waitFor(() => expect(document.querySelector('.sm-gh-star-num').textContent).toBe('7'));
-
-    document.querySelector('.sm-toggle').click();
-    await waitFor(() => expect(star()).toBeNull());
   });
 
   test('star 数请求失败时隐藏数字块，按钮本体仍在', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('offline'))));
     renderMenu();
-    document.querySelector('.sm-toggle').click();
-    await waitFor(() => expect(document.querySelector('.sm-gh-star')).not.toBeNull());
+    expect(document.querySelector('.sm-gh-star')).not.toBeNull();
+    await new Promise((r) => setTimeout(r, 50));
     expect(document.querySelector('.sm-gh-star-num')).toBeNull();
   });
 });
