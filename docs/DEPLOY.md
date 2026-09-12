@@ -1,7 +1,7 @@
 # 部署到阿里云轻量应用服务器（systemd + nginx）
 
 > 后端用 **systemd** 托管（`deploy/zyxf.service`），前端构建产物由 **nginx** 托管并反代 `/api`，HTTPS 用 Let's Encrypt。
-> 部署不再依赖宝塔面板管理 Node 项目——SSH 上去 `git fetch + reset --hard`（对齐 origin/main）+ 装依赖 + 构建 + `systemctl restart zyxf` 即可，由 `.github/workflows/deploy.yml` 全自动完成；部署后健康检查（`/api/health`）失败时，workflow 会自动把服务器退回部署前的修订并重建，避免线上持续 502。
+> 服务器上**没有面板**：nginx、Node 24、certbot 全部是系统级安装（2026-09-12 起宝塔已彻底卸载，见 docs/ISSUES.md IMPROVE-48）。部署由 `.github/workflows/deploy.yml` 全自动完成——SSH 上服务器 `git fetch + reset --hard`（对齐 origin/main）+ 装依赖 + 构建 + `systemctl restart zyxf`；部署后健康检查（`/api/health`）失败时，workflow 会自动把服务器退回部署前的修订并重建，避免线上持续 502。
 
 架构：
 
@@ -47,11 +47,12 @@ OSS 控制台 → 你的 Bucket → **数据安全 → 跨域设置** → 添加
 
 需要：
 
-- **Nginx**（托管前端 + 反代 `/api`）
-- **Node 24**（项目使用内置 `node:sqlite`，无原生编译依赖，安装后无需配置二进制源）
+- **Nginx**（系统包，`apt install nginx`；托管前端 + 反代 `/api`）
+- **Node 24**（系统包走 NodeSource：`curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && apt install -y nodejs`；项目使用内置 `node:sqlite`，无原生编译依赖）
+- **certbot + python3-certbot-nginx**（HTTPS 证书签发与自动续期）
 - **systemd**（Linux 标配，无需额外安装）
 
-> Node 24 若仍装在宝塔路径 `/www/server/nodejs/v24.20.0/bin`，本仓库的 systemd unit 与 deploy workflow 都按该绝对路径调用，无需软链到全局；如果你想用全局 `node`，改 `deploy/zyxf.service` 的 `ExecStart` 和 `deploy.yml` 里的 `export PATH` 即可。
+> `deploy/zyxf.service` 的 `ExecStart` 与 deploy workflow 都直接用 `/usr/bin/node`，不需要任何软链或 PATH 定制。
 
 ---
 
@@ -274,7 +275,6 @@ journalctl -u zyxf -f           # 跟踪日志
 
 ```bash
 cd /opt/zyxf/frontend
-export PATH="/www/server/nodejs/v24.20.0/bin:$PATH"
 npm install
 npm run build        # 生成 dist/
 ```
@@ -329,7 +329,7 @@ cd /opt/zyxf/frontend && npm install && npm run build   # prebuild 会自动跑 
 
 ### 4.2 nginx 站点配置
 
-在 `/etc/nginx/conf.d/zyxf.conf`（或宝塔已建站点的配置目录）写一份配置，把 `/` 静态托管与 `/api` 反代分开：
+在 `/etc/nginx/conf.d/zyxf.conf` 写一份配置，把 `/` 静态托管与 `/api` 反代分开（**当前生产就是这份**，由仓库 [frontend/nginx.conf](../frontend/nginx.conf) 逐字落地，证书路径指向 `/etc/letsencrypt/live/zyxf.top/`）：
 
 > 下面是**简版模板**（仅 `listen 80`，用于起步验证）。完整版（含 80→443 跳转、`/assets/` 长缓存、Let's Encrypt 证书路径）见仓库里的 [frontend/nginx.conf](../frontend/nginx.conf)，证书申请见第 5 节。
 
@@ -374,33 +374,20 @@ server {
 nginx -t && systemctl reload nginx
 ```
 
-> 若 nginx 是宝塔安装的，配置文件可能放在宝塔的站点目录下；直接在对应站点配置里粘贴上述 `location` 块即可，效果一致。
+> 完整模板就是仓库的 [frontend/nginx.conf](../frontend/nginx.conf)——生产 `/etc/nginx/conf.d/zyxf.conf` 与它逐字一致。**改配置的正确姿势**：改仓库模板 → 覆盖服务器上的 `/etc/nginx/conf.d/zyxf.conf` → `nginx -t && systemctl reload nginx`。证书由 certbot 签发到 `/etc/letsencrypt/live/zyxf.top/`（见第 5 节），`certbot.timer` 每天自动续期。
 
-#### 若站点由宝塔面板托管（当前生产就是这种）
+#### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 
-宝塔的站点模板（`/www/server/panel/vhost/nginx/<域名>.conf`）**不会**生成 SPA 回退，`/api` 反代由它 include 的 `proxy/<域名>/*.conf` 里的 `location ^~ /api` 提供。踩过的坑（BUG-97、BUG-100）：
-
-> ⚠️ **`frontend/nginx.conf` 只是模板，面板不会读它。** 生产实际生效的是本节的这些文件；只改仓库那份，线上不会有任何变化——BUG-78 的 CSP 修复、以及 `location /assets/` 的缓存头就是这样「改了但从未上线」的。为便于同步，仓库另存了一份**可直接落到面板**的完整版本：[`frontend/nginx.bt-rewrite.conf`](../frontend/nginx.bt-rewrite.conf)（内容 = 下面这些 location 的合集）。
-
-- **刷新任何前端路由都是 404**（`/folder/6`、`/dashboard`、`/about`、`/settings`）。原因就是缺 `location / { try_files $uri $uri/ /index.html; }`：这些路径在 `dist/` 里没有对应文件，必须交给 `index.html`。**别改 vhost 本体**（面板保存设置时会重写它），把这段写进面板的「**伪静态**」，即：
-
-  ```bash
-  # 面板：网站 → 设置 → 伪静态；等价于直接写这个文件
-  # 完整内容（含下面的缓存 / 安全头 / 资源 404）见 frontend/nginx.bt-rewrite.conf
-  F=/www/server/panel/vhost/rewrite/zyxf.top.conf
-  cp /opt/zyxf/frontend/nginx.bt-rewrite.conf "$F"
-  /www/server/nginx/sbin/nginx -t && /www/server/nginx/sbin/nginx -s reload
-  ```
-
-- **静态资源必须有 `Cache-Control`**（BUG-100）。宝塔默认对 `/assets/`、`/fonts/`、`/favicon.png` **一个缓存头都不下发**，浏览器于是退回「10% × (Date − Last-Modified)」的启发式缓存：带 hash 的构建产物无法长缓存，字体每次冷启动都要重新协商。必须补两类 location：
-  - `location ^~ /assets/`（**文件名带内容 hash**，含 `opposans-subset-<hash>.woff2`）→ `Cache-Control: public, max-age=31536000, immutable` + `try_files $uri =404`；
-  - `location ~* \.(?:ttf|otf|woff2?|png|jpe?g|webp|gif|svg|ico)$`（**文件名无 hash**，如 `/favicon.png`、`/images/*.webp`）→ `max-age=604800`。
-  - ⚠️ **`^~` 不能省**：nginx 的**正则 location 优先级高于普通前缀 location**，而上面那条扩展名正则也含 `woff2`——写成普通 `location /assets/` 时 `/assets/*.woff2` 会被正则抢走、只拿到 7 天（线上实测确认过）。`^~` 的含义是「本前缀命中后不再检查正则」。
-  - ⚠️ `/images/` 与 `/fonts/`（授权声明）不在 `/assets/` 覆盖范围内，少了那条正则，它们依然没有任何缓存头。
-- **安全头必须逐 location 重复声明**。`add_header` **不会被子级 `location` 继承**，任何自己写了 `add_header` 的 location 都会屏蔽 server 级的 HSTS。所以上面每个 location 都要把 `Strict-Transport-Security` / `X-Content-Type-Options` / `Referrer-Policy` / CSP 再写一遍。
-- **`index.html` 必须 `Cache-Control: no-cache`**（BUG-100）。它没有内容 hash，而缓存里的旧 HTML 会引用构建后**已被删除**的 chunk 文件名；那次请求会落到 SPA 回退拿到 HTML，浏览器按 `type="module"` 解析失败 → **整页白屏**。这是发版后最容易复现的线上事故。
-- **不存在的 `/assets/*` 必须回 404**，不能回落到 `index.html`。回 200 + `text/html` 同样会让模块脚本因 MIME 不符而拒绝执行。
-- **CSP 先以 `Content-Security-Policy-Report-Only` 上线**（仓库 `frontend/nginx.conf` 与 `nginx.bt-rewrite.conf` 现在都是 Report-Only）。⚠️ `script-src` **必须放行 `https://g.alicdn.com`**：`OfficeViewer.jsx` 会从那里注入 WPS WebOffice SDK，该脚本随后再 `appendChild` 加载同目录的 `wps.js`——漏了这条，**在线预览会整块失效**。用真实浏览器把预览 / 上传 / 图谱 / AI 对话都点一遍、确认控制台无违规后，再把每处 `-Report-Only` 去掉（每个文件里有 4 处，缺一处那一类路径就没有策略）。
+- **刷新任何前端路由都是 404**（`/folder/6`、`/dashboard`、`/about`、`/settings`）：缺 `location / { try_files $uri $uri/ /index.html; }`（BUG-97）。dist/ 里没有这些文件，必须交给 index.html 由前端路由接管。
+- **静态资源必须有 `Cache-Control`**（BUG-100），否则浏览器退回「10% × (Date − Last-Modified)」启发式缓存，字体每次冷启动重新协商：
+  - `location ^~ /assets/`（文件名带内容 hash，含 `opposans-subset-<hash>.woff2`）→ `max-age=31536000, immutable` + `try_files $uri =404`；
+  - `location ~* \.(?:ttf|otf|woff2?|png|jpe?g|webp|gif|svg|ico)$`（文件名无 hash，如 `/favicon.png`、`/images/*.webp`）→ `max-age=604800`。
+  - ⚠️ **`^~` 不能省**：nginx 的**正则 location 优先级高于普通前缀 location**，而扩展名正则也含 `woff2`——写成普通前缀时 `/assets/*.woff2` 会被正则抢走、只拿到 7 天（线上实测确认过）。
+- **`add_header` 不会被子级 location 继承**：任何自己写了 `add_header` 的 location 都会屏蔽 server 级的 HSTS / 安全头，所以模板里每个 location 都把 `Strict-Transport-Security` / `X-Content-Type-Options` / `Referrer-Policy` / CSP 重复声明了一遍。
+- **`index.html` 必须 `Cache-Control: no-cache`**：它没有内容 hash，缓存里的旧 HTML 引用构建后**已被删除**的 chunk 文件名，那次请求落到 SPA 回退拿到 HTML，浏览器按 `type="module"` 解析失败 → **整页白屏**（BUG-100，发版后最容易复现的事故）。
+- **不存在的 `/assets/*` 必须回 404**：回 200 + `text/html` 同样会让模块脚本因 MIME 不符拒绝执行。
+- **CSP 先以 `Content-Security-Policy-Report-Only` 上线**（模板现为 Report-Only）。⚠️ `script-src` **必须放行 `https://g.alicdn.com`**：`OfficeViewer.jsx` 会从那里注入 WPS WebOffice SDK，该脚本随后再加载同目录的 `wps.js`——漏了这条，**在线预览会整块失效**。真实浏览器把预览 / 上传 / 图谱 / AI 对话全点一遍、控制台无违规后，再去掉每处 `-Report-Only`（模板里共 4 处）。
+- **`/api` 反代必须覆写 `X-Forwarded-For` 为 `$remote_addr`**（不能 append 透传客户端带来的值）：后端按 trust proxy 取 XFF 做限流，可直连时伪造 XFF 能绕过所有限流（BUG-36）。这条成立的前提是后端只监听 `127.0.0.1`、无法被公网直连。
 - **`X-Forwarded-For` 必须覆盖而不是追加**。宝塔的 `proxy/<域名>/*.conf` 默认写的是 `$proxy_add_x_forwarded_for`（追加），而 `backend/src/index.js` 的 `app.set('trust proxy', 1)` 明确要求 nginx 用 `$remote_addr` 覆盖，否则客户端自带的 XFF 会一并传进后端，限流按伪造 IP 计数（BUG-36 的前提被破坏）。改成：
 
   ```bash
@@ -444,6 +431,7 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 - 后端日志：`journalctl -u zyxf -f`
 - 后端重启：`systemctl restart zyxf`
 - 后端状态：`systemctl status zyxf`
+- nginx 配置变更：改仓库 [frontend/nginx.conf](../frontend/nginx.conf) → 覆盖服务器 `/etc/nginx/conf.d/zyxf.conf` → `nginx -t && systemctl reload nginx`
 - 前端重构：`cd /opt/zyxf/frontend && npm install && npm run build`
 - 数据库备份（重要）：**注意后端启用了 WAL 模式**（`db.js` 的 `PRAGMA journal_mode = WAL`），
   只 `cp data.db` 会得到一个**空库或严重陈旧的库**——已提交事务可能全在 `data.db-wal` 里。
