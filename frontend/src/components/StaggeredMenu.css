@@ -175,6 +175,14 @@
   align-items: center;
 }
 
+/* 面板内 `* { color: var(--ink) !important }` 会把按钮文字一起染成墨色（黑底黑字），
+   文字三件套必须与 svg 一样用 important 压回白色。 */
+#root .staggered-menu-panel .sm-gh-star,
+#root .staggered-menu-panel .sm-gh-star .sm-gh-star-label,
+#root .staggered-menu-panel .sm-gh-star .sm-gh-star-num {
+  color: #ffffff !important;
+}
+
 #root .staggered-menu-panel .sm-gh-star svg {
   width: 1rem;
   height: 1rem;

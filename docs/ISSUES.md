@@ -15,9 +15,9 @@
 
 ```yaml
 更新日期: 2026-09-12
-条目总数: 154        # 缺陷 102 + 改进 52
+条目总数: 155        # 缺陷 103 + 改进 52
 待处理: 10           # 缺陷 4 + 改进 6（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index；104 为测试套件偶发登录失败；58 为测试覆盖缺口补齐清单）
-已归档: 144          # 缺陷 98 + 改进 46
+已归档: 145          # 缺陷 99 + 改进 46
 # 本批（卸载宝塔迁移系统组件，2026-09-12）：Node 24 与 nginx 换成系统级安装（NodeSource
 #   v24.21 + apt nginx 1.18，配置 = frontend/nginx.conf 落地 /etc/nginx/conf.d/zyxf.conf），
 #   证书改 certbot 签发 /etc/letsencrypt（续期 timer 已启用、dry-run 通过），宝塔彻底卸载：
@@ -47,6 +47,9 @@
 #   BUG-106（预存在的 IMPROVE-52 回归：菜单开着时 hover/focus 开关会重跑 gsap 预置，
 #   面板被打回屏外而遮罩留存——Windows 任务栏切窗后移鼠标到开关 100% 复现）与
 #   BUG-107（Star 按钮 logo svg 缺 fill 取色类显黑），均当轮修复并补回归测试。
+#   同日面板内锚定改造（按钮挂进面板顶部实现流出/流回）引入 BUG-108：面板
+#   `* { color: var(--ink) !important }` 吞掉按钮文字色（只给 svg 加了覆盖、
+#   漏了 a/label/num），黑底黑字只剩空胶囊，当轮补齐覆盖修复。
 ```
 
 ---
@@ -266,6 +269,7 @@
 | BUG-105 | P0 | 前端 | IMPROVE-52 重构回归：localSubgraph 返回 { nodes, links } 被误解构成 { localNodes, localLinks }，links=undefined 令 buildDegrees 抛 "links is not iterable"，图谱挂载即崩并打穿到 bootError 整页白屏；修复重命名解构 + App 右栏纳入 ErrorBoundary + 补组件挂载级回归测试（纯函数用例拦不住属性接线错误） | `frontend/src/components/KnowledgeGraph.jsx`, `frontend/src/App.jsx`, `frontend/src/test/KnowledgeGraph.test.jsx` | 2026-09-12 |
 | BUG-106 | P0 | 前端 | IMPROVE-52 回归：gsap 加载后开关按钮的 hover/pointerdown/focus 都会重跑 ensureGsap→preparePanel，菜单开着时触发会把面板打回屏外、图标/文字复位，而 React 开合态不变（毛玻璃遮罩留存、白色面板消失）；Windows 下开菜单→点任务栏切窗→回来把鼠标移向开关即 100% 复现。修复 = preparePanel 开着直接跳过 + 打开时间线自带 panel/prelayer opacity（首次打开 gsap 迟到时不依赖预置先跑）；补 hover 回归测试 | `frontend/src/components/StaggeredMenu.jsx`, `frontend/src/test/StaggeredMenu.test.jsx` | 2026-09-12 |
 | BUG-107 | P2 | 前端 | GitHub Star 按钮（同轮新增）logo svg 丢了模板的 fill-current 取色类，fill 落回默认黑色，黑底上图标恒黑；修复在 `#root .sm-gh-star svg` 补 `fill: currentColor` | `frontend/src/components/GithubStarButton.jsx`, `frontend/src/components/StaggeredMenu.css` | 2026-09-12 |
+| BUG-108 | P2 | 前端 | Star 按钮改面板内锚定后文字被面板全局墨色染色吞掉：`#root .staggered-menu-panel * { color: var(--ink) !important }` 命中按钮 a/label/num（黑底黑字只剩空胶囊），当轮只给 svg 加了 important 覆盖漏了文字三件套；补齐 a/label/num 的 important 白色覆盖 | `frontend/src/components/StaggeredMenu.css` | 2026-09-12 |
 
 ### 2.2 已关闭改进项（46）
 
