@@ -1,35 +1,14 @@
+/* OPPO Sans 4.0 的 @font-face 声明已生成到 ./assets/fonts/opposans.css
+   （scripts/build-font.mjs 产出：常用层 + 二级汉字层按 unicode-range 渐进加载，
+   IMPROVE-54）。字体源在 npm 管理的 @fontpkg/oppo-sans-4-0，从 21.7 MB 子集化，
+   永不入库；授权文本在 public/licenses/ 并由页脚署名链接（BUG-99 / IMPROVE-46）。
+   见 docs/DEPLOY.md 4.1.1。liveline 硬编码的 'SF Mono' 别名也随生成文件声明。
+   ⚠️ @import 必须是第一条语句（@tailwind 也算语句），否则构建期被静默忽略。 */
+@import './assets/fonts/opposans.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* OPPO Sans 4.0, subset to GB2312 + the characters this app actually uses.
-   The file is generated at build time by scripts/build-font.mjs from the
-   npm-managed source (@fontpkg/oppo-sans-4-0), so it is never committed.
-   21.7 MB -> 2.7 MB with the 100-900 weight axis intact; BUG-99.
-   Subsetting is how the licence's "embed, bundle ... with any software" grant is
-   exercised for a CJK face — no browser should fetch the full 21.7 MB charset.
-   The obligations that bind us are the notice ones: the licence text lives at
-   public/licenses/OPPO-Sans-4.0-License.txt and the site footer links to it.
-   See docs/DEPLOY.md 4.1.1 and IMPROVE-46. */
-@font-face {
-  font-family: 'OPPOSans';
-  src: url('./assets/fonts/opposans-subset.woff2') format('woff2');
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
-
-/* liveline hardcodes '"SF Mono", Menlo, monospace' for its chart text (canvas
-   axis labels and the DOM value badge), and that family doesn't exist on
-   Windows. Alias the name to the same OPPOSans file so charts match the app;
-   canvas text resolves fonts through CSS, so the alias applies there too. */
-@font-face {
-  font-family: 'SF Mono';
-  src: url('./assets/fonts/opposans-subset.woff2') format('woff2');
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
 
 html {
   /* Reserve space for the vertical scrollbar so its appear/disappear

@@ -25,15 +25,6 @@ function loadGsap() {
   return gsapPromise;
 }
 
-// 在首次交互（悬停/按下）时就并行取回动画库：主包不必等，但点开菜单时通常已经就位。
-function prefetchGsap() {
-  try {
-    loadGsap().catch(() => {});
-  } catch {
-    /* 动态 import 不受支持时保持无动画可用 */
-  }
-}
-
 // Query the animated panel content and reset it to its pre-open state
 // (labels pushed down/rotated, numbers and socials hidden). Returns the
 // elements so the open timeline can tween them back in; also used after the
@@ -104,20 +95,50 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   const [gInit, setGInit] = useState(null);
   const gRef = useRef(null);
 
-  // 挂载后立刻并行取回 gsap（不阻塞首屏渲染；失败则永久降级为无动画）。
-  useEffect(() => {
-    let alive = true;
+  // gsap 就位后把面板/预层挪到屏幕外（再交给时间线推进）。原先这步在 useLayoutEffect 里
+  // 同步执行；惰性加载后推迟到 gsap 到位时，等待期间由 CSS 的 opacity:0 保证不可见。
+  // IMPROVE-54：抽成普通函数供「首次交互预取」在 React 提交前同步调用——playOpen 的
+  // 微任务可能跑在 layout effect 之前，首次打开必须保证预置已就位。幂等，可重复调用。
+  const preparePanel = (g) => {
+    const panel = panelRef.current;
+    const preContainer = preLayersRef.current;
+    const plusH = plusHRef.current;
+    const plusV = plusVRef.current;
+    const icon = iconRef.current;
+    const textInner = textInnerRef.current;
+    if (!panel || !plusH || !plusV || !icon || !textInner) return;
+
+    let preLayers = [];
+    if (preContainer) {
+      preLayers = Array.from(preContainer.querySelectorAll('.sm-prelayer'));
+    }
+    preLayerElsRef.current = preLayers;
+
+    const offscreen = position === 'left' ? -100 : 100;
+    g.set([panel, ...preLayers], { xPercent: offscreen, opacity: 1 });
+    if (preContainer) {
+      g.set(preContainer, { xPercent: 0, opacity: 1 });
+    }
+    g.set(plusH, { transformOrigin: '50% 50%', rotate: 0 });
+    g.set(plusV, { transformOrigin: '50% 50%', rotate: 90 });
+    g.set(icon, { rotate: 0, transformOrigin: '50% 50%' });
+    g.set(textInner, { yPercent: 0 });
+    if (toggleBtnRef.current) g.set(toggleBtnRef.current, { color: menuButtonColor });
+  };
+
+  // IMPROVE-54：gsap 不再「挂载即预取」——本组件常驻所有页面，原先每次进站都会下载
+  // gsap chunk。现在只在用户首次与菜单按钮交互（悬停/按下/聚焦）时取回；取回后先同步
+  // 预置面板再通知 React（useLayoutEffect 只负责 menuButtonColor/position 变化的重放）。
+  const ensureGsap = useCallback(() => {
     loadGsap()
       .then((g) => {
-        if (!alive) return;
         gRef.current = g;
-        setGInit(g);
+        preparePanel(g);
+        setGInit((prev) => prev || g);
       })
       .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [position, menuButtonColor]);
 
   // 语言切换后按钮文字要立刻跟上：textLines 的初值只在首次渲染取自 t()，之后仅由
   // 开合动画重建，所以切语言时可见文字会停留在旧语言（同一按钮的 aria-label 是
@@ -142,44 +163,22 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   // 回来的时间线只有在「仍是同一轮且仍是打开态」时才允许播放。
   const openGenRef = useRef(0);
 
-  // gsap 就位后把面板/预层挪到屏幕外（再交给时间线推进）。原先这步在 useLayoutEffect 里
-  // 同步执行；惰性加载后推迟到 gsap 到位时，等待期间由 CSS 的 opacity:0 保证不可见。
+  // menuButtonColor / position 变化时重放预置（首次就位由 ensureGsap 同步处理）。
   useLayoutEffect(() => {
     if (!gInit) return undefined;
-    const g = gInit;
-    const ctx = g.context(() => {
-      const panel = panelRef.current;
-      const preContainer = preLayersRef.current;
-      const plusH = plusHRef.current;
-      const plusV = plusVRef.current;
-      const icon = iconRef.current;
-      const textInner = textInnerRef.current;
-      if (!panel || !plusH || !plusV || !icon || !textInner) return;
-
-      let preLayers = [];
-      if (preContainer) {
-        preLayers = Array.from(preContainer.querySelectorAll('.sm-prelayer'));
-      }
-      preLayerElsRef.current = preLayers;
-
-      const offscreen = position === 'left' ? -100 : 100;
-      g.set([panel, ...preLayers], { xPercent: offscreen, opacity: 1 });
-      if (preContainer) {
-        g.set(preContainer, { xPercent: 0, opacity: 1 });
-      }
-      g.set(plusH, { transformOrigin: '50% 50%', rotate: 0 });
-      g.set(plusV, { transformOrigin: '50% 50%', rotate: 90 });
-      g.set(icon, { rotate: 0, transformOrigin: '50% 50%' });
-      g.set(textInner, { yPercent: 0 });
-      if (toggleBtnRef.current) g.set(toggleBtnRef.current, { color: menuButtonColor });
-    });
+    const ctx = gInit.context(() => preparePanel(gInit));
     return () => ctx.revert();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gInit, menuButtonColor, position]);
 
   // 拿到 gsap 实例后才构造时间线；返回 null 表示本环境没有动画（交互仍然可用）。
   const buildOpenTimeline = useCallback((g) => {
     const panel = panelRef.current;
-    const layers = preLayerElsRef.current;
+    // 预层元素就地取回（IMPROVE-54）：不依赖 React 是否已提交预置效果——
+    // 首次打开时 playOpen 的微任务可能跑在 layout effect 之前。
+    const layers = preLayerElsRef.current.length
+      ? preLayerElsRef.current
+      : Array.from(preLayersRef.current?.querySelectorAll('.sm-prelayer') || []);
     if (!g || !panel) return null;
 
     openTlRef.current?.kill();
@@ -489,9 +488,9 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
             aria-expanded={open}
             aria-controls="staggered-menu-panel"
             onClick={toggleMenu}
-            onPointerEnter={prefetchGsap}
-            onPointerDown={prefetchGsap}
-            onFocus={prefetchGsap}
+            onPointerEnter={ensureGsap}
+            onPointerDown={ensureGsap}
+            onFocus={ensureGsap}
             type="button"
           >
             <span className="sm-toggle-textWrap" aria-hidden="true">

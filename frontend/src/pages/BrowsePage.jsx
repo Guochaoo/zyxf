@@ -1,6 +1,8 @@
 // 浏览页容器（IMPROVE-01）：只做编排——路由参数、数据/同步/拖拽三个 hook 的接线、
 // 管理操作与页面级弹窗。展示件在 ./Browse/ 下，数据请求在 ./Browse/use*.js 里。
-import { useEffect, useState } from 'react';
+// 传给 ItemList 的处理器一律 useCallback（IMPROVE-54）：行组件 memo 依赖
+// 处理器身份稳定，每次渲染换新闭包会让列表行全部跟着重渲染。
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Loader2, RotateCw } from 'lucide-react';
@@ -55,10 +57,10 @@ export default function BrowsePage() {
   const [renaming, setRenaming] = useState(false);
 
   // Go up one level: current folder's parent (root when at top).
-  const onGoBack = () => {
+  const onGoBack = useCallback(() => {
     const parentId = data?.folder?.parent_id;
     navigate(parentId ? `/folder/${parentId}` : '/');
-  };
+  }, [data, navigate]);
 
   // 深链预览：搜索/知识图谱跳转时带 previewFile，等列表数据到位后再打开预览。
   useEffect(() => {
@@ -70,36 +72,59 @@ export default function BrowsePage() {
 
   // 管理操作共享骨架：await 动作 → 通知目录树 + 刷新；失败 alert 兜底。
   // notify=false 用于不影响目录树的操作（如删除文件）。
-  const runAdmin = async (fn, failMsg, notify = true) => {
-    try {
-      await fn();
-      if (notify) notifyFoldersChanged();
-      refresh();
-    } catch (e) {
-      alert(errMsg(e, failMsg));
-    }
-  };
+  const runAdmin = useCallback(
+    async (fn, failMsg, notify = true) => {
+      try {
+        await fn();
+        if (notify) notifyFoldersChanged();
+        refresh();
+      } catch (e) {
+        alert(errMsg(e, failMsg));
+      }
+    },
+    [refresh]
+  );
 
-  const onCreateFolder = () => {
+  const onCreateFolder = useCallback(() => {
     const name = window.prompt(t('browse.newFolderName'));
     if (!name) return;
     runAdmin(() => createFolder(name, folderId || null), t('browse.createError'));
-  };
+  }, [folderId, runAdmin, t]);
 
-  const onDeleteFolder = (f) => {
-    if (!confirm(t('browse.confirmDeleteFolder', { name: f.name }))) return;
-    runAdmin(() => deleteFolder(f.id), t('browse.deleteError'));
-  };
+  const onDeleteFolder = useCallback(
+    (f) => {
+      if (!confirm(t('browse.confirmDeleteFolder', { name: f.name }))) return;
+      runAdmin(() => deleteFolder(f.id), t('browse.deleteError'));
+    },
+    [runAdmin, t]
+  );
 
-  const onDeleteFile = (f) => {
-    if (!confirm(t('browse.confirmDeleteFile', { name: f.name }))) return;
-    runAdmin(() => deleteFile(f.id), t('browse.deleteError'), false);
-  };
+  const onDeleteFile = useCallback(
+    (f) => {
+      if (!confirm(t('browse.confirmDeleteFile', { name: f.name }))) return;
+      runAdmin(() => deleteFile(f.id), t('browse.deleteError'), false);
+    },
+    [runAdmin, t]
+  );
 
-  const openRenameDialog = (item) => {
+  const openRenameDialog = useCallback((item) => {
     setRenameTarget(item);
     setRenameValue(item.name);
-  };
+  }, []);
+
+  const onRenameFolder = useCallback(
+    (f) => openRenameDialog({ ...f, type: 'folder' }),
+    [openRenameDialog]
+  );
+
+  const onRenameFile = useCallback(
+    (f) => openRenameDialog({ ...f, type: 'file' }),
+    [openRenameDialog]
+  );
+
+  const onDownloadFile = useCallback((f) => downloadAndAlert(f, getFileUrl), []);
+
+  const onEnterFolder = useCallback((f) => navigate(`/folder/${f.id}`), [navigate]);
 
   const closeRenameDialog = () => {
     if (renaming) return;
@@ -132,8 +157,6 @@ export default function BrowsePage() {
       setRenaming(false);
     }
   };
-
-  const onDownloadFile = (f) => downloadAndAlert(f, getFileUrl);
 
   return (
     <div className="space-y-4">
@@ -209,12 +232,12 @@ export default function BrowsePage() {
             isAdmin={isAdmin}
             dragging={dragging}
             dropZone={dropZone}
-            onEnterFolder={(f) => navigate(`/folder/${f.id}`)}
+            onEnterFolder={onEnterFolder}
             onPreviewFile={setPreviewing}
             onDeleteFolder={onDeleteFolder}
             onDeleteFile={onDeleteFile}
-            onRenameFolder={(f) => openRenameDialog({ ...f, type: 'folder' })}
-            onRenameFile={(f) => openRenameDialog({ ...f, type: 'file' })}
+            onRenameFolder={onRenameFolder}
+            onRenameFile={onRenameFile}
             onDownloadFile={onDownloadFile}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}

@@ -94,18 +94,32 @@ export default function SearchBar({ className = '' }) {
     if (!open || !wrapRef.current) return undefined;
     const update = () => {
       const rect = wrapRef.current.getBoundingClientRect();
-      setDropdownRect({
-        top: rect.bottom + 8,
-        left: rect.left,
-        width: rect.width,
+      // 位置没变就不 setState：scroll 是 capture 监听（任何容器滚动都触发），
+      // 逐帧新对象会让整个下拉（含全部结果行）无意义重渲染。
+      setDropdownRect((prev) => {
+        const top = rect.bottom + 8;
+        if (prev && prev.top === top && prev.left === rect.left && prev.width === rect.width) {
+          return prev;
+        }
+        return { top, left: rect.left, width: rect.width };
+      });
+    };
+    // rAF 合并同一帧内的多次 scroll 事件（IMPROVE-54）。
+    let raf = 0;
+    const schedule = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        update();
       });
     };
     update();
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, true);
     return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener('resize', schedule);
+      window.removeEventListener('scroll', schedule, true);
     };
   }, [open]);
 

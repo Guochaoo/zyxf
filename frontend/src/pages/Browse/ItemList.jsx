@@ -1,6 +1,9 @@
 // 文件/文件夹列表（原 BrowsePage.jsx 内联定义，IMPROVE-01 拆分）。
 // 纯展示：拖拽状态与各类回调由容器传入，本模块不发起任何请求。
-import { useMemo } from 'react';
+// IMPROVE-54：行组件 memo 化——容器传入的处理器必须 useCallback 稳定（否则 memo
+// 失效）；拖拽高亮收敛为一个 `vis` 基元，行内操作按钮由 Row 自己构造，
+// 使拖拽经过无关行时它们整体跳过重渲染。
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Download, PenLine, Trash } from 'lucide-react';
 import { BsGripVertical } from 'react-icons/bs';
@@ -52,43 +55,6 @@ export default function ItemList({
     ...(data?.files || []).map((f) => ({ ...f, type: 'file' })),
   ];
 
-  // 两类的行内结构一致，仅点击目标与操作按钮不同——统一构造避免重复。
-  const rows = ordered.map((item) => {
-    const isFolder = item.type === 'folder';
-    return {
-      key: `${isFolder ? 'd' : 'f'}-${item.id}`,
-      item,
-      onClick: isFolder ? () => onEnterFolder(item) : () => onPreviewFile(item),
-      actions: isFolder ? (
-        isAdmin && (
-          <>
-            <RowAction title={t('browse.rename')} onClick={() => onRenameFolder(item)}>
-              <PenLine className="w-4 h-4" />
-            </RowAction>
-            <RowAction title={t('common.delete')} onClick={() => onDeleteFolder(item)}>
-              <Trash className="w-4 h-4" />
-            </RowAction>
-          </>
-        )
-      ) : (
-        <>
-          <RowAction title={t('browse.download')} onClick={() => onDownloadFile(item)}>
-            <Download className="w-4 h-4" />
-          </RowAction>
-          {isAdmin && (
-            <>
-              <RowAction title={t('browse.rename')} onClick={() => onRenameFile(item)}>
-                <PenLine className="w-4 h-4" />
-              </RowAction>
-              <RowAction title={t('common.delete')} onClick={() => onDeleteFile(item)}>
-                <Trash className="w-4 h-4" />
-              </RowAction>
-            </>
-          )}
-        </>
-      ),
-    };
-  });
   return (
     <GlideList as="ul" highlightClassName="bg-hover">
       <li className="rb-table-heading hidden sm:flex items-center gap-2 px-4 py-2 text-xs text-slate-500 bg-field">
@@ -101,24 +67,42 @@ export default function ItemList({
         <span className="w-28 text-right">{t('browse.colModified')}</span>
         <span className={`${actionWidthClass} text-right`}>{t('browse.colAction')}</span>
       </li>
-      {rows.map(({ key, item, onClick, actions }) => (
-        <Row
-          key={key}
-          item={item}
-          tone={toneFor(item.size, thresholds)}
-          isAdmin={isAdmin}
-          dragging={dragging}
-          dropZone={dropZone}
-          actionWidthClass={actionWidthClass}
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          onRowDragOver={onRowDragOver}
-          onRowDragLeave={onRowDragLeave}
-          onRowDrop={onRowDrop}
-          onClick={onClick}
-          actions={actions}
-        />
-      ))}
+      {ordered.map((item) => {
+        const isFolder = item.type === 'folder';
+        const isSelf = dragging?.type === item.type && dragging.id === item.id;
+        const targetMatch =
+          dropZone && dropZone.targetType === item.type && dropZone.id === item.id;
+        // 拖拽高亮收敛为单值基元：'into' | 'before' | 'after' | 'self' | 'none'。
+        // 这是 Row memo 比较的唯一随拖拽变化的 prop——高亮落到别的行时，无关行
+        // 的 vis 不变，整行跳过重渲染。
+        const vis = targetMatch
+          ? dropZone.mode
+          : isSelf
+            ? 'self'
+            : 'none';
+        return (
+          <Row
+            key={`${isFolder ? 'd' : 'f'}-${item.id}`}
+            item={item}
+            tone={toneFor(item.size, thresholds)}
+            vis={vis}
+            isAdmin={isAdmin}
+            actionWidthClass={actionWidthClass}
+            onEnterFolder={onEnterFolder}
+            onPreviewFile={onPreviewFile}
+            onDeleteFolder={onDeleteFolder}
+            onDeleteFile={onDeleteFile}
+            onRenameFolder={onRenameFolder}
+            onRenameFile={onRenameFile}
+            onDownloadFile={onDownloadFile}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onRowDragOver={onRowDragOver}
+            onRowDragLeave={onRowDragLeave}
+            onRowDrop={onRowDrop}
+          />
+        );
+      })}
     </GlideList>
   );
 }
@@ -162,27 +146,63 @@ function SizeChip(size, tone) {
   );
 }
 
-function Row({
+const Row = memo(function Row({
   item,
+  tone,
+  vis,
   isAdmin,
-  dragging,
-  dropZone,
   actionWidthClass,
+  onEnterFolder,
+  onPreviewFile,
+  onDeleteFolder,
+  onDeleteFile,
+  onRenameFolder,
+  onRenameFile,
+  onDownloadFile,
   onDragStart,
   onDragEnd,
   onRowDragOver,
   onRowDragLeave,
   onRowDrop,
-  onClick,
-  actions,
-  tone,
 }) {
-  const isSelf = dragging?.type === item.type && dragging.id === item.id;
-  const targetMatch =
-    dropZone && dropZone.targetType === item.type && dropZone.id === item.id;
-  const isInto = targetMatch && dropZone.mode === 'into';
-  const isBefore = targetMatch && dropZone.mode === 'before';
-  const isAfter = targetMatch && dropZone.mode === 'after';
+  const { t } = useTranslation();
+  const isFolder = item.type === 'folder';
+  const isInto = vis === 'into';
+  const isBefore = vis === 'before';
+  const isAfter = vis === 'after';
+  const isSelf = vis === 'self';
+
+  // 行内操作由 Row 自己构造（原先是容器每渲染重建一遍全部行的 actions JSX）：
+  // item + 稳定处理器之外不依赖任何随渲染漂移的东西，memo 才能生效。
+  const actions = isFolder ? (
+    isAdmin && (
+      <>
+        <RowAction title={t('browse.rename')} onClick={() => onRenameFolder(item)}>
+          <PenLine className="w-4 h-4" />
+        </RowAction>
+        <RowAction title={t('common.delete')} onClick={() => onDeleteFolder(item)}>
+          <Trash className="w-4 h-4" />
+        </RowAction>
+      </>
+    )
+  ) : (
+    <>
+      <RowAction title={t('browse.download')} onClick={() => onDownloadFile(item)}>
+        <Download className="w-4 h-4" />
+      </RowAction>
+      {isAdmin && (
+        <>
+          <RowAction title={t('browse.rename')} onClick={() => onRenameFile(item)}>
+            <PenLine className="w-4 h-4" />
+          </RowAction>
+          <RowAction title={t('common.delete')} onClick={() => onDeleteFile(item)}>
+            <Trash className="w-4 h-4" />
+          </RowAction>
+        </>
+      )}
+    </>
+  );
+  const onClick = isFolder ? () => onEnterFolder(item) : () => onPreviewFile(item);
 
   return (
     <li
@@ -209,7 +229,7 @@ function Row({
         isBefore ? 'shadow-[inset_0_2px_0_0_rgba(0,0,0,0.6)]' : ''
       } ${
         isAfter ? 'shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.6)]' : ''
-      } ${!targetMatch && isSelf ? 'opacity-40' : ''}`}
+      } ${isSelf ? 'opacity-40' : ''}`}
       onClick={onClick}
     >
       {isAdmin && (
@@ -233,4 +253,4 @@ function Row({
       </span>
     </li>
   );
-}
+});

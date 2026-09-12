@@ -186,24 +186,41 @@ export default function ChatComposer({ onOpenSettings }) {
     // BUG-61：signal 只能停止读取，已 resolve 的 reader 回调仍会各触发一次，
     // 所以要自己判「这轮是否还有效」，否则「已停止生成。」后面会被追加半截文本。
     const live = () => abortRef.current === abort && !abort.signal.aborted;
+    // IMPROVE-54：delta 先缓冲、50ms 批量 flush——原先每个 token 都 setMessages，
+    // 增长中的消息每 delta 全量重解析 markdown，长回答的工作量近似 O(n²)。
+    // flush 判 abortRef.current === abort（而非 live()）：中止时要先把缓冲落进
+    // 已有文本再落「已停止生成。」，丢缓冲会吃掉最后半句话。
+    let pendingDelta = '';
+    let flushTimer = null;
+    const flushDelta = () => {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+      const chunk = pendingDelta;
+      pendingDelta = '';
+      if (!chunk || abortRef.current !== abort) return;
+      setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: m.text + chunk } : m)));
+    };
     try {
       await chatStream(history, {
         signal: abort.signal,
         llm,
         onDelta: (t) => {
           if (!live()) return;
-          setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: m.text + t } : m)));
+          pendingDelta += t;
+          if (!flushTimer) flushTimer = setTimeout(flushDelta, 50);
         },
         onFiles: (files) => {
           if (!live()) return;
           patchAi({ files });
         },
       });
+      flushDelta();
       if (live()) patchAi({ streaming: false });
     } catch (err) {
       // 仍然处理本次请求的失败（用户点「停止」也走这里，要落「已停止生成。」）；
       // 只有 abortRef 已被清空/换人（卸载、发起了下一轮）才彻底丢弃。
       if (abortRef.current !== abort) return;
+      flushDelta();
       if (err.name === 'AbortError') {
         setMessages((prev) =>
           prev.map((m) =>
@@ -214,6 +231,8 @@ export default function ChatComposer({ onOpenSettings }) {
         patchAi({ streaming: false, error: true, text: err.message });
       }
     } finally {
+      clearTimeout(flushTimer);
+      pendingDelta = '';
       setBusy(false);
       abortRef.current = null;
     }

@@ -98,17 +98,19 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
   // Full graph only depends on the tree + root files: keep it stable across
   // folder navigation so browsing doesn't re-walk/re-allocate the whole library.
   const fullGraph = useMemo(() => buildGraph(tree, rootFiles, t('tree.home')), [tree, rootFiles, t]);
-  const { localNodes, localLinks, fullNodes, fullLinks } = useMemo(() => {
-    const local = localSubgraph(fullGraph.nodes, fullGraph.links, currentId);
-    return {
-      localNodes: local.nodes,
-      localLinks: local.links,
-      // 全库弹窗同样给拷贝：否则它自己的 forceSimulation 会把 fullGraph 的端点改写成对象、
-      // 并把位置写进同一批节点对象，和局部图互相踩（同一类问题的另一种表现）。
+  const { localNodes, localLinks } = useMemo(
+    () => localSubgraph(fullGraph.nodes, fullGraph.links, currentId),
+    [fullGraph, currentId]
+  );
+  // 全库弹窗用的拷贝与 currentId 解耦（IMPROVE-54）：拷贝只为防 d3-force 就地改写
+  // fullGraph，依赖 currentId 会让每次切目录都全库 spread 一遍。
+  const { fullNodes, fullLinks } = useMemo(
+    () => ({
       fullNodes: fullGraph.nodes.map((n) => ({ ...n })),
       fullLinks: fullGraph.links.map((l) => ({ ...l })),
-    };
-  }, [fullGraph, currentId]);
+    }),
+    [fullGraph]
+  );
 
   const onNavigate = useCallback(
     (node) => {
@@ -245,10 +247,15 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
   const svgRef = useRef(null);
   const simRef = useRef(null);
   const dragRef = useRef(null);
-  const [, setTick] = useState(0);
+  // IMPROVE-54：模拟的每一帧不再经过 React——tick/拖拽直接写 DOM 属性，
+  // hover/缩放等低频状态仍走 state。元素引用按需从 DOM 收集（data-* 定位），
+  // 集合规模与 nodes/links 不一致时重建。
+  const [, setMounted] = useState(0);
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   const [hovered, setHovered] = useState(null);
   const neighborsRef = useRef(new Set());
+  const linkElsRef = useRef(null);
+  const nodeElsRef = useRef(null);
 
   const degrees = useMemo(() => buildDegrees(links), [links]);
   const radiusOf = useCallback(
@@ -257,11 +264,44 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
   );
   const current = nodeIdOf(currentId);
 
+  // 把当前模拟坐标写进 SVG（连线端点 + 节点 transform）。元素列表懒收集：
+  // 渲染顺序即链接下标顺序，节点用 data-node 属性取 id。
+  const applyPositions = useCallback(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    if (!linkElsRef.current || linkElsRef.current.length !== links.length) {
+      linkElsRef.current = links.length ? [...svg.querySelectorAll('line[data-link]')] : [];
+    }
+    if (!nodeElsRef.current || nodeElsRef.current.size !== nodes.length) {
+      nodeElsRef.current = new Map();
+      if (nodes.length) {
+        for (const el of svg.querySelectorAll('g[data-node]')) {
+          nodeElsRef.current.set(el.getAttribute('data-node'), el);
+        }
+      }
+    }
+    for (let i = 0; i < links.length; i++) {
+      const el = linkElsRef.current[i];
+      if (!el) continue;
+      const l = links[i];
+      el.setAttribute('x1', l.source.x);
+      el.setAttribute('y1', l.source.y);
+      el.setAttribute('x2', l.target.x);
+      el.setAttribute('y2', l.target.y);
+    }
+    for (const n of nodes) {
+      const el = nodeElsRef.current?.get(n.id);
+      if (el) el.setAttribute('transform', `translate(${n.x},${n.y})`);
+    }
+  }, [nodes, links]);
+
   // (Re)build the simulation whenever the node set changes.
   useEffect(() => {
     simRef.current?.stop();
     setView({ x: 0, y: 0, k: 1 });
     setHovered(null);
+    linkElsRef.current = null;
+    nodeElsRef.current = null;
     if (nodes.length <= 1) {
       // A lone node never gets a simulation to place it; park it dead-center
       // so the positioned render gate below stays satisfied.
@@ -269,6 +309,7 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
         nodes[0].x = VIEW_W / 2;
         nodes[0].y = VIEW_H / 2;
       }
+      setMounted((t) => t + 1);
       return undefined;
     }
 
@@ -288,7 +329,9 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
       );
     sim.stop();
     sim.tick(300); // settle deterministically
-    sim.on('tick', () => setTick((t) => t + 1));
+    // 残余运动逐帧直写 DOM（IMPROVE-54）：原实现每帧 setState 让全量 SVG 走一遍
+    // reconcile，全库视图节点多时是明显的卡顿源。
+    sim.on('tick', applyPositions);
     sim.alpha(0.1).restart(); // subtle residual motion
     simRef.current = sim;
 
@@ -312,6 +355,9 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
         y: VIEW_H / 2 - ((minY + maxY) / 2) * k,
       });
     }
+    // tick(300) 已就地写出坐标，这里触发一次 React 渲染按真实坐标挂载 SVG；
+    // 之后位置变化全部走 applyPositions，不再有逐帧 setState。
+    setMounted((t) => t + 1);
 
     return () => {
       sim.stop();
@@ -321,7 +367,7 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
       simRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, links]);
+  }, [nodes, links, applyPositions]);
 
   // Recompute neighbors when hovering.
   const onHover = useCallback(
@@ -424,9 +470,10 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
       node.fy = d.startNY + dy / k;
       node.x = node.fx;
       node.y = node.fy;
-      setTick((t) => t + 1);
+      // 拖拽逐帧直写 DOM（IMPROVE-54），不再 setState 触发全量 reconcile。
+      applyPositions();
     },
-    [view.k]
+    [view.k, applyPositions]
   );
 
   const onNodeUp = useCallback(
@@ -475,6 +522,7 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
             return (
               <line
                 key={`l-${i}`}
+                data-link=""
                 x1={l.source.x}
                 y1={l.source.y}
                 x2={l.target.x}
@@ -493,6 +541,7 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
             return (
               <g
                 key={n.id}
+                data-node={n.id}
                 transform={`translate(${n.x},${n.y})`}
                 style={{ cursor: 'pointer', opacity: dim ? 0.12 : 1, transition: 'opacity 150ms' }}
                 onPointerDown={(e) => onNodeDown(e, n)}
