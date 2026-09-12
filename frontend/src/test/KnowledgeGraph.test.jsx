@@ -1,5 +1,19 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
+import { render, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { buildGraph, localSubgraph, buildDegrees, nodeIdOf, endpointId } from '../components/KnowledgeGraph.jsx';
+
+// 组件挂载测试用固定树（不触发请求）；上方纯函数用例用本地 fixture。
+vi.mock('../hooks/useFolderTree.js', () => ({
+  useFolderTree: () => ({
+    tree: [
+      { id: 1, name: 'ACM', children: [], files: [{ id: 11, name: 'a.pdf' }] },
+      { id: 6, name: '高数', children: [], files: [{ id: 12, name: 'b.pdf' }] },
+    ],
+    rootFiles: [{ id: 99, name: 'root.pdf' }],
+    loading: false,
+  }),
+}));
 
 // 线上现象：进入某个文件夹再返回主页（folderId=0）后，知识图谱只剩中间一个小点。
 // 根因：d3-force 会就地改写传给它的对象——forceLink 把 link.source/target 从字符串 id
@@ -79,5 +93,24 @@ describe('知识图谱：局部子图与度数（d3-force 就地改写后仍要�
     simulateD3Mutation(graph);
     const inFolder = localSubgraph(graph.nodes, graph.links, 6).nodes.map((n) => n.id).sort();
     expect(inFolder).toEqual(['f0', 'f6', 'f7', 'file12']);
+  });
+});
+
+// BUG-105 回归：组件挂载级的属性接线必须被测——曾因把 localSubgraph 返回的
+// { nodes, links } 直接解构成 { localNodes, localLinks }，links=undefined，
+// buildDegrees 抛 "links is not iterable" 打穿整页到 bootError（纯函数用例拦不住）。
+describe('知识图谱：组件挂载（属性接线回归）', () => {
+  test('树就绪后渲染全部节点与连线', async () => {
+    const { default: KnowledgeGraph } = await import('../components/KnowledgeGraph.jsx');
+    render(
+      <MemoryRouter>
+        <KnowledgeGraph currentId={0} />
+      </MemoryRouter>
+    );
+    // f0 + f1 + f6 + file99 = 4 个节点；f0 的 3 条连线
+    await waitFor(() => {
+      expect(document.querySelectorAll('g[data-node]')).toHaveLength(4);
+      expect(document.querySelectorAll('line[data-link]')).toHaveLength(3);
+    });
   });
 });

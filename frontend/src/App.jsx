@@ -258,10 +258,14 @@ export default function App() {
         <div className="fixed inset-y-0 right-0 z-10 hidden flex-col gap-4 overflow-hidden pr-2 pt-[61.5px] lg:flex lg:w-[300px]">
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
             <div className="flex min-h-0 flex-1 flex-col gap-[15px]">
-              <Suspense fallback={null}>
-                <KnowledgeGraph currentId={folderId} onFullChange={setGraphFull} />
-                <ChatComposer onOpenSettings={openSettings} />
-              </Suspense>
+              {/* 右栏也进 ErrorBoundary（BUG-105 的教训）：图谱/对话崩溃不再打穿整页到
+                  bootError 白屏，只降级本栏并给出可重试的界面。 */}
+              <ErrorBoundary>
+                <Suspense fallback={null}>
+                  <KnowledgeGraph currentId={folderId} onFullChange={setGraphFull} />
+                  <ChatComposer onOpenSettings={openSettings} />
+                </Suspense>
+              </ErrorBoundary>
             </div>
           </div>
         </div>

@@ -98,7 +98,9 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
   // Full graph only depends on the tree + root files: keep it stable across
   // folder navigation so browsing doesn't re-walk/re-allocate the whole library.
   const fullGraph = useMemo(() => buildGraph(tree, rootFiles, t('tree.home')), [tree, rootFiles, t]);
-  const { localNodes, localLinks } = useMemo(
+  // ⚠️ localSubgraph 返回的键是 { nodes, links }，必须在这里重命名——直接解构
+  // { localNodes, localLinks } 会得到 undefined（BUG-105：links is not iterable 整页崩）。
+  const { nodes: localNodes, links: localLinks } = useMemo(
     () => localSubgraph(fullGraph.nodes, fullGraph.links, currentId),
     [fullGraph, currentId]
   );

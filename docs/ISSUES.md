@@ -15,9 +15,9 @@
 
 ```yaml
 更新日期: 2026-09-12
-条目总数: 150        # 缺陷 99 + 改进 51
+条目总数: 151        # 缺陷 100 + 改进 51
 待处理: 9            # 缺陷 4 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index；104 为测试套件偶发登录失败，建档待查）
-已归档: 141          # 缺陷 95 + 改进 46
+已归档: 142          # 缺陷 96 + 改进 46
 # 本批（卸载宝塔迁移系统组件，2026-09-12）：Node 24 与 nginx 换成系统级安装（NodeSource
 #   v24.21 + apt nginx 1.18，配置 = frontend/nginx.conf 落地 /etc/nginx/conf.d/zyxf.conf），
 #   证书改 certbot 签发 /etc/letsencrypt（续期 timer 已启用、dry-run 通过），宝塔彻底卸载：
@@ -140,7 +140,7 @@
 
 > 归档表只作索引（编号 / 严重度 / 类别 / 标题 / 位置 / 日期）。修法依据、踩坑与验证方式写在**代码注释**里（`grep -rn "BUG-54" backend/src`）与 commit message 中。
 
-### 2.1 已修复缺陷（95）
+### 2.1 已修复缺陷（96）
 
 | 编号 | 严重度 | 类别 | 标题 | 修复位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -239,6 +239,7 @@
 | BUG-101 | P2 | 前端 | favicon 是 512×512 / 107 KB，比除字体外全部首屏 JS+CSS 的一半还多 | `frontend/public/favicon.png`, `frontend/scripts/optimize-assets.py` | 2026-09-11 |
 | BUG-99 | P1 | 前端·性能 | 首屏要传 21.7 MB 字体（唯一瓶颈）：源字体改走 npm，构建期子集化到 GB2312，**21.69 MB → 2.72 MB** 且 `fvar` 字重轴（100–700）保留；协议原文移至 `public/licenses/` 并在首页页脚给出署名链接 | `frontend/scripts/build-font.mjs`, `frontend/src/index.css`, `frontend/package.json`, `frontend/src/pages/BrowsePage.jsx`, `frontend/public/licenses/` | 2026-09-11 |
 | BUG-103 | P2 | 安全·信息泄露 | 部署文档把服务器真实公网 IP 写进仓库（全历史 196 处）：文档改用 RFC 5737 保留段占位并加「勿写入真实 IP」提醒；历史用 git-filter-repo replace-text 全量替换，顺带 mailmap 修正 14 个错误署名提交。注意 GitHub 侧 refs/pull/* 仍钉住改写前对象，彻底清除需 Support GC | `docs/DEPLOY.md`, git 历史（filter-repo） | 2026-09-11 |
+| BUG-105 | P0 | 前端 | IMPROVE-52 重构回归：localSubgraph 返回 { nodes, links } 被误解构成 { localNodes, localLinks }，links=undefined 令 buildDegrees 抛 "links is not iterable"，图谱挂载即崩并打穿到 bootError 整页白屏；修复重命名解构 + App 右栏纳入 ErrorBoundary + 补组件挂载级回归测试（纯函数用例拦不住属性接线错误） | `frontend/src/components/KnowledgeGraph.jsx`, `frontend/src/App.jsx`, `frontend/src/test/KnowledgeGraph.test.jsx` | 2026-09-12 |
 
 ### 2.2 已关闭改进项（46）
 
