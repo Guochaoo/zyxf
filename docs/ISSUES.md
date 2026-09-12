@@ -20,8 +20,9 @@
 已归档: 133          # 缺陷 95 + 改进 38
 # 本批（卸载宝塔迁移系统组件，2026-09-12）：Node 24 与 nginx 换成系统级安装（NodeSource
 #   v24.21 + apt nginx 1.18，配置 = frontend/nginx.conf 落地 /etc/nginx/conf.d/zyxf.conf），
-#   证书改 certbot 签发 /etc/letsencrypt（续期 timer 已启用、dry-run 通过），宝塔彻底卸载
-#   （8888 无监听、cron 已清、/www 残留 ~800MB 待用户定夺，配置备份 /root/bt-backup-20260912.tar.gz）。
+#   证书改 certbot 签发 /etc/letsencrypt（续期 timer 已启用、dry-run 通过），宝塔彻底卸载：
+#   面板/8888/防火墙服务(BT-FirewallServices)/监控报表服务(site_total)/cron 全部清除，
+#   /www 删除、swap 迁至 /swapfile（fstab 已同步）。配置备份 /root/bt-backup-20260912.tar.gz。
 #   全程经阿里云 swas-open RunCommand 代跑（云助手 agent 在实例重启后才恢复）。
 # 授权（IMPROVE-46，已关闭）：**子集化属于第 2 条「embed, bundle ... with any software」的授权范围**
 #   ——CJK 字体要嵌进 Web 就必须子集化，这是行使嵌入权的正常方式；条件 2）的「不得修改」针对的是
