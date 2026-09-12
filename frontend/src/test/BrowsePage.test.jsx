@@ -36,6 +36,7 @@ vi.mock('../components/UploadDialog.jsx', () => ({ default: () => <div data-test
 
 const { default: BrowsePage } = await import('../pages/BrowsePage.jsx');
 const { AuthProvider } = await import('../auth.jsx');
+const { __resetResourceStore } = await import('../data/resource.js');
 
 // manual 排序的目录：items 给出「文件在前、文件夹在后」的交错顺序，
 // 与 folders/files 两个数组的天然顺序不同——渲染必须以 items 为准（BUG-27）。
@@ -90,6 +91,8 @@ function dragEvent(type, el, { dataTransfer, clientY }) {
 }
 
 beforeEach(() => {
+  // IMPROVE-56 审计跟进：resource store 是模块级缓存，不重置的话从第 2 个用例起测的是「陈旧缓存 + 后台刷新」而非全新挂载。
+  __resetResourceStore();
   [
     listFolderMock,
     reorderItemsMock,

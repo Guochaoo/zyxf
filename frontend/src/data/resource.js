@@ -141,9 +141,18 @@ export function useResource(key, fetcher, opts = {}) {
     fetchers.set(key, fetcherRef.current);
     return () => {
       set.delete(rerender);
-      if (!set.size) listeners.delete(key);
+      if (!set.size) {
+        listeners.delete(key);
+        // cache:false 不留缓存（搜索语义）：卸载即丢弃该 key 的数据，并中止在途
+        // 请求（其结果本来也无人订阅）——否则同一关键词重开会瞬间呈现上一次旧命中。
+        if (!cache) {
+          entries.get(key)?.abort?.abort?.();
+          entries.delete(key);
+          fetchers.delete(key);
+        }
+      }
     };
-  }, [key, enabled, rerender]);
+  }, [key, enabled, cache, rerender]);
 
   // 挂载 / key 变化：决定是否发起请求（去重与缓存判断在 store 内）。
   useEffect(() => {
