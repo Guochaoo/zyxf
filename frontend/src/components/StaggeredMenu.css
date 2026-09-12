@@ -27,6 +27,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 0.5rem;
   padding: 0 1rem;
   background: transparent;
   pointer-events: none;
@@ -109,6 +110,113 @@
 
 .sm-toggle:focus-visible {
   outline: none;
+}
+
+/* ---- GitHub Star 按钮（菜单打开时挂在开关左侧，与 .sm-toggle 成对）----
+   同为黑底白字胶囊：34px 最小高、14px 圆角、同一组 hover 阴影；
+   扫光与金星变黄来自上游模板。#root 前缀用于压过 index.css 的
+   `.app-theme svg { color: var(--ink) }` 全局图标染色。 */
+.sm-gh-star {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow: hidden;
+  min-height: 34px;
+  padding: 0.5rem 1rem;
+  border-radius: 14px;
+  background: #000000;
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+  animation: sm-gh-star-in 0.24s ease-out;
+}
+
+.sm-gh-star:hover {
+  background: #1a1a1a;
+  box-shadow:
+    rgba(0, 0, 0, 0.25) 0px 0px 0px 1px,
+    rgba(0, 0, 0, 0.2) 0px 2px 4px;
+}
+
+.sm-gh-star:focus-visible {
+  outline: none;
+  box-shadow:
+    rgba(0, 0, 0, 0.25) 0px 0px 0px 1px,
+    rgba(0, 0, 0, 0.2) 0px 2px 4px,
+    0 0 0 2px #ffffff, 0 0 0 4px #000000;
+}
+
+@keyframes sm-gh-star-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sm-gh-star-shine {
+  position: absolute;
+  top: -3rem;
+  right: 0;
+  height: 8rem;
+  width: 2rem;
+  transform: translateX(3rem) rotate(12deg);
+  background: #ffffff;
+  opacity: 0.1;
+  transition: transform 1s ease-out;
+  pointer-events: none;
+}
+
+.sm-gh-star:hover .sm-gh-star-shine {
+  transform: translateX(-10rem) rotate(12deg);
+}
+
+.sm-gh-star-inner {
+  display: inline-flex;
+  align-items: center;
+}
+
+#root .sm-gh-star svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  color: #ffffff;
+}
+
+.sm-gh-star-label {
+  margin-left: 0.25rem;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.sm-gh-star-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+#root .sm-gh-star .sm-gh-star-star {
+  color: #9ca3af;
+  transition: color 0.3s ease;
+}
+
+#root .sm-gh-star:hover .sm-gh-star-star {
+  color: #fde047;
+}
+
+.sm-gh-star-num {
+  color: #ffffff;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
 }
 
 .sm-toggle-textWrap {

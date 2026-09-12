@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { CircleUserRound, LogIn, LogOut, Settings } from 'lucide-react';
 import { useClickOutside } from '../hooks/useClickOutside.js';
+import GithubStarButton from './GithubStarButton.jsx';
 import './StaggeredMenu.css';
 
 // IMPROVE-23：gsap 改为动态 import，避免常驻首屏预加载整个动画库；等待期间面板由 CSS
@@ -158,6 +159,9 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   const textCycleAnimRef = useRef(null);
   const colorTweenRef = useRef(null);
   const toggleBtnRef = useRef(null);
+  // GitHub Star 按钮只在菜单打开时挂在开关左侧；它也在面板之外，必须参与
+  // click-outside 豁免，否则 mousedown 先收起菜单会把按钮卸载、链接点不中。
+  const ghStarRef = useRef(null);
   const busyRef = useRef(false);
   // 打开动画的开合轮次：await gsap 期间用户可能已经点了关闭（甚至又点开），
   // 回来的时间线只有在「仍是同一轮且仍是打开态」时才允许播放。
@@ -452,7 +456,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     closeMenu();
   };
 
-  useClickOutside(closeOnClickAway && open, closeMenu, panelRef, toggleBtnRef);
+  useClickOutside(closeOnClickAway && open, closeMenu, panelRef, toggleBtnRef, ghStarRef);
 
   useImperativeHandle(
     ref,
@@ -480,6 +484,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
         ))}
       </div>
       <header className="staggered-menu-header" aria-label="Main navigation header">
+        {open && !hideToggleButton && <GithubStarButton ref={ghStarRef} />}
         {!hideToggleButton && (
           <button
             ref={toggleBtnRef}

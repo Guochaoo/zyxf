@@ -1,7 +1,8 @@
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import StaggeredMenu from '../components/StaggeredMenu.jsx';
+import { __resetStarsForTest } from '../components/GithubStarButton.jsx';
 import i18n from '../i18n/index.js';
 
 // 折叠菜单的按钮文字（打开菜单 / 关闭菜单）来自 t()。它被存进 useState 初值、
@@ -26,10 +27,17 @@ const toggleText = () => document.querySelector('.sm-toggle').textContent.replac
 
 beforeEach(async () => {
   await i18n.changeLanguage('zh');
+  // 菜单打开会挂载 GitHub Star 按钮并请求 GitHub API——stub 掉，测试不连外网。
+  __resetStarsForTest();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ stargazers_count: 7 }) }))
+  );
 });
 
 afterEach(async () => {
   await i18n.changeLanguage('zh');
+  vi.unstubAllGlobals();
 });
 
 describe('StaggeredMenu 菜单按钮随语言切换更新', () => {
@@ -82,5 +90,32 @@ describe('StaggeredMenu 关闭态面板不可聚焦', () => {
 
     document.querySelector('.sm-toggle').click();
     await waitFor(() => expect(panel().hasAttribute('inert')).toBe(true));
+  });
+});
+
+// GitHub Star 按钮只在菜单打开时挂在开关左侧；star 数来自打开时的一次
+// GitHub API 请求（fetch 已在文件级 stub），失败则隐藏数字块、按钮本体保留。
+describe('StaggeredMenu GitHub Star 按钮', () => {
+  test('打开菜单后出现并显示拉取到的 star 数，关闭后移除', async () => {
+    renderMenu();
+    expect(document.querySelector('.sm-gh-star')).toBeNull();
+
+    document.querySelector('.sm-toggle').click();
+    const star = () => document.querySelector('.sm-gh-star');
+    await waitFor(() => expect(star()).not.toBeNull());
+    expect(star().getAttribute('href')).toBe('https://github.com/Guochaoo/zyxf');
+    expect(star().getAttribute('target')).toBe('_blank');
+    await waitFor(() => expect(document.querySelector('.sm-gh-star-num').textContent).toBe('7'));
+
+    document.querySelector('.sm-toggle').click();
+    await waitFor(() => expect(star()).toBeNull());
+  });
+
+  test('star 数请求失败时隐藏数字块，按钮本体仍在', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('offline'))));
+    renderMenu();
+    document.querySelector('.sm-toggle').click();
+    await waitFor(() => expect(document.querySelector('.sm-gh-star')).not.toBeNull());
+    expect(document.querySelector('.sm-gh-star-num')).toBeNull();
   });
 });
