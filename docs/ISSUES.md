@@ -16,13 +16,15 @@
 ```yaml
 更新日期: 2026-09-12
 条目总数: 142        # 缺陷 98 + 改进 44
-待处理: 9            # 缺陷 3 + 改进 6（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；50 OSS 域名证书 10-05 到期；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index）
-已归档: 133          # 缺陷 95 + 改进 38
+待处理: 8            # 缺陷 3 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index）
+已归档: 134          # 缺陷 95 + 改进 39
 # 本批（卸载宝塔迁移系统组件，2026-09-12）：Node 24 与 nginx 换成系统级安装（NodeSource
 #   v24.21 + apt nginx 1.18，配置 = frontend/nginx.conf 落地 /etc/nginx/conf.d/zyxf.conf），
 #   证书改 certbot 签发 /etc/letsencrypt（续期 timer 已启用、dry-run 通过），宝塔彻底卸载：
 #   面板/8888/防火墙服务(BT-FirewallServices)/监控报表服务(site_total)/cron 全部清除，
 #   /www 删除、swap 迁至 /swapfile（fstab 已同步）。配置备份 /root/bt-backup-20260912.tar.gz。
+#   另：OSS_ENDPOINT 切换为标准域名 xjtu-zyxf.oss-cn-beijing.aliyuncs.com（预览实测正常），
+#   oss.zyxf.top 自定义域名及其 DigiCert 证书退役解绑（IMPROVE-50 已归档）。
 #   全程经阿里云 swas-open RunCommand 代跑（云助手 agent 在实例重启后才恢复）。
 # 授权（IMPROVE-46，已关闭）：**子集化属于第 2 条「embed, bundle ... with any software」的授权范围**
 #   ——CJK 字体要嵌进 Web 就必须子集化，这是行使嵌入权的正常方式；条件 2）的「不得修改」针对的是
@@ -115,14 +117,6 @@
 - **影响**：助手引用未知后缀文件（如 `.md`、未列入族别表的自定义后缀）时，胶囊上会出现一个突兀的黑色方块徽章，和同排其他族别色不一致；读起来像「强调」而不是「未知」。
 - **修法（二选一）**：① 把 `DEFAULT_TONE` 换成中性灰 `bg-[#808080]`，与 `archive` / 文件夹同色，语义上更贴「未知」；② 若要保留品牌蓝语义，则改用不受覆盖规则影响的内联样式或新增一个真正生效的蓝色 token（不要继续用 `bg-brand-*`——它在本项目里永远渲染为墨黑，见 `docs/DESIGN.md` §2）。
 - **验证**：在聊天里让助手引用一个未知后缀文件，确认徽章为中性灰且与其余族别色亮度一致；`npm test` 全绿（现有测试未断言该色调）。
-
-#### IMPROVE-50 · OSS 自定义域名证书 2026-10-05 到期，阿里云免费 DV 不自动续期
-**影响范围**：`/opt/zyxf/.env（OSS_ENDPOINT）` · 阿里云 SSL 证书控制台（部署 · 运维）
-
-- **现状**：`.env` 的 `OSS_ENDPOINT=https://oss.zyxf.top`，浏览器直传/直读和 IMM 预览都走它。该域名当前绑定的阿里云免费 DV 证书（cert-38cqrv，DigiCert「Encryption Everywhere DV TLS CA - G2」签发，2026-07-08 ~ **2026-10-06**）实测在服役。阿里云免费 DV 证书**不自动续期**，需每年手动重新申请再部署到 OSS。
-- **影响**：2026-10-06 起浏览器访问 OSS 会报证书过期——上传 / 下载 / 文档预览全部失败；且后端签名接口照常返回 200（签名是本地算的），表象与「AccessKey 失效」的坑同款，容易误判成代码问题。
-- **修法（9 月底前二选一）**：① 保留自定义域名：SSL 控制台重新申请一张免费 DV（域名填 `oss.zyxf.top`）→ 部署到 OSS（OSS 控制台 → Bucket `xjtu-zyxf` → 域名管理 → 替换证书绑定）；② 切换标准域名 `https://xjtu-zyxf.oss-cn-beijing.aliyuncs.com`（走阿里云通配符证书、永续免维护）——但 docs 曾记录「自定义域名是 IMM WebOffice 预览的前提」，切换后必须实测预览，通过才改 `.env` 并 `systemctl restart zyxf`；通过的话主站域名那张 cert-hb5xp3（zyxf.top/www.zyxf.top，2026-10-05 到期）就可以一并删除。
-- **验证**：`echo | openssl s_client -connect oss.zyxf.top:443 -servername oss.zyxf.top | openssl x509 -noout -enddate` 到期日应晚于当前 30 天以上；浏览器实际上传 + 预览各一遍。
 
 ---
 
@@ -230,7 +224,7 @@
 | BUG-99 | P1 | 前端·性能 | 首屏要传 21.7 MB 字体（唯一瓶颈）：源字体改走 npm，构建期子集化到 GB2312，**21.69 MB → 2.72 MB** 且 `fvar` 字重轴（100–700）保留；协议原文移至 `public/licenses/` 并在首页页脚给出署名链接 | `frontend/scripts/build-font.mjs`, `frontend/src/index.css`, `frontend/package.json`, `frontend/src/pages/BrowsePage.jsx`, `frontend/public/licenses/` | 2026-09-11 |
 | BUG-103 | P2 | 安全·信息泄露 | 部署文档把服务器真实公网 IP 写进仓库（全历史 196 处）：文档改用 RFC 5737 保留段占位并加「勿写入真实 IP」提醒；历史用 git-filter-repo replace-text 全量替换，顺带 mailmap 修正 14 个错误署名提交。注意 GitHub 侧 refs/pull/* 仍钉住改写前对象，彻底清除需 Support GC | `docs/DEPLOY.md`, git 历史（filter-repo） | 2026-09-11 |
 
-### 2.2 已关闭改进项（38）
+### 2.2 已关闭改进项（39）
 
 | 编号 | 严重度 | 类别 | 标题 | 处理位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -272,3 +266,4 @@
 | IMPROVE-46 | P2 | 授权·合规 | OPPO Sans 子集化的授权依据与署名义务：确认子集化属于第 2 条「embed, bundle」授权范围（CJK webfont 的技术前提），真正约束的是条件 1）/4）的两条署名义务，已落实到页脚署名链接与随附协议 | `frontend/public/licenses/OPPO-Sans-4.0-License.txt`, `frontend/src/pages/BrowsePage.jsx`, `frontend/scripts/build-font.mjs`, `docs/DEPLOY.md` | 2026-09-11 |
 | IMPROVE-47 | P2 | 合规·开源 | 公开仓库前缺 LICENSE：补 Apache-2.0 协议文件，README 增加许可证小节 | `LICENSE`, `README.md` | 2026-09-11 |
 | IMPROVE-48 | P2 | 部署·收敛 | 彻底卸载宝塔面板：Node/nginx 迁系统级（NodeSource 24.21 + apt nginx 1.18，配置 = `frontend/nginx.conf` 落地 `/etc/nginx/conf.d/zyxf.conf`），证书改 certbot 自动续期；踩坑：宝塔同名 init 脚本与 nginx-common 的 conffile 冲突（`--force-confnew`）、卸载脚本会顺手停掉系统 nginx、Git Bash 传脚本需 `MSYS_NO_PATHCONV=1` | `deploy/zyxf.service`, `.github/workflows/deploy.yml`, `frontend/nginx.conf`, `docs/DEPLOY.md` | 2026-09-12 |
+| IMPROVE-50 | P2 | 部署·运维 | OSS 换标准域名免除证书年续：`OSS_ENDPOINT` 切 `xjtu-zyxf.oss-cn-beijing.aliyuncs.com`（IMM 的 SourceURI 走 `oss://` 与域名无关，预览实测正常）——迁移前 env 模板的「自定义域名是预览前提」结论不成立；`oss.zyxf.top` 绑定解绑、DNS CNAME 删除，两张 DigiCert 免费 DV（10-05/10-06 到期、不自动续期）退役 | `/opt/zyxf/.env`, `docs/ISSUES.md` | 2026-09-12 |
