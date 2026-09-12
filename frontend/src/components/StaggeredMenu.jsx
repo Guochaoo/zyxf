@@ -101,6 +101,9 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   // IMPROVE-52：抽成普通函数供「首次交互预取」在 React 提交前同步调用——playOpen 的
   // 微任务可能跑在 layout effect 之前，首次打开必须保证预置已就位。幂等，可重复调用。
   const preparePanel = (g) => {
+    // BUG-106：菜单开着时绝不重跑预置——开关按钮的 hover/focus 都会触发 ensureGsap，
+    // 重跑会把面板打回屏外并复位图标/文字，而 React 开合态不变（遮罩留存、面板消失）。
+    if (openRef.current) return;
     const panel = panelRef.current;
     const preContainer = preLayersRef.current;
     const plusH = plusHRef.current;
@@ -197,18 +200,22 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     const layerStates = layers.map(el => ({ el, start: offscreen }));
     const panelStart = offscreen;
 
+    // BUG-106：面板/预层的可见性由打开时间线自己接管——preparePanel 在菜单开着时会被
+    // 守卫跳过（否则悬停开关会把面板复位），首次打开时 gsap 迟到也不能依赖它先跑过。
+    if (preLayersRef.current) g.set(preLayersRef.current, { opacity: 1 });
+
     const tl = g.timeline({ paused: true });
 
     layerStates.forEach((ls, i) => {
-      tl.fromTo(ls.el, { xPercent: ls.start }, { xPercent: 0, duration: 0.5, ease: 'power4.out' }, i * 0.07);
+      tl.fromTo(ls.el, { xPercent: ls.start, opacity: 1 }, { xPercent: 0, opacity: 1, duration: 0.5, ease: 'power4.out' }, i * 0.07);
     });
     const lastTime = layerStates.length ? (layerStates.length - 1) * 0.07 : 0;
     const panelInsertTime = lastTime + (layerStates.length ? 0.08 : 0);
     const panelDuration = 0.65;
     tl.fromTo(
       panel,
-      { xPercent: panelStart },
-      { xPercent: 0, duration: panelDuration, ease: 'power4.out' },
+      { xPercent: panelStart, opacity: 1 },
+      { xPercent: 0, opacity: 1, duration: panelDuration, ease: 'power4.out' },
       panelInsertTime
     );
 

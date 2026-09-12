@@ -189,6 +189,7 @@
   height: 1rem;
   flex: 0 0 auto;
   color: #ffffff;
+  fill: currentColor; /* logo svg 不带 fill-current 类，缺这条会落回默认黑色 */
 }
 
 .sm-gh-star-label {

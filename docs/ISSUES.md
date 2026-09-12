@@ -15,9 +15,9 @@
 
 ```yaml
 更新日期: 2026-09-12
-条目总数: 152        # 缺陷 100 + 改进 52
+条目总数: 154        # 缺陷 102 + 改进 52
 待处理: 10           # 缺陷 4 + 改进 6（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index；104 为测试套件偶发登录失败；58 为测试覆盖缺口补齐清单）
-已归档: 142          # 缺陷 96 + 改进 46
+已归档: 144          # 缺陷 98 + 改进 46
 # 本批（卸载宝塔迁移系统组件，2026-09-12）：Node 24 与 nginx 换成系统级安装（NodeSource
 #   v24.21 + apt nginx 1.18，配置 = frontend/nginx.conf 落地 /etc/nginx/conf.d/zyxf.conf），
 #   证书改 certbot 签发 /etc/letsencrypt（续期 timer 已启用、dry-run 通过），宝塔彻底卸载：
@@ -42,6 +42,11 @@
 #   11 用例锁死数据层全部语义（顺带修出 cache:false 不清缓存的真缺陷）、修 Dashboard
 #   mockReset 隐患与失真竞态用例、四页级测试接入 __resetResourceStore、删死桩/永真断言。
 #   优先级 4（覆盖缺口补齐清单）建档 IMPROVE-58 待处理。
+# 本批（菜单交互，2026-09-12）：官方渠道收敛为仅 Bilibili；新增 GithubStarButton
+#   （菜单打开时挂在开关左侧，star 数打开时实时拉取 GitHub API）；复现并修复
+#   BUG-106（预存在的 IMPROVE-52 回归：菜单开着时 hover/focus 开关会重跑 gsap 预置，
+#   面板被打回屏外而遮罩留存——Windows 任务栏切窗后移鼠标到开关 100% 复现）与
+#   BUG-107（Star 按钮 logo svg 缺 fill 取色类显黑），均当轮修复并补回归测试。
 ```
 
 ---
@@ -50,7 +55,7 @@
 
 ### 1.1 缺陷
 
-设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；设置页改造批新发现的 **1 条**（BUG-95）当轮修复并归档；预览/下载故障复盘批新发现的 **1 条**（BUG-96）也已当轮修复；随后 SPA 深链批与知识图谱批各新发现 **1 条**（BUG-97、BUG-98），均当轮修复；线上首屏性能实测批新发现 **3 条**：BUG-100（生产 nginx 三条规则未生效）、BUG-101（favicon 107 KB）与 **BUG-99（首屏 21.7 MB 字体）**，均已当轮修复并线上验证（BUG-99 的最终做法见 [2.1 已修复缺陷](#21-已修复缺陷)（94））。最后把内容索引那批合入 main 时发生**部署事故**，新增 **BUG-102**，当轮 revert 处置、条目保留待解。随后为仓库公开做敏感信息全量审计：唯一发现 **BUG-103**（部署文档把服务器真实公网 IP 写进仓库与历史），当轮修复并历史改写；同轮补 Apache-2.0 LICENSE（**IMPROVE-47**）。2026-09-12 落地 **IMPROVE-48**：Node/nginx 迁系统级并彻底卸载宝塔面板，全程经阿里云 swas-open RunCommand 代跑。同日架构与性能优化批在连跑测试时发现**预存在的偶发登录失败**（干净检出同样复现），按 BUG-104 建档待查。
+设计规范审计批新发现 **2 条**（BUG-93、BUG-94），只建档、未改代码；设置页改造批新发现的 **1 条**（BUG-95）当轮修复并归档；预览/下载故障复盘批新发现的 **1 条**（BUG-96）也已当轮修复；随后 SPA 深链批与知识图谱批各新发现 **1 条**（BUG-97、BUG-98），均当轮修复；线上首屏性能实测批新发现 **3 条**：BUG-100（生产 nginx 三条规则未生效）、BUG-101（favicon 107 KB）与 **BUG-99（首屏 21.7 MB 字体）**，均已当轮修复并线上验证（BUG-99 的最终做法见 [2.1 已修复缺陷](#21-已修复缺陷)（94））。最后把内容索引那批合入 main 时发生**部署事故**，新增 **BUG-102**，当轮 revert 处置、条目保留待解。随后为仓库公开做敏感信息全量审计：唯一发现 **BUG-103**（部署文档把服务器真实公网 IP 写进仓库与历史），当轮修复并历史改写；同轮补 Apache-2.0 LICENSE（**IMPROVE-47**）。2026-09-12 落地 **IMPROVE-48**：Node/nginx 迁系统级并彻底卸载宝塔面板，全程经阿里云 swas-open RunCommand 代跑。同日架构与性能优化批在连跑测试时发现**预存在的偶发登录失败**（干净检出同样复现），按 BUG-104 建档待查。随后菜单交互批新增 GitHub Star 按钮时复现**预存在的 IMPROVE-52 回归**（**BUG-106**：菜单开着时开关按钮的 hover/focus 会重跑 gsap 预取路径里的面板预置，面板被打回屏外、图标/文字复位而 React 开合态不变，Windows 任务栏切换窗口后 100% 复现），当轮修复并补回归测试；同批 **BUG-107**（Star 按钮 logo 缺 fill 取色类显黑）同轮修复。
 
 #### BUG-93 · 下载热力图的星期标签比格子错开一天（周一开头的网格配了周日开头的字典）
 **影响范围**：`frontend/src/pages/Dashboard/ActivityHeatmap.jsx` · `frontend/src/i18n/zh.js` · `frontend/src/i18n/en.js`（前端 · 正确性 / i18n）
@@ -259,6 +264,8 @@
 | BUG-99 | P1 | 前端·性能 | 首屏要传 21.7 MB 字体（唯一瓶颈）：源字体改走 npm，构建期子集化到 GB2312，**21.69 MB → 2.72 MB** 且 `fvar` 字重轴（100–700）保留；协议原文移至 `public/licenses/` 并在首页页脚给出署名链接 | `frontend/scripts/build-font.mjs`, `frontend/src/index.css`, `frontend/package.json`, `frontend/src/pages/BrowsePage.jsx`, `frontend/public/licenses/` | 2026-09-11 |
 | BUG-103 | P2 | 安全·信息泄露 | 部署文档把服务器真实公网 IP 写进仓库（全历史 196 处）：文档改用 RFC 5737 保留段占位并加「勿写入真实 IP」提醒；历史用 git-filter-repo replace-text 全量替换，顺带 mailmap 修正 14 个错误署名提交。注意 GitHub 侧 refs/pull/* 仍钉住改写前对象，彻底清除需 Support GC | `docs/DEPLOY.md`, git 历史（filter-repo） | 2026-09-11 |
 | BUG-105 | P0 | 前端 | IMPROVE-52 重构回归：localSubgraph 返回 { nodes, links } 被误解构成 { localNodes, localLinks }，links=undefined 令 buildDegrees 抛 "links is not iterable"，图谱挂载即崩并打穿到 bootError 整页白屏；修复重命名解构 + App 右栏纳入 ErrorBoundary + 补组件挂载级回归测试（纯函数用例拦不住属性接线错误） | `frontend/src/components/KnowledgeGraph.jsx`, `frontend/src/App.jsx`, `frontend/src/test/KnowledgeGraph.test.jsx` | 2026-09-12 |
+| BUG-106 | P0 | 前端 | IMPROVE-52 回归：gsap 加载后开关按钮的 hover/pointerdown/focus 都会重跑 ensureGsap→preparePanel，菜单开着时触发会把面板打回屏外、图标/文字复位，而 React 开合态不变（毛玻璃遮罩留存、白色面板消失）；Windows 下开菜单→点任务栏切窗→回来把鼠标移向开关即 100% 复现。修复 = preparePanel 开着直接跳过 + 打开时间线自带 panel/prelayer opacity（首次打开 gsap 迟到时不依赖预置先跑）；补 hover 回归测试 | `frontend/src/components/StaggeredMenu.jsx`, `frontend/src/test/StaggeredMenu.test.jsx` | 2026-09-12 |
+| BUG-107 | P2 | 前端 | GitHub Star 按钮（同轮新增）logo svg 丢了模板的 fill-current 取色类，fill 落回默认黑色，黑底上图标恒黑；修复在 `#root .sm-gh-star svg` 补 `fill: currentColor` | `frontend/src/components/GithubStarButton.jsx`, `frontend/src/components/StaggeredMenu.css` | 2026-09-12 |
 
 ### 2.2 已关闭改进项（46）
 

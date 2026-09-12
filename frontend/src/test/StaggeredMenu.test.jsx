@@ -119,3 +119,28 @@ describe('StaggeredMenu GitHub Star 按钮', () => {
     expect(document.querySelector('.sm-gh-star-num')).toBeNull();
   });
 });
+
+// BUG-106 回归：gsap 加载后开关按钮的每次 hover（pointerover 被 React 合成为
+// onPointerEnter）都会触发 ensureGsap→preparePanel。菜单开着时若不跳过预置，
+// 面板会被打回屏外、图标/文字复位，而 React 开合态不变——遮罩留存、面板消失。
+describe('StaggeredMenu 菜单开着时 hover 开关不重置面板（BUG-106）', () => {
+  test('打开动画完成后再次 hover 开关，面板仍在原位', async () => {
+    const toggle = () => document.querySelector('.sm-toggle');
+    const panel = () => document.getElementById('staggered-menu-panel');
+
+    renderMenu();
+    // 复刻真实交互：悬停触发 gsap 预取（此时关闭态，预置合法），再点击打开。
+    toggle().dispatchEvent(new Event('pointerover', { bubbles: true }));
+    toggle().click();
+    // jsdom 里真实 gsap 用 rAF 实时驱动，等打开时间线跑完（全程约 1.9s）。
+    await new Promise((r) => setTimeout(r, 2500));
+    const t0 = panel().style.transform;
+    expect(t0).not.toBe('');
+
+    toggle().dispatchEvent(new Event('pointerover', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(panel().style.transform).toBe(t0);
+    expect(panel().style.opacity).toBe('1');
+  }, 15000);
+});
