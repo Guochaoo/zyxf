@@ -15,8 +15,8 @@
 
 ```yaml
 更新日期: 2026-09-12
-条目总数: 151        # 缺陷 100 + 改进 51
-待处理: 9            # 缺陷 4 + 改进 5（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index；104 为测试套件偶发登录失败，建档待查）
+条目总数: 152        # 缺陷 100 + 改进 52
+待处理: 10           # 缺陷 4 + 改进 6（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index；104 为测试套件偶发登录失败；58 为测试覆盖缺口补齐清单）
 已归档: 142          # 缺陷 96 + 改进 46
 # 本批（卸载宝塔迁移系统组件，2026-09-12）：Node 24 与 nginx 换成系统级安装（NodeSource
 #   v24.21 + apt nginx 1.18，配置 = frontend/nginx.conf 落地 /etc/nginx/conf.d/zyxf.conf），
@@ -36,6 +36,12 @@
 #   ——首屏字体 2.86MB→1.53MB）、后端抽 service 层（IMPROVE-53）、自研轻量数据层（IMPROVE-54）、
 #   App 拆分 + ErrorBoundary + 管理端弹窗站内化（IMPROVE-55）。评估后不做两项（IMPROVE-56/57，
 #   判定依据见归档表）。测试套件发现预存在的偶发登录失败，建档 BUG-104 待查。
+# 本批（测试套件审计修复，2026-09-12）：审计优先级 1-3 已修——后端抽 test/helpers.js
+#   （adminToken fail-fast 即 BUG-104 修法①、消六文件重复基建、拆 chat/发码两个零余量
+#   限流配额、mailState finally、registerViaCode fail-fast）；前端新增 resource.test.js
+#   11 用例锁死数据层全部语义（顺带修出 cache:false 不清缓存的真缺陷）、修 Dashboard
+#   mockReset 隐患与失真竞态用例、四页级测试接入 __resetResourceStore、删死桩/永真断言。
+#   优先级 4（覆盖缺口补齐清单）建档 IMPROVE-58 待处理。
 ```
 
 ---
@@ -92,7 +98,7 @@
 
 ### 1.2 改进建议
 
-上一轮审计新发现的 14 条改进项里，已处置 13 条（13/14/15/16/17/18/19/20/21/22/23/24/25，见 [2.2 已关闭改进项](#22-已关闭改进项)（35））；另有 **1 条暂缓**（26）、**2 条来自复核审计、本轮只建档待决策**（31/32）、**1 条设计取舍记账**（33：表单控件无聚焦视觉），以及设计规范审计新增的 **1 条**（34：聊天未知类型徽章被品牌色覆盖规则染黑）。最后一批（线上首屏性能实测）新增的 **3 条**（IMPROVE-43/44/45：首屏关键路径、Google Fonts 外链、关于页图片）已当轮修复并**线上验证**。这几条都写全背景，便于以后接手时不必重新调研。
+上一轮审计新发现的 14 条改进项里，已处置 13 条（13/14/15/16/17/18/19/20/21/22/23/24/25，见 [2.2 已关闭改进项](#22-已关闭改进项)（35））；另有 **1 条暂缓**（26）、**2 条来自复核审计、本轮只建档待决策**（31/32）、**1 条设计取舍记账**（33：表单控件无聚焦视觉），以及设计规范审计新增的 **1 条**（34：聊天未知类型徽章被品牌色覆盖规则染黑）。最后一批（线上首屏性能实测）新增的 **3 条**（IMPROVE-43/44/45：首屏关键路径、Google Fonts 外链、关于页图片）已当轮修复并**线上验证**。这几条都写全背景，便于以后接手时不必重新调研。2026-09-12 全量测试审计批新增 **1 条**（IMPROVE-58：覆盖缺口补齐清单，审计优先级 1-3 的失真/重复/冗余/零余量问题已当轮修复，见提交 5b72c5b 与 ab307da）。
 
 #### IMPROVE-31 · 预览凭证（IMM WebOffice token）匿名可签发，且与下载共用配额
 **影响范围**：`backend/src/routes/files.js` · `backend/src/imm.js` · `frontend/src/components/Preview/index.jsx`（后端 · 配额 / 安全）
@@ -133,6 +139,19 @@
 - **影响**：助手引用未知后缀文件（如 `.md`、未列入族别表的自定义后缀）时，胶囊上会出现一个突兀的黑色方块徽章，和同排其他族别色不一致；读起来像「强调」而不是「未知」。
 - **修法（二选一）**：① 把 `DEFAULT_TONE` 换成中性灰 `bg-[#808080]`，与 `archive` / 文件夹同色，语义上更贴「未知」；② 若要保留品牌蓝语义，则改用不受覆盖规则影响的内联样式或新增一个真正生效的蓝色 token（不要继续用 `bg-brand-*`——它在本项目里永远渲染为墨黑，见 `docs/DESIGN.md` §2）。
 - **验证**：在聊天里让助手引用一个未知后缀文件，确认徽章为中性灰且与其余族别色亮度一致；`npm test` 全绿（现有测试未断言该色调）。
+
+#### IMPROVE-58 · 测试覆盖缺口补齐清单（2026-09-12 全量审计批的遗留待办）
+**影响范围**：`backend/src/index.js` · `backend/src/db.js` · `backend/src/routes/stats.js` · `frontend/src/components/ErrorBoundary.jsx` · `frontend/src/components/ConfirmDialog.jsx`（测试 · 覆盖缺口）
+
+- **现状**：2026-09-12 对前后端 43 个测试文件做过全量审计（重复/冗余/失真/零余量限流/helper 不 fail-fast 等问题已在当批修复，见提交 5b72c5b、ab307da 与 BUG-104），但以下模块/端点仍**完全没有测试**，按风险排序：
+  1. `index.js:27-48` 生产启动自检（弱 JWT/弱密码/开放 CORS 拒绝启动）——安全底线逻辑。需子进程方案：`NODE_ENV=production` + 错误 env 启动，断言进程 exit 且输出原因。
+  2. `db.js` 的迁移分支：users.role 重建表（风险最高——迁移要正确搬移 email/token_epoch）、token_epoch/sort_order/email/uses 补列。fresh `:memory:` 库永远走不到这些分支。做法：用旧 schema 预建一个 DB 文件 → 跑 db.js → 断言迁移结果。
+  3. `GET /api/stats/heatmap`（含 days 钳制 [31,731]）与 statsCache 生产口径行为（TTL 命中 + libraryCaches 统一失效接线）——同批对树/搜索缓存都有生产口径验证（auditFixes.test.js 的 NODE_ENV 临时切换写法可复用），唯独缺 stats。
+  4. 前端新交互三件套 + hook：ErrorBoundary（抛错捕获/重试复位）、ConfirmDialog/NamePromptDialog（空值禁提交、重开重置初值）、useSettingsRoute 的手机端 push/replace 分支。
+  5. 次要（顺手补）：http.js wrapAsync 的 500 路径；folders 的 sort=size 与递归大小计算；chat 的 GET /status 与 sanitizeHistory 截断；files 改名的 deleteOld=false 分支（NFD→NFC 同 key 改名不得删真身）；password.js 的畸形 scrypt 串分支；reorder 的「order 必须是数组」400；前端 Preview/index 自身（URL 失败致命 vs 凭证失败降级）、InsightCards 的 densifyBySpline（手写单调样条，纯函数易测）、FolderTree 渲染、AboutPage、useItemDragDrop 的其余路径（after 重排/文件夹边缘/moveError 自动清除）。
+- **影响**：安全关键与迁移逻辑无回归保护，这些区域的后续重构只能靠手工验证；审计报告其余的跨文件重复用例合并（约 8 组）也未立项，做第 5 条时可顺带。
+- **修法**：按上面 1→4 的顺序补；4 里的组件测试参照 RenameDialog.test.jsx 的受控组件写法，hook 测试参照 resource.test.js 的 renderHook 写法。
+- **验证**：新增用例全绿、全量套件（含 --sequence.shuffle 乱序）无回归。
 
 ---
 
