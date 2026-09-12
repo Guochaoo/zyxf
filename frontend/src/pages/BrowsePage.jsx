@@ -19,6 +19,8 @@ import { useAuth } from '../auth.jsx';
 import Preview from '../components/Preview/index.jsx';
 import UploadDialog from '../components/UploadDialog.jsx';
 import Toast from '../components/Toast.jsx';
+import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import NamePromptDialog from '../components/NamePromptDialog.jsx';
 import { downloadAndAlert, errMsg, notifyFoldersChanged } from '../utils.js';
 import { useFolderContents } from './Browse/useFolderContents.js';
 import { useItemDragDrop } from './Browse/useItemDragDrop.js';
@@ -55,6 +57,14 @@ export default function BrowsePage() {
   const [renameTarget, setRenameTarget] = useState(null);
   const [renameValue, setRenameValue] = useState('');
   const [renaming, setRenaming] = useState(false);
+  // IMPROVE-57：原生 prompt/confirm/alert 换成站内弹窗 + Toast。
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState(null); // { kind: 'folder'|'file', item }
+  const [deleting, setDeleting] = useState(false);
+  // 失败提示：Toast 靠 key 重置计时，用递增 id 保证连续两次失败也能重新弹出。
+  const [errorNotice, setErrorNotice] = useState(null);
+  const showError = useCallback((message) => setErrorNotice({ id: Date.now(), message }), []);
 
   // Go up one level: current folder's parent (root when at top).
   const onGoBack = useCallback(() => {
@@ -70,7 +80,7 @@ export default function BrowsePage() {
     navigate(location.pathname, { replace: true, state: null });
   }, [data, loading, location.pathname, location.state, navigate]);
 
-  // 管理操作共享骨架：await 动作 → 通知目录树 + 刷新；失败 alert 兜底。
+  // 管理操作共享骨架：await 动作 → 通知目录树 + 刷新；失败用站内 Toast 提示。
   // notify=false 用于不影响目录树的操作（如删除文件）。
   const runAdmin = useCallback(
     async (fn, failMsg, notify = true) => {
@@ -79,33 +89,50 @@ export default function BrowsePage() {
         if (notify) notifyFoldersChanged();
         refresh();
       } catch (e) {
-        alert(errMsg(e, failMsg));
+        showError(errMsg(e, failMsg));
       }
     },
-    [refresh]
+    [refresh, showError]
   );
 
-  const onCreateFolder = useCallback(() => {
-    const name = window.prompt(t('browse.newFolderName'));
-    if (!name) return;
-    runAdmin(() => createFolder(name, folderId || null), t('browse.createError'));
-  }, [folderId, runAdmin, t]);
-
-  const onDeleteFolder = useCallback(
-    (f) => {
-      if (!confirm(t('browse.confirmDeleteFolder', { name: f.name }))) return;
-      runAdmin(() => deleteFolder(f.id), t('browse.deleteError'));
+  const submitCreateFolder = useCallback(
+    (name) => {
+      const trimmed = name?.trim();
+      if (!trimmed) {
+        setCreateOpen(false);
+        return;
+      }
+      setCreating(true);
+      runAdmin(() => createFolder(trimmed, folderId || null), t('browse.createError'))
+        .finally(() => {
+          setCreating(false);
+          setCreateOpen(false);
+        });
     },
-    [runAdmin, t]
+    [folderId, runAdmin, t]
   );
 
-  const onDeleteFile = useCallback(
-    (f) => {
-      if (!confirm(t('browse.confirmDeleteFile', { name: f.name }))) return;
-      runAdmin(() => deleteFile(f.id), t('browse.deleteError'), false);
-    },
-    [runAdmin, t]
-  );
+  const requestDeleteFolder = useCallback((f) => {
+    setConfirmTarget({ kind: 'folder', item: f });
+  }, []);
+
+  const requestDeleteFile = useCallback((f) => {
+    setConfirmTarget({ kind: 'file', item: f });
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (!confirmTarget) return;
+    const { kind, item } = confirmTarget;
+    setDeleting(true);
+    runAdmin(
+      () => (kind === 'folder' ? deleteFolder(item.id) : deleteFile(item.id)),
+      t('browse.deleteError'),
+      kind === 'folder'
+    ).finally(() => {
+      setDeleting(false);
+      setConfirmTarget(null);
+    });
+  }, [confirmTarget, runAdmin, t]);
 
   const openRenameDialog = useCallback((item) => {
     setRenameTarget(item);
@@ -152,7 +179,7 @@ export default function BrowsePage() {
       setRenameValue('');
       refresh();
     } catch (err) {
-      alert(errMsg(err, t('browse.renameError')));
+      showError(errMsg(err, t('browse.renameError')));
     } finally {
       setRenaming(false);
     }
@@ -174,7 +201,7 @@ export default function BrowsePage() {
         {isAdmin && (
           <>
             <button
-              onClick={onCreateFolder}
+              onClick={() => setCreateOpen(true)}
               className="rb-toolbar-btn"
             >
               <BsFolderPlus className="w-4 h-4" />
@@ -215,6 +242,15 @@ export default function BrowsePage() {
           onClose={clearSyncNotice}
         />
       )}
+      {/* 管理操作失败的站内 Toast（IMPROVE-57）：替代原生 alert，不阻塞主线程。 */}
+      {errorNotice && (
+        <Toast
+          key={errorNotice.id}
+          type="error"
+          message={errorNotice.message}
+          onClose={() => setErrorNotice(null)}
+        />
+      )}
 
       {/* Body: file list takes the full middle column width. The knowledge
           graph renders in the App right column only on browse routes at the
@@ -234,8 +270,8 @@ export default function BrowsePage() {
             dropZone={dropZone}
             onEnterFolder={onEnterFolder}
             onPreviewFile={setPreviewing}
-            onDeleteFolder={onDeleteFolder}
-            onDeleteFile={onDeleteFile}
+            onDeleteFolder={requestDeleteFolder}
+            onDeleteFile={requestDeleteFile}
             onRenameFolder={onRenameFolder}
             onRenameFile={onRenameFile}
             onDownloadFile={onDownloadFile}
@@ -282,6 +318,38 @@ export default function BrowsePage() {
         onSubmit={submitRenameDialog}
         onClose={closeRenameDialog}
         renaming={renaming}
+      />
+
+      {/* 新建文件夹：站内输入弹窗（IMPROVE-57，替代 window.prompt） */}
+      <NamePromptDialog
+        open={createOpen}
+        title={t('browse.createFolder')}
+        placeholder={t('browse.newFolderName')}
+        submitLabel={t('common.confirm')}
+        onSubmit={submitCreateFolder}
+        onClose={() => setCreateOpen(false)}
+        busy={creating}
+      />
+
+      {/* 删除确认：站内确认弹窗（IMPROVE-57，替代 window.confirm） */}
+      <ConfirmDialog
+        open={!!confirmTarget}
+        title={
+          confirmTarget?.kind === 'folder'
+            ? t('browse.deleteFolderTitle')
+            : t('browse.deleteFileTitle')
+        }
+        message={
+          confirmTarget
+            ? confirmTarget.kind === 'folder'
+              ? t('browse.confirmDeleteFolder', { name: confirmTarget.item.name })
+              : t('browse.confirmDeleteFile', { name: confirmTarget.item.name })
+            : ''
+        }
+        confirmLabel={t('common.delete')}
+        onConfirm={confirmDelete}
+        onClose={() => setConfirmTarget(null)}
+        busy={deleting}
       />
 
       {previewing && <Preview file={previewing} onClose={() => setPreviewing(null)} />}

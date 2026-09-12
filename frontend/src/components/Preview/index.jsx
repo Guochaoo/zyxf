@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { Download, X, Loader2 } from 'lucide-react';
@@ -6,61 +6,39 @@ import { getFileUrl, getWebofficeToken } from '../../api.js';
 import { downloadFileById, errMsg, formatSize, getPreviewKind, isLargeFile, LARGE_FILE_THRESHOLD } from '../../utils.js';
 import useMediaQuery from '../../hooks/useMediaQuery.js';
 import { useModalDialog } from '../../hooks/useModalDialog.js';
+import { useResource } from '../../data/resource.js';
 import PreviewBody from './Body.jsx';
 
 /**
  * Preview — full-screen overlay that fetches a file's OSS signed URL and (for
  * previewable types) WebOffice credentials, then renders the right viewer.
+ * IMPROVE-56：取数下沉到 data/resource.js——签名 URL 与 WebOffice 凭证并行取，
+ * URL 失败视为致命（error，可重试），凭证失败仅降级为本地预览；按文件 id 缓存，
+ * 同一文件再次打开先出缓存再静默刷新。
  */
 export default function Preview({ file, onClose }) {
   const { t } = useTranslation();
-  const [signedUrl, setSignedUrl] = useState(null);
-  const [wbToken, setWbToken] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState('');
   const [downloadErr, setDownloadErr] = useState('');
   const [downloading, setDownloading] = useState(false);
-  // Guards against a stale in-flight load writing state after a newer load
-  // or an unmount (e.g. rapid re-open of a different file).
-  const loadTokenRef = useRef(0);
   const kind = useMemo(() => getPreviewKind(file.ext), [file.ext]);
   const isMobile = useMediaQuery('(max-width: 640px)');
 
-  // Fetch the signed URL (downloads / fallbacks) and WebOffice token
-  // (interactive preview) in parallel; shared by the retry button.
-  const loadUrl = useCallback(async () => {
-    const token = ++loadTokenRef.current;
-    setLoading(true);
-    setErr('');
-    try {
+  const { data, error, loading, reload } = useResource(
+    `preview:${file.id}`,
+    async (_key, { signal }) => {
       const [urlMeta, wb] = await Promise.allSettled([
-        getFileUrl(file.id),
-        getWebofficeToken(file.id),
+        getFileUrl(file.id, { signal }),
+        getWebofficeToken(file.id, { signal }),
       ]);
-      if (token !== loadTokenRef.current) return; // stale load — drop it
-      if (urlMeta.status === 'fulfilled') setSignedUrl(urlMeta.value.url);
-      if (wb.status === 'fulfilled') setWbToken(wb.value);
       // A signed-URL failure is fatal; a WebOffice-token failure just falls
       // back to the native/iframe preview path.
-      if (urlMeta.status === 'rejected') setErr(errMsg(urlMeta.reason, t('common.loadFailed')));
-    } catch (e) {
-      if (token !== loadTokenRef.current) return;
-      if (e.name !== 'AbortError') setErr(errMsg(e, t('common.loadFailed')));
-    } finally {
-      if (token === loadTokenRef.current) setLoading(false);
+      if (urlMeta.status === 'rejected') throw urlMeta.reason;
+      return { url: urlMeta.value.url, wb: wb.status === 'fulfilled' ? wb.value : null };
     }
-  }, [file.id]);
-
-  useEffect(() => {
-    // Invalidate any in-flight load when the file (or unmount) changes.
-    return () => {
-      loadTokenRef.current += 1;
-    };
-  }, [file.id]);
-
-  useEffect(() => {
-    loadUrl();
-  }, [loadUrl]);
+  );
+  const signedUrl = data?.url ?? null;
+  const wbToken = data?.wb ?? null;
+  const err = error ? errMsg(error, t('common.loadFailed')) : '';
 
   // Download: fetch a fresh signed URL with ?download=1 so the backend
   // applies rate limiting and logs the event.
@@ -75,7 +53,7 @@ export default function Preview({ file, onClose }) {
     } finally {
       setDownloading(false);
     }
-  }, [file, downloading]);
+  }, [file, downloading, t]);
 
   const largeFileWarn = isMobile && isLargeFile(file.size);
   // Esc 关闭 + Tab 在预览框内循环 + 关闭后焦点归还给列表行（原先 Esc 无效）
@@ -145,7 +123,7 @@ export default function Preview({ file, onClose }) {
             <div className="h-full flex flex-col items-center justify-center gap-3 p-4">
               <div className="text-red text-sm text-center">{err}</div>
               <button
-                onClick={loadUrl}
+                onClick={reload}
                 className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm hover:bg-brand-700 transition-colors"
               >
                 {t('preview.reload')}

@@ -33,11 +33,10 @@ export default function ItemList({
   const { t } = useTranslation();
   // data.items 存在（manual 模式）时它就是完整列表；否则 folders + files。
   const total = data?.items?.length ?? ((data?.folders?.length || 0) + (data?.files?.length || 0));
-  if (total === 0) {
-    return <div className="py-16 text-center text-slate-500 text-sm">{t('browse.empty')}</div>;
-  }
   const actionWidthClass = isAdmin ? 'w-28' : 'w-16';
-  // 按当前列表实际大小数量等分成 6 段，得到 5 个分位阈值
+  // 按当前列表实际大小数量等分成 6 段，得到 5 个分位阈值。
+  // 所有 hook 必须在 `total === 0` 的早返回**之前**调用（条件 hook 隐患：
+  // 空列表 → 非空列表的同实例更新会触发 "Rendered fewer hooks" 崩溃）。
   const thresholds = useMemo(
     () =>
       sizeThresholds(
@@ -47,6 +46,9 @@ export default function ItemList({
       ),
     [data]
   );
+  if (total === 0) {
+    return <div className="py-16 text-center text-slate-500 text-sm">{t('browse.empty')}</div>;
+  }
   // 手动排序下后端返回合并视图 items（文件夹与文件共享 sort_order 序列），
   // 直接按它渲染才能保持拖拽出的交错顺序（BUG-27）；其余排序模式后端给不出
   // 交错语义，仍按「文件夹在前、文件在后」渲染。

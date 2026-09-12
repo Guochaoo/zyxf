@@ -147,13 +147,13 @@ describe('BrowsePage', () => {
   test('切换排序会用新字段重新请求；再次点击同一项切换升降序', async () => {
     renderPage();
     await screen.findByText('物理.pdf');
-    expect(listFolderMock).toHaveBeenLastCalledWith(0, 'manual', 'asc');
+    expect(listFolderMock).toHaveBeenLastCalledWith(0, 'manual', 'asc', expect.anything());
 
     fireEvent.click(screen.getByRole('button', { name: /名称/ }));
-    await waitFor(() => expect(listFolderMock).toHaveBeenLastCalledWith(0, 'name', 'asc'));
+    await waitFor(() => expect(listFolderMock).toHaveBeenLastCalledWith(0, 'name', 'asc', expect.anything()));
 
     fireEvent.click(screen.getByRole('button', { name: /名称/ }));
-    await waitFor(() => expect(listFolderMock).toHaveBeenLastCalledWith(0, 'name', 'desc'));
+    await waitFor(() => expect(listFolderMock).toHaveBeenLastCalledWith(0, 'name', 'desc', expect.anything()));
   });
 
   test('访客看不到管理入口', async () => {
@@ -212,7 +212,10 @@ describe('BrowsePage', () => {
     listFolderMock.mockClear();
     fireEvent.keyDown(folderRow, { key: 'Enter' });
     // 键盘 Enter 必须等价于点击：容器把行点击接到路由跳转上，跳转后再按 id=1 拉取目录
-    await waitFor(() => expect(listFolderMock).toHaveBeenCalledWith(1, 'manual', 'asc'));
+    // 第 4 个参数是 IMPROVE-56 加的 { signal }，数据层取消用
+    await waitFor(() =>
+      expect(listFolderMock).toHaveBeenCalledWith(1, 'manual', 'asc', expect.anything())
+    );
     expect(loc.path).toBe('/folder/1');
   });
 

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getStats, getHeatmap } from '../api.js';
 import { errMsg, formatSize, timeAgo } from '../utils.js';
 import { folderTarget } from '../ui.js';
+import { useResource } from '../data/resource.js';
 import FileIcon from '../components/FileIcon.jsx';
 import { AnomalyCard, AllocationCard, densifyBySpline } from '../components/InsightCards.jsx';
 import { BsArrowClockwise, BsFolder2Open } from 'react-icons/bs';
@@ -141,69 +142,23 @@ function TopFolders({ items }) {
 
 export default function DashboardPage() {
   const { t } = useTranslation();
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [err, setErr] = useState('');
   const [range, setRange] = useState(30);
-  // trailing-year activity for the heatmap — intentionally NOT refetched when
-  // `range` changes, so the year grid stays put while other cards re-range
-  const [heat, setHeat] = useState(null);
-  // BUG-57：切区间时不回到整页 loading（否则区间切换器被摘掉，等待期间无法再点）。
-  const [switching, setSwitching] = useState(false);
-  const loadReqIdRef = useRef(0);
+  // IMPROVE-56：数据获取下沉到 data/resource.js。stats 用 keepPrevious——切区间时
+  // 保留上一份数据继续展示（BUG-57 的 switching 半透明由此保留，但不再手写 reqId 守卫）；
+  // heatmap 与 range 无关（key 不变，切换区间不会重取）。
+  const statsRes = useResource(`stats:${range}`, (_key, { signal }) => getStats(range, { signal }), {
+    keepPrevious: true,
+  });
+  const heatRes = useResource('heatmap', (_key, { signal }) => getHeatmap({ signal }));
 
-  const load = useCallback(
-    (silent = false, r = range) => {
-      // BUG-57：只接受最新一次请求的结果（含 loading 复位），避免旧区间覆盖新区间。
-      const reqId = (loadReqIdRef.current += 1);
-      if (silent) setRefreshing(true);
-      else {
-        setLoading(true);
-        setSwitching(true);
-      }
-      return getStats(r)
-        .then((d) => {
-          if (reqId !== loadReqIdRef.current) return;
-          setStats(d);
-          setErr('');
-        })
-        .catch((e) => {
-          if (reqId === loadReqIdRef.current) setErr(errMsg(e, t('dashboard.noData')));
-        })
-        .finally(() => {
-          if (reqId !== loadReqIdRef.current) return;
-          setLoading(false);
-          setRefreshing(false);
-          setSwitching(false);
-        });
-    },
-    [range]
-  );
+  const stats = statsRes.data;
+  const heat = heatRes.data;
+  const loading = statsRes.loading && stats === undefined;
+  // 切区间/刷新在途：BUG-57——不回整页 loading（区间切换器保持在 DOM 里可点）。
+  const switching = statsRes.loading && stats !== undefined;
+  const refreshing = statsRes.loading || heatRes.loading;
+  const err = statsRes.error && stats === undefined ? errMsg(statsRes.error, t('dashboard.noData')) : '';
 
-  // BUG-83：热力图与统计共用「刷新」按钮，同样需要请求序号 + 卸载守卫。
-  const heatReqIdRef = useRef(0);
-  const heatAliveRef = useRef(true);
-  useEffect(() => () => { heatAliveRef.current = false; }, []);
-
-  const loadHeat = () => {
-    const reqId = (heatReqIdRef.current += 1);
-    return getHeatmap()
-      .then((d) => {
-        if (!heatAliveRef.current || reqId !== heatReqIdRef.current) return;
-        setHeat(d);
-      })
-      .catch(() => {}); // the heatmap panel renders its own empty state
-  };
-
-  useEffect(() => {
-    load(false, range);
-  }, [load, range]);
-
-  useEffect(() => {
-    loadHeat();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   /* ---- derived stats for the insight cards ---- */
   const insights = useMemo(() => {
     if (!stats) return null;
@@ -324,8 +279,8 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => {
-              load(true);
-              loadHeat();
+              statsRes.reload();
+              heatRes.reload();
             }}
             disabled={refreshing || switching}
             className="inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-[12px] text-ink shadow-btn transition-colors duration-100 hover:bg-hover disabled:opacity-50"

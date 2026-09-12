@@ -9,64 +9,41 @@ import { downloadAndAlert, errMsg } from '../utils.js';
 import FileIcon from './FileIcon.jsx';
 import { openFolderOrFile } from '../ui.js';
 import { useClickOutside } from '../hooks/useClickOutside.js';
+import { useResource } from '../data/resource.js';
 
 export default function SearchBar({ className = '' }) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
-  const [results, setResults] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState('');
+  // 输入即时更新 q（驱动输入框与清除按钮）；请求键用防抖后的 debouncedQ。
+  const [debouncedQ, setDebouncedQ] = useState('');
   const [open, setOpen] = useState(false);
   const [dropdownRect, setDropdownRect] = useState(null);
   const inputRef = useRef(null);
   const wrapRef = useRef(null);
   const dropdownRef = useRef(null);
   const timerRef = useRef(null);
-  const reqIdRef = useRef(0);
   const navigate = useNavigate();
 
-  const doSearch = useCallback(
-    async (query) => {
-      if (!query.trim()) {
-        setResults(null);
-        setErr('');
-        setOpen(false);
-        return;
-      }
-      // Drop out-of-order responses: only the latest request may write state.
-      const reqId = ++reqIdRef.current;
-      setLoading(true);
-      // 发起新查询就必须先扔掉上一次的命中列表：原先失败分支是空 catch，下拉会继续展示
-      // 上一次查询的结果，用户以为那就是新关键词的命中并打开错文件（P1）。
-      setResults(null);
-      setErr('');
-      try {
-        const data = await searchApi(query);
-        if (reqId !== reqIdRef.current) return;
-        setResults(data);
-        setOpen(true);
-      } catch (e) {
-        if (reqId !== reqIdRef.current) return;
-        setErr(errMsg(e, t('search.failed')));
-        setOpen(true); // 打开下拉把失败原因显示出来
-      } finally {
-        if (reqId === reqIdRef.current) setLoading(false);
-      }
-    },
-    [t]
+  // IMPROVE-56：请求去重/取消下沉到 data/resource.js。cache:false 是刻意的——
+  // 旧关键词的命中列表绝不能展示给新关键词（原先的 P1 修复）。
+  const { data: results, error: searchError, loading, reload } = useResource(
+    `search:${debouncedQ}`,
+    (_key, { signal }) => searchApi(debouncedQ, { signal }),
+    { enabled: debouncedQ.trim().length > 0, cache: false }
   );
+  const err = searchError ? errMsg(searchError, t('search.failed')) : '';
 
   const onChange = (e) => {
     const v = e.target.value;
     setQ(v);
     clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => doSearch(v), 250);
+    timerRef.current = setTimeout(() => setDebouncedQ(v), 250);
   };
 
   const clear = () => {
+    clearTimeout(timerRef.current);
     setQ('');
-    setResults(null);
-    setErr('');
+    setDebouncedQ('');
     setOpen(false);
     inputRef.current?.focus();
   };
@@ -74,6 +51,12 @@ export default function SearchBar({ className = '' }) {
   // Clear any pending debounce timer on unmount so a late fire can't setState
   // after the component is gone (and to avoid a stray request from the old q).
   useEffect(() => () => clearTimeout(timerRef.current), []);
+
+  // 结果到达（或失败）时展开下拉；切换关键词后 results 变 undefined，下拉随
+  // 渲染条件自动收起——「发起新查询就扔掉旧命中」的语义由此保持。
+  useEffect(() => {
+    if (results || err) setOpen(true);
+  }, [results, err]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -128,7 +111,7 @@ export default function SearchBar({ className = '' }) {
   const handleResult = (item) => {
     setOpen(false);
     setQ('');
-    setResults(null);
+    setDebouncedQ('');
     openFolderOrFile(item, navigate);
   };
 
@@ -184,7 +167,7 @@ export default function SearchBar({ className = '' }) {
               <span className="text-red">{err}</span>
               <button
                 type="button"
-                onClick={() => doSearch(q)}
+                onClick={reload}
                 className="shrink-0 rounded-full bg-field px-3 py-1 text-xs text-ink-2 hover:bg-hover"
               >
                 {t('search.retry')}

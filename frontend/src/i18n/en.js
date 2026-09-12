@@ -50,6 +50,8 @@ const en = {
     syncDetail: 'Added {{folders}} folders / {{files}} files, cleaned {{removed}} stale files',
     syncNone: 'Nothing added or cleaned',
     confirmDeleteFolder: 'Delete folder "{{name}}" and all its contents? This cannot be undone.',
+    deleteFolderTitle: 'Delete folder',
+    deleteFileTitle: 'Delete file',
     confirmDeleteFile: 'Delete file "{{name}}"?',
     moving: 'Moving "{{name}}"',
     rename: 'Rename',
@@ -318,6 +320,7 @@ const en = {
 
   common: {
     cancel: 'Cancel',
+    confirm: 'Confirm',
     save: 'Save',
     delete: 'Delete',
     close: 'Close',
@@ -334,6 +337,7 @@ const en = {
     bootErrorTitle: 'Something went wrong',
     bootErrorHint: 'Reloading usually fixes it. If it keeps failing, contact xjtuzyxf@163.com.',
     bootErrorReload: 'Reload page',
+    errorBoundaryRetry: 'Retry',
     // Dev-only label above the raw stack (not shown to end users in production)
     bootError: 'Page failed to start (frontend error; the backend may be fine):',
     minutesAgo_one: '{{count}} minute ago',

@@ -1,47 +1,27 @@
 // BrowsePage 的数据 hook（IMPROVE-01 拆分）。
 // 负责「当前文件夹 + 当前排序」这一次数据请求，以及刷新与排序切换；
 // 返回的 data 原样透传后端契约（manual 模式额外含合并视图 items，见 BUG-27）。
-import { useCallback, useEffect, useRef, useState } from 'react';
+// IMPROVE-56：请求去重/取消/缓存下沉到 data/resource.js——返回导航命中缓存
+// 即时呈现（后台静默 revalidate），排序切换仍整页 loading（不同 key）。
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listFolder } from '../../api.js';
 import { errMsg } from '../../utils.js';
+import { useResource } from '../../data/resource.js';
 
 export function useFolderContents(folderId) {
   const { t } = useTranslation();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState('');
   const [sort, setSort] = useState('manual');
   const [order, setOrder] = useState('asc');
-  // Refs keep the latest sort/order so refresh() always reads current values,
-  // avoiding stale-closure bugs when both setSort and refresh are called together.
-  const sortRef = useRef(sort);
-  sortRef.current = sort;
-  const orderRef = useRef(order);
-  orderRef.current = order;
-  // BUG-56（同 BUG-05）：只接受最新一次请求的结果，否则切目录/排序时旧响应会覆盖新目录数据。
-  const reqIdRef = useRef(0);
+
+  const { data, error, loading, reload } = useResource(
+    `contents:${folderId}:${sort}:${order}`,
+    (_key, { signal }) => listFolder(folderId, sort, order, { signal })
+  );
 
   const refresh = useCallback(() => {
-    const reqId = (reqIdRef.current += 1);
-    setLoading(true);
-    setErr('');
-    listFolder(folderId, sortRef.current, orderRef.current)
-      .then((d) => {
-        if (reqId === reqIdRef.current) setData(d);
-      })
-      .catch((e) => {
-        if (reqId === reqIdRef.current) setErr(errMsg(e, t('common.loadFailed')));
-      })
-      .finally(() => {
-        if (reqId === reqIdRef.current) setLoading(false);
-      });
-  }, [folderId, t]);
-
-  useEffect(() => {
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [folderId, sort, order]);
+    reload();
+  }, [reload]);
 
   // Manual 模式没有升降序——重复点击同一项是 no-op。
   const toggleSort = (key) => {
@@ -54,5 +34,15 @@ export function useFolderContents(folderId) {
     }
   };
 
-  return { data, loading, err, sort, order, setSort, refresh, toggleSort };
+  return {
+    data,
+    // 首次加载（该 key 还没有任何数据）才整页转圈；后台 revalidate 不闪。
+    loading: loading && data === undefined,
+    err: error ? errMsg(error, t('common.loadFailed')) : '',
+    sort,
+    order,
+    setSort,
+    refresh,
+    toggleSort,
+  };
 }
