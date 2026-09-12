@@ -24,7 +24,7 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 import useMediaQuery from './hooks/useMediaQuery.js';
 import useTheme from './hooks/useTheme.js';
 import useLocale from './hooks/useLocale.js';
-// 设置弹窗路由状态机与 App.jsx 的拆分（IMPROVE-57）。
+// 设置弹窗路由状态机与 App.jsx 的拆分（IMPROVE-55）。
 import { useSettingsRoute } from './hooks/useSettingsRoute.js';
 import NoticeModal from './components/NoticeModal.jsx';
 import { EASE_COLLAPSE } from './components/ui.js';
@@ -60,7 +60,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // ---- 设置：真实路由 /settings（手机端二级页面 = /settings/:section）----
-  // 状态机在 useSettingsRoute（IMPROVE-57）；这里只取视图需要的部分。
+  // 状态机在 useSettingsRoute（IMPROVE-55）；这里只取视图需要的部分。
   const {
     isSettings,
     settingsSection,
@@ -223,7 +223,7 @@ export default function App() {
           : 'px-3 pt-4 pb-2 sm:px-4 sm:pt-[10.5px] sm:pb-2'
         } ${mainLayout}`}
       >
-        {/* 路由出口的 ErrorBoundary（IMPROVE-57）：懒 chunk 加载失败或页面渲染抛错
+        {/* 路由出口的 ErrorBoundary（IMPROVE-55）：懒 chunk 加载失败或页面渲染抛错
             不再整树卸载白屏，给出可原地重试的界面。包在 Suspense 外层（标准顺序），
             挂起走 Suspense 的 fallback、抛错走这里。 */}
         <ErrorBoundary>

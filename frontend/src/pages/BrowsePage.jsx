@@ -1,6 +1,6 @@
 // 浏览页容器（IMPROVE-01）：只做编排——路由参数、数据/同步/拖拽三个 hook 的接线、
 // 管理操作与页面级弹窗。展示件在 ./Browse/ 下，数据请求在 ./Browse/use*.js 里。
-// 传给 ItemList 的处理器一律 useCallback（IMPROVE-54）：行组件 memo 依赖
+// 传给 ItemList 的处理器一律 useCallback（IMPROVE-52）：行组件 memo 依赖
 // 处理器身份稳定，每次渲染换新闭包会让列表行全部跟着重渲染。
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -57,7 +57,7 @@ export default function BrowsePage() {
   const [renameTarget, setRenameTarget] = useState(null);
   const [renameValue, setRenameValue] = useState('');
   const [renaming, setRenaming] = useState(false);
-  // IMPROVE-57：原生 prompt/confirm/alert 换成站内弹窗 + Toast。
+  // IMPROVE-53：原生 prompt/confirm/alert 换成站内弹窗 + Toast。
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState(null); // { kind: 'folder'|'file', item }
@@ -242,7 +242,7 @@ export default function BrowsePage() {
           onClose={clearSyncNotice}
         />
       )}
-      {/* 管理操作失败的站内 Toast（IMPROVE-57）：替代原生 alert，不阻塞主线程。 */}
+      {/* 管理操作失败的站内 Toast（IMPROVE-53）：替代原生 alert，不阻塞主线程。 */}
       {errorNotice && (
         <Toast
           key={errorNotice.id}
@@ -320,7 +320,7 @@ export default function BrowsePage() {
         renaming={renaming}
       />
 
-      {/* 新建文件夹：站内输入弹窗（IMPROVE-57，替代 window.prompt） */}
+      {/* 新建文件夹：站内输入弹窗（IMPROVE-53，替代 window.prompt） */}
       <NamePromptDialog
         open={createOpen}
         title={t('browse.createFolder')}
@@ -331,7 +331,7 @@ export default function BrowsePage() {
         busy={creating}
       />
 
-      {/* 删除确认：站内确认弹窗（IMPROVE-57，替代 window.confirm） */}
+      {/* 删除确认：站内确认弹窗（IMPROVE-53，替代 window.confirm） */}
       <ConfirmDialog
         open={!!confirmTarget}
         title={

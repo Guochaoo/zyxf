@@ -1,4 +1,4 @@
-// 文件夹路由（IMPROVE-55 瘦身）：参数解析、权限、HTTP 状态映射。
+// 文件夹路由（IMPROVE-53 瘦身）：参数解析、权限、HTTP 状态映射。
 // 业务逻辑（子树搬迁、递归大小、整树构建、面包屑）在 services/folders.js。
 import { Router } from 'express';
 import { db, prepareOnce, transaction } from '../db.js';

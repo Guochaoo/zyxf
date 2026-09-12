@@ -52,7 +52,7 @@ describe('SearchBar 失败路径', () => {
     searchMock.mockResolvedValueOnce({ folders: [], files: [] });
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
 
-    // IMPROVE-56：search 现在带 { signal } 配置（数据层的 AbortController 取消）。
+    // IMPROVE-54：search 现在带 { signal } 配置（数据层的 AbortController 取消）。
     await waitFor(() => expect(searchMock).toHaveBeenLastCalledWith('abc', expect.anything()));
     await waitFor(() => expect(screen.getByText('无匹配结果')).toBeInTheDocument());
   });

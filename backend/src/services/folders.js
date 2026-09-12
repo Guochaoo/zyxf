@@ -1,4 +1,4 @@
-// 文件夹领域的业务逻辑（IMPROVE-55：从 routes/folders.js 抽出，行为不变）。
+// 文件夹领域的业务逻辑（IMPROVE-53：从 routes/folders.js 抽出，行为不变）。
 // 路由层只留参数解析、权限与 HTTP 状态映射；这里负责子树搬迁计划、递归大小
 // 聚合、整树构建、面包屑等可独立测试的纯业务步骤。OSS 网络往返也在这层编排
 // （copy → delete 的顺序约束见 applySubtreeObjectMove）。

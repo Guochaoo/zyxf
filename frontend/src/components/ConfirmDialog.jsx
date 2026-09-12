@@ -1,4 +1,4 @@
-// 通用确认弹窗（IMPROVE-57）：替代管理操作里的 window.confirm——原生弹窗阻塞
+// 通用确认弹窗（IMPROVE-55）：替代管理操作里的 window.confirm——原生弹窗阻塞
 // 主线程、无法样式化、i18n 按钮固定。样式对齐 RenameDialog。
 import { useTranslation } from 'react-i18next';
 import { useModalDialog } from '../hooks/useModalDialog.js';

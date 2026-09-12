@@ -1,4 +1,4 @@
-// 文本输入弹窗（IMPROVE-57）：替代管理操作里的 window.prompt——原生弹窗阻塞
+// 文本输入弹窗（IMPROVE-55）：替代管理操作里的 window.prompt——原生弹窗阻塞
 // 主线程、无法样式化、i18n 按钮固定。样式与交互对齐 RenameDialog（Esc/遮罩关闭、
 // 关闭后焦点归还触发者）。
 import { useEffect, useState } from 'react';

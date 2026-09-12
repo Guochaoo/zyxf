@@ -162,7 +162,7 @@
   will-change: transform;
 }
 
-/* IMPROVE-54：gsap 改为首次交互才加载，竖线的 90° 旋转此前纯靠 JS 预置——
+/* IMPROVE-52：gsap 改为首次交互才加载，竖线的 90° 旋转此前纯靠 JS 预置——
    不预取时按钮图标会退化成两条重叠横线。给 CSS 默认值保证 gsap 就位前后视觉一致；
    gsap 加载后以内联 transform 接管（读到的初始旋转同为 90°），时间线照常驱动。 */
 .sm-icon-line-v {

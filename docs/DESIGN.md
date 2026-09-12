@@ -3,7 +3,7 @@
 > **文档定位**：本文档描述 zyxf（仲英学辅资料库）**已经实现**的界面规范，每条都能在代码里找到出处。设计语言受 Vercel 启发（压缩字距、shadow-as-border、多值阴影栈），但 Vercel 官网里本项目**未落实**的内容（Workflow Pipeline、Trust Bar、Metric Cards、Image Treatment、多档断点表、英文示例文案等）不再收录——避免后来者照着做不存在的组件。
 >
 > **品牌与硬约束**
-> - **品牌字体**：OPPO Sans 4.0（`@font-face` 名 `OPPOSans`，字重 100–900）。源字体经 npm 管理（`@fontpkg/oppo-sans-4-0`，**不入库**），构建期由 `frontend/scripts/build-font.mjs` 子集化为 `src/assets/fonts/opposans-subset.woff2`（21.7 MB → 2.7 MB，字重轴保留）。Geist 并未落地到本项目，保留的只是它的排版原则：压缩、三档字重、紧字距。
+> - **品牌字体**：OPPO Sans 4.0（`@font-face` 名 `OPPOSans`，字重 100–900）。源字体经 npm 管理（`@fontpkg/oppo-sans-4-0`，**不入库**），构建期由 `frontend/scripts/build-font.mjs` 子集化为**两层 woff2**（常用层 1.53 MB 随首屏 + 生僻层 1.35 MB 按 `unicode-range` 按需，合计 2.75 MB，字重轴保留；`@font-face` 生成到 `src/assets/fonts/opposans.css`）。Geist 并未落地到本项目，保留的只是它的排版原则：压缩、三档字重、紧字距。
 > - **品牌标识**：`favicon.png` 与品牌名（仲英学辅资料库 / 仲英书院学业辅导中心 / 仲英学辅）逐字保留，不翻译、不改写。
 > - **文案语言**：简体中文 / English 双语，全部走 i18next 字典（`frontend/src/i18n/zh.js`、`en.js`）——**源码里不得硬编码中文**（`frontend/src/test/i18n.test.js` 强制）。品牌名、语言自身的名字（中文 / English）不翻译。
 > - **主题**：亮 / 暗 / 跟随系统三态，由 `useTheme()` 写 `<html data-theme>` 驱动 CSS 变量（`index.css` 的 `[data-theme='dark']`）。组件一律消费 token，因此**不需要为暗色另写样式**。
@@ -93,7 +93,7 @@
 
 ### 字体
 - **主字体**：OPPO Sans（`@font-face` 名 `OPPOSans`，可变字重 100–900），回退栈 `-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Roboto, Arial, sans-serif`；`body/button/input/textarea/select` 统一继承，并开 `text-rendering: geometricPrecision` 与灰度抗锯齿。
-- **`'SF Mono'` 别名**：`index.css` 把 `'SF Mono'` 这个字体名指向同一个 OPPO 文件——liveline 图表内部硬编码 `"SF Mono", Menlo, monospace`，在 Windows 上不存在该族，别名后图表文字与应用一致。
+- **`'SF Mono'` 别名**：`index.css` 把 `'SF Mono'` 这个字体名指向同一份 OPPO 字体（与 `OPPOSans` 同样的常用/生僻两层声明）——liveline 图表内部硬编码 `"SF Mono", Menlo, monospace`，在 Windows 上不存在该族，别名后图表文字与应用一致。
 - **关于我们页例外**：整页用 **DM Sans**（Google Fonts，400/500），主标题 `font-light`（300），以拉开与资料库主页的调性。
 - **等宽**：本项目未覆写 `fontFamily`，`font-mono` 就是 Tailwind 默认栈（Menlo / Monaco / Consolas / "Liberation Mono" / "Courier New"）。全站唯一的使用处是 AI 消息小节头的耗时计时器（12px + `tabular-nums`）；AI 正文里的行内 `code` 只做了 12px 灰底，**没有**换字族。
 - **OpenType**：全仓未启用任何 `liga`；`tabular-nums` 用在图表提示、度量数字与统计面板的列表数字上（`font-variant-numeric: tabular-nums`）。

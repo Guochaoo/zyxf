@@ -24,7 +24,7 @@ export default function SearchBar({ className = '' }) {
   const timerRef = useRef(null);
   const navigate = useNavigate();
 
-  // IMPROVE-56：请求去重/取消下沉到 data/resource.js。cache:false 是刻意的——
+  // IMPROVE-54：请求去重/取消下沉到 data/resource.js。cache:false 是刻意的——
   // 旧关键词的命中列表绝不能展示给新关键词（原先的 P1 修复）。
   const { data: results, error: searchError, loading, reload } = useResource(
     `search:${debouncedQ}`,
@@ -87,7 +87,7 @@ export default function SearchBar({ className = '' }) {
         return { top, left: rect.left, width: rect.width };
       });
     };
-    // rAF 合并同一帧内的多次 scroll 事件（IMPROVE-54）。
+    // rAF 合并同一帧内的多次 scroll 事件（IMPROVE-52）。
     let raf = 0;
     const schedule = () => {
       if (raf) return;

@@ -102,7 +102,7 @@ export default function KnowledgeGraph({ currentId = 0, className = '', onFullCh
     () => localSubgraph(fullGraph.nodes, fullGraph.links, currentId),
     [fullGraph, currentId]
   );
-  // 全库弹窗用的拷贝与 currentId 解耦（IMPROVE-54）：拷贝只为防 d3-force 就地改写
+  // 全库弹窗用的拷贝与 currentId 解耦（IMPROVE-52）：拷贝只为防 d3-force 就地改写
   // fullGraph，依赖 currentId 会让每次切目录都全库 spread 一遍。
   const { fullNodes, fullLinks } = useMemo(
     () => ({
@@ -247,7 +247,7 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
   const svgRef = useRef(null);
   const simRef = useRef(null);
   const dragRef = useRef(null);
-  // IMPROVE-54：模拟的每一帧不再经过 React——tick/拖拽直接写 DOM 属性，
+  // IMPROVE-52：模拟的每一帧不再经过 React——tick/拖拽直接写 DOM 属性，
   // hover/缩放等低频状态仍走 state。元素引用按需从 DOM 收集（data-* 定位），
   // 集合规模与 nodes/links 不一致时重建。
   const [, setMounted] = useState(0);
@@ -329,7 +329,7 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
       );
     sim.stop();
     sim.tick(300); // settle deterministically
-    // 残余运动逐帧直写 DOM（IMPROVE-54）：原实现每帧 setState 让全量 SVG 走一遍
+    // 残余运动逐帧直写 DOM（IMPROVE-52）：原实现每帧 setState 让全量 SVG 走一遍
     // reconcile，全库视图节点多时是明显的卡顿源。
     sim.on('tick', applyPositions);
     sim.alpha(0.1).restart(); // subtle residual motion
@@ -470,7 +470,7 @@ function GraphCanvas({ nodes, links, currentId, onNavigate, height }) {
       node.fy = d.startNY + dy / k;
       node.x = node.fx;
       node.y = node.fy;
-      // 拖拽逐帧直写 DOM（IMPROVE-54），不再 setState 触发全量 reconcile。
+      // 拖拽逐帧直写 DOM（IMPROVE-52），不再 setState 触发全量 reconcile。
       applyPositions();
     },
     [view.k, applyPositions]

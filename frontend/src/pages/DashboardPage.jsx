@@ -143,7 +143,7 @@ function TopFolders({ items }) {
 export default function DashboardPage() {
   const { t } = useTranslation();
   const [range, setRange] = useState(30);
-  // IMPROVE-56：数据获取下沉到 data/resource.js。stats 用 keepPrevious——切区间时
+  // IMPROVE-54：数据获取下沉到 data/resource.js。stats 用 keepPrevious——切区间时
   // 保留上一份数据继续展示（BUG-57 的 switching 半透明由此保留，但不再手写 reqId 守卫）；
   // heatmap 与 range 无关（key 不变，切换区间不会重取）。
   const statsRes = useResource(`stats:${range}`, (_key, { signal }) => getStats(range, { signal }), {

@@ -1,7 +1,7 @@
 // BrowsePage 的拖拽 hook（IMPROVE-01 拆分）。
 // 两种落点：拖进文件夹 = 移动；manual 排序下拖到行的上/下半 = 重排。
 // 排序切换与刷新由调用方注入（setSort / refresh），避免与数据 hook 相互耦合。
-// 全部处理器 useCallback 稳定化（IMPROVE-54）：ItemList 的行组件按 props 浅比较
+// 全部处理器 useCallback 稳定化（IMPROVE-52）：ItemList 的行组件按 props 浅比较
 // 跳过重渲染，处理器每次渲染换新身份会让 memo 完全失效。
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

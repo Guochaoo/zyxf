@@ -19,13 +19,16 @@ zyxf/
 │   │   ├── searchService.js / searchMatch.js   # 智能搜索（路由与 AI 工具共用）
 │   │   ├── llm.js         # LLM 流式客户端（OpenAI / Anthropic，可选启用）
 │   │   ├── llmProtocols.js # 上游协议适配（请求体与 SSE 形状翻译，纯函数）
-│   │   └── routes/        # auth / folders / files / search / chat / stats / sync
+│   │   ├── services/      # 领域业务层：folders（子树搬迁/整树/面包屑）/ files（上传校验/下载记账）
+│   │   ├── libraryCaches.js # 树/搜索/统计三缓存的统一失效入口（写路径必须调）
+│   │   └── routes/        # auth / folders / files / search / chat / stats / sync（薄路由：参数+权限+HTTP 映射）
 │   └── test/
 ├── frontend/              # React 前端（Vite + TailwindCSS）
 │   ├── src/
 │   │   ├── pages/         # BrowsePage / DashboardPage / AuthPage（登录+注册） / AboutPage
 │   │   │                  #   页面级子模块：pages/Browse/、pages/Dashboard/（容器 + 数据 hook + 纯展示件）
 │   │   ├── components/    # 文件列表 / 预览 / 知识图谱 / 智能对话 / 菜单等
+│   │   ├── data/          # resource.js：轻量数据层（请求去重/取消/缓存/失效），新数据请求优先复用
 │   │   └── test/          # vitest 测试
 ├── docs/
 │   ├── DEPLOY.md          # 部署指南（systemd + nginx + HTTPS）

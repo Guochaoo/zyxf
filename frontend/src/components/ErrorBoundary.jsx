@@ -2,7 +2,7 @@ import { Component } from 'react';
 import { useTranslation } from 'react-i18next';
 
 /**
- * ErrorBoundary（IMPROVE-57）：懒 chunk 加载失败（发版后旧 chunk 404、网络切换）
+ * ErrorBoundary（IMPROVE-55）：懒 chunk 加载失败（发版后旧 chunk 404、网络切换）
  * 或某个页面渲染抛错时，原先会整树卸载只剩白屏兜底；现在在路由出口拦住，
  * 给出可恢复的报错界面。main.jsx 的 window error 监听仍是最后防线。
  */

@@ -1,4 +1,4 @@
-// IMPROVE-53：仪表盘统计的 30 s TTL 缓存（只在非 test 环境启用）。GET /api/stats
+// IMPROVE-51：仪表盘统计的 30 s TTL 缓存（只在非 test 环境启用）。GET /api/stats
 // 单请求要跑 ~12 条聚合 SQL（含相关子查询与递归 CTE），每次进仪表盘全量重算不值。
 // 与目录树/搜索快照同批失效（写路径统一调 invalidateLibraryCaches()，见 libraryCaches.js）；
 // 下载/上传计数变化靠 TTL 自然过期——若在每次下载记账时也失效，缓存会被高频下载打穿，

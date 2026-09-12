@@ -54,7 +54,7 @@ const zh = {
     syncNone: '无新增、无清理',
     confirmDeleteFolder: '确认删除文件夹「{{name}}」及其所有内容？此操作不可恢复。',
     confirmDeleteFile: '确认删除文件「{{name}}」？',
-    // IMPROVE-57：删除确认改用站内 ConfirmDialog 的标题。
+    // IMPROVE-55：删除确认改用站内 ConfirmDialog 的标题。
     deleteFolderTitle: '删除文件夹',
     deleteFileTitle: '删除文件',
     moving: '正在移动「{{name}}」',

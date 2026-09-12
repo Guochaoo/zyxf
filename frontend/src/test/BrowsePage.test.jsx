@@ -212,7 +212,7 @@ describe('BrowsePage', () => {
     listFolderMock.mockClear();
     fireEvent.keyDown(folderRow, { key: 'Enter' });
     // 键盘 Enter 必须等价于点击：容器把行点击接到路由跳转上，跳转后再按 id=1 拉取目录
-    // 第 4 个参数是 IMPROVE-56 加的 { signal }，数据层取消用
+    // 第 4 个参数是 IMPROVE-54 加的 { signal }，数据层取消用
     await waitFor(() =>
       expect(listFolderMock).toHaveBeenCalledWith(1, 'manual', 'asc', expect.anything())
     );

@@ -1,6 +1,6 @@
 // 文件/文件夹列表（原 BrowsePage.jsx 内联定义，IMPROVE-01 拆分）。
 // 纯展示：拖拽状态与各类回调由容器传入，本模块不发起任何请求。
-// IMPROVE-54：行组件 memo 化——容器传入的处理器必须 useCallback 稳定（否则 memo
+// IMPROVE-52：行组件 memo 化——容器传入的处理器必须 useCallback 稳定（否则 memo
 // 失效）；拖拽高亮收敛为一个 `vis` 基元，行内操作按钮由 Row 自己构造，
 // 使拖拽经过无关行时它们整体跳过重渲染。
 import { memo, useMemo } from 'react';

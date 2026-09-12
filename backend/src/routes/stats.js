@@ -57,7 +57,7 @@ function dailySeries(days, todayStart) {
    heatmap — deliberately independent of the ?range= switch on GET /. */
 router.get('/heatmap', (req, res) => {
   const days = Math.min(Math.max(parseInt(req.query.days, 10) || 365, 31), 731);
-  // IMPROVE-53：统计聚合有 30 s TTL 缓存（statsCache.js），key 含 days 变体。
+  // IMPROVE-51：统计聚合有 30 s TTL 缓存（statsCache.js），key 含 days 变体。
   const key = `heatmap:${days}`;
   const cached = getCachedStats(key);
   if (cached) return res.json(cached);
@@ -69,7 +69,7 @@ router.get('/heatmap', (req, res) => {
 
 router.get('/', (req, res) => {
   const range = Math.min(Math.max(parseInt(req.query.range, 10) || 30, 7), 90);
-  // IMPROVE-53：key 含 range 变体（7..90，最多 84 个），payload 原样回传 range。
+  // IMPROVE-51：key 含 range 变体（7..90，最多 84 个），payload 原样回传 range。
   const key = `stats:${range}`;
   const cached = getCachedStats(key);
   if (cached) return res.json(cached);

@@ -12,7 +12,7 @@ import PreviewBody from './Body.jsx';
 /**
  * Preview — full-screen overlay that fetches a file's OSS signed URL and (for
  * previewable types) WebOffice credentials, then renders the right viewer.
- * IMPROVE-56：取数下沉到 data/resource.js——签名 URL 与 WebOffice 凭证并行取，
+ * IMPROVE-54：取数下沉到 data/resource.js——签名 URL 与 WebOffice 凭证并行取，
  * URL 失败视为致命（error，可重试），凭证失败仅降级为本地预览；按文件 id 缓存，
  * 同一文件再次打开先出缓存再静默刷新。
  */

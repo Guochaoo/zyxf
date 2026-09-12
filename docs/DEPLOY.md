@@ -294,16 +294,24 @@ npm run build        # 生成 dist/
 #### 4.1.1 品牌字体：npm 管理 + 构建期子集化
 
 OPPO Sans 4.0 的**源字体不入库**，走 npm devDependency `@fontpkg/oppo-sans-4-0`；构建时由
-[`frontend/scripts/build-font.mjs`](../frontend/scripts/build-font.mjs) 子集化为
-`src/assets/fonts/opposans-subset.woff2`（**21.69 MB → 2.72 MB**，`fvar` 字重轴 100–700 完整保留，
-CSS 无需改动）。该产物已 gitignore，由 `predev` / `prebuild` / `pretest` 自动生成，**部署无需额外操作**：
+[`frontend/scripts/build-font.mjs`](../frontend/scripts/build-font.mjs) 子集化为**两层 woff2**
+（IMPROVE-52，21.69 MB → 合计 2.75 MB，`fvar` 字重轴完整保留），并生成 `src/assets/fonts/opposans.css`
+（两组 `@font-face` × `OPPOSans`/`SF Mono` 别名，带 `unicode-range`；`index.css` 顶部 `@import` 引入——
+⚠️ `@import` 必须是第一条语句，放在 `@tailwind` 之后会被构建期静默忽略）：
+
+- `opposans-subset.woff2` **常用层**（约 1.53 MB）：ASCII + GB2312 符号 + 一级汉字（3,755 字）
+  + 源码实际出现的全部 CJK 字——UI 文案永远命中它，随首屏加载；
+- `opposans-ext.woff2` **生僻层**（约 1.35 MB）：二级汉字中不在常用层的部分，浏览器仅在页面
+  真的渲染到这些字（典型是用户上传的文件名）时才按 `unicode-range` 下载。
+
+两层产物均 gitignore，由 `predev` / `prebuild` / `pretest` 自动生成，**部署无需额外操作**：
 
 ```bash
 cd /opt/zyxf/frontend && npm install && npm run build   # prebuild 会自动跑 fonts
 ```
 
 - **字符集 = GB2312（6,763 汉字）+ ASCII + 常用标点 + 源码里实际出现的全部 CJK 字**（脚本自动从
-  `src/` 提取并并入，实测约 960 个），合计约 8,289 个码点。子集外的字**不会变成方块**——会落到
+  `src/` 提取并并入，实测约 980 个），合计约 8,289 个码点。子集外的字**不会变成方块**——会落到
   CSS 字体栈的下一个家族（`PingFang SC` / `Microsoft YaHei`）正常显示，只是字形风格不同。
 - **子集化用 [subset-font](https://www.npmjs.com/package/subset-font)（纯 WASM harfbuzz）**，不用
   `pyftsubset`：这样部署链上**不引入 Python 依赖**，且两个新依赖都**没有 postinstall 脚本**

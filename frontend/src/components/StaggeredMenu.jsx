@@ -97,7 +97,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
 
   // gsap 就位后把面板/预层挪到屏幕外（再交给时间线推进）。原先这步在 useLayoutEffect 里
   // 同步执行；惰性加载后推迟到 gsap 到位时，等待期间由 CSS 的 opacity:0 保证不可见。
-  // IMPROVE-54：抽成普通函数供「首次交互预取」在 React 提交前同步调用——playOpen 的
+  // IMPROVE-52：抽成普通函数供「首次交互预取」在 React 提交前同步调用——playOpen 的
   // 微任务可能跑在 layout effect 之前，首次打开必须保证预置已就位。幂等，可重复调用。
   const preparePanel = (g) => {
     const panel = panelRef.current;
@@ -126,7 +126,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     if (toggleBtnRef.current) g.set(toggleBtnRef.current, { color: menuButtonColor });
   };
 
-  // IMPROVE-54：gsap 不再「挂载即预取」——本组件常驻所有页面，原先每次进站都会下载
+  // IMPROVE-52：gsap 不再「挂载即预取」——本组件常驻所有页面，原先每次进站都会下载
   // gsap chunk。现在只在用户首次与菜单按钮交互（悬停/按下/聚焦）时取回；取回后先同步
   // 预置面板再通知 React（useLayoutEffect 只负责 menuButtonColor/position 变化的重放）。
   const ensureGsap = useCallback(() => {
@@ -174,7 +174,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   // 拿到 gsap 实例后才构造时间线；返回 null 表示本环境没有动画（交互仍然可用）。
   const buildOpenTimeline = useCallback((g) => {
     const panel = panelRef.current;
-    // 预层元素就地取回（IMPROVE-54）：不依赖 React 是否已提交预置效果——
+    // 预层元素就地取回（IMPROVE-52）：不依赖 React 是否已提交预置效果——
     // 首次打开时 playOpen 的微任务可能跑在 layout effect 之前。
     const layers = preLayerElsRef.current.length
       ? preLayerElsRef.current

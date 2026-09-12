@@ -4,7 +4,7 @@ import { ArrowDown } from 'lucide-react';
 import { ChartTooltip, IconBadge } from '../../components/InsightCards.jsx';
 
 // GitHub 式年度下载热力图（IMPROVE-01：从 DashboardPage 抽出）。自包含，只依赖传入的 rows。
-// IMPROVE-54：网格抽成 memo 子组件并改用事件委托——hover 状态原先让 ~365 个单元格
+// IMPROVE-52：网格抽成 memo 子组件并改用事件委托——hover 状态原先让 ~365 个单元格
 // 整体重渲染，现在只有 tooltip 一小块 React 树随 hover 变化。
 
 const DAY_MS = 86400000;
@@ -219,7 +219,7 @@ export default function ActivityHeatmap({ rows }) {
     [cellByTs, cell]
   );
 
-  // 事件委托（IMPROVE-54）：mouseover/focusin 从单元格冒泡到容器，外层统一
+  // 事件委托（IMPROVE-52）：mouseover/focusin 从单元格冒泡到容器，外层统一
   // 定位 tooltip；网格因此可以在 hover 变化时整体跳过重渲染。
   const onOver = useCallback(
     (e) => {

@@ -186,7 +186,7 @@ export default function ChatComposer({ onOpenSettings }) {
     // BUG-61：signal 只能停止读取，已 resolve 的 reader 回调仍会各触发一次，
     // 所以要自己判「这轮是否还有效」，否则「已停止生成。」后面会被追加半截文本。
     const live = () => abortRef.current === abort && !abort.signal.aborted;
-    // IMPROVE-54：delta 先缓冲、50ms 批量 flush——原先每个 token 都 setMessages，
+    // IMPROVE-52：delta 先缓冲、50ms 批量 flush——原先每个 token 都 setMessages，
     // 增长中的消息每 delta 全量重解析 markdown，长回答的工作量近似 O(n²)。
     // flush 判 abortRef.current === abort（而非 live()）：中止时要先把缓冲落进
     // 已有文本再落「已停止生成。」，丢缓冲会吃掉最后半句话。

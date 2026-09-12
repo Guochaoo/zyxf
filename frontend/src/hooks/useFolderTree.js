@@ -2,7 +2,7 @@ import { getFolderTree } from '../api.js';
 import { invalidateResource, useResource } from '../data/resource.js';
 
 /**
- * 整棵文件夹树的模块级共享存储（IMPROVE-24，IMPROVE-56 迁到 data/resource.js）。
+ * 整棵文件夹树的模块级共享存储（IMPROVE-24，IMPROVE-54 迁到 data/resource.js）。
  *
  * 侧边栏 FolderTree 与知识图谱 KnowledgeGraph 都要这棵树：同一时刻只有一个在途
  * 请求（后到调用复用同一 Promise）、所有订阅者读同一份快照、'folders-changed'
