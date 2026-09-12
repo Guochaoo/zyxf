@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
 import { app } from '../src/index.js';
 import { ossObjectStore } from './setup.js';
+import { request, adminToken as adminLogin, setBaseUrl, clearLibraryTables } from './helpers.js';
 
 let server;
 let base;
@@ -10,6 +11,7 @@ let base;
 before(async () => {
   await new Promise((resolve) => (server = app.listen(0, resolve)));
   base = `http://127.0.0.1:${server.address().port}`;
+  setBaseUrl(base);
 });
 
 after(async () => {
@@ -19,36 +21,8 @@ after(async () => {
 
 beforeEach(() => {
   ossObjectStore.keys = [];
-  db.prepare('DELETE FROM download_logs').run();
-  db.prepare('DELETE FROM files').run();
-  db.prepare('DELETE FROM folders').run();
+  clearLibraryTables(db);
 });
-
-async function request(method, path, { token, body, headers } = {}) {
-  const res = await fetch(base + path, {
-    method,
-    headers: {
-      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {
-    /* no body */
-  }
-  return { status: res.status, body: data };
-}
-
-async function adminLogin() {
-  const { body } = await request('POST', '/api/auth/login', {
-    body: { username: 'admin', password: 'admin123' },
-  });
-  return body.token;
-}
 
 async function registerFile(token, { name, oss_key, mime_type }) {
   const body = { name, folder_id: null, oss_key: oss_key ?? `zyxf-test/${name}`, size: 10 };
