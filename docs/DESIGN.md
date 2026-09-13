@@ -332,7 +332,7 @@
 ## 8. 响应式行为
 
 ### 断点
-使用 Tailwind 断点，**`lg` 覆写为 1100px**（`tailwind.config.js` `extend.screens`，其余保持默认）：`sm` 640px · `md` 768px · `lg` 1100px · `xl` 1280px · `2xl` 1536px（`xl`/`2xl` 目前未使用）。真正承担布局职责的是 **640 / 768 / 1100** 三个：
+使用 Tailwind 断点，**`lg` 覆写为 1100px**（Tailwind 4：覆写在 `src/index.css` 的 `@theme --breakpoint-lg: 68.75rem`，**必须写 rem**——v4 按媒体条件字符串的字典序输出媒体块，写 `1100px` 会排到 `sm`/`md` 之前破坏级联，`68.75rem` 恰好落在 `48rem` 与 `80rem` 之间；其余 token 仍在 `tailwind.config.js`，经 index.css 的 `@config` 兼容引入）：`sm` 640px · `md` 768px · `lg` 1100px · `xl` 1280px · `2xl` 1536px（`xl`/`2xl` 目前未使用）。真正承担布局职责的是 **640 / 768 / 1100** 三个：
 
 | 断点 | 变化 |
 |------|------|

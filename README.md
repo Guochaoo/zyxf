@@ -16,12 +16,18 @@
 
 ## 技术栈
 
-| 层 | 技术 |
-|---|---|
-| 前端 | React 18 · Vite 5 · TailwindCSS 3 · React Router 7 · d3-force · lucide-react |
-| 后端 | Node.js · Express 4 · node:sqlite（SQLite）· JWT · express-rate-limit |
-| 存储 / 预览 | 阿里云 OSS（前端直传，后端仅签名）· 阿里云 IMM WebOffice |
-| AI（可选） | 三种上游协议：OpenAI `/chat/completions`、OpenAI `/responses`、Anthropic `/messages`，均支持 SSE 流式 + 工具调用 |
+| 分层 | 技术 | 说明 |
+|---|---|---|
+| 前端 | React 19 · React Router 7 · i18next · axios · react-markdown | SPA；登录态用 React Context 管理；i18next 中英双语；AI 回复用 react-markdown 渲染 |
+| 构建 / 测试 | Vite 8 · Vitest 5 + Testing Library | 前端测试跑 jsdom；后端测试用 Node 内置 node:test |
+| 样式 | TailwindCSS 4 | 设计 token 与断点覆写见 `tailwind.config.js` / [docs/DESIGN.md](docs/DESIGN.md) |
+| 动效 / 可视化 | framer-motion · GSAP · three.js · d3-force · lucide-react · react-icons | three.js 渲染登录页 WebGL 背景；d3-force 驱动知识图谱；图标用 lucide-react 与 react-icons |
+| 后端 | Node.js ≥ 24 · Express 5 · node:sqlite | SQLite 为 Node 24 内置模块（WAL 模式），无原生编译依赖 |
+| 后端安全 | jsonwebtoken（JWT）· bcryptjs · helmet · express-rate-limit | 生产启动时强校验 `JWT_SECRET` / `ADMIN_PASSWORD` / `CORS_ORIGIN` |
+| 搜索辅助 | pinyin-pro | 拼音全拼 / 首字母 / 汉字缩写匹配 |
+| 云服务（阿里云） | OSS · IMM WebOffice · DirectMail | 文件前端直传 OSS（后端仅签名）；文档在线预览；注册验证码邮件 |
+| AI（可选） | OpenAI `/chat/completions` · OpenAI `/responses` · Anthropic `/messages` | 三种上游协议，均支持 SSE 流式 + 工具调用 |
+| 部署 | systemd · nginx · Let's Encrypt | 后端 systemd 托管；nginx 托管前端静态产物并反代 `/api`（见 [docs/DEPLOY.md](docs/DEPLOY.md)） |
 
 ## 快速开始
 
