@@ -138,7 +138,9 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     g.set(plusH, { transformOrigin: '50% 50%', rotate: 0 });
     g.set(plusV, { transformOrigin: '50% 50%', rotate: 90 });
     g.set(icon, { rotate: 0, transformOrigin: '50% 50%' });
-    g.set(textInner, { yPercent: 0 });
+    // textInner 的 yPercent 不在这里归位（BUG-110）：开合一轮后 textLines[0] 是
+    // 「关闭」，归零会让关闭态悬停时按钮显示成「关闭」——文字由 animateText /
+    // 语言切换 effect 独占管理。
     const star = ghStarRef.current;
     if (star) g.set(star, { x: ghStarDelta(g), opacity: 0 });
     if (toggleBtnRef.current) g.set(toggleBtnRef.current, { color: menuButtonColor });

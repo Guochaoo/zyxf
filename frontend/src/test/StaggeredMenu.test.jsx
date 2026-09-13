@@ -151,3 +151,28 @@ describe('StaggeredMenu 菜单开着时 hover 开关不重置面板（BUG-106）
     expect(panel().style.opacity).toBe('1');
   }, 15000);
 });
+
+// BUG-110 回归：preparePanel 曾把 textInner 的 yPercent 归零——开合一轮后
+// textLines[0] 是「关闭」，关闭态下悬停开关（未点击）会把可见文字打回「关闭」，
+// 与 aria/图标（关闭态应为「菜单」+ 加号）错位。
+describe('StaggeredMenu 关闭后悬停开关文字不复位（BUG-110）', () => {
+  test('开→关一轮后 hover 开关，文字 transform 不被重置', async () => {
+    const toggle = () => document.querySelector('.sm-toggle');
+    const inner = () => document.querySelector('.sm-toggle-textInner');
+
+    renderMenu();
+    // 复刻真实交互：悬停先触发 gsap 预取（否则首次 click 时 animateText 拿不到
+    // gsap 实例，文字 transform 不会被写入），再开→关一轮。
+    toggle().dispatchEvent(new Event('pointerover', { bubbles: true }));
+    toggle().click(); // 开
+    await new Promise((r) => setTimeout(r, 2600));
+    toggle().click(); // 关
+    await new Promise((r) => setTimeout(r, 1200));
+    const t0 = inner().style.transform;
+    expect(t0).not.toBe('');
+
+    toggle().dispatchEvent(new Event('pointerover', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 150));
+    expect(inner().style.transform).toBe(t0);
+  }, 15000);
+});
