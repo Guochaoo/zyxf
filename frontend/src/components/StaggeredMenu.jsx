@@ -565,8 +565,8 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
         aria-hidden={!open}
         // 关闭态的面板仍然常驻渲染（只是 opacity:0 + 平移出屏），子项因此还在 Tab 顺序里：
         // 键盘用户会聚焦到完全看不见的「资料库 / 登录」并回车触发。关闭时把整块设为 inert，
-        // 使可聚焦性与 aria-hidden 一致。
-        inert={open ? undefined : ''}
+        // 使可聚焦性与 aria-hidden 一致。（React 19 起 inert 是布尔属性，字符串写法失效）
+        inert={!open}
       >
         <div className="sm-panel-inner">
           <ul className="sm-panel-list" role="list" data-numbering={displayItemNumbering || undefined}>

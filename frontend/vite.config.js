@@ -1,11 +1,12 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 const backendSrc = fileURLToPath(new URL('../backend/src/', import.meta.url));
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [tailwindcss(), react()],
   resolve: {
     // IMPROVE-19：扩展名分类表以**后端白名单为唯一来源**。extPolicy.js 是纯数据模块
     // （无 node 依赖），前端直接读它，不再手抄副本；改名后构建期即报错，不会静默漂移。

@@ -14,10 +14,20 @@
 ## 当前进度
 
 ```yaml
-更新日期: 2026-09-12
-条目总数: 157        # 缺陷 105 + 改进 52
+更新日期: 2026-09-13
+条目总数: 158        # 缺陷 105 + 改进 53
 待处理: 10           # 缺陷 4 + 改进 6（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index；104 为测试套件偶发登录失败；58 为测试覆盖缺口补齐清单）
-已归档: 147          # 缺陷 101 + 改进 46
+已归档: 148          # 缺陷 101 + 改进 47
+# 本批（技术栈全量升级，2026-09-13）：前后端依赖升到最新稳定版——React 19.3 / Vite 8.3
+#   （Rolldown + plugin-react 6）/ vitest 5 / Tailwind 4.3（@tailwindcss/vite + @config 兼容，
+#   postcss.config.js 与 autoprefixer/postcss 依赖移除）/ Express 5.2（连带删除 body-parser/qs
+#   overrides，BUG-35 主体机制随之消失）/ bcryptjs 3 / dotenv 17 / lucide-react 1.45 / three
+#   0.186 等（gsap/i18next/react-markdown/d3-force/jsdom 本已最新）。三个迁移坑已修并留一行
+#   注释（IMPROVE-59）：① React 19 起 inert 是布尔属性，'' 字符串写法不再渲染属性；
+#   ② v4 不生成无空格 calc() 任意值（App.jsx 三栏 padding 改显式像素）；③ 媒体块按条件字符串
+#   字典序输出，lg 断点覆写必须写 68.75rem 而非 1100px（机制迁到 src/index.css @theme，
+#   DESIGN.md §8 已同步）。验证：后端 246 / 前端 171 测试全过，vite build 通过，
+#   浏览器冒烟（登录 Silk / Browse 三栏 / 暗色 / Dashboard / 游客视图 / 使用须知弹窗）正常。
 # 本批（卸载宝塔迁移系统组件，2026-09-12）：Node 24 与 nginx 换成系统级安装（NodeSource
 #   v24.21 + apt nginx 1.18，配置 = frontend/nginx.conf 落地 /etc/nginx/conf.d/zyxf.conf），
 #   证书改 certbot 签发 /etc/letsencrypt（续期 timer 已启用、dry-run 通过），宝塔彻底卸载：
@@ -279,7 +289,7 @@
 | BUG-109 | P2 | 前端 | BUG-108 修复后 logo 仍黑：`fill: currentColor` 以**未解析关键字**继承到 path，在 path 自己的 color 上解析——面板 `* { color: var(--ink) !important }` 直接命中 path，fill 解析成墨色，svg 层的 color/fill 覆盖够不着（金星同机制被染墨色）。修复 = 按钮移回面板外（wrapper 锚定 + gsap 从开关下方流出/流回动画，顺带实现交互诉求）并在 path 上直接写 fill | `frontend/src/components/StaggeredMenu.css`, `frontend/src/components/StaggeredMenu.jsx`, `frontend/src/components/GithubStarButton.jsx` | 2026-09-12 |
 | BUG-110 | P2 | 前端 | 开→关一轮后悬停开关（未点击），按钮文字复位成「关闭」：preparePanel 里 `g.set(textInner, { yPercent: 0 })` 把可见文字打回 textLines[0]，而开合一轮后 textLines[0] 是「关闭」，与 aria/图标错位（同 BUG-106 的 preparePanel 越权家族）；修复 = 删掉该句，文字由 animateText / 语言切换 effect 独占管理，补 hover 回归测试 | `frontend/src/components/StaggeredMenu.jsx`, `frontend/src/test/StaggeredMenu.test.jsx` | 2026-09-12 |
 
-### 2.2 已关闭改进项（46）
+### 2.2 已关闭改进项（47）
 
 | 编号 | 严重度 | 类别 | 标题 | 处理位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -329,3 +339,4 @@
 | IMPROVE-55 | P2 | 架构·健壮性 | 设置弹窗路由状态机抽 useSettingsRoute hook；新增 ErrorBoundary 包路由出口（懒 chunk 失败/渲染异常可原地重试，不再整树白屏）；管理端 window.prompt/confirm/alert 全部替换为 ConfirmDialog/NamePromptDialog + Toast（补 zh/en 文案）；顺带修 ItemList 早返回在 useMemo 之前的条件 hook 隐患 | `frontend/src/App.jsx`, `frontend/src/hooks/useSettingsRoute.js`, `frontend/src/components/ErrorBoundary.jsx`, `frontend/src/components/ConfirmDialog.jsx`, `frontend/src/components/NamePromptDialog.jsx`, `frontend/src/pages/BrowsePage.jsx`, `frontend/src/pages/Browse/ItemList.jsx` | 2026-09-12 |
 | IMPROVE-56 | P2 | 性能·评估 | `objectKeyForFile` 的 folder map 加 TTL 缓存——评估后不做：30s 陈旧 map 会算出错误 OSS key（文件夹改名后 30s 内向其子树上传即触发，key 与库不一致），正确性风险大于收益（folders 表规模小、每请求仅一次全表读） | `backend/src/storagePath.js` | 2026-09-12 |
 | IMPROVE-57 | P2 | 性能·评估 | `/folders/:id/contents` 加分页——评估后不做：单目录条目规模小，而 API 契约变更会波及前端全部列表逻辑；递归大小 CTE 已分批（BUG-08），当前无实测瓶颈 | `backend/src/routes/folders.js`, `backend/src/services/folders.js` | 2026-09-12 |
+| IMPROVE-59 | P1 | 技术栈 | 前后端依赖全量升级到最新稳定版：React 18→19.3、Vite 5→8.3（Rolldown + plugin-react 6）、vitest 3→5、Tailwind 3.4→4.3（@tailwindcss/vite + `@config` 兼容旧 JS config，postcss.config.js 与 autoprefixer/postcss 依赖移除）、Express 4→5.2（连带删除 body-parser/qs overrides，BUG-35 主体机制消失）、bcryptjs 2→3、dotenv 17、lucide-react 0.453→1.45、three 0.169→0.186、framer-motion 13.2 等。三个迁移坑（修复处均有一行注释）：① React 19 起 `inert` 是布尔属性，`''` 写法不再渲染属性；② v4 不再生成无空格 `calc()` 任意值，三栏 padding 改显式像素 266/316px；③ 媒体块按条件字符串字典序输出，断点覆写必须写 rem（`68.75rem` 落在 48rem/80rem 之间），lg 覆写机制随之迁到 index.css 的 `@theme` | `frontend/package.json`, `backend/package.json`, `frontend/src/index.css`, `frontend/src/App.jsx`, `frontend/src/components/StaggeredMenu.jsx`, `frontend/src/components/ChatComposer.jsx`, `frontend/src/pages/AuthPage.jsx` | 2026-09-13 |

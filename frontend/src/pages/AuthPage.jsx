@@ -18,7 +18,7 @@ import Toast from '../components/Toast.jsx';
 const RESEND_SECONDS = 60;
 const FORM_ANIM = 'fade-up 400ms cubic-bezier(0.23,1,0.32,1) both';
 const INPUT_CLS =
-  'rb-auth-input w-full !rounded-[14px] border-0 bg-neutral-100 px-3.5 py-2.5 sm:py-3 text-sm text-neutral-900 transition-colors focus:outline-none';
+  'rb-auth-input w-full !rounded-[14px] border-0 bg-neutral-100 px-3.5 py-2.5 sm:py-3 text-sm text-neutral-900 transition-colors focus:outline-hidden';
 const LABEL_CLS = 'mb-2 block text-xs font-medium text-neutral-700';
 const SUBMIT_CLS =
   'mt-2 inline-flex w-full items-center justify-center gap-2 rounded-[14px] bg-brand-600 px-4 py-2.5 sm:py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60';
@@ -277,7 +277,7 @@ export default function AuthPage() {
   const mode = useLocation().pathname === '/register' ? 'register' : 'login';
 
   return (
-    <div className="flex min-h-[calc(100vh-24px)] items-center justify-center">
+    <div className="flex min-h-[calc(100vh_-_24px)] items-center justify-center">
       <div className="relative mx-auto w-full max-w-[1100px] grid items-stretch overflow-hidden rounded-[14px] sm:h-[655px] sm:grid-cols-[1.15fr_1fr]">
       {/* Left — silky brand panel with animated Silk background */}
       <div className="rb-dark relative z-0 hidden sm:flex sm:flex-col sm:justify-between p-12 overflow-hidden">

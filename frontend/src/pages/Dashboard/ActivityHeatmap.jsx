@@ -108,7 +108,7 @@ const HeatGrid = memo(function HeatGrid({ visWeeks, months, max, cell, weekdays,
                     date: fmtFullDate(day.ts),
                     count: day.downloads,
                   })}
-                  className="rounded-[2px] transition-shadow hover:ring-1 hover:ring-line-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
+                  className="rounded-[2px] transition-shadow hover:ring-1 hover:ring-line-strong focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ink/40"
                 />
               ) : (
                 <span key={day.ts} style={{ width: cell, height: cell }} />

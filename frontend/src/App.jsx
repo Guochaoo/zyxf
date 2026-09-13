@@ -136,9 +136,10 @@ export default function App() {
   if (isBrowse) {
     // Left rail padding collapses with a smooth transition when the sidebar
     // is toggled off, matching the rail's transform easing.
+    // Tailwind 4 不再为 calc(+/- 无空格) 形式的任意值生成 CSS，显式像素 = 轨道宽 + 1rem 间隙
     mainLayout = `w-full ${
-      sidebarOpen ? 'lg:pl-[calc(250px+1rem)]' : 'lg:pl-0'
-    } lg:pr-[calc(300px+1rem)] lg:transition-[padding] lg:duration-[${SIDEBAR_MS}ms] lg:ease-[${SIDEBAR_EASE}]`;
+      sidebarOpen ? 'lg:pl-[266px]' : 'lg:pl-0'
+    } lg:pr-[316px] lg:transition-[padding] lg:duration-[${SIDEBAR_MS}ms] lg:ease-[${SIDEBAR_EASE}]`;
   } else if (isDashboard || isAbout) {
     mainLayout = 'mx-auto w-full';
   } else {

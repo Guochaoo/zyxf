@@ -30,7 +30,7 @@ export default function RenameDialog({ target, value, onValueChange, onSubmit, o
           autoFocus
           value={value}
           onChange={(e) => onValueChange(e.target.value)}
-          className="mt-4 w-full rounded-[6px] border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none"
+          className="mt-4 w-full rounded-[6px] border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-hidden"
         />
         <div className="mt-4 flex justify-end gap-2">
           <button

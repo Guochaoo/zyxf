@@ -134,7 +134,7 @@ export default function SearchBar({ className = '' }) {
           onChange={onChange}
           onFocus={() => results && setOpen(true)}
           placeholder={t('search.placeholder')}
-          className="w-full rounded-full border-0 bg-transparent py-[8px] pl-11 pr-10 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:outline-none focus:ring-0"
+          className="w-full rounded-full border-0 bg-transparent py-[8px] pl-11 pr-10 text-sm text-slate-900 placeholder:text-slate-400 outline-hidden focus:outline-hidden focus:ring-0"
         />
         {q && (
           <button

@@ -86,7 +86,7 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
             <Upload className="w-5 h-5" />
             {t('upload.title')}
           </div>
-          <button type="button" onClick={onClose} aria-label={t('upload.close')} className="p-1 rounded hover:bg-slate-100">
+          <button type="button" onClick={onClose} aria-label={t('upload.close')} className="p-1 rounded-sm hover:bg-slate-100">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -110,9 +110,9 @@ export default function UploadDialog({ folderId, onClose, onDone }) {
                   <span className="truncate mr-2">{it.file.name}</span>
                   <span className="shrink-0">{formatSize(it.file.size)}</span>
                 </div>
-                <div className="h-1.5 mt-1 bg-slate-200 rounded">
+                <div className="h-1.5 mt-1 bg-slate-200 rounded-sm">
                   <div
-                    className={`h-full rounded ${PROGRESS_BAR_COLOR[it.status] || 'bg-brand-500'}`}
+                    className={`h-full rounded-sm ${PROGRESS_BAR_COLOR[it.status] || 'bg-brand-500'}`}
                     style={{ width: `${it.progress}%` }}
                   />
                 </div>

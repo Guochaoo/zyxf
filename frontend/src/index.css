@@ -3,12 +3,19 @@
    IMPROVE-52）。字体源在 npm 管理的 @fontpkg/oppo-sans-4-0，从 21.7 MB 子集化，
    永不入库；授权文本在 public/licenses/ 并由页脚署名链接（BUG-99 / IMPROVE-46）。
    见 docs/DEPLOY.md 4.1.1。liveline 硬编码的 'SF Mono' 别名也随生成文件声明。
-   ⚠️ @import 必须是第一条语句（@tailwind 也算语句），否则构建期被静默忽略。 */
+   ⚠️ @import 必须在最前（Tailwind 4：`@import 'tailwindcss'` 也是 @import，
+   `@config` 引入 tailwind.config.js 兼容旧 JS 配置），否则构建期被静默忽略。 */
 @import './assets/fonts/opposans.css';
+@import 'tailwindcss';
+@config '../tailwind.config.js';
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* 覆写 lg 断点 1024→1100：三栏 docs 布局与 StaggeredMenu 面板收窄断点一致
+   （DESIGN.md §响应式断点）。必须用 @theme 变量而非 tailwind.config.js 的 screens，
+   且必须写成 rem：v4 按媒体条件字符串的字典序输出媒体块，"1100px" 会排到
+   "40rem/48rem" 之前破坏 sm→lg 级联，"68.75rem" 恰好落在两者之间。 */
+@theme {
+  --breakpoint-lg: 68.75rem;
+}
 
 html {
   /* Reserve space for the vertical scrollbar so its appear/disappear
