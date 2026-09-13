@@ -230,11 +230,10 @@
 }
 
 /* 窄屏（≤480px）紧凑形态：按钮可用宽 = 视口 - 面板宽 + 2em - 开关宽，
-   再窄就顶进开关下方——只留最左侧图标和「GitHub」，隐藏前缀与 star 数。
+   再窄就顶进开关下方——隐藏「Star on」前缀，保留图标 + GitHub + star 数。
    必须放在上面各 display 规则之后，否则会被同权重的 display: inline-flex 盖掉。 */
 @media (max-width: 480px) {
-  .sm-gh-star-verb,
-  .sm-gh-star-count {
+  .sm-gh-star-verb {
     display: none;
   }
 }
