@@ -40,7 +40,7 @@ export default function App() {
   useLocale();
   const { user, logout, ready } = useAuth();
   const navigate = useNavigate();
-  const isLg = useMediaQuery('(min-width: 1024px)');
+  const isLg = useMediaQuery('(min-width: 1100px)');
   // 主题（亮/暗/跟随系统）：useTheme 内部写 <html> 的 data-theme 驱动 CSS 变量。
   useTheme();
   // Menus are language-reactive (labels come from the dictionary).

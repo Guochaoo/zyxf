@@ -3,6 +3,12 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx,ts,tsx}'],
   theme: {
     extend: {
+      // 覆写 lg 1024→1100：三栏 docs 布局（左栏文件树 / 右栏图谱）整体推后，
+      // 与 StaggeredMenu 面板的收窄断点保持一致（见 DESIGN.md §响应式断点）。
+      // extend.screens 只替换同名键，sm/md/xl/2xl 保持 Tailwind 默认。
+      screens: {
+        lg: '1100px',
+      },
       colors: {
         // Vercel neutral scale (docs/DESIGN.md §2). slate is remapped to neutral
         // grays so existing `text-slate-*`/`border-slate-*` classes render in
