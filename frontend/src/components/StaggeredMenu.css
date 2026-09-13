@@ -681,7 +681,7 @@ button.sm-account-action {
   opacity: var(--sm-num-opacity, 0);
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1100px) {
   .staggered-menu-wrapper {
     --sm-panel-w: clamp(280px, 48vw, 340px);
   }
