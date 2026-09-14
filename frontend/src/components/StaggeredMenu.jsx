@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { CircleUserRound, LogIn, LogOut, Settings } from 'lucide-react';
 import { useClickOutside } from '../hooks/useClickOutside.js';
+import GithubStarButton from './GithubStarButton.jsx';
 import './StaggeredMenu.css';
 
 // IMPROVE-23：gsap 改为动态 import，避免常驻首屏预加载整个动画库；等待期间面板由 CSS
@@ -99,7 +100,22 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   // 同步执行；惰性加载后推迟到 gsap 到位时，等待期间由 CSS 的 opacity:0 保证不可见。
   // IMPROVE-52：抽成普通函数供「首次交互预取」在 React 提交前同步调用——playOpen 的
   // 微任务可能跑在 layout effect 之前，首次打开必须保证预置已就位。幂等，可重复调用。
+  // Star 按钮的「收进开关按钮下方」位移量：平移 Δ 后按钮右缘与开关右缘重合，
+  // 两颗黑胶囊叠在一起、开关在上层把它盖住。星标当前可能带着 gsap x 位移，
+  // 用 rect 加回该位移得到无变换的布局右缘，两值同为视口坐标可直接相减。
+  const ghStarDelta = (g) => {
+    const star = ghStarRef.current;
+    const btn = toggleBtnRef.current;
+    if (!star || !btn) return 0;
+    const cur = g ? Number(g.getProperty(star, 'x')) || 0 : 0;
+    const starRight = star.getBoundingClientRect().right - cur;
+    return btn.getBoundingClientRect().right - starRight;
+  };
+
   const preparePanel = (g) => {
+    // BUG-106：菜单开着时绝不重跑预置——开关按钮的 hover/focus 都会触发 ensureGsap，
+    // 重跑会把面板打回屏外并复位图标/文字，而 React 开合态不变（遮罩留存、面板消失）。
+    if (openRef.current) return;
     const panel = panelRef.current;
     const preContainer = preLayersRef.current;
     const plusH = plusHRef.current;
@@ -122,7 +138,11 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     g.set(plusH, { transformOrigin: '50% 50%', rotate: 0 });
     g.set(plusV, { transformOrigin: '50% 50%', rotate: 90 });
     g.set(icon, { rotate: 0, transformOrigin: '50% 50%' });
-    g.set(textInner, { yPercent: 0 });
+    // textInner 的 yPercent 不在这里归位（BUG-110）：开合一轮后 textLines[0] 是
+    // 「关闭」，归零会让关闭态悬停时按钮显示成「关闭」——文字由 animateText /
+    // 语言切换 effect 独占管理。
+    const star = ghStarRef.current;
+    if (star) g.set(star, { x: ghStarDelta(g), opacity: 0 });
     if (toggleBtnRef.current) g.set(toggleBtnRef.current, { color: menuButtonColor });
   };
 
@@ -158,6 +178,10 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   const textCycleAnimRef = useRef(null);
   const colorTweenRef = useRef(null);
   const toggleBtnRef = useRef(null);
+  // GitHub Star 按钮在 header 之外、面板之外（面板打开时它在面板顶层区域的左侧），
+  // 必须参与 click-outside 豁免——否则 mousedown 先收起菜单会抢在链接点击前把
+  // 按钮动画撤走。
+  const ghStarRef = useRef(null);
   const busyRef = useRef(false);
   // 打开动画的开合轮次：await gsap 期间用户可能已经点了关闭（甚至又点开），
   // 回来的时间线只有在「仍是同一轮且仍是打开态」时才允许播放。
@@ -193,18 +217,34 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     const layerStates = layers.map(el => ({ el, start: offscreen }));
     const panelStart = offscreen;
 
+    // BUG-106：面板/预层的可见性由打开时间线自己接管——preparePanel 在菜单开着时会被
+    // 守卫跳过（否则悬停开关会把面板复位），首次打开时 gsap 迟到也不能依赖它先跑过。
+    if (preLayersRef.current) g.set(preLayersRef.current, { opacity: 1 });
+
     const tl = g.timeline({ paused: true });
 
+    // Star 按钮从开关按钮下方流出：起点与开关右缘重合（藏在开关后面），
+    // 淡入并左滑到面板条目左缘对齐的终位；随面板后半程进场。
+    const star = ghStarRef.current;
+    if (star) {
+      tl.fromTo(
+        star,
+        { x: ghStarDelta(g), opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.55, ease: 'power3.out' },
+        0.32
+      );
+    }
+
     layerStates.forEach((ls, i) => {
-      tl.fromTo(ls.el, { xPercent: ls.start }, { xPercent: 0, duration: 0.5, ease: 'power4.out' }, i * 0.07);
+      tl.fromTo(ls.el, { xPercent: ls.start, opacity: 1 }, { xPercent: 0, opacity: 1, duration: 0.5, ease: 'power4.out' }, i * 0.07);
     });
     const lastTime = layerStates.length ? (layerStates.length - 1) * 0.07 : 0;
     const panelInsertTime = lastTime + (layerStates.length ? 0.08 : 0);
     const panelDuration = 0.65;
     tl.fromTo(
       panel,
-      { xPercent: panelStart },
-      { xPercent: 0, duration: panelDuration, ease: 'power4.out' },
+      { xPercent: panelStart, opacity: 1 },
+      { xPercent: 0, opacity: 1, duration: panelDuration, ease: 'power4.out' },
       panelInsertTime
     );
 
@@ -334,6 +374,11 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
         busyRef.current = false;
       }
     });
+    // Star 按钮同步流回开关按钮下方并隐去。
+    const star = ghStarRef.current;
+    if (star) {
+      g.to(star, { x: ghStarDelta(g), opacity: 0, duration: 0.3, ease: 'power2.in', overwrite: 'auto' });
+    }
   }, [position]);
 
   const animateIcon = useCallback(opening => {
@@ -452,7 +497,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     closeMenu();
   };
 
-  useClickOutside(closeOnClickAway && open, closeMenu, panelRef, toggleBtnRef);
+  useClickOutside(closeOnClickAway && open, closeMenu, panelRef, toggleBtnRef, ghStarRef);
 
   useImperativeHandle(
     ref,
@@ -479,6 +524,9 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
           <div key={i} className="sm-prelayer" style={{ background: c }} />
         ))}
       </div>
+      {/* GitHub Star 按钮：锚在面板条目左缘的延长位（top 与开关持平），不随面板滑动。
+          开合由下方时间线驱动——打开时从开关按钮下方「流出」，关闭时流回。 */}
+      {!hideToggleButton && <GithubStarButton ref={ghStarRef} active={open} />}
       <header className="staggered-menu-header" aria-label="Main navigation header">
         {!hideToggleButton && (
           <button
@@ -517,8 +565,8 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
         aria-hidden={!open}
         // 关闭态的面板仍然常驻渲染（只是 opacity:0 + 平移出屏），子项因此还在 Tab 顺序里：
         // 键盘用户会聚焦到完全看不见的「资料库 / 登录」并回车触发。关闭时把整块设为 inert，
-        // 使可聚焦性与 aria-hidden 一致。
-        inert={open ? undefined : ''}
+        // 使可聚焦性与 aria-hidden 一致。（React 19 起 inert 是布尔属性，字符串写法失效）
+        inert={!open}
       >
         <div className="sm-panel-inner">
           <ul className="sm-panel-list" role="list" data-numbering={displayItemNumbering || undefined}>

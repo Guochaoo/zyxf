@@ -25,7 +25,7 @@ export function FloatingPill({ className = '', bottom = 'bottom-6', role, childr
 // 行内操作按钮（重命名 / 删除 / 下载共用）。
 export function RowAction({ title, onClick, children }) {
   return (
-    <button type="button" onClick={onClick} title={title} className="p-1 rounded hover:bg-black/5">
+    <button type="button" onClick={onClick} title={title} className="p-1 rounded-sm hover:bg-black/5">
       {children}
     </button>
   );

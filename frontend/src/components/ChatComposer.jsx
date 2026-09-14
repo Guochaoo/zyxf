@@ -290,7 +290,7 @@ export default function ChatComposer({ onOpenSettings }) {
           height: snapH ?? (collapsed ? '0px' : undefined),
           transitionTimingFunction: EASE_COLLAPSE,
         }}
-        inert={collapsed || snapping ? '' : undefined}
+        inert={collapsed || snapping}
       >
         <div
           className={`flex min-h-0 flex-col overflow-hidden ${snapping ? '' : 'h-full'}`}
@@ -369,7 +369,7 @@ export default function ChatComposer({ onOpenSettings }) {
             placeholder={t('chat.promptPlaceholder')}
             disabled={loginRequired}
             aria-label={t('chat.promptAria')}
-            className="chat-prompt min-h-4.5 bg-transparent text-[13px] leading-[1.4] text-ink outline-none placeholder:text-ink-3"
+            className="chat-prompt min-h-4.5 bg-transparent text-[13px] leading-[1.4] text-ink outline-hidden placeholder:text-ink-3"
           />
           <div className="flex items-center justify-end">
             {busy ? (

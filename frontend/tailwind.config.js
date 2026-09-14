@@ -3,6 +3,8 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx,ts,tsx}'],
   theme: {
     extend: {
+      // （原 screens.lg: '1100px' 覆写已迁至 src/index.css 的 @theme --breakpoint-lg：
+      //   v4 的 @config 兼容模式会把 JS screens 的媒体块排到 sm/md 之前，破坏级联顺序。）
       colors: {
         // Vercel neutral scale (docs/DESIGN.md §2). slate is remapped to neutral
         // grays so existing `text-slate-*`/`border-slate-*` classes render in

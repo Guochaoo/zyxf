@@ -4,6 +4,9 @@
   height: 100%;
   z-index: 40;
   pointer-events: none;
+  /* 面板宽度单一来源：面板/预层的 width 与 GitHub Star 按钮的 left 锚点都引用它，
+     断点变化时两者自动保持同步。 */
+  --sm-panel-w: clamp(240px, 30vw, 340px);
 }
 
 .staggered-menu-wrapper.fixed-wrapper {
@@ -111,6 +114,130 @@
   outline: none;
 }
 
+/* ---- GitHub Star 按钮（wrapper 锚定，gsap 驱动从开关下方流出/流回）----
+   终位 left = 100% - 面板宽 + 2em，与面板条目（资料库…）左缘同源对齐
+   （面板宽引用 --sm-panel-w，断点变化自动同步）；top 12px 与开关垂直持平。
+   关闭态 opacity 0 + pointer-events none + tabIndex -1（组件按 active 切换）；
+   打开时 gsap 时间线驱动 x + opacity 从开关按钮下方流出，关闭时流回。
+   z-index 15：面板(10) 之上、header(20) 之下——滑出起点藏在开关后面。 */
+.sm-gh-star {
+  position: absolute;
+  top: 12px;
+  left: calc(100% - var(--sm-panel-w) + 2em); /* 2em = 面板内边距（自身继承 16px 字号） */
+  z-index: 15;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow: hidden;
+  min-height: 34px;
+  padding: 0.5rem 1rem;
+  border-radius: 14px;
+  background: #000000;
+  color: #ffffff;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.staggered-menu-wrapper[data-open] .sm-gh-star {
+  pointer-events: auto;
+}
+
+.sm-gh-star:hover {
+  background: #1a1a1a;
+  box-shadow:
+    rgba(0, 0, 0, 0.25) 0px 0px 0px 1px,
+    rgba(0, 0, 0, 0.2) 0px 2px 4px;
+}
+
+.sm-gh-star:focus-visible {
+  outline: none;
+  box-shadow:
+    rgba(0, 0, 0, 0.25) 0px 0px 0px 1px,
+    rgba(0, 0, 0, 0.2) 0px 2px 4px,
+    0 0 0 2px #ffffff, 0 0 0 4px #000000;
+}
+
+.sm-gh-star-shine {
+  position: absolute;
+  top: -3rem;
+  right: 0;
+  height: 8rem;
+  width: 2rem;
+  transform: translateX(3rem) rotate(12deg);
+  background: #ffffff;
+  opacity: 0.1;
+  transition: transform 1s ease-out;
+  pointer-events: none;
+}
+
+.sm-gh-star:hover .sm-gh-star-shine {
+  transform: translateX(-10rem) rotate(12deg);
+}
+
+.sm-gh-star-inner {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 图标 fill 直接写在 path 上：fill: currentColor 会以「未解析关键字」继承到
+   path，在 path 自己的 color 上解析——祖先的墨色染色规则（.app-theme svg、
+   面板 * 规则）会把它们染黑（BUG-107/108 的根因）。 */
+#root .sm-gh-star svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+
+#root .sm-gh-star .sm-gh-star-logo path {
+  fill: #ffffff;
+}
+
+#root .sm-gh-star .sm-gh-star-star path {
+  fill: #9ca3af;
+  transition: fill 0.3s ease;
+}
+
+#root .sm-gh-star:hover .sm-gh-star-star path {
+  fill: #fde047;
+}
+
+.sm-gh-star-label {
+  margin-left: 0.25rem;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.sm-gh-star-verb {
+  margin-right: 0.3em;
+}
+
+.sm-gh-star-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.sm-gh-star-num {
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+}
+
+/* 窄屏（≤480px）紧凑形态：按钮可用宽 = 视口 - 面板宽 + 2em - 开关宽，
+   再窄就顶进开关下方——隐藏「Star on」前缀，保留图标 + GitHub + star 数。
+   必须放在上面各 display 规则之后，否则会被同权重的 display: inline-flex 盖掉。 */
+@media (max-width: 480px) {
+  .sm-gh-star-verb {
+    display: none;
+  }
+}
+
 .sm-toggle-textWrap {
   position: relative;
   display: inline-block;
@@ -173,7 +300,7 @@
   position: absolute;
   top: 0;
   right: 0;
-  width: clamp(240px, 30vw, 340px);
+  width: var(--sm-panel-w);
   height: 100%;
   background: var(--surface);
   backdrop-filter: blur(12px);
@@ -202,7 +329,7 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: clamp(240px, 30vw, 340px);
+  width: var(--sm-panel-w);
   pointer-events: none;
   z-index: 5;
   opacity: 0;
@@ -553,10 +680,13 @@ button.sm-account-action {
   opacity: var(--sm-num-opacity, 0);
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1100px) {
+  .staggered-menu-wrapper {
+    --sm-panel-w: clamp(280px, 48vw, 340px);
+  }
+
   .staggered-menu-panel,
   .sm-prelayers {
-    width: clamp(280px, 48vw, 340px);
     left: auto;
     right: 0;
   }
@@ -569,6 +699,10 @@ button.sm-account-action {
 }
 
 @media (max-width: 640px) {
+  .staggered-menu-wrapper {
+    --sm-panel-w: clamp(240px, 78vw, 340px);
+  }
+
   .staggered-menu-header {
     left: 6.5%;
     width: 92%;
@@ -577,7 +711,6 @@ button.sm-account-action {
 
   .staggered-menu-panel,
   .sm-prelayers {
-    width: clamp(240px, 78vw, 340px);
     left: auto;
     right: 0;
   }

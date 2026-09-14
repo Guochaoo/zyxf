@@ -84,7 +84,7 @@ export default function Preview({ file, onClose }) {
             <button
               onClick={download}
               disabled={loading || downloading || !signedUrl}
-              className="flex items-center gap-1 text-sm text-ink-2 hover:text-brand-600 px-2 py-1 rounded disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1 text-sm text-ink-2 hover:text-brand-600 px-2 py-1 rounded-sm disabled:opacity-50 transition-colors"
               title={t('preview.download')}
             >
               {downloading ? (
@@ -96,7 +96,7 @@ export default function Preview({ file, onClose }) {
             </button>
             <button
               onClick={onClose}
-              className="p-1 hover:bg-hover rounded text-ink-3 transition-colors"
+              className="p-1 hover:bg-hover rounded-sm text-ink-3 transition-colors"
               title={t('preview.close')}
             >
               <X className="w-5 h-5" />

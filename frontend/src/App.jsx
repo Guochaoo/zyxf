@@ -32,8 +32,6 @@ import { EASE_COLLAPSE } from './components/ui.js';
 // Social links shown in the menu footer, static (brand names are not translated).
 const socialItems = [
   { label: 'Bilibili', link: 'https://space.bilibili.com/549612395' },
-  { label: 'Email', link: 'mailto:xjtuzyxf@163.com' },
-  { label: 'Wechat', link: 'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU4NTQ4NTg0Mg==&scene=110#wechat_redirect' },
 ];
 
 export default function App() {
@@ -42,7 +40,7 @@ export default function App() {
   useLocale();
   const { user, logout, ready } = useAuth();
   const navigate = useNavigate();
-  const isLg = useMediaQuery('(min-width: 1024px)');
+  const isLg = useMediaQuery('(min-width: 1100px)');
   // 主题（亮/暗/跟随系统）：useTheme 内部写 <html> 的 data-theme 驱动 CSS 变量。
   useTheme();
   // Menus are language-reactive (labels come from the dictionary).
@@ -138,9 +136,10 @@ export default function App() {
   if (isBrowse) {
     // Left rail padding collapses with a smooth transition when the sidebar
     // is toggled off, matching the rail's transform easing.
+    // Tailwind 4 不再为 calc(+/- 无空格) 形式的任意值生成 CSS，显式像素 = 轨道宽 + 1rem 间隙
     mainLayout = `w-full ${
-      sidebarOpen ? 'lg:pl-[calc(250px+1rem)]' : 'lg:pl-0'
-    } lg:pr-[calc(300px+1rem)] lg:transition-[padding] lg:duration-[${SIDEBAR_MS}ms] lg:ease-[${SIDEBAR_EASE}]`;
+      sidebarOpen ? 'lg:pl-[266px]' : 'lg:pl-0'
+    } lg:pr-[316px] lg:transition-[padding] lg:duration-[${SIDEBAR_MS}ms] lg:ease-[${SIDEBAR_EASE}]`;
   } else if (isDashboard || isAbout) {
     mainLayout = 'mx-auto w-full';
   } else {

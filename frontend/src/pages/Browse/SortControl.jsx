@@ -58,7 +58,7 @@ export default function SortControl({ sort, order, onChange }) {
               }}
               key={opt.key}
               onClick={() => onChange(opt.key)}
-              className={`sort-option relative z-10 flex h-[34px] shrink-0 items-center justify-center bg-transparent px-2.5 transition-colors focus:outline-none ${
+              className={`sort-option relative z-10 flex h-[34px] shrink-0 items-center justify-center bg-transparent px-2.5 transition-colors focus:outline-hidden ${
                 active ? 'sort-option--active' : ''
               } ${opt.key === 'manual' ? '' : 'pr-6'}`}
             >

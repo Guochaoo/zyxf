@@ -1,7 +1,8 @@
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import StaggeredMenu from '../components/StaggeredMenu.jsx';
+import { __resetStarsForTest } from '../components/GithubStarButton.jsx';
 import i18n from '../i18n/index.js';
 
 // 折叠菜单的按钮文字（打开菜单 / 关闭菜单）来自 t()。它被存进 useState 初值、
@@ -26,10 +27,17 @@ const toggleText = () => document.querySelector('.sm-toggle').textContent.replac
 
 beforeEach(async () => {
   await i18n.changeLanguage('zh');
+  // 菜单打开会挂载 GitHub Star 按钮并请求 GitHub API——stub 掉，测试不连外网。
+  __resetStarsForTest();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ stargazers_count: 7 }) }))
+  );
 });
 
 afterEach(async () => {
   await i18n.changeLanguage('zh');
+  vi.unstubAllGlobals();
 });
 
 describe('StaggeredMenu 菜单按钮随语言切换更新', () => {
@@ -83,4 +91,88 @@ describe('StaggeredMenu 关闭态面板不可聚焦', () => {
     document.querySelector('.sm-toggle').click();
     await waitFor(() => expect(panel().hasAttribute('inert')).toBe(true));
   });
+});
+
+// GitHub Star 按钮常驻 wrapper 内（面板条目左缘延长位），star 数来自挂载时的一次
+// GitHub API 请求（fetch 已在文件级 stub），失败则隐藏数字块、按钮本体保留；
+// 开合动画由 gsap 时间线驱动（从开关按钮下方流出/流回），关闭态不可聚焦。
+describe('StaggeredMenu GitHub Star 按钮', () => {
+  test('常驻 wrapper 内、链接正确并显示拉取到的 star 数', async () => {
+    renderMenu();
+    const star = document.querySelector('.sm-gh-star');
+    expect(star).not.toBeNull();
+    expect(star.closest('.staggered-menu-wrapper')).not.toBeNull();
+    expect(star.getAttribute('href')).toBe('https://github.com/Guochaoo/zyxf');
+    expect(star.getAttribute('target')).toBe('_blank');
+    await waitFor(() => expect(document.querySelector('.sm-gh-star-num').textContent).toBe('7'));
+  });
+
+  test('关闭态 tabIndex -1 且 aria-hidden，打开后可聚焦', async () => {
+    renderMenu();
+    const star = document.querySelector('.sm-gh-star');
+    expect(star.getAttribute('tabIndex')).toBe('-1');
+    expect(star.getAttribute('aria-hidden')).toBe('true');
+
+    document.querySelector('.sm-toggle').click();
+    await waitFor(() => expect(star.getAttribute('tabIndex')).toBe('0'));
+    expect(star.getAttribute('aria-hidden')).toBeNull();
+  });
+
+  test('star 数请求失败时隐藏数字块，按钮本体仍在', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('offline'))));
+    renderMenu();
+    expect(document.querySelector('.sm-gh-star')).not.toBeNull();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(document.querySelector('.sm-gh-star-num')).toBeNull();
+  });
+});
+
+// BUG-106 回归：gsap 加载后开关按钮的每次 hover（pointerover 被 React 合成为
+// onPointerEnter）都会触发 ensureGsap→preparePanel。菜单开着时若不跳过预置，
+// 面板会被打回屏外、图标/文字复位，而 React 开合态不变——遮罩留存、面板消失。
+describe('StaggeredMenu 菜单开着时 hover 开关不重置面板（BUG-106）', () => {
+  test('打开动画完成后再次 hover 开关，面板仍在原位', async () => {
+    const toggle = () => document.querySelector('.sm-toggle');
+    const panel = () => document.getElementById('staggered-menu-panel');
+
+    renderMenu();
+    // 复刻真实交互：悬停触发 gsap 预取（此时关闭态，预置合法），再点击打开。
+    toggle().dispatchEvent(new Event('pointerover', { bubbles: true }));
+    toggle().click();
+    // jsdom 里真实 gsap 用 rAF 实时驱动，等打开时间线跑完（全程约 1.9s）。
+    await new Promise((r) => setTimeout(r, 2500));
+    const t0 = panel().style.transform;
+    expect(t0).not.toBe('');
+
+    toggle().dispatchEvent(new Event('pointerover', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(panel().style.transform).toBe(t0);
+    expect(panel().style.opacity).toBe('1');
+  }, 15000);
+});
+
+// BUG-110 回归：preparePanel 曾把 textInner 的 yPercent 归零——开合一轮后
+// textLines[0] 是「关闭」，关闭态下悬停开关（未点击）会把可见文字打回「关闭」，
+// 与 aria/图标（关闭态应为「菜单」+ 加号）错位。
+describe('StaggeredMenu 关闭后悬停开关文字不复位（BUG-110）', () => {
+  test('开→关一轮后 hover 开关，文字 transform 不被重置', async () => {
+    const toggle = () => document.querySelector('.sm-toggle');
+    const inner = () => document.querySelector('.sm-toggle-textInner');
+
+    renderMenu();
+    // 复刻真实交互：悬停先触发 gsap 预取（否则首次 click 时 animateText 拿不到
+    // gsap 实例，文字 transform 不会被写入），再开→关一轮。
+    toggle().dispatchEvent(new Event('pointerover', { bubbles: true }));
+    toggle().click(); // 开
+    await new Promise((r) => setTimeout(r, 2600));
+    toggle().click(); // 关
+    await new Promise((r) => setTimeout(r, 1200));
+    const t0 = inner().style.transform;
+    expect(t0).not.toBe('');
+
+    toggle().dispatchEvent(new Event('pointerover', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 150));
+    expect(inner().style.transform).toBe(t0);
+  }, 15000);
 });
