@@ -518,13 +518,18 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--ink-3);
-  background: var(--inset);
+  background: #ffffff;
   user-select: none;
 }
 
-/* Guest avatar: same grey circle (no gradient) */
-.sm-account-avatar--guest {
+/* 暗色下不能沿用纯白：面板的 `#root .staggered-menu-panel * { color: var(--ink) }`
+   会把图标压成浅色（#ededed），压在纯白圆上基本看不见，所以暗色保持灰底。 */
+[data-theme='dark'] .sm-account-avatar {
   background: var(--inset);
+}
+
+/* Guest avatar: same circle (no gradient) */
+.sm-account-avatar--guest {
   color: var(--ink-2);
 }
 
