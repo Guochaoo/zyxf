@@ -145,6 +145,17 @@ describe('App', () => {
     renderApp('/nope');
     expect(await screen.findByText('此文件夹为空')).toBeInTheDocument();
   });
+
+  // BUG-112 回归：中列内边距的过渡只能出现在「手动开合侧栏」那一瞬。
+  // 常驻的话，从别的路由进资料库时 padding 0→266/316 会被动画化，
+  // 表现为列表两侧文字向中间收拢的假入场动画（真机上 150ms）。
+  test('进入资料库时中列不带内边距过渡；手动开合侧栏时才带', async () => {
+    renderApp('/');
+    expect((await screen.findByRole('main')).className).not.toContain('lg:transition-[padding]');
+
+    fireEvent.click(screen.getByRole('button', { name: '收起侧边栏' }));
+    expect(screen.getByRole('main').className).toContain('lg:transition-[padding]');
+  });
 });
 
 
