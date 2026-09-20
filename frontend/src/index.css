@@ -700,8 +700,9 @@ input[type='password']::-ms-clear {
 /* ---- 白色毛玻璃遮罩视觉：菜单 (sm-backdrop) 与知识图谱全屏弹窗共用 ---- */
 .rb-frost-backdrop {
   background: rgba(255, 255, 255, 0.46);
-  backdrop-filter: blur(5px);
+  /* BUG-111：前缀必须写在前，否则 Lightning CSS 去重后只剩 -webkit-（Chromium 已不认），线上模糊失效 */
   -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
 }
 
 /* 暗色（手动或跟随系统）下遮罩加深，与菜单/弹窗的暗色背景协调。
