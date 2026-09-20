@@ -611,71 +611,72 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
                 </ul>
               </div>
             )}
-            {account && (
-              <div className="sm-account-card" aria-label={t('menu.currentAccount')}>
-                {account.guest ? (
-                  <button
-                    type="button"
-                    className="sm-account-go"
-                    aria-label={t('menu.login')}
-                    title={t('menu.login')}
-                    onClick={() => handleAccountAction(account.onLogin)}
-                  >
-                    <span className="sm-account-avatar sm-account-avatar--guest" aria-hidden="true">
-                      <CircleUserRound className="h-5 w-5" strokeWidth={1.6} />
-                    </span>
-                    <span className="sm-account-meta">
-                      <span className="sm-account-name">{account.name}</span>
-                      {account.subtitle && (
-                        <span className="sm-account-sub">{account.subtitle}</span>
-                      )}
-                    </span>
-                  </button>
-                ) : (
-                  <>
-                    <span className="sm-account-avatar" aria-hidden="true">
-                      {account.avatarText}
-                    </span>
-                    <span className="sm-account-meta">
-                      <span className="sm-account-name">{account.name}</span>
-                      {account.subtitle && (
-                        <span className="sm-account-sub">{account.subtitle}</span>
-                      )}
-                    </span>
-                  </>
-                )}
-                <span className="sm-account-actions">
-                  {/* 设置：打开全局设置弹窗 */}
-                  <button
-                    type="button"
-                    className="sm-account-action"
-                    aria-label={t('menu.settings')}
-                    title={t('menu.settings')}
-                    onClick={() => {
-                      onOpenSettings?.();
-                      closeMenu();
-                    }}
-                  >
-                    <Settings size={18} strokeWidth={1.6} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className={`sm-account-action ${account.guest ? 'sm-account-action--login' : 'sm-account-action--logout'}`}
-                    aria-label={account.guest ? t('menu.login') : t('menu.logout')}
-                    title={account.guest ? t('menu.login') : t('menu.logout')}
-                    onClick={() => handleAccountAction(account.guest ? account.onLogin : account.onLogout)}
-                  >
-                    {account.guest ? (
-                      <LogIn size={18} strokeWidth={1.6} aria-hidden="true" />
-                    ) : (
-                      <LogOut size={18} strokeWidth={1.6} aria-hidden="true" />
-                    )}
-                  </button>
-                </span>
-              </div>
-            )}
           </div>
         </div>
+
+        {account && (
+          <div className="sm-account-card" aria-label={t('menu.currentAccount')}>
+            {account.guest ? (
+              <button
+                type="button"
+                className="sm-account-go"
+                aria-label={t('menu.login')}
+                title={t('menu.login')}
+                onClick={() => handleAccountAction(account.onLogin)}
+              >
+                <span className="sm-account-avatar sm-account-avatar--guest" aria-hidden="true">
+                  <CircleUserRound className="h-5 w-5" strokeWidth={1.6} />
+                </span>
+                <span className="sm-account-meta">
+                  <span className="sm-account-name">{account.name}</span>
+                  {account.subtitle && (
+                    <span className="sm-account-sub">{account.subtitle}</span>
+                  )}
+                </span>
+              </button>
+            ) : (
+              <>
+                <span className="sm-account-avatar" aria-hidden="true">
+                  {account.avatarText}
+                </span>
+                <span className="sm-account-meta">
+                  <span className="sm-account-name">{account.name}</span>
+                  {account.subtitle && (
+                    <span className="sm-account-sub">{account.subtitle}</span>
+                  )}
+                </span>
+              </>
+            )}
+            <span className="sm-account-actions">
+              {/* 设置：打开全局设置弹窗 */}
+              <button
+                type="button"
+                className="sm-account-action"
+                aria-label={t('menu.settings')}
+                title={t('menu.settings')}
+                onClick={() => {
+                  onOpenSettings?.();
+                  closeMenu();
+                }}
+              >
+                <Settings size={18} strokeWidth={1.6} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className={`sm-account-action ${account.guest ? 'sm-account-action--login' : 'sm-account-action--logout'}`}
+                aria-label={account.guest ? t('menu.login') : t('menu.logout')}
+                title={account.guest ? t('menu.login') : t('menu.logout')}
+                onClick={() => handleAccountAction(account.guest ? account.onLogin : account.onLogout)}
+              >
+                {account.guest ? (
+                  <LogIn size={18} strokeWidth={1.6} aria-hidden="true" />
+                ) : (
+                  <LogOut size={18} strokeWidth={1.6} aria-hidden="true" />
+                )}
+              </button>
+            </span>
+          </div>
+        )}
       </aside>
     </div>
   );

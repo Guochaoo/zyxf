@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import SettingsModal from '../components/SettingsModal.jsx';
 
 // 组件是「受控」的：板块与手机端层级都来自外层路由（App 里是 /settings 与 /settings/:section）。
@@ -402,6 +402,18 @@ describe('SettingsModal 智能对话配置：配置来源与字段', () => {
 // 手机端是两级结构（仿原生 App 设置页）：一级是设置列表，点进某个板块才显示其内容。
 describe('SettingsModal 手机端：两级结构', () => {
   const row = (name) => screen.getByRole('button', { name });
+
+  // 左栏三个板块的自上而下顺序由 navItems 数组决定，需求指定为
+  // 账户信息 → 外观 → 智能对话配置（改数组顺序就要同步这条用例）。
+  test('板块顺序：账户信息 / 外观 / 智能对话配置', () => {
+    renderModal();
+    const nav = screen.getByRole('navigation', { name: '设置板块' });
+    expect(within(nav).getAllByRole('button').map((b) => b.textContent.trim())).toEqual([
+      '账户信息',
+      '外观',
+      '智能对话配置',
+    ]);
+  });
 
   test('一级只显示设置列表；点行进二级显示该板块内容，返回后回到列表', () => {
     mockMobile();

@@ -32,6 +32,20 @@ export function useSettingsRoute() {
     [isMobileSettings, location.state, navigate]
   );
 
+  // 从任意页面直接落到某个板块（例：对话卡片的齿轮 → 智能对话配置）。
+  // 还没在设置里时要把当前页记进 background——直接 navigate('/settings/:id') 不带
+  // state 的话，弹窗背后会退回资料库根目录，丢掉当前文件夹。
+  const openSettingsAt = useCallback(
+    (id) => {
+      if (isSettings) {
+        openSettingsSection(id);
+      } else {
+        navigate(`/settings/${id}`, { state: { background: location } });
+      }
+    },
+    [isSettings, openSettingsSection, location, navigate]
+  );
+
   // 手机端二级的「返回」按钮 = 回到一级列表；用 replace，之后一次返回直接回到原页面。
   const backToSettingsList = useCallback(() => {
     navigate('/settings', { replace: true, state: location.state });
@@ -49,6 +63,7 @@ export function useSettingsRoute() {
     pageLocation,
     openSettings,
     openSettingsSection,
+    openSettingsAt,
     backToSettingsList,
     closeSettings,
   };

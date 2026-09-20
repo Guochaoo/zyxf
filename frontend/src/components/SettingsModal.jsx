@@ -98,7 +98,7 @@ function ProtocolSelect({ label, value, options, onChange }) {
 export default function SettingsModal({
   open,
   onClose,
-  section = 'ai',
+  section = 'account',
   panelOpen = false,
   onSectionChange = () => {},
   onBack = () => {},
@@ -134,11 +134,13 @@ export default function SettingsModal({
     [t]
   );
 
+  // 顺序 = 左栏自上而下的呈现顺序（账户信息 → 外观 → 智能对话配置）；默认打开哪个
+  // 板块由调用方传入的 section 决定（App 传 settingsSection ?? 'ai'），不跟随本数组。
   const navItems = useMemo(
     () => [
-      { id: 'ai', label: t('settings.nav.ai'), icon: Bot },
       { id: 'account', label: t('settings.nav.account'), icon: CircleUserRound },
       { id: 'appearance', label: t('settings.nav.appearance'), icon: Palette },
+      { id: 'ai', label: t('settings.nav.ai'), icon: Bot },
     ],
     [t]
   );

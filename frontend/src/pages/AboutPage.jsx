@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth.jsx';
@@ -37,18 +37,14 @@ const CASE_BASE = [
   },
 ];
 
-/* Case study card — pixel-dissolve hover + info plate */
+/* Case study card — image + info plate */
 function CaseCard({ study, index, isAdmin }) {
-  const [hovered, setHovered] = useState(false);
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, delay: index * 0.1, ease: EASE }}
-      className="group relative aspect-[4/3] overflow-hidden bg-black"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      className="relative aspect-[4/3] overflow-hidden bg-black"
     >
       {/* background image — first card is the LCP candidate, rest load lazily */}
       <img
@@ -61,29 +57,6 @@ function CaseCard({ study, index, isAdmin }) {
         decoding="async"
         className="absolute h-full w-full object-cover"
       />
-
-      {/* pixel-block dissolve overlay — 12×8 grid, diagonal stagger */}
-      <div className="absolute inset-0 z-[4]">
-        {Array.from({ length: 96 }).map((_, i) => {
-          const row = Math.floor(i / 12);
-          const col = i % 12;
-          const delayIn = (row + col) * 0.018;
-          const delayOut = (8 - row + (12 - col)) * 0.012;
-          return (
-            <div
-              key={i}
-              className="absolute scale-0 bg-black/80 opacity-0 transition-[opacity,transform] duration-250 ease-out group-hover:scale-100 group-hover:opacity-100"
-              style={{
-                width: `${100 / 12}%`,
-                height: `${100 / 8}%`,
-                left: `${col * (100 / 12)}%`,
-                top: `${row * (100 / 8)}%`,
-                transitionDelay: `${hovered ? delayIn : delayOut}s`,
-              }}
-            />
-          );
-        })}
-      </div>
 
       {/* plus button — admin only */}
       {isAdmin && (

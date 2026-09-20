@@ -145,6 +145,17 @@ describe('App', () => {
     renderApp('/nope');
     expect(await screen.findByText('此文件夹为空')).toBeInTheDocument();
   });
+
+  // BUG-112 回归：中列内边距的过渡只能出现在「手动开合侧栏」那一瞬。
+  // 常驻的话，从别的路由进资料库时 padding 0→266/316 会被动画化，
+  // 表现为列表两侧文字向中间收拢的假入场动画（真机上 150ms）。
+  test('进入资料库时中列不带内边距过渡；手动开合侧栏时才带', async () => {
+    renderApp('/');
+    expect((await screen.findByRole('main')).className).not.toContain('lg:transition-[padding]');
+
+    fireEvent.click(screen.getByRole('button', { name: '收起侧边栏' }));
+    expect(screen.getByRole('main').className).toContain('lg:transition-[padding]');
+  });
 });
 
 
@@ -162,9 +173,10 @@ describe('App · 设置路由', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '设置' }));
 
-    // 设置界面出现：板块列表 + 默认板块内容
+    // 设置界面出现：板块列表 + 默认板块（账户信息，不再是智能对话配置）
     expect(screen.getByRole('button', { name: '账户信息' })).toBeInTheDocument();
-    expect(screen.getByLabelText('API Key')).toBeInTheDocument();
+    expect(screen.getByText('尚未登录')).toBeInTheDocument();
+    expect(screen.queryByLabelText('API Key')).toBeNull();
     // 背后仍是资料库页面（背景位置照常渲染）
     expect(screen.getByText('此文件夹为空')).toBeInTheDocument();
   });
