@@ -14,10 +14,18 @@
 ## 当前进度
 
 ```yaml
-更新日期: 2026-09-13
-条目总数: 158        # 缺陷 105 + 改进 53
+更新日期: 2026-09-20
+条目总数: 159        # 缺陷 106 + 改进 53
 待处理: 10           # 缺陷 4 + 改进 6（26 暂缓；31/32 已建档、待决策后修；33 为可访问性权衡；34 为视觉一致性；102 内容索引的 onnxruntime-node 在生产服务器上装不上，阻塞 feature/content-index；104 为测试套件偶发登录失败；58 为测试覆盖缺口补齐清单）
-已归档: 148          # 缺陷 101 + 改进 47
+已归档: 149          # 缺陷 102 + 改进 47
+# 本批（生产毛玻璃失效，2026-09-20）：线上 zyxf.top 菜单遮罩模糊消失，本地 dev 正常。
+#   根因不在代码分叉（线上 CSS 与本地 vite build 产物 SHA256 完全一致），而是 Vite 8 的生产
+#   CSS 压缩链路用了 Lightning CSS：同一逻辑属性的「无前缀 + -webkit- 前缀」重复声明只保留
+#   最后一条，源码里 -webkit- 写在后面 → 产物只剩 -webkit-backdrop-filter；而现代 Chromium
+#   已移除该别名（实测 Edge 153：CSS.supports('-webkit-backdrop-filter') === false，
+#   CSS.supports('backdrop-filter') === true），整条声明被丢弃，dev server 不压缩故无此问题。
+#   修复 = 交换两处声明顺序（BUG-111），验证 171 前端测试全过 + 产物在 Edge 实测 computed
+#   backdrop-filter 恢复 blur(5px)/blur(12px)。
 # 本批（技术栈全量升级，2026-09-13）：前后端依赖升到最新稳定版——React 19.3 / Vite 8.3
 #   （Rolldown + plugin-react 6）/ vitest 5 / Tailwind 4.3（@tailwindcss/vite + @config 兼容，
 #   postcss.config.js 与 autoprefixer/postcss 依赖移除）/ Express 5.2（连带删除 body-parser/qs
@@ -183,7 +191,7 @@
 
 > 归档表只作索引（编号 / 严重度 / 类别 / 标题 / 位置 / 日期）。修法依据、踩坑与验证方式写在**代码注释**里（`grep -rn "BUG-54" backend/src`）与 commit message 中。
 
-### 2.1 已修复缺陷（96）
+### 2.1 已修复缺陷（102）
 
 | 编号 | 严重度 | 类别 | 标题 | 修复位置 | 关闭日期 |
 |---|---|---|---|---|---|
@@ -288,6 +296,7 @@
 | BUG-108 | P2 | 前端 | Star 按钮改面板内锚定后文字被面板全局墨色染色吞掉：`#root .staggered-menu-panel * { color: var(--ink) !important }` 命中按钮 a/label/num（黑底黑字只剩空胶囊），当轮只给 svg 加了 important 覆盖漏了文字三件套；补齐 a/label/num 的 important 白色覆盖 | `frontend/src/components/StaggeredMenu.css` | 2026-09-12 |
 | BUG-109 | P2 | 前端 | BUG-108 修复后 logo 仍黑：`fill: currentColor` 以**未解析关键字**继承到 path，在 path 自己的 color 上解析——面板 `* { color: var(--ink) !important }` 直接命中 path，fill 解析成墨色，svg 层的 color/fill 覆盖够不着（金星同机制被染墨色）。修复 = 按钮移回面板外（wrapper 锚定 + gsap 从开关下方流出/流回动画，顺带实现交互诉求）并在 path 上直接写 fill | `frontend/src/components/StaggeredMenu.css`, `frontend/src/components/StaggeredMenu.jsx`, `frontend/src/components/GithubStarButton.jsx` | 2026-09-12 |
 | BUG-110 | P2 | 前端 | 开→关一轮后悬停开关（未点击），按钮文字复位成「关闭」：preparePanel 里 `g.set(textInner, { yPercent: 0 })` 把可见文字打回 textLines[0]，而开合一轮后 textLines[0] 是「关闭」，与 aria/图标错位（同 BUG-106 的 preparePanel 越权家族）；修复 = 删掉该句，文字由 animateText / 语言切换 effect 独占管理，补 hover 回归测试 | `frontend/src/components/StaggeredMenu.jsx`, `frontend/src/test/StaggeredMenu.test.jsx` | 2026-09-12 |
+| BUG-111 | P1 | 前端 | 生产构建丢掉无前缀 `backdrop-filter`，线上毛玻璃全失效（本地 dev 正常）：Vite 8 的生产 CSS 压缩走 Lightning CSS，同一逻辑属性的「无前缀 + `-webkit-` 前缀」重复声明只保留**最后一条**，源码里 `-webkit-` 写在后面 → 产物只剩 `-webkit-backdrop-filter`；而现代 Chromium 已移除该别名，整条声明被丢弃。受影响 = 菜单遮罩 / 菜单面板 / 知识图谱全屏弹窗 / 设置弹窗 / 使用须知弹窗（均复用 `.rb-frost-backdrop`）。修复 = 把两处声明顺序改成前缀在前 | `frontend/src/index.css`, `frontend/src/components/StaggeredMenu.css` | 2026-09-20 |
 
 ### 2.2 已关闭改进项（47）
 
