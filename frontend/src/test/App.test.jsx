@@ -173,9 +173,10 @@ describe('App · 设置路由', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '设置' }));
 
-    // 设置界面出现：板块列表 + 默认板块内容
+    // 设置界面出现：板块列表 + 默认板块（账户信息，不再是智能对话配置）
     expect(screen.getByRole('button', { name: '账户信息' })).toBeInTheDocument();
-    expect(screen.getByLabelText('API Key')).toBeInTheDocument();
+    expect(screen.getByText('尚未登录')).toBeInTheDocument();
+    expect(screen.queryByLabelText('API Key')).toBeNull();
     // 背后仍是资料库页面（背景位置照常渲染）
     expect(screen.getByText('此文件夹为空')).toBeInTheDocument();
   });

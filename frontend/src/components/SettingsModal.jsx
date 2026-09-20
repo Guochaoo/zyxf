@@ -98,7 +98,7 @@ function ProtocolSelect({ label, value, options, onChange }) {
 export default function SettingsModal({
   open,
   onClose,
-  section = 'ai',
+  section = 'account',
   panelOpen = false,
   onSectionChange = () => {},
   onBack = () => {},

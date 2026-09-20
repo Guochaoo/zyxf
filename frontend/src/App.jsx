@@ -67,6 +67,7 @@ export default function App() {
     pageLocation,
     openSettings,
     openSettingsSection,
+    openSettingsAt,
     backToSettingsList,
     closeSettings,
   } = useSettingsRoute();
@@ -119,6 +120,9 @@ export default function App() {
         : { name: t('app.account.guestName'), subtitle: t('app.account.guestSub'), guest: true, avatarText: '', onLogin: () => navigate('/login') },
     [user, logout, navigate, t]
   );
+
+  // 对话卡片的齿轮直接落到「智能对话配置」板块（菜单里的齿轮仍打开弹窗默认板块）。
+  const openAiSettings = useCallback(() => openSettingsAt('ai'), [openSettingsAt]);
 
   const brand = useMemo(
     () => (
@@ -288,7 +292,7 @@ export default function App() {
               <ErrorBoundary>
                 <Suspense fallback={null}>
                   <KnowledgeGraph currentId={folderId} onFullChange={setGraphFull} />
-                  <ChatComposer onOpenSettings={openSettings} />
+                  <ChatComposer onOpenSettings={openAiSettings} />
                 </Suspense>
               </ErrorBoundary>
             </div>
@@ -317,7 +321,7 @@ export default function App() {
       {/* 全局设置：真实路由 /settings（手机端二级页面为 /settings/:section），覆盖所有页面 */}
       <SettingsModal
         open={isSettings}
-        section={settingsSection ?? 'ai'}
+        section={settingsSection ?? 'account'}
         panelOpen={Boolean(settingsSection)}
         onSectionChange={openSettingsSection}
         onBack={backToSettingsList}
