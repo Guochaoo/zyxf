@@ -112,9 +112,12 @@ export default function AboutPage() {
         .marquee-projects:hover {
           animation-play-state: paused;
         }
-        /* 「加入我们」CTA 的斜切扫过：与给定的 ::after + skewX(-45deg) scale(0→1) 等价，
-           只把纯黑/纯白换成本页的主题变量（暗色下自动反向），直角与细边沿用关于页语言。
-           z-index: -1 的伪元素要能显形，宿主必须是层叠上下文（relative + z-index: 1）。 */
+        /* 「加入我们」CTA 的斜切扫过：与给定的 ::after + skewX(-45deg) scale(0→1) 等价。
+           底色用 --surface（亮色 = 纯白、暗色 = 面板色，避免暗色下白底压浅色字），
+           直角沿用关于页语言；宿主必须是层叠上下文（relative + z-index: 1），
+           否则 z-index: -1 的伪元素会被自己的黑底盖住。
+           横向外扩必须 ≥ 高度的一半：skewX(-45deg) 把上下边各平移 ±H/2，只扩 20%
+           时 H/W 超过 0.4 的按钮就会在左上 / 右下各漏出一个露黑的小三角。 */
         .about-cta {
           position: relative;
           z-index: 1;
@@ -124,11 +127,11 @@ export default function AboutPage() {
           content: '';
           position: absolute;
           z-index: -1;
-          left: -20%;
-          right: -20%;
+          left: -50%;
+          right: -50%;
           top: 0;
           bottom: 0;
-          background: var(--page);
+          background: var(--surface);
           transform: skewX(-45deg) scale(0, 1);
           transition: transform 0.5s;
         }
@@ -188,7 +191,7 @@ export default function AboutPage() {
                 标签块完全一致；右侧原本紧贴的箭头方块按需求去掉。 */}
             <button
               type="button"
-              className="about-cta mt-6 inline-flex items-center border border-line-strong bg-ink px-3 py-2 text-base font-medium text-page"
+              className="about-cta mt-6 inline-flex items-center bg-ink px-[13px] py-[9px] text-base font-medium text-page"
             >
               {t('about.joinUs')}
             </button>
