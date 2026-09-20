@@ -1,4 +1,4 @@
-// 覆盖本轮全仓审计中已修复的后端缺陷（逐条对应 BUG-39 起的编号，见 docs/ISSUES.md）。
+// 覆盖本轮全仓审计中已修复的后端缺陷（逐条对应 BUG-39 起的编号；该编号体系随 ISSUES.md 于 2026-09-20 迁到 GitHub Issues）。
 // 保留原测试文件不动，新的回归集中在这里，便于「一条发现一个用例」地回溯。
 import { describe, test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';

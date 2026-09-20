@@ -1,7 +1,7 @@
 # 部署到阿里云轻量应用服务器（systemd + nginx）
 
 > 后端用 **systemd** 托管（`deploy/zyxf.service`），前端构建产物由 **nginx** 托管并反代 `/api`，HTTPS 用 Let's Encrypt。
-> 服务器上**没有面板**：nginx、Node 24、certbot 全部是系统级安装（2026-09-12 起宝塔已彻底卸载，见 docs/ISSUES.md IMPROVE-48）。部署由 `.github/workflows/deploy.yml` 全自动完成——SSH 上服务器 `git fetch + reset --hard`（对齐 origin/main）+ 装依赖 + 构建 + `systemctl restart zyxf`；部署后健康检查（`/api/health`）失败时，workflow 会自动把服务器退回部署前的修订并重建，避免线上持续 502。
+> 服务器上**没有面板**：nginx、Node 24、certbot 全部是系统级安装（2026-09-12 起宝塔已彻底卸载）。部署由 `.github/workflows/deploy.yml` 全自动完成——SSH 上服务器 `git fetch + reset --hard`（对齐 origin/main）+ 装依赖 + 构建 + `systemctl restart zyxf`；部署后健康检查（`/api/health`）失败时，workflow 会自动把服务器退回部署前的修订并重建，避免线上持续 502。
 
 架构：
 

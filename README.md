@@ -98,10 +98,11 @@ zyxf/
 │   │   └── test/          # vitest 测试
 ├── docs/
 │   ├── DEPLOY.md          # 部署指南（systemd + nginx + HTTPS）
-│   ├── DESIGN.md          # 设计系统规范
-│   └── ISSUES.md          # 缺陷 + 改进建议追踪清单
+│   └── DESIGN.md          # 设计系统规范
 └── start.sh               # 本地一键启动
 ```
+
+> 缺陷与改进追踪在 **GitHub Issues**：<https://github.com/Guochaoo/zyxf/issues>（约定见 `AGENTS.md` §4）。
 
 ## 测试与持续集成
 
