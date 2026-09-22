@@ -276,7 +276,7 @@ export function AllocationCard({ title, segments, extra }) {
   if (!active) return null;
 
   return (
-    <div className="rounded-card bg-surface p-3">
+    <div className="@container rounded-card bg-surface p-3">
       <span className="flex items-center gap-1.5 text-[12px] font-medium text-ink">
         <span className={`flex size-3.5 items-center justify-center rounded-full text-[8px] font-bold text-white ${active.cls}`}>
           {active.badge}
@@ -317,7 +317,11 @@ export function AllocationCard({ title, segments, extra }) {
           </button>
         ))}
       </div>
-      <div className="mt-2 grid grid-cols-4 items-center gap-1.5">
+      {/* BUG-113：图例列数按**卡片自身宽度**（容器查询）降档，而不是让文字省略——
+          原先固定 4 列，卡片窄时圆点被压成 0px 看不见；只加 shrink-0 又会把类型名截成
+          「P… 61.9%」。实测每项自然宽最宽 80px（DOCX 6.7%）、列间距 6px、卡片两侧
+          内边距 24px → 4 列需卡片 ≥362px、3 列 ≥276px、2 列 ≥190px。 */}
+      <div className="mt-2 grid grid-cols-2 items-center gap-1.5 @[280px]:grid-cols-3 @[366px]:grid-cols-4">
         {segments.map((s) => (
           <button
             key={s.name}
@@ -328,8 +332,12 @@ export function AllocationCard({ title, segments, extra }) {
               selected === s.name ? 'bg-field text-ink' : 'text-ink-2 hover:bg-hover hover:text-ink'
             }`}
           >
-            <span className={`size-1.5 rounded-full ${s.cls}`} />
-            {s.name} <span className="tabular-nums">{s.pct.toFixed(1)}%</span>
+            {/* BUG-113：圆点必须 shrink-0。它是 flex 子项，卡片窄（≤360px，图例 4 列
+                每列 ~66px）时会被一路压到 0px 宽而彻底看不见；名称允许收缩并省略，
+                百分比保持完整——至少「哪个颜色 = 哪个类型」这层信息不会丢。 */}
+            <span className={`size-1.5 shrink-0 rounded-full ${s.cls}`} />
+            <span className="min-w-0 truncate">{s.name}</span>{' '}
+            <span className="shrink-0 tabular-nums">{s.pct.toFixed(1)}%</span>
           </button>
         ))}
         {extra}

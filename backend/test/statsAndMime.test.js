@@ -70,7 +70,7 @@ describe('BUG-26: MIME 以扩展名派生值为权威', () => {
     const token = await adminLogin();
     const r = await registerFile(token, { name: 'nomime.docx' });
     // 先断言注册成功：偶发的登录/注册失败会以「row 为 undefined」的 TypeError 呈现，
-    // 真实原因（下游 401/409）被掩盖（见 docs/ISSUES.md 的偶发登录失败条目）。
+    // 真实原因（下游 401/409）被掩盖（偶发项见 issue #52）。
     assert.equal(r.status, 200, `注册应成功，实际 ${r.status}: ${JSON.stringify(r.body)}`);
     const row = db.prepare("SELECT mime_type FROM files WHERE name = 'nomime.docx'").get();
     assert.equal(

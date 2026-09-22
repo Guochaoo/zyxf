@@ -31,7 +31,7 @@ export async function request(method, path, { token, body, headers } = {}) {
 }
 
 // BUG-104 修法①：登录失败必须 fail-fast 并带出真实状态码与响应体——
-// 原先六个文件各自 `return body.token`，登录偶发失败（见 ISSUES.md BUG-104）时
+// 原先六个文件各自 `return body.token`，登录偶发失败（偶发项见 issue #52）时
 // undefined token 静默流向后续请求，失败以无关用例的 401/TypeError 呈现，无法定位。
 export async function adminToken() {
   const { status, body } = await request('POST', '/api/auth/login', {

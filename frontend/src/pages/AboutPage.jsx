@@ -2,7 +2,6 @@ import { useMemo, useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth.jsx';
-import { ArrowUpRight } from 'lucide-react';
 import { LogoIcon } from '../components/icons';
 
 /* ─────────────────────────────────────────────────────────
@@ -113,6 +112,37 @@ export default function AboutPage() {
         .marquee-projects:hover {
           animation-play-state: paused;
         }
+        /* 「加入我们」CTA 的斜切扫过：与给定的 ::after + skewX(-45deg) scale(0→1) 等价。
+           底色用 --surface（亮色 = 纯白、暗色 = 面板色，避免暗色下白底压浅色字），
+           直角沿用关于页语言；宿主必须是层叠上下文（relative + z-index: 1），
+           否则 z-index: -1 的伪元素会被自己的黑底盖住。
+           横向外扩必须 ≥ 高度的一半：skewX(-45deg) 把上下边各平移 ±H/2，只扩 20%
+           时 H/W 超过 0.4 的按钮就会在左上 / 右下各漏出一个露黑的小三角。 */
+        .about-cta {
+          position: relative;
+          z-index: 1;
+          overflow: hidden;
+        }
+        .about-cta::after {
+          content: '';
+          position: absolute;
+          z-index: -1;
+          left: -50%;
+          right: -50%;
+          top: 0;
+          bottom: 0;
+          background: var(--surface);
+          transform: skewX(-45deg) scale(0, 1);
+          transition: transform 0.5s;
+        }
+        .about-cta:hover,
+        .about-cta:focus-visible {
+          color: var(--ink);
+        }
+        .about-cta:hover::after,
+        .about-cta:focus-visible::after {
+          transform: skewX(-45deg) scale(1, 1);
+        }
       `}</style>
 
       {/* Top area — header */}
@@ -157,13 +187,13 @@ export default function AboutPage() {
             <p className="text-[14px] leading-[1.7] text-ink-2">
               {t('about.pitch')}
             </p>
-            <button type="button" className="group mt-6 flex items-start">
-              <span className="inline-flex items-center gap-[10px] border border-line-strong bg-ink px-3 py-2 text-base font-medium text-page transition-colors duration-200 group-hover:bg-ink-2">
-                {t('about.joinUs')}
-              </span>
-              <span className="flex h-6 w-6 items-center justify-center bg-ink text-page transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-y-[18px]">
-                <ArrowUpRight size={16} strokeWidth={2} style={{ color: 'var(--page)' }} />
-              </span>
+            {/* 「加入我们」CTA：hover 时斜切白色扫过（扫满后文字转深色）。尺寸与原来的
+                标签块完全一致；右侧原本紧贴的箭头方块按需求去掉。 */}
+            <button
+              type="button"
+              className="about-cta mt-6 inline-flex items-center bg-ink px-[13px] py-[9px] text-base font-medium text-page"
+            >
+              {t('about.joinUs')}
             </button>
           </div>
 
