@@ -258,6 +258,7 @@
 - 格子自适应 12–22px（取高度优先、宽度封顶），间隙 5px、内边距 `px-3 pb-3`；宽度不够时**从最左侧（最旧周）裁剪**而不是滚动，网格在剩余空间居中；面板 `rounded-control bg-surface`（10px 圆角、无边框无阴影、随行高撑满）
 - 标题行 = 蓝色圆底徽章 + 白色下载箭头 + 卡片名 + 右侧「少 ▫▫▫▫▫ 多」图例（9px 方块）
 - 悬浮 / 聚焦 tooltip：日期 + 当日下载数，优先显示在格子上方，顶部行翻转到下方，绝不遮挡被悬停格子；单元格本身 `tabIndex=0` + `aria-label` 播报
+- tooltip 横向以 `74px` 半宽钳制（`TIP_HALF`，对应 `.insight-chart-tooltip` 的 132px `min-width`）。⚠️ 钳制上界必须用 **tooltip 自身 `offsetParent`（`.relative w-max` 网格容器）的宽度**——`offsetLeft` 的基准就是它；外层那圈 `px-3` 滚动容器比网格宽出两侧内边距（实测 38px），拿它的 `clientWidth` 当上界会让上界永远取不到，末列 tooltip 向右溢出卡片、被面板根节点的 `overflow-hidden` 切掉一截。网格窄于 tooltip 时退化为居中
 - 数据源 `GET /api/stats/heatmap`（近 365 天，独立于页面右上 7/30/90 切换）
 - ⚠️ 已知偏差：星期标签取的是**周日开头**的字典数组按行号渲染（`日/二/四/六`），与周一开头的网格错开一天，见 issue #49
 

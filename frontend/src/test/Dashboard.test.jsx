@@ -104,6 +104,33 @@ describe('DashboardPage', () => {
     );
   });
 
+  // tooltip 横向钳制的上界必须是网格（offsetParent）宽度；取外层 px-3 容器的 clientWidth
+  // 会让末列溢出卡片、被 overflow-hidden 切掉。jsdom 没有布局，offset 全靠下面这层桩。
+  async function hoverCellAt(offsetLeft) {
+    renderApp();
+    await waitFor(() => expect(document.querySelector('[data-cell]')).toBeTruthy(), { timeout: 3000 });
+    const cell = document.querySelector('[data-cell]');
+    const card = cell.closest('.rounded-control');
+    Object.defineProperty(cell, 'offsetLeft', { value: offsetLeft, configurable: true });
+    Object.defineProperty(cell, 'offsetTop', { value: 48, configurable: true });
+    Object.defineProperty(cell, 'offsetParent', { value: { offsetWidth: 660 }, configurable: true });
+    fireEvent.mouseOver(cell);
+    return card;
+  }
+
+  test('热力图 tooltip 末列被钳在网格内，不再溢出卡片', async () => {
+    const card = await hoverCellAt(648);
+    expect(card.querySelector('.insight-chart-tooltip')).toBeTruthy();
+    // 中心 648+6=654 越过上界 → 钳到 660−74=586。
+    // 旧实现拿外层滚动容器的 clientWidth（jsdom 里为 0）当上界，这条断言必失败。
+    expect(card.querySelector('.pointer-events-none.absolute').style.left).toBe('586px');
+  });
+
+  test('热力图 tooltip 首列仍受下界约束', async () => {
+    const card = await hoverCellAt(19);
+    expect(card.querySelector('.pointer-events-none.absolute').style.left).toBe('74px');
+  });
+
   test('compare card is gone; anomaly and allocation cards render', async () => {
     renderApp();
     await waitFor(() => {

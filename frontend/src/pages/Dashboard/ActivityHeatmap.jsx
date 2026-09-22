@@ -20,6 +20,7 @@ const HEAT_LEVELS = [
 ];
 
 const HEAT_GAP = 5; // px between cells and label rows
+const TIP_HALF = 74; // 半个 tooltip 宽（.insight-chart-tooltip 的 132px min-width）+ 8px 余量
 
 /* sqrt-of-max instead of linear so one huge spike (a bulk upload) doesn't
    flatten every other active day into the lightest shade */
@@ -204,11 +205,12 @@ export default function ActivityHeatmap({ rows }) {
      never covered */
   const showCell = useCallback(
     (el) => {
-      const scroll = scrollRef.current;
-      if (!scroll) return;
       const day = cellByTs.get(Number(el.dataset.ts));
       if (!day) return;
-      const left = Math.min(Math.max(el.offsetLeft + cell / 2, 74), scroll.clientWidth - 74);
+      // 上界必须用 offsetParent（网格自身）宽度：scrollRef 那层 px-3 容器更宽，会让上界取不到
+      const gridW = el.offsetParent?.offsetWidth ?? scrollRef.current?.clientWidth ?? 0;
+      const half = Math.min(TIP_HALF, gridW / 2);
+      const left = Math.min(Math.max(el.offsetLeft + cell / 2, half), gridW - half);
       const above = el.offsetTop - 58;
       setHover({
         left,
