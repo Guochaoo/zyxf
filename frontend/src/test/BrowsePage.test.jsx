@@ -222,6 +222,34 @@ describe('BrowsePage', () => {
     expect(loc.path).toBe('/folder/1');
   });
 
+  // 人类反馈：文件列表里点「下载」应当只是下载，不能连带打开预览（那是行的 onClick）。
+  // 行内按钮的点击由 actions 容器的 stopPropagation 拦住；同时验证「点行本身会预览」，
+  // 否则这条用例可能因为预览压根打不开而永真。
+  test('文件列表点「下载」只下载，不打开预览', async () => {
+    const { getFileUrl } = await import('../api.js');
+    // 让下载在拿到签名 URL 后就停住：后续的 OSS fetch / createObjectURL / a.click
+    // 在 jsdom 里没有实现，这里只需证明点击确实走到了下载分支。
+    getFileUrl.mockRejectedValue(new Error('stop-after-url'));
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+
+    await renderPageAsAdmin();
+    await waitFor(() => expect(rows().length).toBeGreaterThan(0));
+
+    const fileRow = rows().find((r) => r.textContent.includes('物理.pdf'));
+    const dl = [...fileRow.querySelectorAll('button')].find((b) => b.getAttribute('title') === '下载');
+    expect(dl).toBeTruthy();
+
+    fireEvent.click(dl);
+    await waitFor(() => expect(getFileUrl).toHaveBeenCalledWith(10, { download: true }));
+    expect(screen.queryByTestId('preview')).toBeNull();
+
+    // 对照：点行本身必须能打开预览
+    fireEvent.click(fileRow);
+    expect(await screen.findByTestId('preview')).toBeInTheDocument();
+
+    alertSpy.mockRestore();
+  });
+
   test('拖到行的上半区触发重排，且顺序基准取自 items（BUG-27）', async () => {
     await renderPageAsAdmin();
     const dt = fakeDataTransfer();
