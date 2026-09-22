@@ -156,28 +156,28 @@ router.get('/', (req, res) => {
        LIMIT 8`
   ).all();
 
-  // ---- Top root folders by size ----
-  // Recursively aggregate descendants; SQLite supports recursive CTE.
-  const top_folders = prepareOnce(
-    `WITH RECURSIVE descendants(root_id, id) AS (
-         SELECT id, id FROM folders WHERE parent_id IS NULL
-         UNION ALL
-         SELECT d.root_id, fo.id
-         FROM folders fo
-         JOIN descendants d ON fo.parent_id = d.id
-       )
-       SELECT
-         r.id AS id,
-         r.name AS name,
-         COALESCE(SUM(f.size), 0) AS size,
-         COUNT(f.id) AS file_count
-       FROM folders r
-       JOIN descendants d ON d.root_id = r.id
-       LEFT JOIN files f ON f.folder_id = d.id
-       WHERE r.parent_id IS NULL
-       GROUP BY r.id, r.name
-       ORDER BY size DESC
-       LIMIT 5`
+  // ---- Recent downloads ----
+  // 按 file_id 分组取 MAX(downloaded_at)：同一文件下载多次只留最近那一次，
+  // 因此列表是「最近被下载过的 8 个文件」，而不是「最近 8 条下载记录」。
+  // 刻意不加时间窗——加了之后低活跃期整卡会空掉，而「最近下载」本来就该一直有内容。
+  // 字段名与 recent_uploads 对齐（id / name），前端两张卡共用同一个列表组件。
+  // 文件名聚合与 top_downloads 同口径：优先 files 表持久名，无则取组内最新日志名。
+  const recent_downloads = prepareOnce(
+    `SELECT
+         dl.file_id AS id,
+         COALESCE(f.name,
+                  (SELECT dl2.file_name FROM download_logs dl2
+                   WHERE dl2.file_id = dl.file_id
+                   ORDER BY dl2.downloaded_at DESC, dl2.id DESC LIMIT 1)) AS name,
+         MAX(dl.downloaded_at) AS downloaded_at,
+         f.ext AS ext,
+         f.size AS size,
+         f.folder_id AS folder_id
+       FROM download_logs dl
+       LEFT JOIN files f ON f.id = dl.file_id
+       GROUP BY dl.file_id
+       ORDER BY downloaded_at DESC
+       LIMIT 8`
   ).all();
 
   // The library itself (folder tree, file names, sizes) is already publicly
@@ -200,7 +200,7 @@ router.get('/', (req, res) => {
     type_total,
     top_downloads,
     recent_uploads,
-    top_folders,
+    recent_downloads,
   };
   setCachedStats(key, payload);
   res.json(payload);

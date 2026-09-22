@@ -112,8 +112,8 @@ const zh = {
     refresh: '刷新',
     downloadHeatmap: '下载热力图',
     heatmapCell: '{{date}}：{{count}} 次下载',
-    topFolders: '热门文件夹',
     recentUploads: '近期上传',
+    recentDownloads: '近期下载',
     typeDist: '类型分布',
     files: '个文件',
     times: '次',
@@ -122,7 +122,6 @@ const zh = {
     todayUp: '{{count}} 次上传',
     download: '下载',
     upload: '上传',
-    folderCount: '{{count}} 文件',
     noData: '暂无数据',
     // 类型分布卡片：'· 共 <大小>' 与「+N 类」原先硬编码在组件里。
     sizeAndTotal: '共 {{size}}',

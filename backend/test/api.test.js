@@ -556,7 +556,7 @@ describe('stats', () => {
     assert.equal(anon.body.top_downloads.length, 0);
     assert.equal(anon.body.recent_uploads.length, 1);
     assert.deepEqual(anon.body.recent_uploads[0].name, 's.pdf');
-    assert.ok(Array.isArray(anon.body.top_folders));
+    assert.deepEqual(anon.body.recent_downloads, []);
   });
 
   test('range is clamped to [7, 90]', async () => {

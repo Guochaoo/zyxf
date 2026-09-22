@@ -63,7 +63,11 @@ vi.mock('../api.js', () => {
         ],
         top_downloads: [],
         recent_uploads: [],
-        top_folders: [],
+        // 后端已按 file_id 去重、按最近一次下载倒序并限 8 条，前端只负责渲染
+        recent_downloads: [
+          { id: 201, name: '线性代数习题.pdf', ext: 'pdf', size: 2048, folder_id: 3, downloaded_at: t0 - 2 * 3600000 },
+          { id: 202, name: '传热学讲义.pdf', ext: 'pdf', size: 4096, folder_id: 4, downloaded_at: t0 - 30 * 3600000 },
+        ],
       })
     ),
     getHeatmap: vi.fn(() => Promise.resolve({ days: 365, series: heatSeries })),
@@ -140,6 +144,16 @@ describe('DashboardPage', () => {
       expect(screen.queryByText('7日 2 次')).not.toBeInTheDocument();
       expect(screen.queryByText('7日 850 个')).not.toBeInTheDocument();
     }, { timeout: 3000 });
+  });
+
+  test('「热门文件夹」已换成「近期下载」，渲染后端返回的下载文件', async () => {
+    renderApp();
+    await waitFor(() => expect(screen.getByText('近期下载')).toBeInTheDocument(), { timeout: 3000 });
+    // 旧卡片不得残留
+    expect(screen.queryByText('热门文件夹')).toBeNull();
+    // 列表项：文件名（大小由 formatSize 渲染，随 mock 值变化，不锁具体文本）
+    expect(screen.getByText('线性代数习题.pdf')).toBeInTheDocument();
+    expect(screen.getByText('传热学讲义.pdf')).toBeInTheDocument();
   });
 
   test('anomaly toggle switches metric value, unit and title icon', async () => {

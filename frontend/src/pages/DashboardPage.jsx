@@ -7,8 +7,8 @@ import { folderTarget } from '../ui.js';
 import { useResource } from '../data/resource.js';
 import FileIcon from '../components/FileIcon.jsx';
 import { AnomalyCard, AllocationCard, densifyBySpline } from '../components/InsightCards.jsx';
-import { BsArrowClockwise, BsFolder2Open } from 'react-icons/bs';
-import { ArrowDown, ArrowUp, BarChart3, HardDrive } from 'lucide-react';
+import { BsArrowClockwise } from 'react-icons/bs';
+import { ArrowDown, ArrowUp, BarChart3 } from 'lucide-react';
 // 页面级子模块（IMPROVE-01）：无状态展示已迁出，页面只保留数据编排。
 import ActivityHeatmap from './Dashboard/ActivityHeatmap.jsx';
 import { Card, CardHeader, Empty, RangeSwitch } from './Dashboard/primitives.jsx';
@@ -38,7 +38,7 @@ const PALETTE = [
   { cls: 'bg-[#14b8a6]', tone: 'text-[#14b8a6]', color: '#14b8a6' },
 ];
 
-/* ---- List cards (top downloads / recent uploads / top folders) ---- */
+/* ---- List cards (top downloads / recent uploads / recent downloads) ---- */
 
 function TopDownloads({ items }) {
   const { t } = useTranslation();
@@ -75,7 +75,10 @@ function TopDownloads({ items }) {
   );
 }
 
-function RecentUploads({ items }) {
+/* 近期上传 / 近期下载共用：文件图标 + 名称 + 大小 + 相对时间。两者只差时间字段
+   （created_at / downloaded_at）——后端已让这两组条目同形（id / name / ext / size /
+   folder_id），所以一个组件加 timeKey 就够，不必写两遍同样的列表。 */
+function RecentFileList({ items, timeKey }) {
   const { t } = useTranslation();
   if (!items?.length) return <Empty>{t('dashboard.noData')}</Empty>;
   return (
@@ -92,42 +95,9 @@ function RecentUploads({ items }) {
             </span>
             <span className="shrink-0 text-[11px] tabular-nums text-ink-2">{formatSize(f.size)}</span>
             <span className="w-16 shrink-0 text-right text-[11px] text-ink-3">
-              {timeAgo(f.created_at)}
+              {timeAgo(f[timeKey])}
             </span>
           </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function TopFolders({ items }) {
-  const { t } = useTranslation();
-  if (!items?.length) return <Empty>{t('dashboard.noData')}</Empty>;
-  const max = items[0].size || 1;
-  return (
-    <ul className="mt-3 grow space-y-2.5">
-      {items.map((f) => (
-        <li key={f.id}>
-          <div className="flex items-center justify-between text-[12px]">
-            <Link
-              to={`/folder/${f.id}`}
-              className="inline-flex items-center gap-2 text-ink hover:text-ink-2"
-            >
-              <BsFolder2Open className="h-3.5 w-3.5 text-ink-2" />
-              <span className="truncate">{f.name}</span>
-            </Link>
-            <span className="tabular-nums text-ink-2">
-              {formatSize(f.size)}
-              <span className="ml-2 text-ink-3">{t('dashboard.folderCount', { count: f.file_count })}</span>
-            </span>
-          </div>
-          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-field">
-            <div
-              className="h-full rounded-full bg-orange"
-              style={{ width: `${(f.size / max) * 100}%` }}
-            />
-          </div>
         </li>
       ))}
     </ul>
@@ -320,7 +290,7 @@ export default function DashboardPage() {
         </Card>
       </section>
 
-      {/* Recent uploads + Top folders */}
+      {/* Recent uploads + recent downloads */}
       <section className="grid grid-cols-1 gap-3 lg:grid-cols-12">
         <Card className="flex flex-col lg:col-span-6">
           <CardHeader
@@ -328,16 +298,16 @@ export default function DashboardPage() {
             icon={<ArrowUp className="size-2" strokeWidth={3} />}
             badgeClass="bg-orange"
           />
-          <RecentUploads items={stats.recent_uploads} />
+          <RecentFileList items={stats.recent_uploads} timeKey="created_at" />
         </Card>
 
         <Card className="flex flex-col lg:col-span-6">
           <CardHeader
-            title={t('dashboard.topFolders')}
-            icon={<HardDrive className="size-2" strokeWidth={3} />}
-            badgeClass="bg-green"
+            title={t('dashboard.recentDownloads')}
+            icon={<ArrowDown className="size-2" strokeWidth={3} />}
+            badgeClass="bg-accent"
           />
-          <TopFolders items={stats.top_folders} />
+          <RecentFileList items={stats.recent_downloads} timeKey="downloaded_at" />
         </Card>
       </section>
     </div>
