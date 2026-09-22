@@ -61,7 +61,7 @@ const emptyStats = {
   type_breakdown: [],
   top_downloads: [],
   recent_uploads: [],
-  top_folders: [],
+  recent_downloads: [],
 };
 
 vi.mock('../api.js', () => ({

@@ -107,8 +107,8 @@ const en = {
     refresh: 'Refresh',
     downloadHeatmap: 'Download heatmap',
     heatmapCell: '{{date}}: {{count}} downloads',
-    topFolders: 'Top folders',
     recentUploads: 'Recent uploads',
+    recentDownloads: 'Recent downloads',
     typeDist: 'Type distribution',
     files: 'files',
     times: '×',
@@ -121,8 +121,6 @@ const en = {
     todayUp_other: '{{count}} uploads',
     download: 'Download',
     upload: 'Upload',
-    folderCount_one: '{{count}} file',
-    folderCount_other: '{{count}} files',
     noData: 'No data',
     // 类型分布卡片：'· 共 <大小>' 与「+N 类」原先硬编码在组件里。
     sizeAndTotal: '{{size}} total',

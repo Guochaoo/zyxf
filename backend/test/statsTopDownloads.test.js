@@ -101,3 +101,102 @@ describe('BUG-15: top_downloads 按 file_id 分组', () => {
     assert.equal(row.file_name, 'keep.txt');
   });
 });
+
+/* recent_downloads = 近期下载卡（原「热门文件夹」）：按文件去重、取每个文件最近一次下载、
+   按该时间倒序、最多 8 个。 */
+describe('recent_downloads 按文件去重取最近一次', () => {
+  const t0 = () => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() + 1;
+  };
+  const logDownload = (fileId, name, at) =>
+    db
+      .prepare('INSERT INTO download_logs (file_id, file_name, downloaded_at) VALUES (?, ?, ?)')
+      .run(fileId, name, at);
+  const mkFile = async (token, name, size = 100) => {
+    const reg = await request('POST', '/api/files', {
+      token,
+      body: { name, oss_key: `zyxf-test/${name}`, size, mime_type: 'text/plain' },
+    });
+    assert.equal(reg.status, 200, `登记文件失败：${JSON.stringify(reg.body)}`);
+    return reg.body.id;
+  };
+
+  test('同一文件多次下载只出现一行，时间取最近一次', async () => {
+    const token = await adminLogin();
+    const id = await mkFile(token, 'dup.txt');
+    const t = t0();
+    logDownload(id, 'dup.txt', t + 1000);
+    logDownload(id, 'dup.txt', t + 5000); // 最近一次
+    logDownload(id, 'dup.txt', t + 3000);
+
+    const { body } = await request('GET', '/api/stats', { token });
+    const rows = body.recent_downloads.filter((r) => r.id === id);
+    assert.equal(rows.length, 1, '同一文件去重为一行');
+    assert.equal(rows[0].downloaded_at, t + 5000, '取该文件最近一次下载时间');
+  });
+
+  test('按最近下载时间倒序，最多 8 个文件', async () => {
+    const token = await adminLogin();
+    const t = t0();
+    for (let i = 1; i <= 10; i++) {
+      const id = await mkFile(token, `f${i}.txt`, i);
+      logDownload(id, `f${i}.txt`, t + i * 1000); // f10 最新
+    }
+
+    const { body } = await request('GET', '/api/stats', { token });
+    assert.equal(body.recent_downloads.length, 8, '最多返回 8 个文件');
+    assert.deepEqual(
+      body.recent_downloads.map((r) => r.name),
+      ['f10.txt', 'f9.txt', 'f8.txt', 'f7.txt', 'f6.txt', 'f5.txt', 'f4.txt', 'f3.txt']
+    );
+    // 与 recent_uploads 同形：id / name / ext / size / folder_id + 时间字段
+    const row = body.recent_downloads[0];
+    assert.ok('id' in row && 'name' in row && 'ext' in row && 'size' in row && 'folder_id' in row);
+    assert.equal(row.size, 10);
+  });
+
+  test('文件改名后取 files 表持久名，而不是日志里的旧名', async () => {
+    const token = await adminLogin();
+    const id = await mkFile(token, 'old.txt');
+    logDownload(id, 'old.txt', t0());
+
+    const renamed = await request('PATCH', `/api/files/${id}`, { token, body: { name: 'new.txt' } });
+    assert.equal(renamed.status, 200);
+
+    const { body } = await request('GET', '/api/stats', { token });
+    const row = body.recent_downloads.find((r) => r.id === id);
+    assert.ok(row);
+    assert.equal(row.name, 'new.txt');
+  });
+
+  test('文件已从 files 表消失时仍出现，取组内最新日志名且元数据为 null', async () => {
+    const token = await adminLogin();
+    // 先做一次 API 写以跳过缓存无关紧要（test 环境缓存本就关闭），
+    // 再直接写入一条指向不存在 file_id 的日志（外键临时关闭）。
+    await mkFile(token, 'unrelated.txt');
+    const t = t0();
+    db.exec('PRAGMA foreign_keys = OFF');
+    try {
+      logDownload(424242, 'gone-a.txt', t);
+      logDownload(424242, 'gone-b.txt', t + 1000); // 组内最新
+    } finally {
+      db.exec('PRAGMA foreign_keys = ON');
+    }
+
+    const { body } = await request('GET', '/api/stats', { token });
+    const row = body.recent_downloads.find((r) => r.id === 424242);
+    assert.ok(row, 'files 表无对应行时仍按 file_id 聚合成一行');
+    assert.equal(row.name, 'gone-b.txt');
+    assert.equal(row.ext, null);
+    assert.equal(row.size, null);
+  });
+
+  test('没有任何下载记录时返回空数组（前端显示「暂无数据」）', async () => {
+    const token = await adminLogin();
+    await mkFile(token, 'never-downloaded.txt');
+    const { body } = await request('GET', '/api/stats', { token });
+    assert.deepEqual(body.recent_downloads, []);
+  });
+});
