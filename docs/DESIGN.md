@@ -181,6 +181,7 @@
 - 当前文件夹：`bg-inset`（#f7f8f9）底 + 500 字重 + `var(--ink)`——是**底色块**，不是描边
 - hover：GlideList 滑动高亮条（`bg-hover`）
 - 展开 chevron 14px，展开时旋转 90°；点击文件名跳转；当前路径的祖先链自动展开
+- 根节点（「首页」，id 0）**每次导航都展开**：它不在活动路径里（活动路径只遍历 `tree`），不展开的话深链 / 刷新 `/folder/:id` 时整棵树只渲染出「首页」一行、当前文件夹看不到也不高亮（issue #62，回归用例 `frontend/src/test/FolderTree.test.jsx`）。手动收起根节点仍被尊重——展开 effect 只在导航/树加载时运行
 - 监听全局 `folders-changed` 事件刷新；数据来自 `GET /api/folders/tree`
 - 滚动条：`.rb-side-scroll` 静止时隐藏、滚动或 hover 时显示（8px 圆角滑块），并把**底部** 16px 用 mask 渐隐融入栏底
 
