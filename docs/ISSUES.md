@@ -1,6 +1,6 @@
 # 问题与改进追踪（ISSUES）
 
-> ⛔ **本分支（`feature/content-index`）未能合入生产，合并前必须先解掉 BUG-102。**
+> ⛔ **本分支（`feature/content-index`）未能合入生产。合并前请先读下面的 BUG-102 处置结论。**
 >
 > 2026-09-11：本批合入 `main` 后部署失败——`onnxruntime-node` 的 `postinstall` 要联网下载
 > 原生库，在生产服务器上返回 `302` 而失败，deploy workflow 中断在 `npm install`，服务器被
@@ -10,10 +10,18 @@
 >
 > **本分支保留这套改动的全部 9 个提交**（tip `d6e3f34`），作为后续接入的基础。
 >
-> **恢复工作的第一步**：在 `dev` 分支的 `docs/ISSUES.md` 里读 **BUG-102**，按其中的修法
-> 处理依赖安装问题（推荐改为 `optionalDependencies` + `require` 包 try/catch，让「装不上」
-> 退化为「只抽正文不出向量」而不是阻断部署——该降级链本已存在，见 IMPROVE-39）。
-> 在服务器上验证 `npm install` + `systemctl restart zyxf` 都通过之后，再重新合入。
+> ✅ **BUG-102 的依赖侧已在本分支解决**（`fix(deps): onnxruntime-node 降级为可选依赖并补齐降级链`）：
+> - `onnxruntime-node` 从 `dependencies` 移到 **`optionalDependencies`**：postinstall 拉原生库失败时
+>   npm 只是跳过它，`npm install` 不再中断部署；
+> - `embed.js` 的 `isEmbeddingEnabled()` 增加**运行时可用性**判定（`require.resolve('onnxruntime-node')`），
+>   否则「模型文件在、运行时缺失」会通过闸门、然后在 `embedTexts` 里每个文件失败一轮。
+>
+> 验收（2026-09-21，本机 `--omit=optional` 模拟装不上）：本分支后端测试 **278/278 通过**；
+> 模型文件齐全但 `onnxruntime-node` 缺失时后端仍能启动（`/api/health` 200），
+> `/api/index/status` → `embedding.enabled = false` 且 `embedding.error` 给出原因。
+>
+> ⚠️ 合入时还要带上 `dev` 上 BUG-102 的**另一半修复**：`deploy.yml` 的回滚原先只挂在健康检查上，
+> 现已改成 `EXIT` trap——装依赖/构建阶段失败同样回退到部署前修订，不会再留下「新代码 + 缺依赖」的中间态。
 
 > 本文件是项目的「待办清单 + 处置档案」：追踪**缺陷**与**改进建议**，并沉淀关键决策依据。
 

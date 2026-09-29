@@ -22,9 +22,11 @@
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
-    "onnxruntime-node": "^1.29.0",
     "pdfjs-dist": "^6.3.289",
     "pinyin-pro": "^3.29.3"
+  },
+  "optionalDependencies": {
+    "onnxruntime-node": "^1.29.0"
   },
   "overrides": {
     "body-parser": "^1.20.6",

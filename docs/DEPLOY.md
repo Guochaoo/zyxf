@@ -394,6 +394,14 @@ sudo chown -R www:www /opt/zyxf/backend/models   # 与 2.1 节同一口径
 
 `onnxruntime-node` 的 npm 包里带**全平台**原生库（含 CUDA/DirectML），装完 `node_modules` 约 **282 MB**；运行只用得上其中 `win32/x64` 或 `linux/x64` 那一个（几十 MB）。这是为了避开「下载 vs 本地编译」的不确定性而接受的代价；不想要这么大的部署体积，可以只抽正文（不装模型、不删依赖也能跑，只是内容视图不可用）。
 
+> ✅ **BUG-102 已解**：该依赖在 `backend/package.json` 里是 **`optionalDependencies`**，不再阻断部署。
+> 它的 `postinstall` 会联网拉对应平台的原生库（脚本把非 200 一律判失败，服务器上拿到 `302` 就报错），
+> npm 对 optional 依赖的安装失败是「跳过并继续」，`npm install` 不会再中断。配套地 `embed.js` 的
+> `isEmbeddingEnabled()` 现在**同时要求运行时可用**（`require.resolve('onnxruntime-node')`）——否则
+> 模型文件在、运行时缺失时会走进 `embedTexts` 然后每个文件索引失败一轮。装不上时的表现是：
+> 后端正常启动，`/api/index/status` 的 `embedding.enabled` 为 `false` 并给出原因（只抽正文不出向量）。
+> 想让向量可用再手动补装：`cd /opt/zyxf/backend && npm install onnxruntime-node`（视网络情况加代理/换镜像）。
+
 ### 6.3 建立索引
 
 首次部署后库里已有资料，需要跑一次全量索引：

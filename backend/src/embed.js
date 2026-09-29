@@ -11,6 +11,7 @@
  */
 
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,11 +29,35 @@ let session = null; // ONNX InferenceSession
 let tokenizer = null;
 let loadError = null;
 let loading = null;
+let runtimeAvailable = null; // onnxruntime-node 是否可解析（缓存）
 
-/** 模型文件是否齐全（缺一个就当作不可用）。 */
+/**
+ * onnxruntime-node 是否装上了（BUG-102）。
+ *
+ * 它是 **optionalDependency**：postinstall 会联网拉对应平台的原生库，服务器上
+ * （无代理、走 npmmirror）会因 302 判定失败，把 `npm install` 整体拖挂、部署中断。
+ * 降级成可选依赖后「装不上」不再是部署阻断，但必须在**功能层**也降级：模型文件在、
+ * 运行时缺失时如果 isEmbeddingEnabled() 仍返回 true，索引会走进 embedTexts 然后
+ * 每个文件都失败一轮。这里用 require.resolve 做同步探测（只查包是否可解析，
+ * 便宜且可缓存），真正的加载错误仍由 load() 捕获并记进 loadError。
+ */
+function hasRuntime() {
+  if (runtimeAvailable == null) {
+    try {
+      createRequire(import.meta.url).resolve('onnxruntime-node');
+      runtimeAvailable = true;
+    } catch {
+      runtimeAvailable = false;
+    }
+  }
+  return runtimeAvailable;
+}
+
+/** 嵌入是否可用：运行时（onnxruntime-node）与模型文件**都**就绪才算可用。 */
 export function isEmbeddingEnabled() {
   try {
     return (
+      hasRuntime() &&
       fs.existsSync(path.join(MODEL_DIR, 'model_quantized.onnx')) &&
       fs.existsSync(path.join(MODEL_DIR, 'tokenizer.json'))
     );
@@ -43,7 +68,11 @@ export function isEmbeddingEnabled() {
 
 /** 上次加载失败的原因（给运维接口显示，避免「为什么没向量」只能靠猜）。 */
 export function embeddingLoadError() {
-  return loadError;
+  if (loadError) return loadError;
+  if (!hasRuntime()) {
+    return 'onnxruntime-node 未安装（optionalDependency，postinstall 拉原生库失败时会被跳过）——只抽正文不出向量';
+  }
+  return null;
 }
 
 async function load() {
