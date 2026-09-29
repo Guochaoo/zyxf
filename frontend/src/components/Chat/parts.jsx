@@ -82,7 +82,10 @@ for (const e of ['xls', 'xlt', 'xlsx', 'xltx', 'et', 'csv']) EXT_FAMILY.set(e, '
 for (const e of ['pdf']) EXT_FAMILY.set(e, 'pdf');
 for (const e of ['txt']) EXT_FAMILY.set(e, 'txt');
 for (const e of ARCHIVE_EXTS) EXT_FAMILY.set(e, 'archive');
-const DEFAULT_TONE = 'bg-brand-500';
+// 未知类型徽章用中性灰，与 archive / 文件夹同色（IMPROVE-34）：品牌色类名在本项目里
+// 会被 index.css 的 `.app-theme .bg-brand-500 { background: var(--ink) !important }`
+// 覆盖成墨黑，既不是品牌蓝也不是中性灰，在一排族别色里显得像「强调」。
+const DEFAULT_TONE = 'bg-[#808080]';
 
 export function FileChip({ item }) {
   const navigate = useNavigate();

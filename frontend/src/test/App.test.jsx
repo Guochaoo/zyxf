@@ -156,6 +156,39 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '收起侧边栏' }));
     expect(screen.getByRole('main').className).toContain('lg:transition-[padding]');
   });
+
+  // BUG-94 回归：时长/缓动原先拼在模板字符串里当类名（`lg:duration-[${SIDEBAR_MS}ms]`），
+  // Tailwind 静态扫描扫不到插值 → 规则从未生成，动画静静退化成默认 150ms。
+  // 现在改由内联样式下发，值必须真实出现在 style 上（产物 CSS 里搜不到是预期的）。
+  test('侧栏 320ms + EASE_COLLAPSE 走内联样式（不再是被扫不到的插值类名）', async () => {
+    const ease = 'cubic-bezier(0.22, 1, 0.36, 1)';
+    renderApp('/');
+    const toggle = await screen.findByRole('button', { name: '收起侧边栏' });
+
+    // 轨道：滑入/滑出
+    const rail = toggle.closest('[class*="will-change-transform"]');
+    expect(rail).toBeTruthy();
+    expect(rail.style.transitionDuration).toBe('320ms');
+    expect(rail.style.transitionTimingFunction).toBe(ease);
+    // 品牌行图标的淡出外壳
+    expect(toggle.parentElement.style.transitionDuration).toBe('320ms');
+    expect(toggle.parentElement.style.transitionTimingFunction).toBe(ease);
+
+    // 收起后浮出的展开按钮（轨道内的那个同 aria-label，用 fixed 定位的那个区分）
+    fireEvent.click(toggle);
+    const expand = screen
+      .getAllByRole('button', { name: '展开侧边栏' })
+      .find((b) => b.className.includes('left-[18px]'));
+    expect(expand).toBeTruthy();
+    expect(expand.style.transitionDuration).toBe('320ms');
+    expect(expand.style.transitionTimingFunction).toBe(ease);
+
+    // 中列 padding 与轨道同步，且只在手动开合窗口内挂 transition-property
+    const main = screen.getByRole('main');
+    expect(main.style.transitionProperty).toBe('padding');
+    expect(main.style.transitionDuration).toBe('320ms');
+    expect(main.style.transitionTimingFunction).toBe(ease);
+  });
 });
 
 

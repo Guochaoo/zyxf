@@ -213,7 +213,7 @@
 - 与知识图谱同款外壳：`bg-surface`、无边框无阴影、`PanelHeader` 灰条 + 13px 标题 + 24px 图标按钮（清空 / 设置 / 收起）
 - 收起 / 展开同款 360ms 交互：实现上以像素高度冻结内容（不重排），消息列表常驻 `overflow-y-auto`（`scrollbar-gutter: stable` 全局设在 `html` 上，滚动条槽位恒定，路由切换不会让居中内容跳动）
 - 输入区：`bg-field` 圆角 10px、无描边、仅极浅投影（聚焦微调）；发送按钮是深色圆角方块，流式中变为停止按钮
-- 消息区：用户消息右对齐灰底气泡；AI 回复带小节头（检索中 / 生成中 / 完成 / 出错）+ 耗时，流式打字机渲染；引用渲染为**可点击文件胶囊**（`h-6 rounded-full bg-inset` + `shadow-btn` + 族别彩色小徽章 + 文件名 + 外链图标）；空态给三条建议 chip
+- 消息区：用户消息右对齐灰底气泡；AI 回复带小节头（检索中 / 生成中 / 完成 / 出错）+ 耗时，流式打字机渲染；引用渲染为**可点击文件胶囊**（`h-6 rounded-full bg-inset` + `shadow-btn` + 族别彩色小徽章 + 文件名 + 外链图标）；未知族别徽章回落**中性灰** `bg-[#808080]`（与 archive / 文件夹同色）——`bg-brand-*` 在本项目里一律被染成墨黑，拿它表达「未知」会渲染成突兀的黑方块（IMPROVE-34）；空态给三条建议 chip
 - 依赖 `LLM_*` 环境变量（未配置时返回 503 → 「AI 功能未配置」）
 
 ### 设置（`SettingsModal`，真实路由 `/settings`）
@@ -261,7 +261,7 @@
 - 悬浮 / 聚焦 tooltip：日期 + 当日下载数，优先显示在格子上方，顶部行翻转到下方，绝不遮挡被悬停格子；单元格本身 `tabIndex=0` + `aria-label` 播报
 - tooltip 横向以 `74px` 半宽钳制（`TIP_HALF`，对应 `.insight-chart-tooltip` 的 132px `min-width`）。⚠️ 钳制上界必须用 **tooltip 自身 `offsetParent`（`.relative w-max` 网格容器）的宽度**——`offsetLeft` 的基准就是它；外层那圈 `px-3` 滚动容器比网格宽出两侧内边距（实测 38px），拿它的 `clientWidth` 当上界会让上界永远取不到，末列 tooltip 向右溢出卡片、被面板根节点的 `overflow-hidden` 切掉一截。网格窄于 tooltip 时退化为居中
 - 数据源 `GET /api/stats/heatmap`（近 365 天，独立于页面右上 7/30/90 切换）
-- ⚠️ 已知偏差：星期标签取的是**周日开头**的字典数组按行号渲染（`日/二/四/六`），与周一开头的网格错开一天，见 issue #49
+- 星期标签与网格同源：字典是**周日开头**（`日一二三四五六`），而网格是周一开头，所以第 `i` 行取字典的 `(i + 1) % 7` 项（隔行显示策略 `i % 2 === 0` 不变，中英双语同规则）。按行号直接取会让标签整体早一天（BUG-93，回归用例 `frontend/src/test/ActivityHeatmap.test.jsx`）
 
 ### 近期上传 / 近期下载（统计面板第三行双卡）
 - 两张卡共用同一个列表组件 `RecentFileList`：文件图标 + 名称（`truncate`）+ 大小 + 相对时间；两者只差时间字段（`created_at` / `downloaded_at`，用 `timeKey` 传入）。后端 `recent_uploads` / `recent_downloads` 两组条目已同形（`id` / `name` / `ext` / `size` / `folder_id`），加字段时两边都要保持
@@ -273,7 +273,7 @@
 
 ### 栅格与容器
 - **浏览路由**（`/`、`/folder/:id`，以及覆盖层的 `/settings`、`/settings/:section`——它背后照常渲染资料库）使用三栏 docs 布局：左栏 **250px**（`fixed`、通到视口左缘、`--app-sidebar` 底色、无分割线）+ 中列 `w-full min-w-0`（**自身不滚动**，滚动发生在文档层：`html` 有 `overflow-y: scroll` + `scrollbar-gutter: stable`）+ 右栏 **300px**（`fixed` 且内部滚动，知识图谱 + 智能对话，右侧留 8px、顶部 61.5px 与中列对齐）
-- 左栏可收起（默认展开）：收起时中列 `padding-left` 归零、左上角浮出「展开侧边栏」按钮，收起态与展开态分别给中列与按钮做 320ms 过渡，缓动用项目级 `EASE_COLLAPSE`（`cubic-bezier(0.22, 1, 0.36, 1)`）。中列的内边距过渡**只在手动开合侧栏的短窗口内挂载**——路由进入资料库时 padding 会 0→266/316，常驻过渡会变成「两侧向中间收拢」的假入场动画（BUG-112）。⚠️ 当前实现把时长 / 缓动写成模板插值类名（`lg:duration-[${SIDEBAR_MS}ms]`），Tailwind 扫不到、不会生成对应 CSS，**实际退化成默认 150ms**——见 issue #50
+- 左栏可收起（默认展开）：收起时中列 `padding-left` 归零、左上角浮出「展开侧边栏」按钮，收起态与展开态分别给中列与按钮做 320ms 过渡，缓动用项目级 `EASE_COLLAPSE`（`cubic-bezier(0.22, 1, 0.36, 1)`）。中列的内边距过渡**只在手动开合侧栏的短窗口内挂载**——路由进入资料库时 padding 会 0→266/316，常驻过渡会变成「两侧向中间收拢」的假入场动画（BUG-112）。⚠️ 时长 / 缓动必须**走内联样式**（`App.jsx` 顶部的 `SIDEBAR_TRANSITION`），不能拼成模板插值类名——Tailwind 只静态扫描源码文本，`lg:duration-[${SIDEBAR_MS}ms]` 这类插值一个规则都不会生成，动效会静默退化成默认 150ms（BUG-94；回归用例 `frontend/src/test/App.test.jsx`）。同理别给「只在某段时间才需要过渡」的元素单独挂 `transitionDuration`：`transition-property` 的初始值是 `all`，会把该元素所有可动画属性都带上过渡（中列那处因此显式写 `transitionProperty: 'padding'`）
 - **独立页**：外层都是 `mx-auto w-full`。统计面板直接铺满可用宽度；关于我们在外层内部再用 `max-w-7xl` 居中文档流；登录 / 注册外层 `max-w-7xl`，卡片 `max-w-[1100px]`
 - 中列工具栏右对齐并允许换行：排序分段（默认 / 名称 / 时间 / 大小，带滑动指示器，360ms）+ 刷新 / 返回上级图标按钮 + 管理员才有的「新建文件夹」「上传」；**工具栏自身没有底色**，白底的是它内部的按钮与分段外壳
 
