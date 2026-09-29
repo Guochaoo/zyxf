@@ -41,13 +41,15 @@ folderRoutes.get('/_probe/error-status', wrapAsync(async () => {
 }));
 
 let keySeq = 0;
-function insertFolder(name, parentId = null) {
+// 纯文件夹行（created_at=now）
+function insertFolderRow(name, parentId = null) {
   return db
     .prepare('INSERT INTO folders (name, parent_id, created_at) VALUES (?, ?, ?)')
     .run(name, parentId, Date.now()).lastInsertRowid;
 }
 
-function insertFile({ name, folderId = null, size }) {
+// 文件行：oss_key 自动生成、ext=pdf，size 由用例给
+function insertSizedFile({ name, folderId = null, size }) {
   keySeq += 1;
   return db
     .prepare(
@@ -73,17 +75,17 @@ describe('IMPROVE-58: wrapAsync 的 rejection 由 index.js 末尾的错误中间
 
 describe('IMPROVE-58: contents 的 sort=size 用递归汇总大小排序', () => {
   test('文件夹大小 = 自身 + 全部子孙文件；升序/降序都按该值排', async () => {
-    const a = insertFolder('甲'); // 父
-    const a1 = insertFolder('甲一', a); // 子
-    const a2 = insertFolder('甲二甲', a1); // 孙
-    const d = insertFolder('丁', a); // 甲的另一个子
-    const c = insertFolder('丙'); // 顶层兄弟
-    insertFolder('乙'); // 顶层空目录
-    insertFile({ name: 'a.pdf', folderId: a, size: 100 });
-    insertFile({ name: 'a1.pdf', folderId: a1, size: 200 });
-    insertFile({ name: 'a2.pdf', folderId: a2, size: 300 });
-    insertFile({ name: 'd.pdf', folderId: d, size: 150 });
-    insertFile({ name: 'c.pdf', folderId: c, size: 400 });
+    const a = insertFolderRow('甲'); // 父
+    const a1 = insertFolderRow('甲一', a); // 子
+    const a2 = insertFolderRow('甲二甲', a1); // 孙
+    const d = insertFolderRow('丁', a); // 甲的另一个子
+    const c = insertFolderRow('丙'); // 顶层兄弟
+    insertFolderRow('乙'); // 顶层空目录
+    insertSizedFile({ name: 'a.pdf', folderId: a, size: 100 });
+    insertSizedFile({ name: 'a1.pdf', folderId: a1, size: 200 });
+    insertSizedFile({ name: 'a2.pdf', folderId: a2, size: 300 });
+    insertSizedFile({ name: 'd.pdf', folderId: d, size: 150 });
+    insertSizedFile({ name: 'c.pdf', folderId: c, size: 400 });
 
     const asc = await request('GET', '/api/folders/0/contents?sort=size');
     assert.equal(asc.status, 200);
@@ -124,12 +126,12 @@ describe('IMPROVE-58: contents 的 sort=size 用递归汇总大小排序', () =>
   });
 
   test('边界：空文件夹计 0；同名不同层各自按 id 汇总，互不串味', async () => {
-    const p = insertFolder('父');
-    const dupInP = insertFolder('同名', p);
-    insertFile({ name: 'in-p.pdf', folderId: dupInP, size: 700 });
-    const dupAtRoot = insertFolder('同名');
-    insertFile({ name: 'at-root.pdf', folderId: dupAtRoot, size: 1000 });
-    const empty = insertFolder('空');
+    const p = insertFolderRow('父');
+    const dupInP = insertFolderRow('同名', p);
+    insertSizedFile({ name: 'in-p.pdf', folderId: dupInP, size: 700 });
+    const dupAtRoot = insertFolderRow('同名');
+    insertSizedFile({ name: 'at-root.pdf', folderId: dupAtRoot, size: 1000 });
+    const empty = insertFolderRow('空');
 
     const root = await request('GET', '/api/folders/0/contents?sort=size');
     assert.deepEqual(
@@ -231,8 +233,8 @@ describe('IMPROVE-58: reorder 的入参校验', () => {
 
   test('合法 order 生效：sort=manual 按提交顺序返回', async () => {
     const token = await adminToken();
-    const a = insertFile({ name: 'a.pdf', size: 1 });
-    const b = insertFile({ name: 'b.pdf', size: 2 });
+    const a = insertSizedFile({ name: 'a.pdf', size: 1 });
+    const b = insertSizedFile({ name: 'b.pdf', size: 2 });
     const r = await request('POST', '/api/folders/reorder', {
       token,
       body: {

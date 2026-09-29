@@ -36,13 +36,15 @@ afterEach(() => {
 const DAY = 24 * 60 * 60 * 1000;
 const OLD = Date.now() - 30 * DAY; // 30 天前 → 越过默认闸门
 
-function insertFolder(name, parentId = null, createdAt = OLD) {
+// 文件夹行：created_at 默认 30 天前（为越过剪枝年龄闸门）
+function insertOldFolder(name, parentId = null, createdAt = OLD) {
   return db
     .prepare('INSERT INTO folders (name, parent_id, created_at) VALUES (?, ?, ?)')
     .run(name, parentId, createdAt).lastInsertRowid;
 }
 
-function insertFile(name, folderId, ossKey) {
+// 文件行：size 10、created_at 30 天前
+function insertOldFile(name, folderId, ossKey) {
   return db
     .prepare(
       `INSERT INTO files (folder_id, name, oss_key, size, mime_type, ext, created_at)
@@ -58,10 +60,10 @@ describe('IMPROVE-26: 活根下的死文件夹会被回收', () => {
   test('活根下的死子目录（含更深一层）被剪掉，活根本身保留', async () => {
     process.env.FOLDER_PRUNE_MIN_AGE_DAYS = '0';
     const token = await adminToken();
-    const keep = insertFolder('keep');
-    const stale = insertFolder('stale', keep);
-    const deep = insertFolder('deep', stale);
-    insertFile('a.pdf', keep, 'zyxf-test/keep/a.pdf');
+    const keep = insertOldFolder('keep');
+    const stale = insertOldFolder('stale', keep);
+    const deep = insertOldFolder('deep', stale);
+    insertOldFile('a.pdf', keep, 'zyxf-test/keep/a.pdf');
     // OSS 里只有 keep 的文件与 keep 自己的占位对象：stale / deep 一点痕迹都没有
     ossObjectStore.keys = ['zyxf-test/keep/a.pdf', placeholderKeyForFolder(db, keep)];
 
@@ -79,8 +81,8 @@ describe('IMPROVE-26: 活根下的死文件夹会被回收', () => {
   test('整棵死树（含根）仍然整棵回收（原行为保持）', async () => {
     process.env.FOLDER_PRUNE_MIN_AGE_DAYS = '0';
     const token = await adminToken();
-    const deadRoot = insertFolder('deadRoot');
-    insertFolder('child', deadRoot);
+    const deadRoot = insertOldFolder('deadRoot');
+    insertOldFolder('child', deadRoot);
     ossObjectStore.keys = ['zyxf-test/alive.pdf']; // 列表非空即可，与本库无关
 
     const r = await sync(token);
@@ -96,7 +98,7 @@ describe('IMPROVE-26: 什么算「活」，绝不误删', () => {
   test('空但有占位对象的文件夹算活：刷新不会吃掉刚建好还没上传的目录', async () => {
     process.env.FOLDER_PRUNE_MIN_AGE_DAYS = '0';
     const token = await adminToken();
-    const empty = insertFolder('empty');
+    const empty = insertOldFolder('empty');
     ossObjectStore.keys = [placeholderKeyForFolder(db, empty)];
 
     const r = await sync(token);
@@ -108,10 +110,10 @@ describe('IMPROVE-26: 什么算「活」，绝不误删', () => {
   test('子树里有文件就是活：父目录与祖先都不剪（CASCADE 波及不到文件行）', async () => {
     process.env.FOLDER_PRUNE_MIN_AGE_DAYS = '0';
     const token = await adminToken();
-    const root = insertFolder('root');
-    const mid = insertFolder('mid', root);
-    const leaf = insertFolder('leaf', mid);
-    insertFile('deep.pdf', leaf, 'zyxf-test/root/mid/leaf/deep.pdf');
+    const root = insertOldFolder('root');
+    const mid = insertOldFolder('mid', root);
+    const leaf = insertOldFolder('leaf', mid);
+    insertOldFile('deep.pdf', leaf, 'zyxf-test/root/mid/leaf/deep.pdf');
     ossObjectStore.keys = ['zyxf-test/root/mid/leaf/deep.pdf']; // 一个占位对象都没有
 
     const r = await sync(token);
@@ -123,8 +125,8 @@ describe('IMPROVE-26: 什么算「活」，绝不误删', () => {
 
   test('默认闸门（7 天）下，刚建的死目录先留着，由运维看过再处理', async () => {
     const token = await adminToken();
-    const keep = insertFolder('keep', null, Date.now());
-    const fresh = insertFolder('fresh', keep, Date.now() - 60 * 1000);
+    const keep = insertOldFolder('keep', null, Date.now());
+    const fresh = insertOldFolder('fresh', keep, Date.now() - 60 * 1000);
     ossObjectStore.keys = [placeholderKeyForFolder(db, keep)];
 
     const r = await sync(token);
@@ -137,7 +139,7 @@ describe('IMPROVE-26: 什么算「活」，绝不误删', () => {
   test('OSS 列表为空时一律不删（桶配错/打包失败的兜底仍然生效）', async () => {
     process.env.FOLDER_PRUNE_MIN_AGE_DAYS = '0';
     const token = await adminToken();
-    insertFolder('deadRoot');
+    insertOldFolder('deadRoot');
     ossObjectStore.keys = [];
 
     const r = await sync(token);
@@ -151,9 +153,9 @@ describe('IMPROVE-26: dry_run 干跑', () => {
   test('?dry_run=1 只报告将会发生的变化，一个字节都不落库', async () => {
     process.env.FOLDER_PRUNE_MIN_AGE_DAYS = '0';
     const token = await adminToken();
-    const keep = insertFolder('keep');
-    const staleFolder = insertFolder('stale', keep);
-    const staleFile = insertFile('gone.pdf', keep, 'zyxf-test/keep/gone.pdf');
+    const keep = insertOldFolder('keep');
+    const staleFolder = insertOldFolder('stale', keep);
+    const staleFile = insertOldFile('gone.pdf', keep, 'zyxf-test/keep/gone.pdf');
     ossObjectStore.keys = [placeholderKeyForFolder(db, keep)];
 
     const r = await sync(token, '?dry_run=1');

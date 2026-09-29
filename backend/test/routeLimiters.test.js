@@ -26,7 +26,8 @@ beforeEach(() => clearLibraryTables(db));
 let ipPool = 10;
 const freshXff = () => ({ 'x-forwarded-for': `198.51.100.${ipPool++}` });
 
-const insertPdf = () =>
+// PDF 行（PREVIEWABLE_EXTS 之一，给预览凭证限流用）
+const insertPreviewablePdf = () =>
   db
     .prepare(
       `INSERT INTO files (folder_id, name, oss_key, size, mime_type, ext, created_at)
@@ -74,7 +75,7 @@ describe('IMPROVE-32: /api/stats 与 /api/stats/heatmap 共用专属分层限流
 
 describe('IMPROVE-31: 预览凭证独立配额，不占用下载额度', () => {
   test('游客预览 20 次/分钟后 429，同一 IP 的下载仍可访问', async () => {
-    const id = insertPdf();
+    const id = insertPreviewablePdf();
     const xff = freshXff();
     for (let i = 1; i <= 20; i++) {
       const res = await request('GET', `/api/files/${id}/weboffice-token`, { headers: xff });
@@ -91,7 +92,7 @@ describe('IMPROVE-31: 预览凭证独立配额，不占用下载额度', () => {
   });
 
   test('weboffice-refresh 与签发共用同一桶（都是付费 IMM 调用）', async () => {
-    const id = insertPdf();
+    const id = insertPreviewablePdf();
     const xff = freshXff();
     for (let i = 1; i <= 20; i++) {
       await request('GET', `/api/files/${id}/weboffice-token`, { headers: xff });
@@ -104,7 +105,7 @@ describe('IMPROVE-31: 预览凭证独立配额，不占用下载额度', () => {
   });
 
   test('登录用户预览额度更宽；管理员豁免', async () => {
-    const id = insertPdf();
+    const id = insertPreviewablePdf();
     const xff = freshXff();
     for (let i = 1; i <= 20; i++) {
       await request('GET', `/api/files/${id}/weboffice-token`, { headers: xff });

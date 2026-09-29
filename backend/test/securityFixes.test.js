@@ -10,13 +10,15 @@ const SECRET = process.env.JWT_SECRET || DEV_JWT_SECRET;
 
 const DAY = 24 * 60 * 60 * 1000;
 
-function insertFile(ossKey) {
+// 文件行：name=oss_key、size 1（只为挂下载日志）
+function insertKeyNamedFile(ossKey) {
   return db
     .prepare('INSERT INTO files (folder_id, name, oss_key, size, created_at) VALUES (NULL, ?, ?, 1, ?)')
     .run(ossKey, ossKey, Date.now()).lastInsertRowid;
 }
 
-function insertLog(fileId, at) {
+// 下载日志行：带固定 ip/ua，时间可指定
+function insertDownloadLogAt(fileId, at) {
   db.prepare(
     'INSERT INTO download_logs (file_id, file_name, downloaded_at, ip, ua) VALUES (?, ?, ?, ?, ?)'
   ).run(fileId, 'x.pdf', at, '203.0.113.9', 'test-agent');
@@ -25,12 +27,12 @@ function insertLog(fileId, at) {
 // 下载日志含 ip/ua（PII），需按保留期清理；热力图需要近一年数据。
 describe('pruneDownloadLogs 按保留期清理下载日志（PII）', () => {
   test('删除超期行、保留窗口内行', () => {
-    const fileId = insertFile('zyxf-test/prune-a.pdf');
+    const fileId = insertKeyNamedFile('zyxf-test/prune-a.pdf');
     const now = Date.now();
-    insertLog(fileId, now - 500 * DAY); // 超期
-    insertLog(fileId, now - 401 * DAY); // 超期（刚过边界）
-    insertLog(fileId, now - 30 * DAY); // 保留
-    insertLog(fileId, now - 1 * DAY); // 保留
+    insertDownloadLogAt(fileId, now - 500 * DAY); // 超期
+    insertDownloadLogAt(fileId, now - 401 * DAY); // 超期（刚过边界）
+    insertDownloadLogAt(fileId, now - 30 * DAY); // 保留
+    insertDownloadLogAt(fileId, now - 1 * DAY); // 保留
 
     const removed = pruneDownloadLogs(400);
 

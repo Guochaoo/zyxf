@@ -53,7 +53,8 @@ const NFC_NAME = 'caf\u00e9.pdf'.normalize('NFC');
 
 // 上传/改名都会把 name 归一化成 NFC，库里造不出 NFD 名，只能直接落库模拟
 // 「外部导入/historical」的 NFD 行：它的 oss_key 就是 NFC 写法算出来的那个 key。
-function seedFile(name) {
+// 文件行：oss_key 由 objectKeyForFile 按 name 算出（NFD/NFC 同 key 场景）
+function seedFileWithKeyFromName(name) {
   const key = objectKeyForFile(db, null, name);
   const id = db
     .prepare(
@@ -67,7 +68,7 @@ function seedFile(name) {
 describe('IMPROVE-58: PATCH /api/files/:id 改名的同 key 分支', () => {
   test('NFD→NFC 改名：key 不变即不删旧对象，行仍指向原对象且文件可读', async () => {
     const token = await adminToken();
-    const { id, key } = seedFile(NFD_NAME);
+    const { id, key } = seedFileWithKeyFromName(NFD_NAME);
     // 前提：两种写法映射到同一个 OSS key（否则本条用例覆盖不到 deleteOld=false 分支）
     assert.equal(key, objectKeyForFile(db, null, NFC_NAME));
 
@@ -97,7 +98,7 @@ describe('IMPROVE-58: PATCH /api/files/:id 改名的同 key 分支', () => {
 
   test('对照：改成真正的新名（key 变了）确实会删掉旧 key —— 上面的空删除不是桩没生效', async () => {
     const token = await adminToken();
-    const { id, key } = seedFile(NFC_NAME);
+    const { id, key } = seedFileWithKeyFromName(NFC_NAME);
     const newKey = objectKeyForFile(db, null, 'renamed.pdf');
     assert.notEqual(newKey, key);
 
@@ -110,7 +111,7 @@ describe('IMPROVE-58: PATCH /api/files/:id 改名的同 key 分支', () => {
 
   test('NFC 名改成等价的 NFD 写法视为未变化（unchanged），不进入搬运流程', async () => {
     const token = await adminToken();
-    const { id, key } = seedFile(NFC_NAME);
+    const { id, key } = seedFileWithKeyFromName(NFC_NAME);
 
     const r = await request('PATCH', `/api/files/${id}`, { token, body: { name: NFD_NAME } });
     assert.equal(r.status, 200);
