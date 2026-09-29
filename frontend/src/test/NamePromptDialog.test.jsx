@@ -36,14 +36,19 @@ describe('NamePromptDialog 空值保护', () => {
     expect(confirmButton()).toBeDisabled();
   });
 
-  test('输入有效名称后按钮可用，提交把输入值回传给 onSubmit', () => {
+  test('输入有效名称后按钮可用，提交把 trim 后的值回传给 onSubmit', () => {
     const { onSubmit } = renderDialog();
     fireEvent.change(input(), { target: { value: ' 线性代数 ' } });
     expect(confirmButton()).toBeEnabled();
 
     fireEvent.submit(input().closest('form'));
-    // 组件只做「非空白」校验，首尾空格由调用方 trim（这里断言原样透传，改了要同步 BrowsePage）
-    expect(onSubmit).toHaveBeenCalledWith(' 线性代数 ');
+    // issue #64：校验只判「非空白」，提交时由组件统一 trim，调用方不必再处理首尾空格
+    expect(onSubmit).toHaveBeenCalledWith('线性代数');
+  });
+
+  test('不传 submitLabel 时按钮有兜底文案（不再渲染成无名空按钮）', () => {
+    renderDialog({ submitLabel: undefined });
+    expect(screen.getByRole('button', { name: '确认' })).toBeInTheDocument();
   });
 
   test('取消按钮触发 onClose，不触发 onSubmit', () => {
@@ -78,6 +83,19 @@ describe('NamePromptDialog 初值重置', () => {
 
     expect(input().value).toBe('');
     expect(confirmButton()).toBeDisabled();
+  });
+
+  // issue #64：打开期间父级改 initial（重命名目标变了 / 列表刷新带回新值）不该覆盖用户输入
+  test('打开期间 initial 变化不覆盖正在输入的内容；关闭重开后新 initial 才生效', () => {
+    const { rerenderWith } = renderDialog({ initial: '旧目标' });
+    fireEvent.change(input(), { target: { value: '用户正在打的字' } });
+
+    rerenderWith({ initial: '新目标' });
+    expect(input().value).toBe('用户正在打的字');
+
+    rerenderWith({ open: false, initial: '新目标' });
+    rerenderWith({ open: true, initial: '新目标' });
+    expect(input().value).toBe('新目标');
   });
 });
 
