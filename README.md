@@ -36,16 +36,11 @@
 - Node.js ≥ 24（`node:sqlite` 内置模块与测试用的 module-mocks 均要求；CI/部署统一 24）
 - 一个阿里云 OSS Bucket（[CORS 规则](docs/DEPLOY.md)需允许你的来源域名，Methods 含 `GET, POST, PUT, HEAD`）
 
-### 方式一：一键启动（Git Bash）
+### 启动
 
 ```bash
 cp .env.example .env   # 编辑 .env，至少填写 OSS_* 凭证
-./start.sh             # 后台启动前后端并做健康检查
-```
 
-### 方式二：手动启动
-
-```bash
 # 后端（http://localhost:4000）
 cd backend && npm install && npm run dev
 
@@ -96,10 +91,9 @@ zyxf/
 │   │   │                  #   页面级子模块：pages/Browse/、pages/Dashboard/（容器 + 数据 hook + 纯展示件）
 │   │   ├── components/    # 文件列表 / 预览 / 知识图谱 / 智能对话 / 菜单等
 │   │   └── test/          # vitest 测试
-├── docs/
+└── docs/
 │   ├── DEPLOY.md          # 部署指南（systemd + nginx + HTTPS）
 │   └── DESIGN.md          # 设计系统规范
-└── start.sh               # 本地一键启动
 ```
 
 > 缺陷与改进追踪在 **GitHub Issues**：<https://github.com/Guochaoo/zyxf/issues>（约定见 `AGENTS.md` §4）。

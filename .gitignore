@@ -12,7 +12,6 @@ certs/
 .npmrc
 .tmp-*
 page.html
-backend/run-backend-hidden.ps1
 
 # ZCode 会话状态与 GUI 测试截图产物
 .zcode/

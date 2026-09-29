@@ -33,7 +33,6 @@ zyxf/
 ├── docs/
 │   ├── DEPLOY.md          # 部署指南（systemd + nginx + HTTPS）
 │   └── DESIGN.md          # 设计系统规范
-├── start.sh               # 本地一键启动
 ├── .env                   # 唯一配置文件（已被 .gitignore 忽略，绝不提交）
 └── .env.example           # 环境变量模板
 ```
@@ -42,13 +41,14 @@ zyxf/
 
 ### 0.2 启动方式
 
-- **一键启动**：执行仓库根目录的 **`./start.sh`**（Git Bash / Bash 环境）。
-  - 该脚本后台启动后端 `:4000` + 前端 `:5173`，日志写入 `backend/run.log`、`backend/run.err.log`、`frontend/vite-dev.log`、`frontend/vite-dev.err.log`。
-  - 脚本内含 sleep + 健康检查：先 curl 后端 `/api/health`，再检查前端 `http://localhost:5173/` 的 HTTP 状态码。
-  - 停止：`kill` 对应的 node 进程。
-- **手动启动**（PowerShell / 需要单独控制时）：
-  - 后端：`cd backend && npm install && npm run dev`
-  - 前端：`cd frontend && npm install && npm run dev`
+```bash
+# 后端 → http://localhost:4000
+cd backend && npm install && npm run dev
+
+# 前端 → http://localhost:5173（/api 已代理到 4000）
+cd frontend && npm install && npm run dev
+```
+
 - 首次启动自动创建 SQLite 数据库 `backend/data.db` 并按 `.env` 的 `ADMIN_USER`/`ADMIN_PASSWORD` 写入管理员账号；`.env` 至少需填写 `OSS_*` 凭证（见 README）。用户注册（邮箱验证码）需额外填写 `DM_*` 三项，未配置时仅注册功能返回 503。
 
 ## 1. 文档维护（docs/ + README）
