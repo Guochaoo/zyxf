@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { lazy, Suspense } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import ErrorBoundary from '../components/ErrorBoundary.jsx';
+import ErrorBoundary, { isChunkLoadError } from '../components/ErrorBoundary.jsx';
 
 // 抛不抛错由模块级开关控制：ErrorBoundary 的「重试」是原地 setState({error:null}) 后
 // 重新渲染子树——子组件会再挂载一次，只有这种外部开关能在不改 props 的前提下让第二次渲染成功。
@@ -90,5 +91,77 @@ describe('ErrorBoundary 兜底与复位', () => {
     expect(screen.getByText('页面出了点问题')).toBeInTheDocument();
     expect(screen.getByText('外层内容')).toBeInTheDocument();
     expect(screen.getByText('兄弟内容')).toBeInTheDocument();
+  });
+});
+
+// issue #63：懒 chunk 失败时「重试」原先只清边界 state，而 React.lazy 会把失败的 import
+// 缓存在模块级 payload 上（_status=2），再渲染只是把同一个错误重新抛出——动态 import 根本
+// 不会重发，按钮是死键、只有「刷新页面」能恢复。这类失败现在直接走整页重载。
+describe('ErrorBoundary 的 chunk 失败重试语义（issue #63）', () => {
+  test('isChunkLoadError 认得各浏览器/打包器的文案，普通错误不误判', () => {
+    for (const msg of [
+      'Loading chunk 5 failed.',
+      'Loading CSS chunk 3 failed.',
+      'Failed to fetch dynamically imported module: https://zyxf.top/assets/x.js',
+      'error loading dynamically imported module',
+      'Importing a module script failed.',
+    ]) {
+      expect(isChunkLoadError(new Error(msg)), msg).toBe(true);
+    }
+    for (const other of ['渲染失败', '', undefined, null, { name: 'TypeError' }]) {
+      expect(isChunkLoadError(other)).toBe(false);
+    }
+  });
+
+  test('懒 chunk 失败：点「重试」走整页重载（原地重试不可能恢复）', async () => {
+    let attempts = 0;
+    const Lazy = lazy(() => {
+      attempts += 1;
+      return Promise.reject(new Error('Loading chunk 7 failed.'));
+    });
+    const onHardReload = vi.fn();
+
+    render(
+      <ErrorBoundary onHardReload={onHardReload}>
+        <Suspense fallback={<p>加载中</p>}>
+          <Lazy />
+        </Suspense>
+      </ErrorBoundary>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '重试' }));
+
+    // 走的是重载而不是复位；动态 import 只发起过一次（失败结果被 lazy 缓存）
+    expect(onHardReload).toHaveBeenCalledTimes(1);
+    expect(attempts).toBe(1);
+    // 因为测试里没有真的重载，兜底仍在——这正是「原地重试救不回来」的证据
+    expect(screen.getByText('页面出了点问题')).toBeInTheDocument();
+  });
+
+  test('渲染期错误：点「重试」仍原地复位（不误触发整页重载）', () => {
+    const onHardReload = vi.fn();
+    render(
+      <ErrorBoundary onHardReload={onHardReload}>
+        <Bomb />
+      </ErrorBoundary>
+    );
+
+    failing = false;
+    fireEvent.click(screen.getByRole('button', { name: '重试' }));
+
+    expect(screen.getByText('子组件正常内容')).toBeInTheDocument();
+    expect(onHardReload).not.toHaveBeenCalled();
+  });
+
+  test('「刷新页面」按钮始终走整页重载', () => {
+    const onHardReload = vi.fn();
+    render(
+      <ErrorBoundary onHardReload={onHardReload}>
+        <Bomb />
+      </ErrorBoundary>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '刷新页面' }));
+    expect(onHardReload).toHaveBeenCalledTimes(1);
   });
 });
