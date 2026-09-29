@@ -77,6 +77,51 @@ describe('BUG-53: 登录限流按「IP + 账号」分桶', () => {
   });
 });
 
+describe('issue #65: /login 的凭据类型校验', () => {
+  // 真值但非字符串的 password 原先会进 bcrypt.compare 抛 TypeError → 500，dev 下把
+  // "Illegal arguments: object, string" 直接回给客户端；admin 行始终是 bcrypt legacy
+  // 哈希，所以任何部署都能稳定复现。
+  test('password 为对象/数组/数字/布尔时 400「格式不正确」，不 500 也不泄漏内部文案', async () => {
+    const ip = '203.0.113.230';
+    for (const password of [{}, [], 1, true]) {
+      const r = await login('admin', password, ip);
+      assert.equal(r.status, 400, `password=${JSON.stringify(password)} 应 400，实际 ${r.status}`);
+      assert.equal(r.body.error, '用户名和密码格式不正确');
+      assert.ok(!JSON.stringify(r.body).includes('Illegal arguments'));
+    }
+  });
+
+  test('password 缺失/null 仍走原来的「不能为空」（向后兼容）', async () => {
+    const ip = '203.0.113.233';
+    for (const password of [undefined, null, '']) {
+      const r = await login('admin', password, ip);
+      assert.equal(r.status, 400);
+      assert.equal(r.body.error, '用户名和密码不能为空');
+    }
+  });
+
+  test('username 非字符串同样 400（不落库查询、不 500）', async () => {
+    const ip = '203.0.113.231';
+    for (const username of [{}, ['admin'], 7]) {
+      const r = await login(username, 'whatever', ip);
+      assert.equal(r.status, 400, `username=${JSON.stringify(username)} 应 400，实际 ${r.status}`);
+      assert.equal(r.body.error, '用户名和密码格式不正确');
+    }
+  });
+
+  test('字符串密码路径不受影响：缺失凭据 400、错密码 401、正确密码 200', async () => {
+    const ip = '203.0.113.232';
+    const missing = await request('POST', '/api/auth/login', { body: {}, headers: { 'x-forwarded-for': ip } });
+    assert.equal(missing.status, 400);
+    assert.equal(missing.body.error, '用户名和密码不能为空');
+
+    assert.equal((await login('admin', 'wrong-password', ip)).status, 401);
+    const ok = await login('admin', 'admin123', ip);
+    assert.equal(ok.status, 200);
+    assert.ok(ok.body.token);
+  });
+});
+
 describe('IMPROVE-16: 密码哈希不再独占事件循环', () => {
   // 判据：登录进行中并发打 /api/health，health 的排队时间应远小于一次哈希的耗时。
   // 改前（bcryptjs 同步/分片实现）health 会被挡到约一整个哈希时长（≈40 ms）；

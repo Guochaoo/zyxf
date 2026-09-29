@@ -44,8 +44,15 @@ const emailRegistered = (email) => !!db.prepare('SELECT id FROM users WHERE emai
 // IMPROVE-16：密码哈希改用 crypto.scrypt（见 src/password.js），事件循环不再被哈希独占。
 router.post('/login', loginFloodLimiter, loginLimiter, wrapAsync(async (req, res) => {
   const { username, password } = req.body || {};
-  if (!username || !password) {
+  // 缺字段/空串保持原来的「不能为空」；其它**真值但非字符串**的凭据（{} / [] / 1 / true）
+  // 必须在这里拦住：它们会一路进 bcrypt.compare 抛 TypeError → 500 并回内部文案（issue #65）。
+  // register 早已用 typeof 校验同一批字段，两条路径口径要一致。
+  const nil = (v) => v === undefined || v === null || v === '';
+  if (nil(username) || nil(password)) {
     return res.status(400).json({ error: '用户名和密码不能为空' });
+  }
+  if (typeof username !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ error: '用户名和密码格式不正确' });
   }
   // 用户名或邮箱均可登录：邮箱统一小写后匹配（注册时已归一化存储）。
   const identifier = String(username).trim();
