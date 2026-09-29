@@ -106,6 +106,9 @@ DM_FROM_ALIAS=
 
 # 可选：下载日志保留天数（含 ip/ua，默认 400 天）
 DOWNLOAD_LOG_RETENTION_DAYS=
+
+# 可选：文件夹剪枝的年龄闸门（天，默认 7，设 0 = 不设限）
+FOLDER_PRUNE_MIN_AGE_DAYS=
 ```
 
 生成 JWT_SECRET：
@@ -241,6 +244,15 @@ aliyun ram CreateAccessKey --UserName zyxf-mail --region cn-beijing
 ### 2.4 数据保留
 
 下载日志含访问者 `ip`/`ua`，属个人信息。后端启动时按 `DOWNLOAD_LOG_RETENTION_DAYS`（默认 400，略大于仪表盘热力图的近一年窗口）清理超期记录；无需保留访问明细时可调小。
+
+### 2.5 文件夹剪枝（刷新时回收死目录）
+
+点「刷新」触发的是 `POST /api/sync`：以 OSS 为准对账（补新对象、删失联记录），并回收**死文件夹**——子树里既没有文件、也没有 OSS 占位对象（`<路径>/` 空对象）的目录。
+
+- **界面里新建的文件夹永远是「活」的**：创建时后端会写占位对象，所以空目录不会被刷新吃掉；
+- 只回收**已存在超过 `FOLDER_PRUNE_MIN_AGE_DAYS` 天**（默认 7，设 0 不设限）的死目录，给历史遗留（建库时没写占位对象）的目录留出处理窗口；
+- 被剪的目录会随响应返回（`removed.folder_paths`，最多 20 条）；**同步响应里的 `removed.files` 只统计失联文件行**，与目录剪枝互不影响；
+- 判死只看「文件 + 占位对象 + 活着的子节点」，所以被剪的子树里**必然没有文件行**，`files.folder_id` 的级联删除不会波及任何文件。
 
 ---
 
@@ -441,6 +453,15 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 - 后端状态：`systemctl status zyxf`
 - nginx 配置变更：改仓库 [frontend/nginx.conf](../frontend/nginx.conf) → 覆盖服务器 `/etc/nginx/conf.d/zyxf.conf` → `nginx -t && systemctl reload nginx`
 - 前端重构：`cd /opt/zyxf/frontend && npm install && npm run build`
+- 同步干跑（核对「会新增/会删除什么」，**一个字节都不落库**；游客即可调用，限 2 次/分钟）：
+
+  ```bash
+  curl -s -X POST 'http://127.0.0.1:4000/api/sync?dry_run=1' | python3 -m json.tool
+  # 关注 removed.folder_paths（将被剪的目录）与 removed.files / added.*
+  ```
+
+  干跑走的是与真实同步完全相同的事务体，只是在 COMMIT 前回滚，所以「会删什么」是精确的；
+  怀疑剪枝会误删时先跑它，再决定要不要调 `FOLDER_PRUNE_MIN_AGE_DAYS`（见 §2.5）。
 - 数据库备份（重要）：**注意后端启用了 WAL 模式**（`db.js` 的 `PRAGMA journal_mode = WAL`），
   只 `cp data.db` 会得到一个**空库或严重陈旧的库**——已提交事务可能全在 `data.db-wal` 里。
   本仓库开发库就是现成反例：`data.db` 仅 4 KB，而 `data.db-wal` 有 600 KB，单独拷贝后

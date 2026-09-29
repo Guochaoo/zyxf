@@ -657,11 +657,17 @@ describe('sync', () => {
     const token = await adminLogin();
     await createFolder(token, '\u65e7\u6587\u4ef6\u5939'); // 旧文件夹
     await registerFile(token, { name: 'stale.pdf', oss_key: 'zyxf-test/stale.pdf' });
+    // IMPROVE-26 的年龄闸门只剪「已存在超过 N 天」的死目录，把刚建的这个回拨过闸门
+    db.prepare('UPDATE folders SET created_at = ? WHERE name = ?').run(
+      Date.now() - 30 * 24 * 60 * 60 * 1000,
+      '\u65e7\u6587\u4ef6\u5939'
+    );
 
     ossObjectStore.keys = ['zyxf-test/\u4fdd\u7559/\u5b58\u5728.pdf']; // 保留/存在.pdf
     const { body } = await request('POST', '/api/sync', { token });
     assert.equal(body.removed.files, 1);
     assert.equal(body.removed.folders, 1); // 旧文件夹 is empty & unrepresented
+    assert.deepEqual(body.removed.folder_paths, ['\u65e7\u6587\u4ef6\u5939']);
 
     const tree = await request('GET', '/api/folders/tree');
     assert.deepEqual(tree.body.tree.map((f) => f.name), ['\u4fdd\u7559']);
@@ -672,7 +678,9 @@ describe('sync', () => {
     await registerFile(token, { name: 'keep.pdf' });
     const { body } = await request('POST', '/api/sync', { token }); // ossObjectStore.keys = []
     assert.equal(body.scanned, 0);
-    assert.deepEqual(body.removed, { folders: 0, files: 0 });
+    assert.equal(body.removed.folders, 0);
+    assert.equal(body.removed.files, 0);
+    assert.deepEqual(body.removed.folder_paths, []);
     const root = await request('GET', '/api/folders/0/contents');
     assert.equal(root.body.files.length, 1);
   });
