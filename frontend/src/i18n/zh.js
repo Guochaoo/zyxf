@@ -51,6 +51,8 @@ const zh = {
     syncDone: '同步完成',
     // 明细放副行（13px，可两行），主行只留 4 个字，避免被单行省略号截断（见 Toast.css）
     syncDetail: '新增 {{folders}} 个文件夹 / {{files}} 个文件，清理 {{removed}} 个失效文件',
+    // IMPROVE-26：目录剪枝与文件增删分开表述，混在一句里会被误读成「动了文件」
+    syncPrunedFolders: '清理 {{count}} 个空文件夹',
     syncNone: '无新增、无清理',
     confirmDeleteFolder: '确认删除文件夹「{{name}}」及其所有内容？此操作不可恢复。',
     confirmDeleteFile: '确认删除文件「{{name}}」？',

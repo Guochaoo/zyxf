@@ -304,6 +304,23 @@ describe('BrowsePage', () => {
     expect(msg.closest('.toast-card').textContent).toContain('无新增、无清理');
   });
 
+  // IMPROVE-26：目录剪枝要单独报出来——剪的是「既没文件又没占位对象」的空文件夹，
+  // 只剪目录时如果沿用旧文案会显示「无新增、无清理」，用户以为刷新什么都没做。
+  test('只剪掉空文件夹时，副行报出剪枝数量而不是「无新增、无清理」', async () => {
+    syncOssMock.mockResolvedValue({
+      added: {},
+      removed: { folders: 2, files: 0, folder_paths: ['高数/过期', '高数/过期/更深'] },
+    });
+    renderPage();
+    await screen.findByText('物理.pdf');
+
+    fireEvent.click(screen.getByTitle('刷新（同步远端资料库）'));
+
+    const card = (await screen.findByText('同步完成')).closest('.toast-card');
+    expect(card.textContent).toContain('清理 2 个空文件夹');
+    expect(card.textContent).not.toContain('无新增、无清理');
+  });
+
   test('同步失败时同样走 Toast，但类型为 error', async () => {
     syncOssMock.mockRejectedValue({ response: { data: { error: 'OSS 不可用' } } });
     renderPage();
