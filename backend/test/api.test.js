@@ -735,6 +735,8 @@ describe('POST /api/auth/register (+ /register/code)', () => {
   test('full flow: request code, register, token works, role is user', async () => {
     const { status, body } = await registerViaCode('newbie@test.dev');
     assert.equal(status, 200);
+    // 显式断言 token 存在：undefined token 流向后续请求只会以无关用例的 401 呈现（issue #52）
+    assert.ok(body.token, `注册响应缺少 token：${JSON.stringify(body)}`);
     assert.equal(body.user.role, 'user');
     assert.equal(body.user.username, 'newbie');
 

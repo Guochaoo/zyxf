@@ -23,6 +23,15 @@ const SCRYPT_PARAMS = { N: 32768, r: 8, p: 1, maxmem: 256 * 1024 * 1024 };
 const KEY_LEN = 32;
 const SALT_LEN = 16;
 
+// crypto.scrypt 对「参数畸形」抛出的错误码（见 verifyPassword 的分类）：这些等价于
+// 「库里的哈希坏了，校验不通过」，不应该把它升级成 500。
+const MALFORMED_HASH_ERRORS = new Set([
+  'ERR_CRYPTO_INVALID_SCRYPT_PARAMS',
+  'ERR_OUT_OF_RANGE',
+  'ERR_INVALID_ARG_TYPE',
+  'ERR_INVALID_ARG_VALUE',
+]);
+
 const scryptAsync = (password, salt, opts) =>
   new Promise((resolve, reject) => {
     crypto.scrypt(password, salt, KEY_LEN, opts, (err, key) => (err ? reject(err) : resolve(key)));
@@ -42,6 +51,12 @@ export const isLegacyHash = (hash) => typeof hash === 'string' && /^\$2[aby]\$/.
 /**
  * 校验密码。返回 { ok, legacy }：legacy=true 表示这次是通过旧 bcrypt 哈希校验成功的，
  * 调用方应把该行升级为 scrypt 哈希。
+ *
+ * ⚠️ 「存储的哈希本身畸形」与「scrypt 执行失败」必须分开：前者按校验不通过处理，
+ * 后者要冒泡成 500。原先所有 scrypt 异常都被 catch 成 { ok: false }，于是一次瞬时的
+ * 资源性失败（内存/线程池）会在登录接口原样表现成 401「用户名或密码错误」——
+ * 用户以为密码错了，测试里表现为「admin 登录没拿到 token」，真实原因被彻底掩盖
+ * （BUG-104 的偶发签名就是这个形状：干净检出、约 4–6% 的运行、无 429/500 可辨）。
  */
 export async function verifyPassword(password, stored) {
   if (typeof stored !== 'string' || !stored) return { ok: false, legacy: false };
@@ -65,15 +80,25 @@ export async function verifyPassword(password, stored) {
     // 长度不同时 timingSafeEqual 会抛错，先比长度（不是秘密信息）
     const ok = key.length === expected.length && crypto.timingSafeEqual(key, expected);
     return { ok, legacy: false };
-  } catch {
-    return { ok: false, legacy: false };
+  } catch (e) {
+    // 参数/取值非法 = 库里的哈希畸形（例如 N 非数字、超出 maxmem），等价于校验失败；
+    // 其它错误（ENOMEM、线程池失败等）不吞，交给上层变成 500 并带上真实原因。
+    if (MALFORMED_HASH_ERRORS.has(e?.code)) return { ok: false, legacy: false };
+    throw e;
   }
 }
 
 // 账号不存在时也要跑一次等价的哈希，抹平「不存在」与「密码错」之间的时间差（BUG-70）。
 // 惰性生成一次，避免模块加载期做昂贵计算。
+// 失败不能被缓存：一次瞬时的资源性失败若留在 memo 里，之后所有「账号不存在」的登录都会
+// 一直 500（改成 reject 时清空）。
 let dummyHashPromise = null;
 export const dummyPasswordHash = () => {
-  if (!dummyHashPromise) dummyHashPromise = hashPassword('timing-equalizer');
+  if (!dummyHashPromise) {
+    dummyHashPromise = hashPassword('timing-equalizer').catch((e) => {
+      dummyHashPromise = null;
+      throw e;
+    });
+  }
   return dummyHashPromise;
 };
