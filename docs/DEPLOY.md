@@ -1,7 +1,7 @@
 # 部署到阿里云轻量应用服务器（systemd + nginx）
 
 > 后端用 **systemd** 托管（`deploy/zyxf.service`），前端构建产物由 **nginx** 托管并反代 `/api`，HTTPS 用 Let's Encrypt。
-> 服务器上**没有面板**：nginx、Node 24、certbot 全部是系统级安装（2026-09-12 起宝塔已彻底卸载）。部署由 `.github/workflows/deploy.yml` 全自动完成——SSH 上服务器 `git fetch + reset --hard`（对齐 origin/main）+ 装依赖 + 构建 + `systemctl restart zyxf`；部署后健康检查（`/api/health`）失败时，workflow 会自动把服务器退回部署前的修订并重建，避免线上持续 502。
+> 服务器上**没有面板**：nginx、Node 24、certbot 全部是系统级安装（2026-09-12 起宝塔已彻底卸载）。部署由 `.github/workflows/deploy.yml` 全自动完成——SSH 上服务器 `git fetch + reset --hard`（对齐 origin/main）+ 装依赖 + 构建 + `systemctl restart zyxf`；**流程中任何一步失败**（装依赖、构建、健康检查 `/api/health`）都会触发回滚：workflow 在 `git reset --hard origin/main` 后挂了 `EXIT` trap，失败时把服务器退回部署前的修订并重建。这条覆盖是 BUG-102 的两个教训——① 回滚原先只挂在健康检查上，`npm install` 挂掉时脚本只是停在原地，服务器留在「新代码 + 缺依赖」的中间态（旧进程还在跑所以看起来正常，下次重启才起不来）；② 健康检查失败时前端 `dist/` 已被新构建覆盖，不回滚就会持续 502。
 
 架构：
 
@@ -106,6 +106,9 @@ DM_FROM_ALIAS=
 
 # 可选：下载日志保留天数（含 ip/ua，默认 400 天）
 DOWNLOAD_LOG_RETENTION_DAYS=
+
+# 可选：文件夹剪枝的年龄闸门（天，默认 7，设 0 = 不设限）
+FOLDER_PRUNE_MIN_AGE_DAYS=
 ```
 
 生成 JWT_SECRET：
@@ -241,6 +244,15 @@ aliyun ram CreateAccessKey --UserName zyxf-mail --region cn-beijing
 ### 2.4 数据保留
 
 下载日志含访问者 `ip`/`ua`，属个人信息。后端启动时按 `DOWNLOAD_LOG_RETENTION_DAYS`（默认 400，略大于仪表盘热力图的近一年窗口）清理超期记录；无需保留访问明细时可调小。
+
+### 2.5 文件夹剪枝（刷新时回收死目录）
+
+点「刷新」触发的是 `POST /api/sync`：以 OSS 为准对账（补新对象、删失联记录），并回收**死文件夹**——子树里既没有文件、也没有 OSS 占位对象（`<路径>/` 空对象）的目录。
+
+- **界面里新建的文件夹永远是「活」的**：创建时后端会写占位对象，所以空目录不会被刷新吃掉；
+- 只回收**已存在超过 `FOLDER_PRUNE_MIN_AGE_DAYS` 天**（默认 7，设 0 不设限）的死目录，给历史遗留（建库时没写占位对象）的目录留出处理窗口；
+- 被剪的目录会随响应返回（`removed.folder_paths`，最多 20 条）；**同步响应里的 `removed.files` 只统计失联文件行**，与目录剪枝互不影响；
+- 判死只看「文件 + 占位对象 + 活着的子节点」，所以被剪的子树里**必然没有文件行**，`files.folder_id` 的级联删除不会波及任何文件。
 
 ---
 
@@ -392,7 +404,7 @@ nginx -t && systemctl reload nginx
   - `location ~* \.(?:ttf|otf|woff2?|png|jpe?g|webp|gif|svg|ico)$`（文件名无 hash，如 `/favicon.png`、`/images/*.webp`）→ `max-age=604800`。
   - ⚠️ **`^~` 不能省**：nginx 的**正则 location 优先级高于普通前缀 location**，而扩展名正则也含 `woff2`——写成普通前缀时 `/assets/*.woff2` 会被正则抢走、只拿到 7 天（线上实测确认过）。
 - **`add_header` 不会被子级 location 继承**：任何自己写了 `add_header` 的 location 都会屏蔽 server 级的 HSTS / 安全头，所以模板里每个 location 都把 `Strict-Transport-Security` / `X-Content-Type-Options` / `Referrer-Policy` / CSP 重复声明了一遍。
-- **`index.html` 必须 `Cache-Control: no-cache`**：它没有内容 hash，缓存里的旧 HTML 引用构建后**已被删除**的 chunk 文件名，那次请求落到 SPA 回退拿到 HTML，浏览器按 `type="module"` 解析失败 → **整页白屏**（BUG-100，发版后最容易复现的事故）。
+- **`index.html` 必须 `Cache-Control: no-cache`**：它没有内容 hash，缓存里的旧 HTML 引用构建后**已被删除**的 chunk 文件名，那次请求落到 SPA 回退拿到 HTML，浏览器按 `type="module"` 解析失败 → **整页白屏**（BUG-100，发版后最容易复现的事故）。前端另有一层兜底：路由出口的 `ErrorBoundary` 会给出可恢复界面，且识别到「懒 chunk 加载失败」时把「重试」直接接成整页重载——`React.lazy` 会把失败的 import 缓存在模块级 payload 上，原地重试不可能恢复（issue #63）。
 - **不存在的 `/assets/*` 必须回 404**：回 200 + `text/html` 同样会让模块脚本因 MIME 不符拒绝执行。
 - **CSP 先以 `Content-Security-Policy-Report-Only` 上线**（模板现为 Report-Only）。⚠️ `script-src` **必须放行 `https://g.alicdn.com`**：`OfficeViewer.jsx` 会从那里注入 WPS WebOffice SDK，该脚本随后再加载同目录的 `wps.js`——漏了这条，**在线预览会整块失效**。真实浏览器把预览 / 上传 / 图谱 / AI 对话全点一遍、控制台无违规后，再去掉每处 `-Report-Only`（模板里共 4 处）。
 - **`/api` 反代必须覆写 `X-Forwarded-For` 为 `$remote_addr`**（不能 append 透传客户端带来的值）：后端按 trust proxy 取 XFF 做限流，可直连时伪造 XFF 能绕过所有限流（BUG-36）。这条成立的前提是后端只监听 `127.0.0.1`、无法被公网直连。
@@ -441,6 +453,15 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 - 后端状态：`systemctl status zyxf`
 - nginx 配置变更：改仓库 [frontend/nginx.conf](../frontend/nginx.conf) → 覆盖服务器 `/etc/nginx/conf.d/zyxf.conf` → `nginx -t && systemctl reload nginx`
 - 前端重构：`cd /opt/zyxf/frontend && npm install && npm run build`
+- 同步干跑（核对「会新增/会删除什么」，**一个字节都不落库**；游客即可调用，限 2 次/分钟）：
+
+  ```bash
+  curl -s -X POST 'http://127.0.0.1:4000/api/sync?dry_run=1' | python3 -m json.tool
+  # 关注 removed.folder_paths（将被剪的目录）与 removed.files / added.*
+  ```
+
+  干跑走的是与真实同步完全相同的事务体，只是在 COMMIT 前回滚，所以「会删什么」是精确的；
+  怀疑剪枝会误删时先跑它，再决定要不要调 `FOLDER_PRUNE_MIN_AGE_DAYS`（见 §2.5）。
 - 数据库备份（重要）：**注意后端启用了 WAL 模式**（`db.js` 的 `PRAGMA journal_mode = WAL`），
   只 `cp data.db` 会得到一个**空库或严重陈旧的库**——已提交事务可能全在 `data.db-wal` 里。
   本仓库开发库就是现成反例：`data.db` 仅 4 KB，而 `data.db-wal` 有 600 KB，单独拷贝后

@@ -34,6 +34,19 @@ const socialItems = [
   { label: 'Bilibili', link: 'https://space.bilibili.com/549612395' },
 ];
 
+// 侧边栏开合的缓动曲线与时长（与 ChatComposer / KnowledgeGraph 的收缩动画一致）。
+// ⚠️ BUG-94：这两个值**必须**通过内联样式下发，不能拼进模板字符串当 Tailwind 类名
+// （`lg:duration-[${SIDEBAR_MS}ms]`）——Tailwind 只静态扫描源码文本，插值处构建期不存在
+// 字面量类名，规则从未生成，动画会静默退化成 `transition-*` 的默认 150ms + 默认缓动。
+// 同理，别给「不总是需要过渡」的元素单独挂 transitionDuration：transition-property 的
+// 初始值是 all，会把该元素所有可动画属性都带上过渡（BUG-112 的 padding 假入场会复发）。
+const SIDEBAR_EASE = EASE_COLLAPSE;
+const SIDEBAR_MS = 320;
+const SIDEBAR_TRANSITION = {
+  transitionDuration: `${SIDEBAR_MS}ms`,
+  transitionTimingFunction: SIDEBAR_EASE,
+};
+
 export default function App() {
   const { t } = useTranslation();
   // 语言切换（设置弹窗内的语言项）；页面标题由下方 effect 统一设置（IMPROVE-25）。
@@ -72,9 +85,8 @@ export default function App() {
     closeSettings,
   } = useSettingsRoute();
 
-  // 侧边栏开合的缓动曲线与时长（与 ChatComposer/KnowledgeGraph 的收缩动画一致）。
-  const SIDEBAR_EASE = EASE_COLLAPSE;
-  const SIDEBAR_MS = 320;
+  // 侧边栏开合的缓动曲线与时长见文件顶部 SIDEBAR_TRANSITION（BUG-94：走内联样式，
+  // 不走 Tailwind 类名——插值类名 Tailwind 扫不到）。
 
   // 中列内边距的过渡**只在用户手动开合侧栏的那一下**启用：路由从别的页面进资料库时，
   // padding 会从 0 变成 266/316，若此时带着过渡类，就会被动画化成「两侧向中间收拢」的
@@ -208,17 +220,19 @@ export default function App() {
         <div
           className={`hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-10 lg:flex lg:flex-col lg:gap-4 lg:overflow-hidden lg:bg-[var(--app-sidebar)] lg:px-4 lg:pt-[11px] lg:w-[250px] ${
             sidebarOpen ? 'lg:translate-x-0' : 'lg:-translate-x-full'
-          } transition-transform lg:duration-[${SIDEBAR_MS}ms] lg:ease-[${SIDEBAR_EASE}] will-change-transform ${
+          } transition-transform will-change-transform ${
             sidebarOpen ? 'lg:pointer-events-auto' : 'lg:pointer-events-none'
           }`}
+          style={SIDEBAR_TRANSITION}
         >
           {/* 34px-high row keeps the brand aligned with the middle toolbar (41px center). */}
           <div className="flex h-[34px] items-center justify-between gap-2">
             {brand}
             <span
-              className={`transition-opacity duration-[${SIDEBAR_MS}ms] ease-[${SIDEBAR_EASE}] ${
+              className={`transition-opacity ${
                 sidebarOpen ? 'opacity-100' : 'opacity-0'
               }`}
+              style={SIDEBAR_TRANSITION}
             >
               {sidebarToggle('shrink-0 h-7 w-7')}
             </span>
@@ -237,9 +251,10 @@ export default function App() {
           title={t('app.expandSidebar')}
           aria-hidden={sidebarOpen}
           tabIndex={sidebarOpen ? -1 : 0}
-          className={`fixed left-[18px] top-[13px] z-20 hidden lg:flex h-7 w-7 items-center justify-center rounded-[7px] text-slate-400 transition-all duration-[${SIDEBAR_MS}ms] ease-[${SIDEBAR_EASE}] hover:bg-slate-100 hover:text-slate-700 ${
+          className={`fixed left-[18px] top-[13px] z-20 hidden lg:flex h-7 w-7 items-center justify-center rounded-[7px] text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-700 ${
             sidebarOpen ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'
           }`}
+          style={SIDEBAR_TRANSITION}
         >
           <PanelLeftOpen className="h-[18px] w-[18px]" strokeWidth={1.7} />
         </button>
@@ -251,6 +266,10 @@ export default function App() {
           ? 'px-4 pt-[11px] pb-6'
           : 'px-3 pt-4 pb-2 sm:px-4 sm:pt-[10.5px] sm:pb-2'
         } ${mainLayout}`}
+        // 中列 padding 与左栏轨道同步成 320ms（BUG-94 补充），且只在手动开合窗口内挂
+        // transition-property:padding——绝不能只给 transitionDuration：property 的初始值
+        // 是 all，会把路由切换时的 padding 变化也动画成假入场（BUG-112 复发）。
+        style={layoutAnimating ? { transitionProperty: 'padding', ...SIDEBAR_TRANSITION } : undefined}
       >
         {/* 路由出口的 ErrorBoundary（IMPROVE-55）：懒 chunk 加载失败或页面渲染抛错
             不再整树卸载白屏，给出可原地重试的界面。包在 Suspense 外层（标准顺序），

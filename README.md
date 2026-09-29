@@ -12,7 +12,7 @@
 - **在线预览**：PDF / PPT / Word / Excel / TXT 走阿里云 IMM WebOffice；zip / rar 等归档仅提供下载
 - **知识图谱**：按目录连接关系的力导向图，点击节点跳转或预览，支持全库视图与当前文件夹邻域放大
 - **统计面板**（`/dashboard`）：近一年 GitHub 式下载热力图、文件类型分布、下载 / 占用排行、今日上传下载动态
-- **权限模型**：管理员可新建文件夹、上传、删除、改名、移动、排序；游客与登录用户只读，但均可点「刷新」触发 OSS→本地库同步（按身份分层限流：游客 2 次/分钟 < 登录用户 5 次/分钟 < 管理员豁免）
+- **权限模型**：管理员可新建文件夹、上传、删除、改名、移动、排序；游客与登录用户只读，但均可点「刷新」触发 OSS→本地库同步（按身份分层限流：游客 2 次/分钟 < 登录用户 5 次/分钟 < 管理员豁免）。全站还有一层 300 次/分钟/IP 的匿名兜底，昂贵的读接口另挂专属分层配额：智能搜索 60/240、统计（概览 + 热力图共用一桶）30/120、预览凭证（WebOffice token 与 refresh 共用一桶，与下载配额**分开**）20/60（依次为游客次/分钟 · 登录用户次/分钟，管理员一律豁免、登录用户按 user id 计数不占出口 IP）
 
 ## 技术栈
 
@@ -36,16 +36,11 @@
 - Node.js ≥ 24（`node:sqlite` 内置模块与测试用的 module-mocks 均要求；CI/部署统一 24）
 - 一个阿里云 OSS Bucket（[CORS 规则](docs/DEPLOY.md)需允许你的来源域名，Methods 含 `GET, POST, PUT, HEAD`）
 
-### 方式一：一键启动（Git Bash）
+### 启动
 
 ```bash
 cp .env.example .env   # 编辑 .env，至少填写 OSS_* 凭证
-./start.sh             # 后台启动前后端并做健康检查
-```
 
-### 方式二：手动启动
-
-```bash
 # 后端（http://localhost:4000）
 cd backend && npm install && npm run dev
 
@@ -96,10 +91,9 @@ zyxf/
 │   │   │                  #   页面级子模块：pages/Browse/、pages/Dashboard/（容器 + 数据 hook + 纯展示件）
 │   │   ├── components/    # 文件列表 / 预览 / 知识图谱 / 智能对话 / 菜单等
 │   │   └── test/          # vitest 测试
-├── docs/
+└── docs/
 │   ├── DEPLOY.md          # 部署指南（systemd + nginx + HTTPS）
 │   └── DESIGN.md          # 设计系统规范
-└── start.sh               # 本地一键启动
 ```
 
 > 缺陷与改进追踪在 **GitHub Issues**：<https://github.com/Guochaoo/zyxf/issues>（约定见 `AGENTS.md` §4）。

@@ -48,6 +48,7 @@ const en = {
     foldersLabel: 'Folders',
     syncDone: 'Sync complete',
     syncDetail: 'Added {{folders}} folders / {{files}} files, cleaned {{removed}} stale files',
+    syncPrunedFolders: 'pruned {{count}} empty folders',
     syncNone: 'Nothing added or cleaned',
     confirmDeleteFolder: 'Delete folder "{{name}}" and all its contents? This cannot be undone.',
     deleteFolderTitle: 'Delete folder',

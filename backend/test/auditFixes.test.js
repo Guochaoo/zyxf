@@ -29,13 +29,15 @@ beforeEach(() => {
   clearLibraryTables(db);
 });
 
-function insertFolder(name, parentId = null) {
+// 纯文件夹行：sort_order=0、created_at=now
+function insertFolderRow(name, parentId = null) {
   return db
     .prepare('INSERT INTO folders (name, parent_id, sort_order, created_at) VALUES (?, ?, 0, ?)')
     .run(name, parentId, Date.now()).lastInsertRowid;
 }
 
-function insertFile({ name, folderId = null, ossKey, ext, size = 100 }) {
+// 文件行：mime 由 ext 派生（mimeOf）、默认 size 100
+function insertFileWithExt({ name, folderId = null, ossKey, ext, size = 100 }) {
   return db
     .prepare(
       'INSERT INTO files (folder_id, name, oss_key, size, mime_type, ext, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -100,8 +102,8 @@ describe('审计修复：文件夹名里的点段被清洗（不产生可越前�
 });
 
 describe('审计修复：contents 的 sort 白名单不再是原型链查找', () => {  test('sort=constructor 等原型键回退默认排序而不是 500', async () => {
-    insertFolder('甲乙');
-    insertFolder('丙丁');
+    insertFolderRow('甲乙');
+    insertFolderRow('丙丁');
     for (const key of ['constructor', '__proto__', 'toString', 'valueOf', 'hasOwnProperty']) {
       const r = await request('GET', `/api/folders/0/contents?sort=${key}`);
       assert.equal(r.status, 200, `sort=${key} 不应 500`);
@@ -110,8 +112,8 @@ describe('审计修复：contents 的 sort 白名单不再是原型链查找', (
   });
 
   test('未知 sort 回退为名称排序', async () => {
-    insertFolder('b');
-    insertFolder('a');
+    insertFolderRow('b');
+    insertFolderRow('a');
     const r = await request('GET', '/api/folders/0/contents?sort=不存在的字段');
     assert.equal(r.status, 200);
     assert.deepEqual(r.body.folders.map((f) => f.name), ['a', 'b']);
@@ -127,9 +129,9 @@ describe('审计修复：DELETE 文件夹的存在性与伪键清理', () => {
 
   test('删除真实文件夹时计数只含真实文件', async () => {
     const token = await adminToken();
-    const fid = insertFolder('数学');
-    insertFile({ name: 'a.pdf', folderId: fid, ossKey: 'zyxf-test/数学/a.pdf', ext: 'pdf' });
-    insertFile({ name: 'b.pdf', folderId: fid, ossKey: 'zyxf-test/数学/b.pdf', ext: 'pdf' });
+    const fid = insertFolderRow('数学');
+    insertFileWithExt({ name: 'a.pdf', folderId: fid, ossKey: 'zyxf-test/数学/a.pdf', ext: 'pdf' });
+    insertFileWithExt({ name: 'b.pdf', folderId: fid, ossKey: 'zyxf-test/数学/b.pdf', ext: 'pdf' });
     const r = await request('DELETE', `/api/folders/${fid}`, { token });
     assert.equal(r.status, 200);
     // 2 个文件 + 1 个文件夹占位键 = 3（占位键来自真实存在的 folderMap 项）
@@ -154,7 +156,7 @@ describe('审计修复：upload-url 按 OSS key 预检同名（防覆盖既有�
     const nfc = 'caf\u00e9.pdf'; // é = U+00E9
     const nfd = 'cafe\u0301.pdf'; // e + U+0301
     assert.notEqual(nfc, nfd); // 字节层面确实不同，SQL 的 name 等值比较拦不住
-    insertFile({ name: nfc, ossKey: 'zyxf-test/caf\u00e9.pdf', ext: 'pdf' });
+    insertFileWithExt({ name: nfc, ossKey: 'zyxf-test/caf\u00e9.pdf', ext: 'pdf' });
 
     const r = await request('POST', '/api/files/upload-url', { token, body: { filename: nfd } });
     assert.equal(r.status, 409);
@@ -164,8 +166,8 @@ describe('审计修复：upload-url 按 OSS key 预检同名（防覆盖既有�
 
   test('清洗后等价的段名同样被拦（同级 `_` 与 `.` 都映射为 `_`）', async () => {
     const token = await adminToken();
-    const fid = insertFolder('_');
-    insertFile({ name: 'x.pdf', folderId: fid, ossKey: 'zyxf-test/_/x.pdf', ext: 'pdf' });
+    const fid = insertFolderRow('_');
+    insertFileWithExt({ name: 'x.pdf', folderId: fid, ossKey: 'zyxf-test/_/x.pdf', ext: 'pdf' });
     const r = await request('POST', '/api/files/upload-url', {
       token,
       body: { filename: 'x.pdf', folder_id: fid },
@@ -177,8 +179,8 @@ describe('审计修复：upload-url 按 OSS key 预检同名（防覆盖既有�
 describe('审计修复：PATCH 空 body 不得被当成「移动到根」', () => {
   test('空 body / 全是未知字段时返回 400，且文件夹位置不变', async () => {
     const token = await adminToken();
-    const parent = insertFolder('父级');
-    const child = insertFolder('子级', parent);
+    const parent = insertFolderRow('父级');
+    const child = insertFolderRow('子级', parent);
 
     for (const body of [{}, { foo: 1 }]) {
       const r = await request('PATCH', `/api/folders/${child}`, { token, body });
@@ -189,7 +191,7 @@ describe('审计修复：PATCH 空 body 不得被当成「移动到根」', () =
 
   test('文件 PATCH 空 body 同样 400', async () => {
     const token = await adminToken();
-    const id = insertFile({ name: 'a.pdf', ossKey: 'zyxf-test/a.pdf', ext: 'pdf' });
+    const id = insertFileWithExt({ name: 'a.pdf', ossKey: 'zyxf-test/a.pdf', ext: 'pdf' });
     const r = await request('PATCH', `/api/files/${id}`, { token, body: {} });
     assert.equal(r.status, 400);
   });
@@ -198,8 +200,8 @@ describe('审计修复：PATCH 空 body 不得被当成「移动到根」', () =
 describe('审计修复：文件夹 PATCH 的校验与写库在同一事务内（BUG-54）', () => {
   test('并发互相移动不会写出 parent 环', async () => {
     const token = await adminToken();
-    const a = insertFolder('A');
-    const b = insertFolder('B');
+    const a = insertFolderRow('A');
+    const b = insertFolderRow('B');
 
     // 两个请求都基于「A、B 都是根级」的同一快照，各自把对方设为自己的父级。
     const [ra, rb] = await Promise.all([
@@ -224,9 +226,9 @@ describe('审计修复：文件夹 PATCH 的校验与写库在同一事务内（
 
   test('并发移动到同一根级位置时不会出现同名文件夹', async () => {
     const token = await adminToken();
-    const p = insertFolder('父');
-    const x = insertFolder('X', p);
-    const y = insertFolder('Y', p);
+    const p = insertFolderRow('父');
+    const x = insertFolderRow('X', p);
+    const y = insertFolderRow('Y', p);
 
     const [rx, ry] = await Promise.all([
       request('PATCH', `/api/folders/${x}`, { token, body: { name: '重名' } }),
@@ -244,11 +246,11 @@ describe('审计修复：文件夹 PATCH 的校验与写库在同一事务内（
 describe('审计修复：文件移动补 key 冲突检查（防覆盖他人对象）', () => {
   test('目标 key 已被别的文件占用时返回 409 而不是覆盖后 500', async () => {
     const token = await adminToken();
-    const fid = insertFolder('目标目录');
+    const fid = insertFolderRow('目标目录');
     // 目录内已有 a-b.pdf（key 归一化后为 …/a-b.pdf）
-    insertFile({ name: 'a-b.pdf', folderId: fid, ossKey: 'zyxf-test/目标目录/a-b.pdf', ext: 'pdf' });
+    insertFileWithExt({ name: 'a-b.pdf', folderId: fid, ossKey: 'zyxf-test/目标目录/a-b.pdf', ext: 'pdf' });
     // 历史脏数据：名叫 a/b.pdf 的文件，key 与上面相同（分隔符被归一化成 '-'）
-    const dirty = insertFile({ name: 'a/b.pdf', folderId: null, ossKey: 'zyxf-test/a-b.pdf', ext: 'pdf' });
+    const dirty = insertFileWithExt({ name: 'a/b.pdf', folderId: null, ossKey: 'zyxf-test/a-b.pdf', ext: 'pdf' });
 
     const r = await request('PATCH', `/api/files/${dirty}`, { token, body: { folder_id: fid } });
     assert.equal(r.status, 409, '应因存储路径冲突而拒绝');
@@ -268,7 +270,7 @@ describe('审计修复：cleanup-upload 的边界', () => {
     });
     assert.equal(outside.status, 400);
 
-    insertFile({ name: 'live.pdf', ossKey: 'zyxf-test/live.pdf', ext: 'pdf' });
+    insertFileWithExt({ name: 'live.pdf', ossKey: 'zyxf-test/live.pdf', ext: 'pdf' });
     const referenced = await request('POST', '/api/files/cleanup-upload', {
       token,
       body: { oss_key: 'zyxf-test/live.pdf' },
@@ -318,12 +320,12 @@ describe('IMPROVE-15：目录树快照缓存与写路径失效', () => {
     const prev = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production'; // 树缓存只在非 test 环境启用
     try {
-      insertFolder('缓存前');
+      insertFolderRow('缓存前');
       const first = await request('GET', '/api/folders/tree');
       assert.deepEqual(first.body.tree.map((f) => f.name), ['缓存前']);
 
       // 绕过路由直接改库：缓存未失效 → 仍返回旧快照（证明缓存确实生效）
-      insertFolder('直插不失效');
+      insertFolderRow('直插不失效');
       const cached = await request('GET', '/api/folders/tree');
       assert.deepEqual(cached.body.tree.map((f) => f.name), ['缓存前']);
 
@@ -342,7 +344,7 @@ describe('IMPROVE-15：目录树快照缓存与写路径失效', () => {
 describe('IMPROVE-20：搜索结果带截断标志', () => {
   test('命中超过每类上限时 truncated=true，且两类各自最多 20 条', async () => {
     for (let i = 0; i < 25; i++) {
-      insertFile({ name: `trunc${i}.pdf`, ossKey: `zyxf-test/trunc${i}.pdf`, ext: 'pdf' });
+      insertFileWithExt({ name: `trunc${i}.pdf`, ossKey: `zyxf-test/trunc${i}.pdf`, ext: 'pdf' });
     }
     const r = await request('GET', '/api/search?q=trunc');
     assert.equal(r.status, 200);
@@ -351,7 +353,7 @@ describe('IMPROVE-20：搜索结果带截断标志', () => {
   });
 
   test('未截断时 truncated=false；空查询结构一致', async () => {
-    insertFile({ name: 'only.pdf', ossKey: 'zyxf-test/only.pdf', ext: 'pdf' });
+    insertFileWithExt({ name: 'only.pdf', ossKey: 'zyxf-test/only.pdf', ext: 'pdf' });
     const one = await request('GET', '/api/search?q=only');
     assert.equal(one.body.truncated, false);
     assert.equal(one.body.files.length, 1);
@@ -364,16 +366,16 @@ describe('IMPROVE-20：搜索结果带截断标志', () => {
 describe('IMPROVE-17：子树搬迁的规模阈值', () => {
   test('超过阈值时 409 且不写库；阈值内仍可正常改名', async () => {
     const token = await adminToken();
-    const parent = insertFolder('容量测试');
+    const parent = insertFolderRow('容量测试');
     // 阈值内：2 个文件 + 1 个文件夹 = 3 项，正常改名
-    insertFile({ name: 'a.pdf', folderId: parent, ossKey: 'zyxf-test/容量测试/a.pdf', ext: 'pdf' });
-    insertFile({ name: 'b.pdf', folderId: parent, ossKey: 'zyxf-test/容量测试/b.pdf', ext: 'pdf' });
+    insertFileWithExt({ name: 'a.pdf', folderId: parent, ossKey: 'zyxf-test/容量测试/a.pdf', ext: 'pdf' });
+    insertFileWithExt({ name: 'b.pdf', folderId: parent, ossKey: 'zyxf-test/容量测试/b.pdf', ext: 'pdf' });
     const ok = await request('PATCH', `/api/folders/${parent}`, { token, body: { name: '改过了' } });
     assert.equal(ok.status, 200);
     assert.equal(db.prepare('SELECT name FROM folders WHERE id = ?').get(parent).name, '改过了');
 
     // 构造超过阈值的子树
-    const big = insertFolder('大目录', null);
+    const big = insertFolderRow('大目录', null);
     const ins = db.prepare(
       'INSERT INTO files (folder_id, name, oss_key, size, mime_type, ext, created_at) VALUES (?, ?, ?, 10, ?, ?, ?)'
     );
@@ -395,8 +397,8 @@ describe('审计修复：sync 的 repaired 与 removed 不再指向同一批记�
   test('将被删除的失联行不计入 repaired_files', async () => {
     // 桶里只剩 keep.pdf；gone.pdf 的行会被清理
     ossObjectStore.keys = ['zyxf-test/keep.pdf'];
-    insertFile({ name: 'keep.pdf', ossKey: 'zyxf-test/keep.pdf', ext: 'wrong' });
-    insertFile({ name: 'gone.pdf', ossKey: 'zyxf-test/gone.pdf', ext: 'wrong' });
+    insertFileWithExt({ name: 'keep.pdf', ossKey: 'zyxf-test/keep.pdf', ext: 'wrong' });
+    insertFileWithExt({ name: 'gone.pdf', ossKey: 'zyxf-test/gone.pdf', ext: 'wrong' });
 
     const r = await request('POST', '/api/sync');
     assert.equal(r.status, 200);
@@ -439,7 +441,7 @@ describe('审计修复：保留文件夹名 .preview', () => {
     assert.equal(created.status, 400);
     assert.match(created.body.error, /保留名称/);
 
-    const fid = insertFolder('正常目录');
+    const fid = insertFolderRow('正常目录');
     const renamed = await request('PATCH', `/api/folders/${fid}`, { token, body: { name: '.preview' } });
     assert.equal(renamed.status, 400);
 

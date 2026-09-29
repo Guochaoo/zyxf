@@ -1,8 +1,23 @@
 import { Router } from 'express';
 import { db, prepareOnce } from '../db.js';
 import { getCachedStats, setCachedStats } from '../statsCache.js';
+import { tieredLimiter } from '../limiter.js';
 
 const router = Router();
+
+// IMPROVE-32：概览与热力图都是全表扫描（热力图按天聚合近一年），30s 缓存只挡重复
+// 请求、挡不住换参数的脚本。原先只靠 index.js 的全局兜底（300 次/分钟/IP），
+// 这里挂专属分层配额：游客 30 次/分钟 · 登录用户 120 次/分钟（按 user id 计数）
+// · 管理员豁免。仪表盘一次加载 = 2 次请求（/stats + /stats/heatmap），30 次/分钟
+// 对游客足够，同时仍比全局兜底紧 10 倍。
+router.use(
+  tieredLimiter({
+    windowMs: 60 * 1000,
+    guest: 30,
+    user: 120,
+    message: '统计数据请求过于频繁，请稍后再试',
+  })
+);
 
 const DAY = 86400000;
 

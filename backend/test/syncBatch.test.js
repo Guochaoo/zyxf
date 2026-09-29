@@ -76,7 +76,12 @@ describe('BUG-08: sync 批量删除（>999 文件场景）', () => {
     ];
     const { body } = await request('POST', '/api/sync', { token });
     assert.deepEqual(body.added, { folders: 2, files: 3 });
-    assert.deepEqual(body.removed, { folders: 0, files: 0 });
+    assert.equal(body.removed.folders, 0);
+    assert.equal(body.removed.files, 0);
+    // IMPROVE-26：removed 多了被剪目录的路径清单，顶层多了干跑开关与年龄闸门
+    assert.deepEqual(body.removed.folder_paths, []);
+    assert.equal(body.dry_run, false);
+    assert.equal(body.prune_min_age_days, 7);
     assert.equal(body.scanned, 3);
     assert.equal(typeof body.repaired_files, 'number');
     assert.equal(body.ok, true);

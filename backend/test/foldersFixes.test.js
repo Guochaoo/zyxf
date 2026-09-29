@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
 import { app } from '../src/index.js';
 import { ossObjectStore } from './setup.js';
-import { request, adminToken as adminLogin, setBaseUrl, clearLibraryTables } from './helpers.js';
+import { request, adminToken as adminLogin, setBaseUrl, clearLibraryTables, createFolder, registerFile } from './helpers.js';
 
 let server;
 let base;
@@ -25,23 +25,6 @@ beforeEach(() => {
   db.prepare('DELETE FROM files').run();
   db.prepare('DELETE FROM folders').run();
 });
-
-async function createFolder(token, name, parent_id) {
-  return request('POST', '/api/folders', { token, body: { name, parent_id } });
-}
-
-async function registerFile(token, { name, folder_id = null, oss_key, size = 123, mime_type = null }) {
-  return request('POST', '/api/files', {
-    token,
-    body: {
-      name,
-      folder_id,
-      oss_key: oss_key ?? `zyxf-test/${name}`,
-      size,
-      mime_type,
-    },
-  });
-}
 
 describe('BUG-11: folder names containing path separators are rejected', () => {
   test('POST /api/folders rejects a name with "/" (400)', async () => {

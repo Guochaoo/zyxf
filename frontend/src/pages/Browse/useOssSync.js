@@ -24,17 +24,27 @@ export function useOssSync(refresh) {
       const a = r.added || {};
       const rm = r.removed || {};
       const changed = Boolean(a.files || a.folders || rm.files);
+      const prunedFolders = rm.folders || 0;
       // 主行只放「同步完成」这类短标题，明细交给副行——Toast 主行两行后即省略，
       // 原先整句塞在主行会显示不全（卡片文字区仅约 200px）。
+      // 目录剪枝单独一段：剪掉的是「既没文件又没占位对象」的空文件夹，跟新增/清理文件
+      // 不是一回事，混进同一句会让人以为动了文件（IMPROVE-26）。
+      const sub = [];
+      if (changed) {
+        sub.push(
+          t('browse.syncDetail', {
+            folders: a.folders || 0,
+            files: a.files || 0,
+            removed: rm.files || 0,
+          })
+        );
+      }
+      if (prunedFolders > 0) {
+        sub.push(t('browse.syncPrunedFolders', { count: prunedFolders }));
+      }
       showSyncMsg({
         message: t('browse.syncDone'),
-        sub: changed
-          ? t('browse.syncDetail', {
-              folders: a.folders || 0,
-              files: a.files || 0,
-              removed: rm.files || 0,
-            })
-          : t('browse.syncNone'),
+        sub: sub.length ? sub.join(' · ') : t('browse.syncNone'),
       });
     } catch (e) {
       showSyncMsg({ message: errMsg(e, t('browse.syncError')), ok: false });

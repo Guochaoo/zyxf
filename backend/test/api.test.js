@@ -1,10 +1,9 @@
 import { describe, test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
-import { request, adminToken as adminLogin, setBaseUrl, clearLibraryTables } from './helpers.js';
-import { signToken } from '../src/auth.js';
+import { request, adminToken as adminLogin, setBaseUrl, clearLibraryTables, createFolder, registerFile, userToken } from './helpers.js';
 import { app } from '../src/index.js';
-import { ossObjectStore, mailState, ensureTestUser } from './setup.js';
+import { ossObjectStore, mailState } from './setup.js';
 
 let server;
 let base;
@@ -25,29 +24,6 @@ beforeEach(() => {
   ossObjectStore.keys = [];
   clearLibraryTables(db);
 });
-
-function userToken() {
-  // attachUser 会回查用户行（BUG-51/52），普通用户 token 也必须对应真实账号
-  ensureTestUser({ id: 99, username: 'guest', role: 'user' });
-  return signToken({ id: 99, username: 'guest', role: 'user' });
-}
-
-async function createFolder(token, name, parent_id) {
-  return request('POST', '/api/folders', { token, body: { name, parent_id } });
-}
-
-async function registerFile(token, { name, folder_id = null, oss_key, size = 123, mime_type = null }) {
-  return request('POST', '/api/files', {
-    token,
-    body: {
-      name,
-      folder_id,
-      oss_key: oss_key ?? `zyxf-test/${name}`,
-      size,
-      mime_type,
-    },
-  });
-}
 
 describe('GET /api/health', () => {
   test('returns ok', async () => {
@@ -657,11 +633,17 @@ describe('sync', () => {
     const token = await adminLogin();
     await createFolder(token, '\u65e7\u6587\u4ef6\u5939'); // 旧文件夹
     await registerFile(token, { name: 'stale.pdf', oss_key: 'zyxf-test/stale.pdf' });
+    // IMPROVE-26 的年龄闸门只剪「已存在超过 N 天」的死目录，把刚建的这个回拨过闸门
+    db.prepare('UPDATE folders SET created_at = ? WHERE name = ?').run(
+      Date.now() - 30 * 24 * 60 * 60 * 1000,
+      '\u65e7\u6587\u4ef6\u5939'
+    );
 
     ossObjectStore.keys = ['zyxf-test/\u4fdd\u7559/\u5b58\u5728.pdf']; // 保留/存在.pdf
     const { body } = await request('POST', '/api/sync', { token });
     assert.equal(body.removed.files, 1);
     assert.equal(body.removed.folders, 1); // 旧文件夹 is empty & unrepresented
+    assert.deepEqual(body.removed.folder_paths, ['\u65e7\u6587\u4ef6\u5939']);
 
     const tree = await request('GET', '/api/folders/tree');
     assert.deepEqual(tree.body.tree.map((f) => f.name), ['\u4fdd\u7559']);
@@ -672,7 +654,9 @@ describe('sync', () => {
     await registerFile(token, { name: 'keep.pdf' });
     const { body } = await request('POST', '/api/sync', { token }); // ossObjectStore.keys = []
     assert.equal(body.scanned, 0);
-    assert.deepEqual(body.removed, { folders: 0, files: 0 });
+    assert.equal(body.removed.folders, 0);
+    assert.equal(body.removed.files, 0);
+    assert.deepEqual(body.removed.folder_paths, []);
     const root = await request('GET', '/api/folders/0/contents');
     assert.equal(root.body.files.length, 1);
   });
@@ -735,6 +719,8 @@ describe('POST /api/auth/register (+ /register/code)', () => {
   test('full flow: request code, register, token works, role is user', async () => {
     const { status, body } = await registerViaCode('newbie@test.dev');
     assert.equal(status, 200);
+    // 显式断言 token 存在：undefined token 流向后续请求只会以无关用例的 401 呈现（issue #52）
+    assert.ok(body.token, `注册响应缺少 token：${JSON.stringify(body)}`);
     assert.equal(body.user.role, 'user');
     assert.equal(body.user.username, 'newbie');
 

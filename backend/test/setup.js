@@ -7,20 +7,12 @@
 // Do not drop that flag (tests fail without it); re-verify when bumping Node.
 import './env.js';
 import { mock } from 'node:test';
-import { db } from '../src/db.js';
 import * as realOss from '../src/oss.js';
 import * as realLlm from '../src/llm.js';
 
-// 认证加固后 attachUser 会按 payload.id 回查用户行（BUG-51/52：使改密/降权/删号立即生效），
-// 所以任何「以某个身份发请求」的用例都必须先让该 id 真实存在，否则 token 会被判为无效。
-// id 显式指定，便于用例直接把它写进 signToken 的 payload。
-export function ensureTestUser({ id, username = `u${id}`, role = 'user' } = {}) {
-  db.prepare(
-    `INSERT INTO users (id, username, password_hash, role, created_at) VALUES (?, ?, 'x', ?, ?)
-     ON CONFLICT(id) DO UPDATE SET username = excluded.username, role = excluded.role`
-  ).run(id, username, role, Date.now());
-  return { id, username, role };
-}
+// ensureTestUser 现在住在 seed.js（纯 DB helper）：helpers.js 的 userToken() 也要用它，而
+// helpers.js 不该依赖这个「注册模块 mock」的文件。这里继续 re-export，既有 import 保持不变。
+export { ensureTestUser } from './seed.js';
 
 // Controllable fake OSS object store — tests write ossObjectStore.keys to
 // simulate what the bucket contains (sync endpoint reads this).

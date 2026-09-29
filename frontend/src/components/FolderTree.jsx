@@ -52,9 +52,8 @@ export default function FolderTree({ currentId = 0, className = '' }) {
   useEffect(() => {
     setExpanded((prev) => {
       const next = new Set(prev);
-      // 首页 (root node) is expanded by default; re-expand it when returning
-      // to the root. Manual collapse is respected until the next navigation.
-      if (currentRef.current === 0) next.add(0);
+      // #62：根节点（id 0）不在 activePath 里（那里只遍历 tree），必须无条件展开，否则深链/刷新 /folder/:id 时整棵树只剩「首页」一行。
+      next.add(0);
       for (const id of activePath) next.add(id);
       return next;
     });

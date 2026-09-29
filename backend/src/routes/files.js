@@ -11,7 +11,7 @@ import { isUniqueError, folderExists, nextSortOrder } from '../dbHelpers.js';
 import { objectKeyForFile, ossPrefix, parseOptionalFolderId } from '../storagePath.js';
 import { isExtAllowed, normalizeExt, PREVIEWABLE_EXTS, shouldForceDownload } from '../extPolicy.js';
 import { invalidateLibraryCaches } from '../libraryCaches.js';
-import { adminBypassLimiter } from '../limiter.js';
+import { adminBypassLimiter, tieredLimiter } from '../limiter.js';
 import { wrapAsync, serviceError } from '../http.js';
 import {
   containsPathSeparator,
@@ -32,6 +32,30 @@ import {
 // equally throttled (admins bypass the cap).
 const downloadLimiterShort = adminBypassLimiter(60 * 1000, 60, '请求过于频繁,请稍后再试');
 const downloadLimiterLong = adminBypassLimiter(60 * 60 * 1000, 240, '本小时请求次数已达上限,请稍后再试');
+
+// ---- Anti-abuse: preview credential issuance (IMPROVE-31) ----
+// 预览凭证（WebOffice token / refresh）单独一层配额，与下载桶**分开**，原因有二：
+// ① 每命中一次都真调一次付费的 IMM 转换（GenerateWebofficeToken / RefreshWebofficeToken）；
+// ② 返回的 WebofficeURL + AccessToken 在 30 分钟内不绑定请求者，转发出去就是可复现的
+//    整库读取入口，而这条链路不走本站，下载日志与限流都拦不住。
+// 原先它与 /url 共用 60/分 · 240/时 的下载配额：匿名 IP 能据此放量遍历 file.id 触发付费
+// 调用，预览流量也会挤占正常下载的额度。
+// 匿名预览是有意的产品设计，故保留游客可用，但收得更紧：游客 20 次/分钟 · 60 次/小时，
+// 登录用户 60 次/分钟 · 300 次/小时（按 user id 计数，不占出口 IP 配额），管理员豁免。
+// 数值没压到个位数：校园 NAT 下游客共用 IP，一次预览只消耗 1 次、长会话 25 分钟才续期
+// 一次，20/分钟留了并发余量，同时把遍历成本压到原先的 1/4（240 → 60 次/小时）。
+const previewLimiterShort = tieredLimiter({
+  windowMs: 60 * 1000,
+  guest: 20,
+  user: 60,
+  message: '预览请求过于频繁,请稍后再试',
+});
+const previewLimiterLong = tieredLimiter({
+  windowMs: 60 * 60 * 1000,
+  guest: 60,
+  user: 300,
+  message: '本小时预览次数已达上限,请稍后再试',
+});
 
 const SHORT_SIGN_TTL = 1800; // 30 min — enough for long preview sessions, short enough to limit link-sharing risk
 
@@ -138,7 +162,7 @@ router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => 
 // WebOffice preview token via IMM GenerateWebofficeToken. Works for
 // browser-uploaded ("externally uploaded") objects too — the JS-SDK renders
 // the returned WebofficeURL in the browser, mobile WebViews included.
-router.get('/:id/weboffice-token', downloadLimiterShort, downloadLimiterLong, wrapAsync(async (req, res) => {
+router.get('/:id/weboffice-token', previewLimiterShort, previewLimiterLong, wrapAsync(async (req, res) => {
   const file = getFileOr404(req, res);
   if (!file) return;
   const ext = normalizeExt(file.ext);
@@ -155,7 +179,7 @@ router.get('/:id/weboffice-token', downloadLimiterShort, downloadLimiterLong, wr
 // Refresh a WebOffice access token (30-min lifetime) with the refresh token
 // (1-day lifetime). The frontend JS-SDK calls this via its refreshToken
 // callback before the access token expires.
-router.post('/:id/weboffice-refresh', downloadLimiterShort, downloadLimiterLong, wrapAsync(async (req, res) => {
+router.post('/:id/weboffice-refresh', previewLimiterShort, previewLimiterLong, wrapAsync(async (req, res) => {
   const file = getFileOr404(req, res);
   if (!file) return;
   const { access_token, refresh_token } = req.body || {};

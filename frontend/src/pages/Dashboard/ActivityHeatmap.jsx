@@ -78,8 +78,10 @@ const HeatGrid = memo(function HeatGrid({ visWeeks, months, max, cell, weekdays,
       <div className="flex" style={{ gap: HEAT_GAP }}>
         <div className="mr-1 flex flex-col" style={{ gap: HEAT_GAP }}>
           {weekdays.map((name, i) => (
+            // key 用行号而非文案：英文周日开头字典里 'T'/'S' 各出现两次，
+            // 用文案当 key 会重键（BUG-93 顺带修掉）。
             <span
-              key={name}
+              key={i}
               style={{ height: cell, lineHeight: `${cell}px` }}
               className="text-[10px] text-ink-3"
             >
@@ -130,9 +132,13 @@ export default function ActivityHeatmap({ rows }) {
   // 月份轴文案：按下标取用（1 月 = 下标 0）。用整份数组而非按 count 拼接，
   // 以免英文出现 '9m' 这类易误读的写法。
   const monthNames = useMemo(() => t('dashboard.monthShort', { returnObjects: true }), [t]);
-  // dictionary weekdays is Sunday-first; rendered per row index (grid is built
-  // Monday-first in buildWeeks, so labels may not align perfectly)
-  const weekdays = useMemo(() => t('dashboard.weekdays', { returnObjects: true }), [t]);
+  // 字典是周日开头（zh: 日一二三四五六），而网格按周一开头构建（buildWeeks 把
+  // 首列对齐到周一），所以第 i 行必须取字典的 (i + 1) % 7 项——按行号直接取会让
+  // 每一行标签都比真实星期早一天（BUG-93）。隔行显示策略（i % 2 === 0）保持不变。
+  const weekdays = useMemo(() => {
+    const dict = t('dashboard.weekdays', { returnObjects: true });
+    return dict.map((_, i) => dict[(i + 1) % 7]);
+  }, [t]);
 
   const { weeks, months, max } = useMemo(
     () => (rows?.length ? buildWeeks(rows) : { weeks: [], months: [], max: 0 }),

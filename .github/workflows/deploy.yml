@@ -36,7 +36,7 @@ jobs:
           script: |
             set -e
             cd /opt/zyxf
-            # 回滚基线：本次部署前的修订。健康检查失败时据此回退（人工排障也可直接执行
+            # 回滚基线：本次部署前的修订。任何步骤失败都据此回退（人工排障也可直接执行
             # `git reset --hard <该 SHA>` + 重新构建）。
             PREV=$(git rev-parse HEAD)
             git config --global --add safe.directory /opt/zyxf
@@ -48,6 +48,37 @@ jobs:
             # reset --hard 只碰被跟踪文件，.env / data.db 均被 gitignore 不受影响。
             git fetch origin main
             git reset --hard origin/main
+
+            # BUG-102：把「安装/构建阶段」也纳入回滚。原先 set -e 只让脚本停在原地——
+            # 此时 reset --hard 已经跑过，服务器停在「新代码 + 缺依赖」的中间态：旧进程
+            # 还在跑所以站点看起来正常，但下一次重启就会因缺依赖起不来；而回滚分支只挂在
+            # 健康检查失败上，更早的 npm install 挂掉根本走不到那里（上次事故就是人工
+            # revert 整批才恢复的）。现在用 EXIT trap 兜住所有非零退出，不管失败发生在
+            # npm install、vite build 还是健康检查，都退回 PREV 重建。
+            # ⚠️ trap 处理函数里第一件事必须 set +e：回滚自身任何一步失败都不能打断回滚，
+            # 且 ROLLED_BACK 保证只回滚一次（健康检查失败会正常退出，由同一个 trap 接管）。
+            ROLLED_BACK=0
+            rollback() {
+              set +e
+              [ "$ROLLED_BACK" = 1 ] && return 0
+              ROLLED_BACK=1
+              echo "::error::deploy failed on $(git rev-parse --short HEAD), rolling back to ${PREV}"
+              cd /opt/zyxf
+              git reset --hard "$PREV"
+              cd /opt/zyxf/backend
+              npm install --no-audit --no-fund
+              cd /opt/zyxf/frontend
+              npm install --no-audit --no-fund
+              npm run build
+              systemctl restart zyxf
+              sleep 3
+              curl -fsS http://127.0.0.1:4000/api/health || true
+              echo "::error::rolled back to ${PREV}: 回滚已完成，但本次部署判定为失败"
+            }
+            # 末尾的 exit 不能省：EXIT trap 的最终退出码取自最后一条命令，而最后一条是
+            # echo（成功），会把失败掩盖成绿灯。统一以 1 结束（失败码本身已记在日志里），
+            # 与旧脚本「回滚后 exit 1」的约定一致。
+            trap 'code=$?; if [ "$code" -ne 0 ]; then rollback; exit 1; fi; exit 0' EXIT
 
             # Node 24 走系统包（NodeSource，/usr/bin/node，v24.21+）。
             # 旧写法 export PATH="/www/server/nodejs/..." 随宝塔卸载已废弃（IMPROVE-48）。
@@ -86,26 +117,8 @@ jobs:
             fi
             systemctl start zyxf
 
-            sleep 3
             # 健康检查：确认后端起来（写库/加载环境变量失败会在此暴露）。
-            if curl -fsS http://127.0.0.1:4000/api/health; then
-              exit 0
-            fi
-
-            # 健康检查失败 = 新修订起不来。此时前端 dist/ 已被新构建覆盖、新代码也已就位，
-            # 直接留在新修订上会让线上持续 502，所以退回部署前的修订并重建，至少恢复可用。
-            # 注意：回滚会把本地分支指针退回 PREV，与 origin/main 暂时分叉；下次部署的
-            # `git reset --hard origin/main` 会自动重新对齐，属预期行为。
-            echo "::error::health check failed on $(git rev-parse --short HEAD), rolling back to ${PREV}"
-            cd /opt/zyxf
-            git reset --hard "$PREV"
-            cd /opt/zyxf/backend
-            npm install --no-audit --no-fund
-            cd /opt/zyxf/frontend
-            npm install --no-audit --no-fund
-            npm run build
-            systemctl restart zyxf
+            # 失败即非零退出 → EXIT trap 回滚到 PREV（前端 dist 已被新构建覆盖，
+            # 留在新修订上会让线上持续 502）。
             sleep 3
-            curl -fsS http://127.0.0.1:4000/api/health || true
-            echo "::error::rolled back to ${PREV}: 回滚已完成，但本次部署判定为失败"
-            exit 1
+            curl -fsS http://127.0.0.1:4000/api/health
