@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
 import { app } from '../src/index.js';
 import { ossObjectStore } from './setup.js';
-import { request, adminToken as adminLogin, setBaseUrl, clearLibraryTables } from './helpers.js';
+import { request, adminToken as adminLogin, setBaseUrl, clearLibraryTables, registerFile } from './helpers.js';
 
 let server;
 let base;
@@ -23,12 +23,6 @@ beforeEach(() => {
   ossObjectStore.keys = [];
   clearLibraryTables(db);
 });
-
-async function registerFile(token, { name, oss_key, mime_type }) {
-  const body = { name, folder_id: null, oss_key: oss_key ?? `zyxf-test/${name}`, size: 10 };
-  if (mime_type !== undefined) body.mime_type = mime_type;
-  return request('POST', '/api/files', { token, body });
-}
 
 // 直接插行以构造超 8 种扩展名的场景（走接口会受扩展名白名单限制）。
 function seedExts(exts) {

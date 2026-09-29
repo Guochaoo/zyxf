@@ -1,10 +1,8 @@
 import { describe, test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { db } from '../src/db.js';
-import { request, adminToken as adminLogin, setBaseUrl, clearLibraryTables } from './helpers.js';
-import { signToken } from '../src/auth.js';
+import { request, adminToken as adminLogin, setBaseUrl, clearLibraryTables, userToken } from './helpers.js';
 import { app } from '../src/index.js';
-import { ensureTestUser } from './setup.js';
 
 // IMPROVE-31 / IMPROVE-32 的限流回归：搜索、统计、预览凭证三类「昂贵端点」各自
 // 有专属分层配额，与全局 publicLimiter（300 次/分钟）和下载桶互相独立。
@@ -27,12 +25,6 @@ beforeEach(() => clearLibraryTables(db));
 
 let ipPool = 10;
 const freshXff = () => ({ 'x-forwarded-for': `198.51.100.${ipPool++}` });
-
-function userToken() {
-  // attachUser 会回查用户行，普通用户 token 必须对应真实账号
-  ensureTestUser({ id: 98, username: 'cap-user', role: 'user' });
-  return signToken({ id: 98, username: 'cap-user', role: 'user' });
-}
 
 const insertPdf = () =>
   db

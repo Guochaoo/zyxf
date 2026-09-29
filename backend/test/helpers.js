@@ -2,6 +2,8 @@
 // statsTopDownloads/statsAndMime 六个文件各复制约 50 行，审计后收敛到这里）。
 // 普通 import，不经 mock.module——本文件只做 HTTP 编排，不碰任何被 mock 的模块。
 import assert from 'node:assert/strict';
+import { signToken } from '../src/auth.js';
+import { ensureTestUser } from './seed.js';
 
 let base = null;
 
@@ -47,4 +49,29 @@ export function clearLibraryTables(db) {
   db.prepare('DELETE FROM download_logs').run();
   db.prepare('DELETE FROM files').run();
   db.prepare('DELETE FROM folders').run();
+}
+
+// ---- 常用写的封装（issue #66：原先 api / foldersFixes / statsAndMime 各抄一份，
+// 三者的默认值还不一样，改一处语义不会同步到别处） ----
+
+/** 建文件夹（管理员）：POST /api/folders。 */
+export async function createFolder(token, name, parent_id = null) {
+  return request('POST', '/api/folders', { token, body: { name, parent_id } });
+}
+
+/** 注册文件元数据（管理员）：POST /api/files。oss_key 默认按 name 派生；mime_type 由服务端按扩展名派生（BUG-26）。 */
+export async function registerFile(token, { name, folder_id = null, oss_key, size = 123, mime_type = null }) {
+  return request('POST', '/api/files', {
+    token,
+    body: { name, folder_id, oss_key: oss_key ?? `zyxf-test/${name}`, size, mime_type },
+  });
+}
+
+/**
+ * 普通用户 token。id 默认 99：`ensureTestUser` 先落库（attachUser 会回查用户行），
+ * 所以调用方不必自己「先建行再签 token」。
+ */
+export function userToken({ id = 99, username = 'guest', role = 'user' } = {}) {
+  ensureTestUser({ id, username, role });
+  return signToken({ id, username, role });
 }
