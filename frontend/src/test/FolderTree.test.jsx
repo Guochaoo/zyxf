@@ -93,10 +93,11 @@ describe('FolderTree 渲染与展开', () => {
   test('当前文件夹高亮，且其祖先链自动展开（深链 /folder/:id 也能看到自己在哪）', async () => {
     renderTree(5);
 
-    // 深链进来时应当看得到活动路径：高数 → 期中（加载中机器负载高时 1s 默认超时不够，
-    // 这里显式放宽，避免在 CI 上抖动）
+    // 树到达后，根节点由 effect 展开；**祖先链**的展开是紧随其后的另一次 state 更新
+    // （activePath 变化 → effect → setExpanded）。两条断言都必须 await：高负载下
+    // 同步 getByText 会抢在那次更新之前跑，表现为「找不到『期中』」的假失败。
     expect(await screen.findByText('高数', {}, { timeout: 3000 })).toBeInTheDocument();
-    expect(screen.getByText('期中')).toBeInTheDocument();
+    expect(await screen.findByText('期中', {}, { timeout: 3000 })).toBeInTheDocument();
 
     const current = screen.getByText('期中').closest('[aria-current="page"]');
     expect(current).not.toBeNull();
