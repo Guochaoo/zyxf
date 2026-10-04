@@ -157,11 +157,12 @@ export default function SearchBar({ className = '' }) {
       {open && (err || results) && dropdownRect && createPortal(
         <div
           ref={dropdownRef}
-          className="rb-search-dropdown app-theme fixed z-[200] overflow-hidden"
+          className="rb-search-dropdown app-theme fixed z-[200] overflow-hidden h-auto min-h-0"
           style={{
             top: dropdownRect.top,
             left: dropdownRect.left,
             width: dropdownRect.width,
+            maxHeight: `calc(100vh - ${dropdownRect.top + 16}px)`,
             backdropFilter: 'blur(16px) saturate(180%)',
             WebkitBackdropFilter: 'blur(16px) saturate(180%)',
           }}

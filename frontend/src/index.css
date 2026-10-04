@@ -67,7 +67,6 @@ a:focus-visible,
 
 /* ---- DESIGN.md §3: Typography ---- */
 .app-theme {
-  min-height: 100%;
   color: var(--ink);
   font-weight: 400;
   letter-spacing: 0;
@@ -230,6 +229,8 @@ a:focus-visible,
 
 /* Search dropdown — frosted glass with shadow stack */
 .rb-search-dropdown {
+  height: auto !important;
+  min-height: 0 !important;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.65) !important;
   background: color-mix(in srgb, var(--surface) 65%, transparent) !important;
