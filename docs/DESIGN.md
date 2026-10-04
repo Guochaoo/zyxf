@@ -82,7 +82,7 @@
 - **`.rb-card`**（`index.css` 内联定义）：rgba(0,0,0,.08) 0 0 0 1px + rgba(0,0,0,.04) 0 2px 2px + rgba(0,0,0,.04) 0 8px 8px -8px + #fafafa 0 0 0 1px（内环）——**只用于上传 / 重命名弹窗**。
 - **`shadow-btn`**（Tailwind token）：rgba(23,23,23,.12) 0 1px 2px + rgba(23,23,23,.06) 0 0 0 1px——提拉胶囊（时间范围切换、刷新、聊天引用胶囊、活跃分段）。
 - **`.rb-btn-ghost` 的 hairline**：rgba(0,0,0,.08) 0 0 0 1px，hover 加深为 rgba(0,0,0,.12)，背景不变。
-- **搜索下拉 `.rb-search-dropdown`**：`var(--line-strong)` 0 0 0 1px + rgba(0,0,0,.04) 0 2px 2px + rgba(0,0,0,.04) 0 8px 8px -8px + `var(--surface)` 内环。
+- **搜索下拉 `.rb-search-dropdown`**：毛玻璃背景（`blur(16px)` + 80% `--surface` 半透明底色），`var(--line-strong)` 0 0 0 1px + rgba(0,0,0,.04) 0 4px 12px + rgba(0,0,0,.04) 0 12px 24px -4px 柔光阴影。
 - **设置弹窗卡片**：0 1px 2px rgba(0,0,0,.04) + 0 28px 64px -20px rgba(0,0,0,.28)，16px 圆角。
 - **图表提示 `.insight-chart-tooltip`**：rgba(23,23,23,.08) 0 0 0 1px + rgba(23,23,23,.12) 0 8px 24px。
 - **Toast 自带投影**：rgba(149,157,165,.2) 0 8px 24px（沿用 uiverse 通知卡样式，**不属**本系统的阴影语汇，见 §6 注）。
@@ -188,7 +188,7 @@
 ### 搜索（中列工具栏与移动端）
 - **位置**：宽屏（`lg` 及以上）下常驻于中列工具栏左侧，弹性自适应延展至排序分段按钮前（`flex-1 max-w-none`，34px 高度与右侧工具按钮严格齐平），左栏不再放置搜索框；移动端（`lg` 以下）独立一行（`w-[92%]` 居中），位于品牌行下方
 - **胶囊 `.rb-search-pill`**：白底、圆角 14px、**无描边**；`focus-within` 只加一层极浅投影 rgba(0,0,0,.05) 0 2px 4px；内部 `input` 背景 / 描边 / 焦点环全部清空
-- **下拉 `.rb-search-dropdown`**：圆角 12px、白底、`--line-strong` 细环 + 两层浅投影；结果行 hover `bg-slate-50`（#FAFAFA）
+- **下拉 `.rb-search-dropdown`**：圆角 12px、毛玻璃背景（`blur(16px)` + 80% 表面色半透明）、`--line-strong` 细环 + 柔光投影；结果行 hover 浅灰半透遮罩（`bg-black/5` / `dark:bg-white/5`），底部状态栏半透明
 
 ### 导航（`StaggeredMenu`，全尺寸通用）
 - 全站**没有 topbar**：导航开关钉在右上角（`top: 5px`），所有尺寸一致；点击向右滑出面板。面板宽 `clamp(240px, 30vw, 340px)`；`≤1100px` 时 `clamp(280px, 48vw, 340px)`；`≤640px` 时随一个 92% 宽的菜单头条（`left: 6.5%`）布局，面板 `clamp(240px, 78vw, 340px)`

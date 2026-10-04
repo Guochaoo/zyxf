@@ -178,7 +178,7 @@ export default function SearchBar({ className = '' }) {
           ) : total === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-slate-500">{t('search.noResult')}</div>
           ) : (
-            <div className="max-h-80 overflow-y-auto">
+            <div className="max-h-80 overflow-y-auto rb-side-scroll">
               {results.folders.length > 0 && (
                 <div>
                   <div className="px-4 py-2 text-xs text-slate-500 font-medium">{t('search.folders')}</div>
@@ -186,7 +186,7 @@ export default function SearchBar({ className = '' }) {
                     <button
                       key={`d-${f.id}`}
                       onClick={() => handleResult(f)}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50 transition-colors"
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                     >
                       <BsFolder className="w-4 h-4 text-amber-400 shrink-0" />
                       <span className="text-sm text-slate-900 truncate">{f.name}</span>
@@ -200,7 +200,7 @@ export default function SearchBar({ className = '' }) {
                   {results.files.map((f) => (
                     <div
                       key={`f-${f.id}`}
-                      className="flex w-full items-center gap-1 hover:bg-slate-50 transition-colors"
+                      className="flex w-full items-center gap-1 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                     >
                       <button
                         type="button"
@@ -218,7 +218,7 @@ export default function SearchBar({ className = '' }) {
                       <button
                         type="button"
                         onClick={(e) => handleDownload(e, f)}
-                        className="mr-2 flex w-8 h-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-900"
+                        className="mr-2 flex w-8 h-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-slate-900"
                         title={t('common.download')}
                         aria-label={t('search.download', { name: f.name })}
                       >
@@ -230,7 +230,7 @@ export default function SearchBar({ className = '' }) {
               )}
             </div>
           )}
-          <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-400">
+          <div className="border-t border-line/60 bg-black/[0.02] dark:bg-white/[0.02] px-4 py-2 text-xs text-slate-400">
             {err
               ? t('search.failed')
               : results?.truncated
