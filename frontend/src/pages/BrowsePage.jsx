@@ -21,6 +21,7 @@ import UploadDialog from '../components/UploadDialog.jsx';
 import Toast from '../components/Toast.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import NamePromptDialog from '../components/NamePromptDialog.jsx';
+import SearchBar from '../components/SearchBar.jsx';
 import { downloadAndAlert, errMsg, notifyFoldersChanged } from '../utils.js';
 import { useFolderContents } from './Browse/useFolderContents.js';
 import { useItemDragDrop } from './Browse/useItemDragDrop.js';
@@ -188,34 +189,39 @@ export default function BrowsePage() {
   return (
     <div className="space-y-4">
       {/* Toolbar — sits above the file list */}
-      <div className="flex w-full flex-wrap items-center justify-end gap-2">
-        <SortControl sort={sort} order={order} onChange={toggleSort} />
-        <ToolbarIconButton title={t('browse.refresh')} onClick={onSyncRefresh}>
-          <RotateCw className={`w-6 h-6 ${syncing ? 'animate-spin' : ''}`} />
-        </ToolbarIconButton>
-        {folderId !== 0 && (
-          <ToolbarIconButton title={t('browse.openFolder')} onClick={onGoBack}>
-            <ArrowLeft className="w-6 h-6" />
+      <div className="flex w-full flex-wrap items-center justify-between gap-2">
+        <div className="hidden lg:block w-64 xl:w-72 shrink-0">
+          <SearchBar />
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
+          <SortControl sort={sort} order={order} onChange={toggleSort} />
+          <ToolbarIconButton title={t('browse.refresh')} onClick={onSyncRefresh}>
+            <RotateCw className={`w-6 h-6 ${syncing ? 'animate-spin' : ''}`} />
           </ToolbarIconButton>
-        )}
-        {isAdmin && (
-          <>
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="rb-toolbar-btn"
-            >
-              <BsFolderPlus className="w-4 h-4" />
-              {t('browse.createFolder')}
-            </button>
-            <button
-              onClick={() => setUploadOpen(true)}
-              className="rb-btn-dark h-[34px]"
-            >
-              <BsCloudArrowUp className="w-4 h-4" />
-              {t('browse.upload')}
-            </button>
-          </>
-        )}
+          {folderId !== 0 && (
+            <ToolbarIconButton title={t('browse.openFolder')} onClick={onGoBack}>
+              <ArrowLeft className="w-6 h-6" />
+            </ToolbarIconButton>
+          )}
+          {isAdmin && (
+            <>
+              <button
+                onClick={() => setCreateOpen(true)}
+                className="rb-toolbar-btn"
+              >
+                <BsFolderPlus className="w-4 h-4" />
+                {t('browse.createFolder')}
+              </button>
+              <button
+                onClick={() => setUploadOpen(true)}
+                className="rb-btn-dark h-[34px]"
+              >
+                <BsCloudArrowUp className="w-4 h-4" />
+                {t('browse.upload')}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Floating banners — fixed so they don't disrupt drag layout */}

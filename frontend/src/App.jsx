@@ -237,7 +237,6 @@ export default function App() {
               {sidebarToggle('shrink-0 h-7 w-7')}
             </span>
           </div>
-          <SearchBar />
           <FolderTree currentId={folderId} />
         </div>
       )}
