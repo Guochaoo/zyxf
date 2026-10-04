@@ -157,11 +157,13 @@ export default function SearchBar({ className = '' }) {
       {open && (err || results) && dropdownRect && createPortal(
         <div
           ref={dropdownRef}
-          className="rb-search-dropdown fixed z-[200] overflow-hidden"
+          className="rb-search-dropdown app-theme fixed z-[200] overflow-hidden"
           style={{
             top: dropdownRect.top,
             left: dropdownRect.left,
             width: dropdownRect.width,
+            backdropFilter: 'blur(16px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(16px) saturate(180%)',
           }}
         >
           {err ? (
@@ -230,13 +232,6 @@ export default function SearchBar({ className = '' }) {
               )}
             </div>
           )}
-          <div className="border-t border-line/60 bg-black/[0.02] dark:bg-white/[0.02] px-4 py-2 text-xs text-slate-400">
-            {err
-              ? t('search.failed')
-              : results?.truncated
-                ? t('search.resultsTruncated', { count: total })
-                : t('search.resultsCount', { count: total })}
-          </div>
         </div>,
         document.body
       )}

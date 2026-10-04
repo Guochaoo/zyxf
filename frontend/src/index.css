@@ -230,24 +230,24 @@ a:focus-visible,
 
 /* Search dropdown — frosted glass with shadow stack */
 .rb-search-dropdown {
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.8);
-  background: color-mix(in srgb, var(--surface) 80%, transparent);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.65) !important;
+  background: color-mix(in srgb, var(--surface) 65%, transparent) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow:
-    var(--line-strong) 0px 0px 0px 1px,
-    rgba(0, 0, 0, 0.04) 0px 4px 12px,
-    rgba(0, 0, 0, 0.04) 0px 12px 24px -4px;
+    0 20px 40px -15px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset;
 }
 
 [data-theme='dark'] .rb-search-dropdown {
-  background: rgba(30, 30, 30, 0.8);
-  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  background: rgba(26, 26, 26, 0.72) !important;
+  background: color-mix(in srgb, var(--surface) 72%, transparent) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow:
-    rgba(255, 255, 255, 0.08) 0px 0px 0px 1px,
-    rgba(0, 0, 0, 0.25) 0px 4px 12px,
-    rgba(0, 0, 0, 0.35) 0px 12px 24px -4px;
+    0 20px 40px -15px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
 }
 
 .rb-search-dropdown,
