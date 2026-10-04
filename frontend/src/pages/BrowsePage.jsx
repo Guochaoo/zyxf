@@ -189,11 +189,11 @@ export default function BrowsePage() {
   return (
     <div className="space-y-4">
       {/* Toolbar — sits above the file list */}
-      <div className="flex w-full flex-wrap items-center justify-between gap-2">
-        <div className="hidden lg:block w-64 xl:w-72 shrink-0">
-          <SearchBar />
+      <div className="flex w-full items-center gap-2">
+        <div className="hidden lg:block min-w-0 flex-1">
+          <SearchBar className="w-full max-w-none" />
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
+        <div className="flex flex-wrap items-center justify-end gap-2 shrink-0 max-lg:ml-auto">
           <SortControl sort={sort} order={order} onChange={toggleSort} />
           <ToolbarIconButton title={t('browse.refresh')} onClick={onSyncRefresh}>
             <RotateCw className={`w-6 h-6 ${syncing ? 'animate-spin' : ''}`} />

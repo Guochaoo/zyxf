@@ -123,8 +123,10 @@ export default function SearchBar({ className = '' }) {
     await downloadAndAlert(file, getFileUrl);
   };
 
+  const maxW = className.includes('max-w-') ? '' : 'max-w-[520px]';
+
   return (
-    <div ref={wrapRef} className={`relative z-[70] w-full max-w-[520px] ${className}`.trim()}>
+    <div ref={wrapRef} className={`relative z-[70] w-full ${maxW} ${className}`.trim()}>
       <div className="rb-search-pill relative">
         <Search className="absolute left-[15px] top-1/2 w-4 h-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
         <input
