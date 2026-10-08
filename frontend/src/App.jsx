@@ -46,6 +46,10 @@ const SIDEBAR_TRANSITION = {
   transitionDuration: `${SIDEBAR_MS}ms`,
   transitionTimingFunction: SIDEBAR_EASE,
 };
+// 浮动「展开侧边栏」按钮的淡入淡出时长。取与开合动画同长（320ms）：展开时左轨滑回来
+// 要 320ms，按钮若淡得更快，会在轨道还没盖住它时就先消失（实测 58ms 处已只剩 0.28），
+// 看起来是「先没了」而不是「被轨道收走」。同长则两者贴合。
+const SIDEBAR_FADE_MS = SIDEBAR_MS;
 
 export default function App() {
   const { t } = useTranslation();
@@ -254,7 +258,14 @@ export default function App() {
           横向 x=2 + 工具栏 32px 一起让按钮居中于这段留白：按钮占 2~30，
           于是「页面左缘 → 按钮左缘」2px 与「按钮右缘 → 搜索胶囊左缘（32）」2px 相等。
           ⚠️ 别改成 left: calc(50% - 14px)：fixed 元素的百分比参照视口，不是这段留白，
-          按钮会被推到屏幕中间（实测 x≈779）。 */}
+          按钮会被推到屏幕中间（实测 x≈779）。
+
+          ⚠️ 淡入必须等左轨滑走：左轨从 x=0 滑到 -250 要 320ms，中途会扫过本按钮所在的
+          2~30。若照常瞬间淡入，前 ~130ms 是「半透明的本按钮 + 正在外滑的收起按钮」
+          叠在浅色轨道底上，两个图标同时可见 —— 这就是点击收起时的闪动。所以给淡入挂
+          SIDEBAR_MS 的延迟（左轨滑完才出现），淡出不加延迟（展开时随左轨滑入一起消失，
+          不残留）。勿用 transition-all：属性初始值是 all，会把 left 也带上过渡，
+          悬停改样式时按钮会横向漂移。 */}
       {isBrowse && (
         <button
           type="button"
@@ -263,10 +274,15 @@ export default function App() {
           title={t('app.expandSidebar')}
           aria-hidden={sidebarOpen}
           tabIndex={sidebarOpen ? -1 : 0}
-          className={`fixed left-[2px] top-[13px] z-20 hidden lg:flex h-7 w-7 items-center justify-center rounded-[7px] text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-700 ${
+          className={`fixed left-[2px] top-[13px] z-20 hidden lg:flex h-7 w-7 items-center justify-center rounded-[7px] text-slate-400 hover:bg-slate-100 hover:text-slate-700 ${
             sidebarOpen ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'
           }`}
-          style={SIDEBAR_TRANSITION}
+          style={{
+            ...SIDEBAR_TRANSITION,
+            transitionProperty: 'opacity',
+            transitionDuration: `${SIDEBAR_FADE_MS}ms`,
+            transitionDelay: sidebarOpen ? '0ms' : `${SIDEBAR_MS}ms`,
+          }}
         >
           <PanelLeftOpen className="h-[18px] w-[18px]" strokeWidth={1.7} />
         </button>
