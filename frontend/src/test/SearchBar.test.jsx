@@ -108,11 +108,12 @@ describe('SearchBar · AI 搜索卡', () => {
   };
   const entry = () => screen.findByText('AI 搜索更多结果');
 
-  // 一次成功的检索：正文带【文件N】引用 + files 事件回传命中条目
+  // 一次成功的检索：真实后端会先流式吐正文、再给 files 事件（命中条目）。
+  // 前端已经不订阅正文（onDelta 不传），所以这里用可选调用模拟「上游仍会发」。
   const mockAiReply = () =>
-    chatStreamMock.mockImplementation(async (_messages, { onDelta, onFiles }) => {
-      onDelta('推荐这份【文件1】');
-      onFiles([AI_HIT]);
+    chatStreamMock.mockImplementation(async (_messages, opts = {}) => {
+      opts.onDelta?.('推荐这份【文件1】');
+      opts.onFiles?.([AI_HIT]);
     });
 
   // 悬挂的流：用于观察「查找中」这一态（中止时按 BUG-61 的约定 reject）
@@ -134,13 +135,13 @@ describe('SearchBar · AI 搜索卡', () => {
     expect(await entry()).toBeInTheDocument();
   });
 
-  test('点入口按当前关键词发起一次检索，完成后正文与命中条目落进卡片', async () => {
+  test('点入口按当前关键词发起一次检索，完成后只落固定说明行与命中条目', async () => {
     searchMock.mockResolvedValue({ folders: [], files: [] });
     let seenMessages = null;
-    chatStreamMock.mockImplementation(async (messages, { onDelta, onFiles }) => {
+    chatStreamMock.mockImplementation(async (messages, opts = {}) => {
       seenMessages = messages;
-      onDelta('推荐这份【文件1】');
-      onFiles([AI_HIT]);
+      opts.onDelta?.('推荐这份【文件1】');
+      opts.onFiles?.([AI_HIT]);
     });
     renderBar();
 
@@ -148,9 +149,10 @@ describe('SearchBar · AI 搜索卡', () => {
     fireEvent.click(await entry());
 
     expect(await screen.findByText('AI 搜索')).toBeInTheDocument();
-    // 正文里的【文件N】编号不露给用户，条目改以列表形式给在下方
-    expect(screen.getByText('推荐这份')).toBeInTheDocument();
+    expect(screen.getByText('基于你的描述，你可能想找以下资料')).toBeInTheDocument();
     expect(screen.getByText('高等数学期末版.pdf')).toBeInTheDocument();
+    // LLM 的正文（markdown，且与清单重复）一律不渲染
+    expect(screen.queryByText(/推荐这份/)).toBeNull();
     // 候选框是 portal 到 body 的，泛光要按文档查
     expect(document.querySelector('.rb-ai-card')).toBeTruthy();
     expect(document.querySelector('.rb-ai-card__halo')).toBeNull(); // 完成态不再泛光

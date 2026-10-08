@@ -8,21 +8,9 @@ import FileIcon from './FileIcon.jsx';
 /* ─────────────────────────────────────────────────────────
  * AI 搜索卡（搜索候选框顶部，DESIGN.md §4）
  * 三个形态：入口 → 查找中（彩虹流光泛光）→ 结果卡。
+ * 结果卡只给「一句固定说明 + 命中条目」：LLM 的正文（markdown）不渲染。
  * 纯展示：请求状态由 useAiSearch 持有，这里只按 status 换形态。
  * ───────────────────────────────────────────────────────── */
-
-// 后端把命中的资料写成回答里的【文件N】引用，正文里直接展示这串编号没有意义——
-// 条目已经以列表形式给在下方（与「一句描述 + 候选条目」的结构一致）。
-// 标记本身是中文，这里用码点转义写：源码里不得出现中文文案（test/i18n.test.js 强制）。
-const CITATION = /\u3010\u6587\u4ef6\d+\u3011/g;
-const stripCitations = (value) =>
-  (value || '')
-    .replace(CITATION, '')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join('\n')
-    .trim();
 
 // AI 图标：RiSearchAiLine（放大镜 + 星芒），透明底、图标自身走渐变填充。
 // 渐变要在文档里有个 <defs> 才解析得出来，所以随图标渲染一段 0×0 的 svg；
@@ -76,7 +64,7 @@ function ItemRow({ item, onOpen }) {
 
 export default function AiSearchCard({ query, ai, onOpenItem, onOpenSettings }) {
   const { t } = useTranslation();
-  const { status, text, items, error, loginRequired, run } = ai;
+  const { status, items, error, loginRequired, run } = ai;
   const q = (query || '').trim();
 
   // 入口态：与候选框里的结果行同样是「一行 hover 高亮」，不是卡片。
@@ -99,9 +87,7 @@ export default function AiSearchCard({ query, ai, onOpenItem, onOpenSettings }) 
 
   const loading = status === 'loading';
   const failed = status === 'error';
-  const answer = failed ? '' : stripCitations(text);
   const hits = failed ? null : items;
-  const showNoResult = !loading && !failed && !answer && !hits?.length;
 
   return (
     <div className="rb-ai-card">
@@ -116,21 +102,20 @@ export default function AiSearchCard({ query, ai, onOpenItem, onOpenSettings }) 
           {loading && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin opacity-45" />}
         </div>
 
-        {answer && (
-          <p className="rb-ai-card__sub px-3 pb-2 text-[12.5px] leading-[1.5] whitespace-pre-line">
-            {answer}
-          </p>
-        )}
-
+        {/* LLM 的正文不渲染：它本来是 markdown，剥掉引用后仍会与下方清单重复，
+            还会把 ** 之类的记号露给用户。命中资料由下面的条目行承担，说明行固定。 */}
         {hits?.length > 0 && (
-          <div className="flex flex-col gap-1 px-2 pb-2">
-            {hits.map((item) => (
-              <ItemRow key={`${item.type}-${item.id}`} item={item} onOpen={onOpenItem} />
-            ))}
-          </div>
+          <>
+            <p className="rb-ai-card__sub px-3 pb-2 text-[12.5px]">{t('aiSearch.describe')}</p>
+            <div className="flex flex-col gap-1 px-2 pb-2">
+              {hits.map((item) => (
+                <ItemRow key={`${item.type}-${item.id}`} item={item} onOpen={onOpenItem} />
+              ))}
+            </div>
+          </>
         )}
 
-        {showNoResult && (
+        {!loading && !failed && !hits?.length && (
           <p className="rb-ai-card__sub px-3 pb-2.5 text-[12.5px]">{t('aiSearch.noResult')}</p>
         )}
 

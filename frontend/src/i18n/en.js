@@ -218,6 +218,7 @@ const en = {
     entry: 'More results with AI',
     title: 'AI Search',
     searching: 'AI is searching…',
+    describe: 'Based on your description, you may be looking for:',
     noResult: 'AI found no matching materials',
     loginRequired: 'Sign in to use AI search with your own API key',
     retry: 'Retry',

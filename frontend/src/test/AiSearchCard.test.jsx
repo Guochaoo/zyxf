@@ -54,18 +54,19 @@ describe('AiSearchCard', () => {
     expect(ai.run).not.toHaveBeenCalled();
   });
 
-  test('查找中：状态文案 + 流光泛光 + 已到达的正文', () => {
-    const { container } = renderCard({ status: 'loading', text: '正在检索资料库' });
+  test('查找中：状态文案 + 流光泛光', () => {
+    const { container } = renderCard({ status: 'loading' });
     expect(screen.getByText('AI 搜索正在查找…')).toBeInTheDocument();
     expect(container.querySelector('.rb-ai-card__halo')).toBeTruthy();
     expect(container.querySelector('.rb-ai-icon')).toBeTruthy(); // 卡片头部同一枚图标
-    expect(screen.getByText('正在检索资料库')).toBeInTheDocument();
+    // 查找中还没有条目，也不该出现说明行
+    expect(screen.queryByText('基于你的描述，你可能想找以下资料')).toBeNull();
   });
 
-  test('完成态：剥掉【文件N】编号、列出命中条目，点条目回调出去', () => {
+  // 结果卡只给「固定说明 + 命中条目」：LLM 正文（markdown，且与清单重复）不渲染。
+  test('完成态：固定说明行 + 命中条目，点条目回调出去', () => {
     const { onOpenItem, container } = renderCard({
       status: 'done',
-      text: '可能想找：【文件1】',
       items: [
         { id: 7, name: '高等数学期末版.pdf', type: 'file', ext: 'pdf', folder_path: '高等数学' },
         { id: 3, name: '线性代数', type: 'folder' },
@@ -73,7 +74,7 @@ describe('AiSearchCard', () => {
     });
 
     expect(screen.getByText('AI 搜索')).toBeInTheDocument();
-    expect(screen.getByText('可能想找：')).toBeInTheDocument();
+    expect(screen.getByText('基于你的描述，你可能想找以下资料')).toBeInTheDocument();
     expect(container.querySelector('.rb-ai-card__halo')).toBeNull(); // 完成态不再泛光
 
     fireEvent.click(screen.getByRole('button', { name: /高等数学期末版\.pdf/ }));
@@ -83,9 +84,10 @@ describe('AiSearchCard', () => {
     expect(onOpenItem).toHaveBeenCalledWith(expect.objectContaining({ id: 3, type: 'folder' }));
   });
 
-  test('完成但没有任何命中：给出空态', () => {
-    renderCard({ status: 'done', text: '', items: [] });
+  test('完成但没有任何命中：给出空态（不显示说明行）', () => {
+    renderCard({ status: 'done', items: [] });
     expect(screen.getByText('AI 没有找到相关资料')).toBeInTheDocument();
+    expect(screen.queryByText('基于你的描述，你可能想找以下资料')).toBeNull();
   });
 
   test('失败：给出错误、重试与设置入口', () => {

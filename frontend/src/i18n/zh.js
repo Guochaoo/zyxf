@@ -220,6 +220,7 @@ const zh = {
     entry: 'AI 搜索更多结果',
     title: 'AI 搜索',
     searching: 'AI 搜索正在查找…',
+    describe: '基于你的描述，你可能想找以下资料',
     noResult: 'AI 没有找到相关资料',
     loginRequired: '登录后才能使用自带 Key 的 AI 搜索',
     retry: '重试',
