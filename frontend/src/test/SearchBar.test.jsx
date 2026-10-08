@@ -135,6 +135,20 @@ describe('SearchBar · AI 搜索卡', () => {
     expect(await entry()).toBeInTheDocument();
   });
 
+  // 泛光层是 inset:-2px 的外溢元素：包裹层底边不留内边距的话，滚动容器会多出 2px
+  // 可滚动区 → 凭空冒出滚动条（实测把整行压窄 10px）。左右同理，给泛光留外溢空间。
+  test('AI 卡包裹层四周留够内边距（泛光外溢不撑出滚动条）', async () => {
+    searchMock.mockResolvedValue({ folders: [], files: [] });
+    renderBar();
+    fireEvent.change(input(), { target: { value: '高数' } });
+    await entry();
+
+    const wrap = document.querySelector('.rb-search-dropdown .rb-ai-card').parentElement;
+    for (const cls of ['px-2', 'pt-2', 'pb-2']) {
+      expect(wrap.className.split(/\s+/)).toContain(cls);
+    }
+  });
+
   test('点入口按当前关键词发起一次检索，完成后只落固定说明行与命中条目', async () => {
     searchMock.mockResolvedValue({ folders: [], files: [] });
     let seenMessages = null;

@@ -67,21 +67,25 @@ export default function AiSearchCard({ query, ai, onOpenItem, onOpenSettings }) 
   const { status, items, error, loginRequired, run } = ai;
   const q = (query || '').trim();
 
-  // 入口态：与候选框里的结果行同样是「一行 hover 高亮」，不是卡片。
+  // 入口态：与结果卡**共用同一层几何**——外层同样是 .rb-ai-card（只把渐变环与
+  // 内层底色藏起来），内层是按钮，内边距与卡片头部逐项一致。这样点击前后内容
+  // 一动不动（只有环浮现、右侧 chevron 换成转圈），内层圆角也恒为 12 − 1.5 = 10.5px。
   if (status === 'idle') {
     return (
-      <button
-        type="button"
-        disabled={!q || loginRequired}
-        onClick={() => run(q)}
-        className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left transition-colors duration-200 enabled:hover:bg-black/5 disabled:cursor-default dark:enabled:hover:bg-white/5"
-      >
-        <AiIcon />
-        <span className="min-w-0 flex-1 truncate text-[13px]">
-          {loginRequired ? t('aiSearch.loginRequired') : t('aiSearch.entry')}
-        </span>
-        {!loginRequired && <ChevronRight className="h-4 w-4 shrink-0 opacity-35" />}
-      </button>
+      <div className="rb-ai-card rb-ai-card--idle">
+        <button
+          type="button"
+          disabled={!q || loginRequired}
+          onClick={() => run(q)}
+          className="rb-ai-card__inner flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors duration-200 enabled:hover:bg-black/5 disabled:cursor-default dark:enabled:hover:bg-white/5"
+        >
+          <AiIcon />
+          <span className="min-w-0 flex-1 truncate text-[13px]">
+            {loginRequired ? t('aiSearch.loginRequired') : t('aiSearch.entry')}
+          </span>
+          {!loginRequired && <ChevronRight className="h-4 w-4 shrink-0 opacity-35" />}
+        </button>
+      </div>
     );
   }
 
@@ -94,7 +98,9 @@ export default function AiSearchCard({ query, ai, onOpenItem, onOpenSettings }) 
       {/* 泛光只在查找中出现（内层卡片盖住中央，只留一圈外溢的流光）。 */}
       {loading && <span className="rb-ai-card__halo" aria-hidden="true" />}
       <div className="rb-ai-card__inner">
-        <div className="flex items-center gap-2.5 px-3 pt-2.5 pb-1.5">
+        {/* 头部行的内边距必须与入口态按钮逐项相同（px-3 py-2.5），否则点击后
+            内容会位移几个像素——两处一起改。 */}
+        <div className="flex items-center gap-2.5 px-3 py-2.5">
           <AiIcon />
           <span className="min-w-0 flex-1 truncate text-[13px] font-medium" aria-live="polite">
             {loading ? t('aiSearch.searching') : t('aiSearch.title')}

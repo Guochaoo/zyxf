@@ -200,9 +200,12 @@ export default function SearchBar({ className = '' }) {
           }}
         >
           {/* AI 搜索卡常驻顶部（有输入就在），本地命中在它下方；两者同处一个
-              滚动区，候选很多时一起滚。左右留 8px 给卡片的流光泛光外溢。 */}
+              滚动区，候选很多时一起滚。
+              ⚠️ 四周内边距必须给够（尤其 pb）：卡片的泛光层是 inset:-2px 的外溢
+              元素，底边不给够会让滚动容器多出 2px 可滚动区——凭空冒出滚动条、整行
+              被压窄一个滚动条宽度（实测 10px）。左右 8px 同理，给泛光留外溢空间。 */}
           <div className="min-h-0 flex-1 overflow-y-auto rb-side-scroll">
-            <div className="px-2 pt-2">
+            <div className="px-2 pt-2 pb-2">
               <AiSearchCard
                 query={q}
                 ai={ai}

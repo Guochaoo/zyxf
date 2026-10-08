@@ -343,6 +343,18 @@ a:focus-visible,
   background: var(--surface);
 }
 
+/* 入口态：几何与结果卡完全相同（同为 .rb-ai-card + 1.5px 内缩），只是把渐变环与
+   内层底色藏起来。这样点击前后内容不位移——先前入口是另一个盒子（px-2.5 / py-2，
+   又少 1.5px 内缩），点一下图标与文字会整体右移下移 3.5px。
+   ⚠️ 入口按钮与卡片头部行的内边距（px-3 py-2.5）必须保持一致，改一处要改两处。 */
+.rb-ai-card--idle {
+  background: none;
+  animation: none;
+}
+.rb-ai-card--idle .rb-ai-card__inner {
+  background: none;
+}
+
 /* 次级文字：同样要压过 `.rb-search-dropdown *` 的墨色（同特异性，靠源码顺序取胜）。 */
 .rb-ai-card__sub {
   color: var(--ink-2);

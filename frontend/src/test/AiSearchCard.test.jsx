@@ -46,6 +46,30 @@ describe('AiSearchCard', () => {
     expect(screen.getByRole('button', { name: /AI 搜索更多结果/ })).toBeDisabled();
   });
 
+  // 曾经的 bug：入口是另一个盒子（px-2.5 / py-2，且少了外环那 1.5px 内缩），
+  // 点一下图标与文字整体右移下移 3.5px。现在三态共用同一层几何（外环 + 1.5px 内缩、
+  // 内层 padding 逐项一致），只有环浮现与右侧图标变化。
+  // 无头 Chrome 实测（改动前 → 改动后，单位 px）：
+  //   入口行  盒高 35.50 → 39.50，图标相对盒子 (10.00, 8.25) → (12.00, 10.25)
+  //   卡片头部 盒高 39.50，      图标相对盒子 (12.00, 10.25)
+  test('入口与结果卡头部几何一致：点击前后内容不位移', () => {
+    const idle = renderCard();
+    const entryBox = idle.container.querySelector('.rb-ai-card--idle');
+    const entryRow = idle.container.querySelector('.rb-ai-card--idle .rb-ai-card__inner');
+    expect(entryBox).toBeTruthy(); // 入口也带外环层（只是透明），内缩量与卡片一致
+    expect(entryRow.tagName).toBe('BUTTON');
+
+    const loading = renderCard({ status: 'loading' });
+    const headerRow = loading.container.querySelector('.rb-ai-card__inner > div');
+    expect(headerRow).toBeTruthy();
+
+    const tokens = (el) => el.className.split(/\s+/);
+    for (const cls of ['px-3', 'py-2.5', 'gap-2.5']) {
+      expect(tokens(entryRow)).toContain(cls);
+      expect(tokens(headerRow)).toContain(cls);
+    }
+  });
+
   // IMPROVE-10：服务端未配置 + 未登录 + 自带 Key 时后端要求登录，入口直接换成提示。
   test('需要登录时入口改成提示且不可点', () => {
     const { ai } = renderCard({ loginRequired: true });
