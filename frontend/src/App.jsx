@@ -241,7 +241,11 @@ export default function App() {
         </div>
       )}
       {/* 折叠后，左上角浮现一个固定的「展开侧边栏」按钮；展开时它淡出消失，
-          避免与侧边栏内的收起按钮同时出现。 */}
+          避免与侧边栏内的收起按钮同时出现。
+          z 必须高于中列内容：收起后 main 的 lg:pl-0 让搜索框回到 x≈16，而这个浮动按钮
+          在 x=18~46，只压住搜索框左缘 2px 就会被整块盖住（搜索框外壳 z-[70]）——原先
+          z-20 时按钮直接消失且点不到。取 75：压过搜索框，但仍低于搜索候选栏 z-[200]
+          与各弹窗（z-[80] 起）、大图预览（z-[150]），浮层打开时不会压在它们上面。 */}
       {isBrowse && (
         <button
           type="button"
@@ -250,7 +254,7 @@ export default function App() {
           title={t('app.expandSidebar')}
           aria-hidden={sidebarOpen}
           tabIndex={sidebarOpen ? -1 : 0}
-          className={`fixed left-[18px] top-[13px] z-20 hidden lg:flex h-7 w-7 items-center justify-center rounded-[7px] text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-700 ${
+          className={`fixed left-[18px] top-[13px] z-[75] hidden lg:flex h-7 w-7 items-center justify-center rounded-[7px] text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-700 ${
             sidebarOpen ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'
           }`}
           style={SIDEBAR_TRANSITION}
