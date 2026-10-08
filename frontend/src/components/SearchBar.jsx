@@ -125,6 +125,16 @@ export default function SearchBar({ className = '' }) {
 
   const maxW = className.includes('max-w-') ? '' : 'max-w-[520px]';
 
+  // 候选栏占浏览器高度的 70%（原为固定 max-h-80 = 320px，高屏上浪费空间）。
+  // 取「上限」而非固定高度：命中少时面板仍紧贴结果自适应（DESIGN.md §2 无底部空白），
+  // 命中多时才涨到 70vh 后滚动。再嵌一层 min() 兜底——输入框下方剩余高度不足 70vh 时
+  // （矮窗口 / 手机横屏）不能让面板溢出视口底部，即原来 `calc(100vh - top - 16px)` 的语义。
+  // 选择器名必须是 max-height：.rb-search-dropdown 带 `height: auto !important`，
+  // 写成固定 height 会被它压掉。
+  const dropdownMaxHeight = dropdownRect
+    ? `min(70vh, ${Math.max(window.innerHeight - dropdownRect.top - 16, 0)}px)`
+    : undefined;
+
   return (
     <div ref={wrapRef} className={`relative z-[70] w-full ${maxW} ${className}`.trim()}>
       <div className="rb-search-pill relative">
@@ -157,12 +167,12 @@ export default function SearchBar({ className = '' }) {
       {open && (err || results) && dropdownRect && createPortal(
         <div
           ref={dropdownRef}
-          className="rb-search-dropdown app-theme fixed z-[200] overflow-hidden h-auto min-h-0"
+          className="rb-search-dropdown app-theme fixed z-[200] flex flex-col overflow-hidden min-h-0"
           style={{
             top: dropdownRect.top,
             left: dropdownRect.left,
             width: dropdownRect.width,
-            maxHeight: `calc(100vh - ${dropdownRect.top + 16}px)`,
+            maxHeight: dropdownMaxHeight,
             backdropFilter: 'blur(16px) saturate(180%)',
             WebkitBackdropFilter: 'blur(16px) saturate(180%)',
           }}
@@ -181,7 +191,7 @@ export default function SearchBar({ className = '' }) {
           ) : total === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-slate-500">{t('search.noResult')}</div>
           ) : (
-            <div className="max-h-80 overflow-y-auto rb-side-scroll">
+            <div className="min-h-0 flex-1 overflow-y-auto rb-side-scroll">
               {results.folders.length > 0 && (
                 <div>
                   <div className="px-4 py-2 text-xs text-slate-500 font-medium">{t('search.folders')}</div>
