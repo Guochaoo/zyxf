@@ -48,7 +48,7 @@ OSS 控制台 → 你的 Bucket → **数据安全 → 跨域设置** → 添加
 需要：
 
 - **Nginx**（系统包，`apt install nginx`；托管前端 + 反代 `/api`）
-- **Node 24**（系统包走 NodeSource：`curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && apt install -y nodejs`；项目使用内置 `node:sqlite`，无原生编译依赖）
+- **Node 24**（系统包走 NodeSource：`curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && apt install -y nodejs`；项目使用内置 `node:sqlite`，无原生编译依赖）。若要在服务器上跑后端测试，需 **≥ 24.15**（`mock.module({ exports })` 的下界，见 issue #68）；NodeSource 的 `setup_24.x` 给的是 24.21+，满足要求
 - **certbot + python3-certbot-nginx**（HTTPS 证书签发与自动续期）
 - **systemd**（Linux 标配，无需额外安装）
 
@@ -406,7 +406,7 @@ nginx -t && systemctl reload nginx
 - **`add_header` 不会被子级 location 继承**：任何自己写了 `add_header` 的 location 都会屏蔽 server 级的 HSTS / 安全头，所以模板里每个 location 都把 `Strict-Transport-Security` / `X-Content-Type-Options` / `Referrer-Policy` / CSP 重复声明了一遍。
 - **`index.html` 必须 `Cache-Control: no-cache`**：它没有内容 hash，缓存里的旧 HTML 引用构建后**已被删除**的 chunk 文件名，那次请求落到 SPA 回退拿到 HTML，浏览器按 `type="module"` 解析失败 → **整页白屏**（BUG-100，发版后最容易复现的事故）。前端另有一层兜底：路由出口的 `ErrorBoundary` 会给出可恢复界面，且识别到「懒 chunk 加载失败」时把「重试」直接接成整页重载——`React.lazy` 会把失败的 import 缓存在模块级 payload 上，原地重试不可能恢复（issue #63）。
 - **不存在的 `/assets/*` 必须回 404**：回 200 + `text/html` 同样会让模块脚本因 MIME 不符拒绝执行。
-- **CSP 先以 `Content-Security-Policy-Report-Only` 上线**（模板现为 Report-Only）。⚠️ `script-src` **必须放行 `https://g.alicdn.com`**：`OfficeViewer.jsx` 会从那里注入 WPS WebOffice SDK，该脚本随后再加载同目录的 `wps.js`——漏了这条，**在线预览会整块失效**。真实浏览器把预览 / 上传 / 图谱 / AI 对话全点一遍、控制台无违规后，再去掉每处 `-Report-Only`（模板里共 4 处）。
+- **CSP 先以 `Content-Security-Policy-Report-Only` 上线**（模板现为 Report-Only）。⚠️ `script-src` **必须放行 `https://g.alicdn.com`**：`OfficeViewer.jsx` 会从那里注入 WPS WebOffice SDK，该脚本随后再加载同目录的 `wps.js`——漏了这条，**在线预览会整块失效**。真实浏览器把预览 / 上传 / 图谱 / AI 搜索全点一遍、控制台无违规后，再去掉每处 `-Report-Only`（模板里共 4 处）。
 - **`/api` 反代必须覆写 `X-Forwarded-For` 为 `$remote_addr`**（不能 append 透传客户端带来的值）：后端按 trust proxy 取 XFF 做限流，可直连时伪造 XFF 能绕过所有限流（BUG-36）。这条成立的前提是后端只监听 `127.0.0.1`、无法被公网直连。
 - **`X-Forwarded-For` 必须覆盖而不是追加**。宝塔的 `proxy/<域名>/*.conf` 默认写的是 `$proxy_add_x_forwarded_for`（追加），而 `backend/src/index.js` 的 `app.set('trust proxy', 1)` 明确要求 nginx 用 `$remote_addr` 覆盖，否则客户端自带的 XFF 会一并传进后端，限流按伪造 IP 计数（BUG-36 的前提被破坏）。改成：
 

@@ -93,7 +93,7 @@ export async function chatStream(messages, { onDelta, onFiles, signal, llm } = {
       }
       if (event.type === 'delta') onDelta?.(event.text);
       else if (event.type === 'files') onFiles?.(event.files);
-      else if (event.type === 'error') throw new Error(event.message || i18n.t('chat.err'));
+      else if (event.type === 'error') throw new Error(event.message || i18n.t('aiSearch.err'));
     }
   }
 }

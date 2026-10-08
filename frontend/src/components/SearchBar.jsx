@@ -7,8 +7,11 @@ import { BsFolder } from 'react-icons/bs';
 import { getFileUrl, search as searchApi } from '../api.js';
 import { downloadAndAlert, errMsg } from '../utils.js';
 import FileIcon from './FileIcon.jsx';
+import AiSearchCard from './AiSearchCard.jsx';
 import { openFolderOrFile } from '../ui.js';
 import { useClickOutside } from '../hooks/useClickOutside.js';
+import { useAiSearch } from '../hooks/useAiSearch.js';
+import { useSettingsRoute } from '../hooks/useSettingsRoute.js';
 import { useResource } from '../data/resource.js';
 
 export default function SearchBar({ className = '' }) {
@@ -23,6 +26,10 @@ export default function SearchBar({ className = '' }) {
   const dropdownRef = useRef(null);
   const timerRef = useRef(null);
   const navigate = useNavigate();
+  // 齿轮（出错态）→ 设置弹窗的「AI 搜索配置」板块。
+  const { openSettingsAt } = useSettingsRoute();
+  const ai = useAiSearch();
+  const aiReset = ai.reset;
 
   // IMPROVE-54：请求去重/取消下沉到 data/resource.js。cache:false 是刻意的——
   // 旧关键词的命中列表绝不能展示给新关键词（原先的 P1 修复）。
@@ -32,10 +39,13 @@ export default function SearchBar({ className = '' }) {
     { enabled: debouncedQ.trim().length > 0, cache: false }
   );
   const err = searchError ? errMsg(searchError, t('search.failed')) : '';
+  const hasQuery = q.trim().length > 0;
 
   const onChange = (e) => {
     const v = e.target.value;
     setQ(v);
+    // 有输入就展开候选框（AI 入口不依赖本地搜索结果，不必等请求回来）。
+    if (v.trim()) setOpen(true);
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setDebouncedQ(v), 250);
   };
@@ -51,6 +61,12 @@ export default function SearchBar({ className = '' }) {
   // Clear any pending debounce timer on unmount so a late fire can't setState
   // after the component is gone (and to avoid a stray request from the old q).
   useEffect(() => () => clearTimeout(timerRef.current), []);
+
+  // 关键词一变，上一轮的 AI 结果就作废（它属于旧关键词）——回到入口态。
+  // aiReset 是稳定的 useCallback，别依赖整个 ai 对象（每次渲染都是新引用）。
+  useEffect(() => {
+    aiReset();
+  }, [q, aiReset]);
 
   // 结果到达（或失败）时展开下拉；切换关键词后 results 变 undefined，下拉随
   // 渲染条件自动收起——「发起新查询就扔掉旧命中」的语义由此保持。
@@ -115,6 +131,12 @@ export default function SearchBar({ className = '' }) {
     openFolderOrFile(item, navigate);
   };
 
+  // 出错态的齿轮：先收起候选框再进设置（弹窗盖在资料库之上，背后页面照常渲染）。
+  const openAiSettings = useCallback(() => {
+    setOpen(false);
+    openSettingsAt('ai');
+  }, [openSettingsAt]);
+
   const total = results ? (results.folders?.length || 0) + (results.files?.length || 0) : 0;
 
   const handleDownload = async (e, file) => {
@@ -123,8 +145,20 @@ export default function SearchBar({ className = '' }) {
     await downloadAndAlert(file, getFileUrl);
   };
 
+  const maxW = className.includes('max-w-') ? '' : 'max-w-[520px]';
+
+  // 候选栏占浏览器高度的 70%（原为固定 max-h-80 = 320px，高屏上浪费空间）。
+  // 取「上限」而非固定高度：命中少时面板仍紧贴结果自适应（DESIGN.md §2 无底部空白），
+  // 命中多时才涨到 70vh 后滚动。再嵌一层 min() 兜底——输入框下方剩余高度不足 70vh 时
+  // （矮窗口 / 手机横屏）不能让面板溢出视口底部，即原来 `calc(100vh - top - 16px)` 的语义。
+  // 选择器名必须是 max-height：.rb-search-dropdown 带 `height: auto !important`，
+  // 写成固定 height 会被它压掉。
+  const dropdownMaxHeight = dropdownRect
+    ? `min(70vh, ${Math.max(window.innerHeight - dropdownRect.top - 16, 0)}px)`
+    : undefined;
+
   return (
-    <div ref={wrapRef} className={`relative z-[70] w-full max-w-[520px] ${className}`.trim()}>
+    <div ref={wrapRef} className={`relative z-[70] w-full ${maxW} ${className}`.trim()}>
       <div className="rb-search-pill relative">
         <Search className="absolute left-[15px] top-1/2 w-4 h-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
         <input
@@ -132,9 +166,9 @@ export default function SearchBar({ className = '' }) {
           type="text"
           value={q}
           onChange={onChange}
-          onFocus={() => results && setOpen(true)}
+          onFocus={() => hasQuery && setOpen(true)}
           placeholder={t('search.placeholder')}
-          className="w-full rounded-full border-0 bg-transparent py-[8px] pl-11 pr-10 text-sm text-slate-900 placeholder:text-slate-400 outline-hidden focus:outline-hidden focus:ring-0"
+          className="w-full h-[34px] rounded-full border-0 bg-transparent py-0 pl-11 pr-10 text-sm text-slate-900 placeholder:text-slate-400 outline-hidden focus:outline-hidden focus:ring-0"
         />
         {q && (
           <button
@@ -152,88 +186,104 @@ export default function SearchBar({ className = '' }) {
         )}
       </div>
 
-      {open && (err || results) && dropdownRect && createPortal(
+      {open && hasQuery && dropdownRect && createPortal(
         <div
           ref={dropdownRef}
-          className="rb-search-dropdown fixed z-[200] overflow-hidden"
+          className="rb-search-dropdown app-theme fixed z-[200] flex flex-col overflow-hidden min-h-0"
           style={{
             top: dropdownRect.top,
             left: dropdownRect.left,
             width: dropdownRect.width,
+            maxHeight: dropdownMaxHeight,
+            backdropFilter: 'blur(16px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(16px) saturate(180%)',
           }}
         >
-          {err ? (
-            <div className="flex items-center justify-between gap-3 px-4 py-4 text-sm">
-              <span className="text-red">{err}</span>
-              <button
-                type="button"
-                onClick={reload}
-                className="shrink-0 rounded-full bg-field px-3 py-1 text-xs text-ink-2 hover:bg-hover"
-              >
-                {t('search.retry')}
-              </button>
+          {/* AI 搜索卡常驻顶部（有输入就在），本地命中在它下方；两者同处一个
+              滚动区，候选很多时一起滚。
+              ⚠️ 四周内边距必须给够（尤其 pb）：卡片的泛光层是 inset:-2px 的外溢
+              元素，底边不给够会让滚动容器多出 2px 可滚动区——凭空冒出滚动条、整行
+              被压窄一个滚动条宽度（实测 10px）。左右 8px 同理，给泛光留外溢空间。 */}
+          <div className="min-h-0 flex-1 overflow-y-auto rb-side-scroll">
+            <div className="px-2 pt-2 pb-2">
+              <AiSearchCard
+                query={q}
+                ai={ai}
+                onOpenItem={handleResult}
+                onOpenSettings={openAiSettings}
+              />
             </div>
-          ) : total === 0 ? (
-            <div className="px-4 py-6 text-center text-sm text-slate-500">{t('search.noResult')}</div>
-          ) : (
-            <div className="max-h-80 overflow-y-auto">
-              {results.folders.length > 0 && (
-                <div>
-                  <div className="px-4 py-2 text-xs text-slate-500 font-medium">{t('search.folders')}</div>
-                  {results.folders.map((f) => (
-                    <button
-                      key={`d-${f.id}`}
-                      onClick={() => handleResult(f)}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50 transition-colors"
-                    >
-                      <BsFolder className="w-4 h-4 text-amber-400 shrink-0" />
-                      <span className="text-sm text-slate-900 truncate">{f.name}</span>
-                    </button>
-                  ))}
+            {err ? (
+              <div className="flex items-center justify-between gap-3 px-4 py-4 text-sm">
+                <span className="text-red">{err}</span>
+                <button
+                  type="button"
+                  onClick={reload}
+                  className="shrink-0 rounded-full bg-field px-3 py-1 text-xs text-ink-2 hover:bg-hover"
+                >
+                  {t('search.retry')}
+                </button>
+              </div>
+            ) : total === 0 ? (
+              // 请求在途时先不落「无匹配结果」——防抖 + 往返期间那句话会闪一下。
+              loading ? null : (
+                <div className="px-4 py-6 text-center text-sm text-slate-500">
+                  {t('search.noResult')}
                 </div>
-              )}
-              {results.files.length > 0 && (
-                <div>
-                  <div className="px-4 py-2 text-xs text-slate-500 font-medium">{t('search.files')}</div>
-                  {results.files.map((f) => (
-                    <div
-                      key={`f-${f.id}`}
-                      className="flex w-full items-center gap-1 hover:bg-slate-50 transition-colors"
-                    >
+              )
+            ) : (
+              <>
+                {results.folders.length > 0 && (
+                  <div>
+                    <div className="px-4 py-2 text-xs text-slate-500 font-medium">{t('search.folders')}</div>
+                    {results.folders.map((f) => (
                       <button
-                        type="button"
+                        key={`d-${f.id}`}
                         onClick={() => handleResult(f)}
-                        className="min-w-0 flex flex-1 items-center gap-3 py-2.5 pl-4 pr-1 text-left"
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                       >
-                        <FileIcon type="file" ext={f.ext} className="w-4 h-4 shrink-0" />
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm text-slate-900 truncate">{f.name}</span>
-                          {f.folder_path && (
-                            <span className="block text-xs text-slate-400 truncate">{f.folder_path}</span>
-                          )}
-                        </span>
+                        <BsFolder className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span className="text-sm text-slate-900 truncate">{f.name}</span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={(e) => handleDownload(e, f)}
-                        className="mr-2 flex w-8 h-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-900"
-                        title={t('common.download')}
-                        aria-label={t('search.download', { name: f.name })}
+                    ))}
+                  </div>
+                )}
+                {results.files.length > 0 && (
+                  <div>
+                    <div className="px-4 py-2 text-xs text-slate-500 font-medium">{t('search.files')}</div>
+                    {results.files.map((f) => (
+                      <div
+                        key={`f-${f.id}`}
+                        className="flex w-full items-center gap-1 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                       >
-                        <Download className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-400">
-            {err
-              ? t('search.failed')
-              : results?.truncated
-                ? t('search.resultsTruncated', { count: total })
-                : t('search.resultsCount', { count: total })}
+                        <button
+                          type="button"
+                          onClick={() => handleResult(f)}
+                          className="min-w-0 flex flex-1 items-center gap-3 py-2.5 pl-4 pr-1 text-left"
+                        >
+                          <FileIcon type="file" ext={f.ext} className="w-4 h-4 shrink-0" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm text-slate-900 truncate">{f.name}</span>
+                            {f.folder_path && (
+                              <span className="block text-xs text-slate-400 truncate">{f.folder_path}</span>
+                            )}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDownload(e, f)}
+                          className="mr-2 flex w-8 h-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-slate-900"
+                          title={t('common.download')}
+                          aria-label={t('search.download', { name: f.name })}
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>,
         document.body

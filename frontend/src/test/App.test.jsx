@@ -175,12 +175,21 @@ describe('App', () => {
     expect(toggle.parentElement.style.transitionTimingFunction).toBe(ease);
 
     // 收起后浮出的展开按钮（轨道内的那个同 aria-label，用 fixed 定位的那个区分）
+    // 用 fixed + top-[13px] 认它，别认 left-*：横向位置调过几次（18 → 2），
+    // 认死坐标会让「按钮挪个位置」这种纯样式改动打挂这条过渡断言。
     fireEvent.click(toggle);
     const expand = screen
       .getAllByRole('button', { name: '展开侧边栏' })
-      .find((b) => b.className.includes('left-[18px]'));
+      .find((b) => b.className.includes('fixed') && b.className.includes('top-[13px]'));
     expect(expand).toBeTruthy();
-    expect(expand.style.transitionDuration).toBe('320ms');
+    // 浮动按钮的过渡是刻意偏置的，三处数值都是「防闪动」调出来的（见 DESIGN.md §6）：
+    //   - transitionProperty 只留 opacity：初始值 all 会把 left 也带上过渡，悬停时按钮横向漂移
+    //   - 淡入 150ms + 延迟 240ms：左轨滑完（实测让开 x=2 在 243ms）之后才可见，
+    //     既不等满 320ms 显得晚，也不在轨道还没让开时就淡入（那会两个图标叠着闪）
+    //   - 缓动沿用项目级 EASE_COLLAPSE
+    expect(expand.style.transitionProperty).toBe('opacity');
+    expect(expand.style.transitionDuration).toBe('150ms');
+    expect(expand.style.transitionDelay).toBe('240ms');
     expect(expand.style.transitionTimingFunction).toBe(ease);
 
     // 中列 padding 与轨道同步，且只在手动开合窗口内挂 transition-property
@@ -206,7 +215,7 @@ describe('App · 设置路由', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '设置' }));
 
-    // 设置界面出现：板块列表 + 默认板块（账户信息，不再是智能对话配置）
+    // 设置界面出现：板块列表 + 默认板块（账户信息，不再是 AI 搜索配置）
     expect(screen.getByRole('button', { name: '账户信息' })).toBeInTheDocument();
     expect(screen.getByText('尚未登录')).toBeInTheDocument();
     expect(screen.queryByLabelText('API Key')).toBeNull();
@@ -216,7 +225,7 @@ describe('App · 设置路由', () => {
 
   test('直接访问 /settings 也能打开设置，且背后渲染资料库而不是被重定向', async () => {
     renderApp('/settings');
-    expect(screen.getByRole('button', { name: '智能对话配置' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'AI 搜索配置' })).toBeInTheDocument();
     expect(await screen.findByText('此文件夹为空')).toBeInTheDocument();
   });
 

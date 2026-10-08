@@ -2,9 +2,10 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { ICON_BUTTON_CLASS } from './ui.js';
 
 /**
- * Right-rail card header: gray label row + icon action buttons + collapse
- * toggle. Shared by KnowledgeGraph and ChatComposer so the two card headers
- * never drift apart. `children` (action buttons) render only when expanded.
+ * 右栏卡片头部：灰底标签行 + 图标操作按钮 + 收起开关。
+ * （原由知识图谱与智能对话两张卡片共用；智能对话卡片迁入搜索候选框后
+ * 只剩知识图谱一个消费方，保留为独立展示件。）`children`（操作按钮）
+ * 只在展开时渲染。
  */
 export default function PanelHeader({
   title,

@@ -6,8 +6,8 @@ import { wrapAsync } from '../http.js';
 
 const router = Router();
 
-const chatLimiterShort = adminBypassLimiter(60 * 1000, 6, 'AI 对话太频繁，请稍后再试');
-const chatLimiterLong = adminBypassLimiter(60 * 60 * 1000, 20, '本小时 AI 对话次数已达上限，请稍后再试');
+const chatLimiterShort = adminBypassLimiter(60 * 1000, 6, 'AI 搜索太频繁，请稍后再试');
+const chatLimiterLong = adminBypassLimiter(60 * 60 * 1000, 20, '本小时 AI 搜索次数已达上限，请稍后再试');
 
 const MAX_MESSAGE_LEN = 500;
 const MAX_HISTORY = 8;

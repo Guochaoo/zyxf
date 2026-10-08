@@ -3,7 +3,7 @@ import { renderHook, act } from '@testing-library/react';
 import { MemoryRouter, useLocation, useNavigationType } from 'react-router-dom';
 import { useSettingsRoute } from '../hooks/useSettingsRoute.js';
 
-// openSettingsAt：从任意页面直接落到某个板块（对话卡片的齿轮 → 智能对话配置）。
+// openSettingsAt：从任意页面直接落到某个板块（AI 搜索卡出错态的齿轮 → AI 搜索配置）。
 // 关键点是 background 必须一起记——否则弹窗背后会退回资料库根目录，丢掉当前文件夹。
 function setup(initialEntries) {
   const wrapper = ({ children }) => (

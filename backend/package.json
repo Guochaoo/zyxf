@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=24"
+    "node": ">=24.15 <25"
   },
   "scripts": {
     "dev": "nodemon src/index.js",

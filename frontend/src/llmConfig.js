@@ -1,6 +1,6 @@
 import { storageGet, storageSet, storageRemove } from './ui.js';
 
-// 浏览器侧 LLM 配置（ChatComposer 与 SettingsModal 共用同一份存储）。
+// 浏览器侧 LLM 配置（useAiSearch 与 SettingsModal 共用同一份存储）。
 export const LLM_KEY = 'zyxf_llm';
 
 // 上游协议白名单，必须与后端 llmProtocols.js 的 PROTOCOLS 一致。

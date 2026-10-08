@@ -21,6 +21,7 @@ import UploadDialog from '../components/UploadDialog.jsx';
 import Toast from '../components/Toast.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import NamePromptDialog from '../components/NamePromptDialog.jsx';
+import SearchBar from '../components/SearchBar.jsx';
 import { downloadAndAlert, errMsg, notifyFoldersChanged } from '../utils.js';
 import { useFolderContents } from './Browse/useFolderContents.js';
 import { useItemDragDrop } from './Browse/useItemDragDrop.js';
@@ -187,35 +188,45 @@ export default function BrowsePage() {
 
   return (
     <div className="space-y-4">
-      {/* Toolbar — sits above the file list */}
-      <div className="flex w-full flex-wrap items-center justify-end gap-2">
-        <SortControl sort={sort} order={order} onChange={toggleSort} />
-        <ToolbarIconButton title={t('browse.refresh')} onClick={onSyncRefresh}>
-          <RotateCw className={`w-6 h-6 ${syncing ? 'animate-spin' : ''}`} />
-        </ToolbarIconButton>
-        {folderId !== 0 && (
-          <ToolbarIconButton title={t('browse.openFolder')} onClick={onGoBack}>
-            <ArrowLeft className="w-6 h-6" />
+      {/* 工具栏这一行在侧栏收起时要让开左上角的「展开侧边栏」浮动按钮（x=2~30）。
+          留 32px 让搜索胶囊左缘落在 x=32，于是两侧间距相等：
+            页面左缘 → 按钮左缘 = 2px，按钮宽 28px → 右缘 30px，再到胶囊左缘 32px = 2px。
+          整个左侧留白带（0~32）居中，视觉上均衡；之前留 46px 会让右侧空 16px、左侧只 2px。
+          收起与否看 App 根节点的 data-sidebar 属性。
+          缩进只给工具栏：给整列会让文件列表一起右移、左侧空出一条。 */}
+      <div className="flex w-full items-center gap-2 [.app-theme[data-sidebar='collapsed']_&]:lg:pl-[32px]">
+        <div className="hidden lg:block min-w-0 flex-1">
+          <SearchBar className="w-full max-w-none" />
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2 shrink-0 max-lg:ml-auto">
+          <SortControl sort={sort} order={order} onChange={toggleSort} />
+          <ToolbarIconButton title={t('browse.refresh')} onClick={onSyncRefresh}>
+            <RotateCw className={`w-6 h-6 ${syncing ? 'animate-spin' : ''}`} />
           </ToolbarIconButton>
-        )}
-        {isAdmin && (
-          <>
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="rb-toolbar-btn"
-            >
-              <BsFolderPlus className="w-4 h-4" />
-              {t('browse.createFolder')}
-            </button>
-            <button
-              onClick={() => setUploadOpen(true)}
-              className="rb-btn-dark h-[34px]"
-            >
-              <BsCloudArrowUp className="w-4 h-4" />
-              {t('browse.upload')}
-            </button>
-          </>
-        )}
+          {folderId !== 0 && (
+            <ToolbarIconButton title={t('browse.openFolder')} onClick={onGoBack}>
+              <ArrowLeft className="w-6 h-6" />
+            </ToolbarIconButton>
+          )}
+          {isAdmin && (
+            <>
+              <button
+                onClick={() => setCreateOpen(true)}
+                className="rb-toolbar-btn"
+              >
+                <BsFolderPlus className="w-4 h-4" />
+                {t('browse.createFolder')}
+              </button>
+              <button
+                onClick={() => setUploadOpen(true)}
+                className="rb-btn-dark h-[34px]"
+              >
+                <BsCloudArrowUp className="w-4 h-4" />
+                {t('browse.upload')}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Floating banners — fixed so they don't disrupt drag layout */}

@@ -10,7 +10,7 @@ import { useClickOutside } from '../hooks/useClickOutside.js';
 import useMediaQuery from '../hooks/useMediaQuery.js';
 import './SettingsModal.css';
 
-// 配置来源由「存储里是否已有一份三项齐全的配置」推导：ChatComposer 也只在三项
+// 配置来源由「存储里是否已有一份三项齐全的配置」推导：useAiSearch 也只在三项
 // 齐全时才下发用户配置（否则回落到服务端），两边口径必须一致。
 const EMPTY_CFG = { apiKey: '', baseUrl: '', model: '' };
 const modeOf = (cfg) => (cfg.apiKey && cfg.baseUrl && cfg.model ? 'custom' : 'server');
@@ -116,7 +116,7 @@ export default function SettingsModal({
   // .settings-lang 容器上，故点击触发按钮本身仍走它自己的切换逻辑，不会被重复收起。
   const langRef = useRef(null);
   useClickOutside(langOpen, () => setLangOpen(false), langRef);
-  // 智能对话配置草稿与已提交值分离：保存前不覆盖已生效配置。
+  // AI 搜索配置草稿与已提交值分离：保存前不覆盖已生效配置。
   const [llmCfg, setLlmCfg] = useState(loadLlmCfg);
   const [cfgDraft, setCfgDraft] = useState(loadLlmCfg);
   const [cfgMode, setCfgMode] = useState(() => modeOf(loadLlmCfg()));
@@ -134,8 +134,8 @@ export default function SettingsModal({
     [t]
   );
 
-  // 顺序 = 左栏自上而下的呈现顺序（账户信息 → 外观 → 智能对话配置）；默认打开哪个
-  // 板块由调用方传入的 section 决定（App 传 settingsSection ?? 'ai'），不跟随本数组。
+  // 顺序 = 左栏自上而下的呈现顺序（账户信息 → 外观 → AI 搜索配置）；默认打开哪个
+  // 板块由调用方传入的 section 决定（App 传 settingsSection ?? 'account'），不跟随本数组。
   const navItems = useMemo(
     () => [
       { id: 'account', label: t('settings.nav.account'), icon: CircleUserRound },
@@ -175,8 +175,8 @@ export default function SettingsModal({
     [t]
   );
 
-  // 三项齐全才算「已配置」：这里与 llmConfig/ChatComposer 的判定口径一致（都要求三项非空）。
-  // 半份配置存下来等于没配置——ChatComposer 不会下发，下次打开还会回落到服务器配置，
+  // 三项齐全才算「已配置」：这里与 llmConfig/useAiSearch 的判定口径一致（都要求三项非空）。
+  // 半份配置存下来等于没配置——useAiSearch 不会下发，下次打开还会回落到服务器配置，
   // 所以保存前先拦住（提示文案见 zh/en 字典的 settings.ai.errorIncomplete）。
   const missingKeys = useMemo(() => {
     if (cfgMode !== 'custom') return [];
@@ -226,7 +226,7 @@ export default function SettingsModal({
       setSaveAttempted(false);
       return;
     }
-    // BUG-95：没填完就不写存储——半份配置 ChatComposer 不会下发，只会让用户以为已经生效
+    // BUG-95：没填完就不写存储——半份配置 useAiSearch 不会下发，只会让用户以为已经生效
     if (missingKeys.length) {
       setSaveAttempted(true); // 点过保存才开始标红 / 出提示
       return;

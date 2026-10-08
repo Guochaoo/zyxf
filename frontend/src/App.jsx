@@ -9,13 +9,11 @@ import BrowsePage from './pages/BrowsePage.jsx';
 const AuthPage = lazy(() => import('./pages/AuthPage.jsx'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
 const AboutPage = lazy(() => import('./pages/AboutPage.jsx'));
-// 右栏两个面板同样按需加载（IMPROVE-43）：KnowledgeGraph 静态依赖 d3-force、
-// ChatComposer 经 Chat/parts 依赖 react-markdown。它们原先被静态 import，于是
-// 这两个库进了入口的同步依赖图并出现在 index.html 的 modulepreload 里——只看
-// 文件列表、不开图谱也不用 AI 的访客照样要下载约 45 KB(gzip)。改成 lazy 后
-// 只有真的渲染右栏（browse 路由 + lg 屏）才会去取。
+// 右栏知识图谱同样按需加载（IMPROVE-43）：它静态依赖 d3-force，原先被静态 import，
+// 于是这个库进了入口的同步依赖图并出现在 index.html 的 modulepreload 里——只看
+// 文件列表、不开图谱的访客照样要下载约 45 KB(gzip)。改成 lazy 后只有真的渲染右栏
+// （browse 路由 + lg 屏）才会去取。
 const KnowledgeGraph = lazy(() => import('./components/KnowledgeGraph.jsx'));
-const ChatComposer = lazy(() => import('./components/ChatComposer.jsx'));
 import StaggeredMenu from './components/StaggeredMenu.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import SearchBar from './components/SearchBar.jsx';
@@ -34,7 +32,7 @@ const socialItems = [
   { label: 'Bilibili', link: 'https://space.bilibili.com/549612395' },
 ];
 
-// 侧边栏开合的缓动曲线与时长（与 ChatComposer / KnowledgeGraph 的收缩动画一致）。
+// 侧边栏开合的缓动曲线与时长（与 KnowledgeGraph 的收缩动画一致）。
 // ⚠️ BUG-94：这两个值**必须**通过内联样式下发，不能拼进模板字符串当 Tailwind 类名
 // （`lg:duration-[${SIDEBAR_MS}ms]`）——Tailwind 只静态扫描源码文本，插值处构建期不存在
 // 字面量类名，规则从未生成，动画会静默退化成 `transition-*` 的默认 150ms + 默认缓动。
@@ -46,6 +44,16 @@ const SIDEBAR_TRANSITION = {
   transitionDuration: `${SIDEBAR_MS}ms`,
   transitionTimingFunction: SIDEBAR_EASE,
 };
+// 浮动「展开侧边栏」按钮的淡入延迟：左轨滑完要 320ms，但按钮不是「瞬间出现」——
+// 淡入是渐进的，opacity 爬到肉眼可见还需要几十毫秒。所以起点可以提前到 240ms：
+// 实测左轨让开按钮所在的 x=2 是 243ms，而按钮要到 276ms 才爬到 5% 可见，两者错开，
+// 看不出重叠。取 320ms 则是「一帧都不重叠」的保守值，代价是约 300ms 空窗、显得出现得晚。
+const SIDEBAR_FADE_DELAY_MS = 240;
+// 淡入比淡出快（150ms vs 320ms）：淡入只需「尽快就位」——150ms 让它在 376ms 完全
+// 显示出来；若也取 320ms，要到 640ms 才到 1，看着懒洋洋地浮出来。淡出必须与开合同长
+// 320ms——展开时左轨滑回来要 320ms，按钮若淡得更快，会在轨道还没盖住它时就先消失
+// （实测 150ms 时 58ms 处已只剩 0.28），看起来是「先没了」而不是「被轨道收走」。
+const SIDEBAR_FADE_IN_MS = 150;
 
 export default function App() {
   const { t } = useTranslation();
@@ -80,7 +88,6 @@ export default function App() {
     pageLocation,
     openSettings,
     openSettingsSection,
-    openSettingsAt,
     backToSettingsList,
     closeSettings,
   } = useSettingsRoute();
@@ -133,9 +140,6 @@ export default function App() {
     [user, logout, navigate, t]
   );
 
-  // 对话卡片的齿轮直接落到「智能对话配置」板块（菜单里的齿轮仍打开弹窗默认板块）。
-  const openAiSettings = useCallback(() => openSettingsAt('ai'), [openSettingsAt]);
-
   const brand = useMemo(
     () => (
       <Link to="/" className="flex items-center gap-2 shrink-0 hover:text-brand-500">
@@ -171,11 +175,13 @@ export default function App() {
   // about fill the viewport width; everything else is a centered column.
   let mainLayout;
   if (isBrowse) {
-    // Left rail padding collapses when the sidebar is toggled off, matching the
-    // rail's transform easing — but **only for that toggle**: the transition class
-    // must not be on while a route change grows this padding 0 → 266/316px, or the
-    // middle column plays an unintended "both sides slide inward" animation
-    // (BUG-112). Hence `layoutAnimating`, a short window opened by the toggles.
+    // Left-rail padding. 收起态归零：中列整体仍从 x=16 起排（文件列表保持原来的左边距）；
+    // 需要让开左上角浮动按钮（x=18~46）的只有工具栏那一行，由 BrowsePage 的工具栏自己
+    // 按 data-sidebar 加 lg:pl-[46px]，与这里的 266px 一起构成开合动画。
+    // Left-rail padding transitions only for the manual toggle: the transition class must not
+    // be on while a route change grows this padding, or the middle column plays an unintended
+    // "both sides slide inward" animation (BUG-112) — hence `layoutAnimating`, a short window
+    // opened by the toggles.
     // ⚠️ 任意值类名后面必须留空格再进 ${}：贴成 `lg:pr-[316px]${...}` 会被 Tailwind
     // 的扫描器并成一个非法候选而不生成规则（BUG-94 同族陷阱，改这段务必回看产物）。
     // Tailwind 4 不再为 calc(+/- 无空格) 形式的任意值生成 CSS，显式像素 = 轨道宽 + 1rem 间隙
@@ -198,7 +204,12 @@ export default function App() {
   }
 
   return (
-    <div className="app-theme min-h-full flex flex-col relative bg-page">
+    // data-sidebar 供中列内部的元素按开合态调布局（工具栏要让开收起后左上角的浮动按钮，
+    // 见 BrowsePage 工具栏的 [.app-theme[data-sidebar='collapsed']_&]:lg:pl-[46px]）。
+    <div
+      className="app-theme min-h-full flex flex-col relative bg-page"
+      data-sidebar={sidebarOpen ? 'open' : 'collapsed'}
+    >
       {/* Mobile-only brand row on browse pages (no topbar on any layout) */}
       {isBrowse && (
         <div className="flex h-14 items-center px-4 lg:hidden">
@@ -237,12 +248,24 @@ export default function App() {
               {sidebarToggle('shrink-0 h-7 w-7')}
             </span>
           </div>
-          <SearchBar />
           <FolderTree currentId={folderId} />
         </div>
       )}
       {/* 折叠后，左上角浮现一个固定的「展开侧边栏」按钮；展开时它淡出消失，
-          避免与侧边栏内的收起按钮同时出现。 */}
+          避免与侧边栏内的收起按钮同时出现。
+          让开它的是工具栏那一行自己（BrowsePage 按 data-sidebar 加 lg:pl-[32px]），
+          不是整列内边距——整列右移会让文件列表左侧空出一条。
+          横向 x=2 + 工具栏 32px 一起让按钮居中于这段留白：按钮占 2~30，
+          于是「页面左缘 → 按钮左缘」2px 与「按钮右缘 → 搜索胶囊左缘（32）」2px 相等。
+          ⚠️ 别改成 left: calc(50% - 14px)：fixed 元素的百分比参照视口，不是这段留白，
+          按钮会被推到屏幕中间（实测 x≈779）。
+
+          ⚠️ 淡入必须等左轨滑走：左轨从 x=0 滑到 -250 要 320ms，中途会扫过本按钮所在的
+          2~30。若照常瞬间淡入，前 ~130ms 是「半透明的本按钮 + 正在外滑的收起按钮」
+          叠在浅色轨道底上，两个图标同时可见 —— 这就是点击收起时的闪动。所以给淡入挂
+          SIDEBAR_MS 的延迟（左轨滑完才出现），淡出不加延迟（展开时随左轨滑入一起消失，
+          不残留）。勿用 transition-all：属性初始值是 all，会把 left 也带上过渡，
+          悬停改样式时按钮会横向漂移。 */}
       {isBrowse && (
         <button
           type="button"
@@ -251,10 +274,15 @@ export default function App() {
           title={t('app.expandSidebar')}
           aria-hidden={sidebarOpen}
           tabIndex={sidebarOpen ? -1 : 0}
-          className={`fixed left-[18px] top-[13px] z-20 hidden lg:flex h-7 w-7 items-center justify-center rounded-[7px] text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-700 ${
+          className={`fixed left-[2px] top-[13px] z-20 hidden lg:flex h-7 w-7 items-center justify-center rounded-[7px] text-slate-400 hover:bg-slate-100 hover:text-slate-700 ${
             sidebarOpen ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'
           }`}
-          style={SIDEBAR_TRANSITION}
+          style={{
+            ...SIDEBAR_TRANSITION,
+            transitionProperty: 'opacity',
+            transitionDuration: `${sidebarOpen ? SIDEBAR_MS : SIDEBAR_FADE_IN_MS}ms`,
+            transitionDelay: sidebarOpen ? '0ms' : `${SIDEBAR_FADE_DELAY_MS}ms`,
+          }}
         >
           <PanelLeftOpen className="h-[18px] w-[18px]" strokeWidth={1.7} />
         </button>
@@ -306,12 +334,11 @@ export default function App() {
         <div className="fixed inset-y-0 right-0 z-10 hidden flex-col gap-4 overflow-hidden pr-2 pt-[61.5px] lg:flex lg:w-[300px]">
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
             <div className="flex min-h-0 flex-1 flex-col gap-[15px]">
-              {/* 右栏也进 ErrorBoundary（BUG-105 的教训）：图谱/对话崩溃不再打穿整页到
+              {/* 右栏也进 ErrorBoundary（BUG-105 的教训）：图谱崩溃不再打穿整页到
                   bootError 白屏，只降级本栏并给出可重试的界面。 */}
               <ErrorBoundary>
                 <Suspense fallback={null}>
                   <KnowledgeGraph currentId={folderId} onFullChange={setGraphFull} />
-                  <ChatComposer onOpenSettings={openAiSettings} />
                 </Suspense>
               </ErrorBoundary>
             </div>

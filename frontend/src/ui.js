@@ -6,7 +6,7 @@ export const TOKEN_KEY = 'zyxf_token';
 
 /**
  * 打开文件的预览：跳转到文件所在文件夹并携带 previewFile state。
- * SearchBar / ChatComposer / KnowledgeGraph / FolderTree 共用（原四处重复）。
+ * SearchBar / KnowledgeGraph / FolderTree 共用（原四处重复）。
  */
 export function openFilePreview(file, navigate) {
   const target = file.folder_id ? `/folder/${file.folder_id}` : '/';
@@ -17,7 +17,8 @@ export function openFilePreview(file, navigate) {
 export const folderTarget = (folderId) => (folderId ? `/folder/${folderId}` : '/');
 
 // 打开文件夹或文件：文件夹直接进入，文件走预览跳转。
-// SearchBar / ChatComposer 共用（KnowledgeGraph 的 root 特判保留自处）。
+// SearchBar 共用（搜索结果与候选框里的 AI 命中条目都走它；KnowledgeGraph
+// 的 root 特判保留自处）。
 export function openFolderOrFile(item, navigate) {
   if (item.type === 'folder') {
     navigate(folderTarget(item.id));
@@ -27,7 +28,7 @@ export function openFolderOrFile(item, navigate) {
 }
 
 // ---- 安全 localStorage（隐私模式 / 被禁用的存储下不抛错）----
-// 与 NoticeModal / ChatComposer 现有的 try/catch 行为保持一致。
+// 与 NoticeModal 现有的 try/catch 行为保持一致。
 
 export function storageGet(key) {
   try {

@@ -22,19 +22,15 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes('node_modules/three') || id.includes('node_modules\\three')) return 'three';
           if (id.includes('node_modules/d3-force')) return 'graph';
-          if (id.includes('node_modules/react-markdown') || id.includes('node_modules/remark')
-            || id.includes('node_modules/rehype') || id.includes('node_modules/mdast')
-            || id.includes('node_modules/micromark') || id.includes('node_modules/unified')
-            || id.includes('node_modules/hast')) return 'markdown';
           if (id.includes('node_modules/framer-motion') || id.includes('node_modules\\framer-motion')) return 'motion';
           if (id.includes('node_modules/gsap')) return 'gsap';
           // React 核心必须单独成 chunk（IMPROVE-43）：不显式指定时 rollup 会把它塞进
-          // 「第一个用到它的 manual chunk」——实测先是落进 markdown，把图谱/对话改成
-          // 懒加载后又落进 motion。入口为了拿 React 就得同步 import 那个 chunk，Vite
-          // 随即把它写成 modulepreload，懒加载等于白做。固定到 'react' 之后
-          // markdown / motion / graph 才真正只在需要时下载。
-          // ⚠️ 正则带尾斜杠是有意的：`includes('react')` 会误吞 react-markdown /
-          // react-router-dom / react-i18next / react-icons / lucide-react。
+          // 「第一个用到它的 manual chunk」——历史上先落进 markdown、把图谱改成懒加载后
+          // 又落进 motion。入口为了拿 React 就得同步 import 那个 chunk，Vite 随即把它写成
+          // modulepreload，懒加载等于白做。固定到 'react' 之后 motion / graph 才真正只在
+          // 需要时下载。
+          // ⚠️ 正则带尾斜杠是有意的：`includes('react')` 会误吞 react-router-dom /
+          // react-i18next / react-icons / lucide-react。
           if (/node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react';
           return undefined;
         },
