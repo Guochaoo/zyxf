@@ -250,7 +250,11 @@ export default function App() {
       {/* 折叠后，左上角浮现一个固定的「展开侧边栏」按钮；展开时它淡出消失，
           避免与侧边栏内的收起按钮同时出现。
           让开它的是工具栏那一行自己（BrowsePage 按 data-sidebar 加 lg:pl-[46px]），
-          不是整列内边距——整列右移会让文件列表左侧空出一条。 */}
+          不是整列内边距——整列右移会让文件列表左侧空出一条。
+          横向 x=2 让它居中于左侧那段空白：收起态中列从 16px 起排（sm:px-4），而这颗按钮
+          宽 28px，于是左空 2px、右侧到工具栏左缘（46）留 16px，视觉上居中。
+          ⚠️ 别改成 left: calc(50% - 14px)：fixed 元素的百分比参照视口，不是这段空白，
+          按钮会被推到屏幕中间（实测 x≈779）。 */}
       {isBrowse && (
         <button
           type="button"
@@ -259,7 +263,7 @@ export default function App() {
           title={t('app.expandSidebar')}
           aria-hidden={sidebarOpen}
           tabIndex={sidebarOpen ? -1 : 0}
-          className={`fixed left-[18px] top-[13px] z-20 hidden lg:flex h-7 w-7 items-center justify-center rounded-[7px] text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-700 ${
+          className={`fixed left-[2px] top-[13px] z-20 hidden lg:flex h-7 w-7 items-center justify-center rounded-[7px] text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-700 ${
             sidebarOpen ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'
           }`}
           style={SIDEBAR_TRANSITION}

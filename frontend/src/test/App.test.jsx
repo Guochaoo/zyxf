@@ -175,10 +175,12 @@ describe('App', () => {
     expect(toggle.parentElement.style.transitionTimingFunction).toBe(ease);
 
     // 收起后浮出的展开按钮（轨道内的那个同 aria-label，用 fixed 定位的那个区分）
+    // 用 fixed + top-[13px] 认它，别认 left-*：横向位置调过几次（18 → 2），
+    // 认死坐标会让「按钮挪个位置」这种纯样式改动打挂这条过渡断言。
     fireEvent.click(toggle);
     const expand = screen
       .getAllByRole('button', { name: '展开侧边栏' })
-      .find((b) => b.className.includes('left-[18px]'));
+      .find((b) => b.className.includes('fixed') && b.className.includes('top-[13px]'));
     expect(expand).toBeTruthy();
     expect(expand.style.transitionDuration).toBe('320ms');
     expect(expand.style.transitionTimingFunction).toBe(ease);
