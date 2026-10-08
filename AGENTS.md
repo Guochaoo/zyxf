@@ -9,7 +9,7 @@
 
 ```
 zyxf/
-├── backend/               # Express 后端（资源库 API、智能搜索、AI 助手服务）
+├── backend/               # Express 后端（资源库 API、智能搜索、AI 搜索服务）
 │   ├── src/
 │   │   ├── index.js       # 入口：helmet / 限流 / 生产安全校验
 │   │   ├── db.js          # SQLite 初始化
@@ -27,7 +27,8 @@ zyxf/
 │   ├── src/
 │   │   ├── pages/         # BrowsePage / DashboardPage / AuthPage（登录+注册） / AboutPage
 │   │   │                  #   页面级子模块：pages/Browse/、pages/Dashboard/（容器 + 数据 hook + 纯展示件）
-│   │   ├── components/    # 文件列表 / 预览 / 知识图谱 / 智能对话 / 菜单等
+│   │   ├── components/    # 文件列表 / 预览 / 知识图谱 / AI 搜索卡 / 菜单等
+│   │   ├── hooks/         # 跨组件复用的 hook（useAiSearch / useSettingsRoute / useMediaQuery 等）
 │   │   ├── data/          # resource.js：轻量数据层（请求去重/取消/缓存/失效），新数据请求优先复用
 │   │   └── test/          # vitest 测试
 ├── docs/

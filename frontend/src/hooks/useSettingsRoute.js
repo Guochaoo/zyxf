@@ -32,7 +32,7 @@ export function useSettingsRoute() {
     [isMobileSettings, location.state, navigate]
   );
 
-  // 从任意页面直接落到某个板块（例：对话卡片的齿轮 → 智能对话配置）。
+  // 从任意页面直接落到某个板块（例：AI 搜索卡出错态的齿轮 → AI 搜索配置）。
   // 还没在设置里时要把当前页记进 background——直接 navigate('/settings/:id') 不带
   // state 的话，弹窗背后会退回资料库根目录，丢掉当前文件夹。
   const openSettingsAt = useCallback(

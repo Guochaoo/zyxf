@@ -1,6 +1,6 @@
 # 仲英学辅 · 资料库（zyxf）
 
-> 西安交通大学仲英书院学业辅导中心的全栈在线资料库：按文件夹层级组织 PPT / Word / PDF / 图片等学习资料，提供智能搜索、AI 资料助手、在线预览、知识图谱与下载统计。文件直存阿里云 OSS，不占应用服务器带宽。
+> 西安交通大学仲英书院学业辅导中心的全栈在线资料库：按文件夹层级组织 PPT / Word / PDF / 图片等学习资料，提供智能搜索、AI 搜索、在线预览、知识图谱与下载统计。文件直存阿里云 OSS，不占应用服务器带宽。
 
 线上地址：<https://zyxf.top>
 
@@ -8,7 +8,7 @@
 
 - **资料管理**：文件夹任意嵌套；按名称、大小、时间排序，升降序可切换；拖拽 / 点击上传（前端直传 OSS）；后端提供面包屑数据（前端当前未在 UI 展示）
 - **智能搜索**：名称子串、汉字缩写（搜「高数」命中「高等数学」）、拼音全拼与首字母（`gaoshu` / `gdsx`）、所在文件夹路径命中；名称命中排在路径命中之前，结果标注所属文件夹
-- **AI 资料助手**（可选）：右栏流式对话，LLM 按需调用智能检索并推荐文件；回答中【文件N】引用渲染为可点击卡片（跳转 / 预览）；支持三种上游协议（OpenAI Chat Completions / OpenAI Responses / Anthropic Messages），浏览器端配置或服务器端 env 配置均可；游客限流、管理员豁免
+- **AI 搜索**（可选）：搜索候选框顶部常驻「AI 搜索更多结果」入口，点一下即用当前关键词做一次 AI 检索——LLM 按需调用智能检索，命中的资料以可点击条目列在卡片里（跳转 / 预览），正文里的【文件N】引用不直接展示；查找中卡片四周为彩虹流光泛光。支持三种上游协议（OpenAI Chat Completions / OpenAI Responses / Anthropic Messages），浏览器端配置或服务器端 env 配置均可；游客限流、管理员豁免
 - **在线预览**：PDF / PPT / Word / Excel / TXT 走阿里云 IMM WebOffice；zip / rar 等归档仅提供下载
 - **知识图谱**：按目录连接关系的力导向图，点击节点跳转或预览，支持全库视图与当前文件夹邻域放大
 - **统计面板**（`/dashboard`）：近一年 GitHub 式下载热力图、文件类型分布、下载 / 占用排行、今日上传下载动态
@@ -18,7 +18,7 @@
 
 | 分层 | 技术 | 说明 |
 |---|---|---|
-| 前端 | React 19 · React Router 7 · i18next · axios · react-markdown | SPA；登录态用 React Context 管理；i18next 中英双语；AI 回复用 react-markdown 渲染 |
+| 前端 | React 19 · React Router 7 · i18next · axios | SPA；登录态用 React Context 管理；i18next 中英双语 |
 | 构建 / 测试 | Vite 8 · Vitest 5 + Testing Library | 前端测试跑 jsdom；后端测试用 Node 内置 node:test |
 | 样式 | TailwindCSS 4 | 设计 token 与断点覆写见 `tailwind.config.js` / [docs/DESIGN.md](docs/DESIGN.md) |
 | 动效 / 可视化 | framer-motion · GSAP · three.js · d3-force · lucide-react · react-icons | three.js 渲染登录页 WebGL 背景；d3-force 驱动知识图谱；图标用 lucide-react 与 react-icons |
@@ -65,7 +65,7 @@ cd frontend && npm install && npm run dev
 | `CORS_ORIGIN` |  | 跨域来源；同源反代部署可留空 |
 | `OSS_KEY_PREFIX` / `OSS_ENDPOINT` |  | 上传根前缀 / 自定义直传 endpoint |
 | `IMM_PROJECT` |  | IMM 项目名（默认 `zyxf`），与 OSS Bucket 绑定的 IMM 项目名不同才需设置 |
-| `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` |  | 三者齐备才启用 AI 对话，留空则该接口返回 503 |
+| `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` |  | 三者齐备才启用 AI 搜索，留空则该接口返回 503 |
 | `LLM_PROTOCOL` |  | 上游协议：`openai-completions`（默认，OpenAI/GLM/DeepSeek 等 `/chat/completions` 接口）/ `openai-responses`（OpenAI `/responses`）/ `anthropic-messages`（Anthropic `/messages`）。旧值 `openai` / `anthropic` 仍兼容。前端设置里的「API 协议」可让用户用自带 Key 覆盖它 |
 | `DM_ACCESS_KEY_ID` / `DM_ACCESS_KEY_SECRET` / `DM_ACCOUNT_NAME` |  | 三者齐备才启用用户注册（阿里云邮件推送 DirectMail 发送邮箱验证码），留空则注册发码接口返回 503 |
 | `DM_FROM_ALIAS` |  | 发件人显示名（默认「仲英学辅」） |
@@ -90,7 +90,7 @@ zyxf/
 │   ├── src/
 │   │   ├── pages/         # BrowsePage / DashboardPage / AuthPage（登录+注册） / AboutPage
 │   │   │                  #   页面级子模块：pages/Browse/、pages/Dashboard/（容器 + 数据 hook + 纯展示件）
-│   │   ├── components/    # 文件列表 / 预览 / 知识图谱 / 智能对话 / 菜单等
+│   │   ├── components/    # 文件列表 / 预览 / 知识图谱 / AI 搜索卡 / 菜单等
 │   │   └── test/          # vitest 测试
 └── docs/
 │   ├── DEPLOY.md          # 部署指南（systemd + nginx + HTTPS）

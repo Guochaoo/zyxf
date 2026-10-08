@@ -9,13 +9,11 @@ import BrowsePage from './pages/BrowsePage.jsx';
 const AuthPage = lazy(() => import('./pages/AuthPage.jsx'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
 const AboutPage = lazy(() => import('./pages/AboutPage.jsx'));
-// 右栏两个面板同样按需加载（IMPROVE-43）：KnowledgeGraph 静态依赖 d3-force、
-// ChatComposer 经 Chat/parts 依赖 react-markdown。它们原先被静态 import，于是
-// 这两个库进了入口的同步依赖图并出现在 index.html 的 modulepreload 里——只看
-// 文件列表、不开图谱也不用 AI 的访客照样要下载约 45 KB(gzip)。改成 lazy 后
-// 只有真的渲染右栏（browse 路由 + lg 屏）才会去取。
+// 右栏知识图谱同样按需加载（IMPROVE-43）：它静态依赖 d3-force，原先被静态 import，
+// 于是这个库进了入口的同步依赖图并出现在 index.html 的 modulepreload 里——只看
+// 文件列表、不开图谱的访客照样要下载约 45 KB(gzip)。改成 lazy 后只有真的渲染右栏
+// （browse 路由 + lg 屏）才会去取。
 const KnowledgeGraph = lazy(() => import('./components/KnowledgeGraph.jsx'));
-const ChatComposer = lazy(() => import('./components/ChatComposer.jsx'));
 import StaggeredMenu from './components/StaggeredMenu.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import SearchBar from './components/SearchBar.jsx';
@@ -34,7 +32,7 @@ const socialItems = [
   { label: 'Bilibili', link: 'https://space.bilibili.com/549612395' },
 ];
 
-// 侧边栏开合的缓动曲线与时长（与 ChatComposer / KnowledgeGraph 的收缩动画一致）。
+// 侧边栏开合的缓动曲线与时长（与 KnowledgeGraph 的收缩动画一致）。
 // ⚠️ BUG-94：这两个值**必须**通过内联样式下发，不能拼进模板字符串当 Tailwind 类名
 // （`lg:duration-[${SIDEBAR_MS}ms]`）——Tailwind 只静态扫描源码文本，插值处构建期不存在
 // 字面量类名，规则从未生成，动画会静默退化成 `transition-*` 的默认 150ms + 默认缓动。
@@ -90,7 +88,6 @@ export default function App() {
     pageLocation,
     openSettings,
     openSettingsSection,
-    openSettingsAt,
     backToSettingsList,
     closeSettings,
   } = useSettingsRoute();
@@ -142,9 +139,6 @@ export default function App() {
         : { name: t('app.account.guestName'), subtitle: t('app.account.guestSub'), guest: true, avatarText: '', onLogin: () => navigate('/login') },
     [user, logout, navigate, t]
   );
-
-  // 对话卡片的齿轮直接落到「智能对话配置」板块（菜单里的齿轮仍打开弹窗默认板块）。
-  const openAiSettings = useCallback(() => openSettingsAt('ai'), [openSettingsAt]);
 
   const brand = useMemo(
     () => (
@@ -340,12 +334,11 @@ export default function App() {
         <div className="fixed inset-y-0 right-0 z-10 hidden flex-col gap-4 overflow-hidden pr-2 pt-[61.5px] lg:flex lg:w-[300px]">
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
             <div className="flex min-h-0 flex-1 flex-col gap-[15px]">
-              {/* 右栏也进 ErrorBoundary（BUG-105 的教训）：图谱/对话崩溃不再打穿整页到
+              {/* 右栏也进 ErrorBoundary（BUG-105 的教训）：图谱崩溃不再打穿整页到
                   bootError 白屏，只降级本栏并给出可重试的界面。 */}
               <ErrorBoundary>
                 <Suspense fallback={null}>
                   <KnowledgeGraph currentId={folderId} onFullChange={setGraphFull} />
-                  <ChatComposer onOpenSettings={openAiSettings} />
                 </Suspense>
               </ErrorBoundary>
             </div>

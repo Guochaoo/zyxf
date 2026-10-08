@@ -23,6 +23,9 @@ vi.mock('../api.js', () => ({
   renameFile: vi.fn(),
   renameFolder: vi.fn(),
   getFileUrl: vi.fn(),
+  // 工具栏 SearchBar 里的 AI 搜索卡：挂载时会问一次服务端 AI 状态（见 useAiSearch）。
+  getChatStatus: vi.fn(() => Promise.resolve({ enabled: true })),
+  chatStream: vi.fn(),
 }));
 const { default: BrowsePage } = await import('../pages/BrowsePage.jsx');
 

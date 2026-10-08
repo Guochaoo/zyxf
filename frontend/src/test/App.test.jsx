@@ -215,7 +215,7 @@ describe('App · 设置路由', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '设置' }));
 
-    // 设置界面出现：板块列表 + 默认板块（账户信息，不再是智能对话配置）
+    // 设置界面出现：板块列表 + 默认板块（账户信息，不再是 AI 搜索配置）
     expect(screen.getByRole('button', { name: '账户信息' })).toBeInTheDocument();
     expect(screen.getByText('尚未登录')).toBeInTheDocument();
     expect(screen.queryByLabelText('API Key')).toBeNull();
@@ -225,7 +225,7 @@ describe('App · 设置路由', () => {
 
   test('直接访问 /settings 也能打开设置，且背后渲染资料库而不是被重定向', async () => {
     renderApp('/settings');
-    expect(screen.getByRole('button', { name: '智能对话配置' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'AI 搜索配置' })).toBeInTheDocument();
     expect(await screen.findByText('此文件夹为空')).toBeInTheDocument();
   });
 

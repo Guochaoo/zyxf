@@ -113,9 +113,10 @@ describe('SettingsModal 语言下拉：点击空白收起', () => {
   });
 });
 
-// 智能对话配置：来源二选一（服务器 / 自定义），只有自定义才显示字段。
+// AI 搜索配置：来源二选一（服务器 / 自定义），只有自定义才显示字段。
 // 字段顺序：API 地址 → API 协议 → API Key → 模型；只有地址带通用格式占位提示。
-describe('SettingsModal 智能对话配置：配置来源与字段', () => {
+// （板块原名为「智能对话配置」，随右栏对话卡片迁入搜索候选框而更名。）
+describe('SettingsModal AI 搜索配置：配置来源与字段', () => {
   const radio = (name) => screen.getByRole('radio', { name });
   const savedCfg = () => {
     const raw = localStorage.getItem('zyxf_llm');
@@ -404,14 +405,14 @@ describe('SettingsModal 手机端：两级结构', () => {
   const row = (name) => screen.getByRole('button', { name });
 
   // 左栏三个板块的自上而下顺序由 navItems 数组决定，需求指定为
-  // 账户信息 → 外观 → 智能对话配置（改数组顺序就要同步这条用例）。
-  test('板块顺序：账户信息 / 外观 / 智能对话配置', () => {
+  // 账户信息 → 外观 → AI 搜索配置（改数组顺序就要同步这条用例）。
+  test('板块顺序：账户信息 / 外观 / AI 搜索配置', () => {
     renderModal();
     const nav = screen.getByRole('navigation', { name: '设置板块' });
     expect(within(nav).getAllByRole('button').map((b) => b.textContent.trim())).toEqual([
       '账户信息',
       '外观',
-      '智能对话配置',
+      'AI 搜索配置',
     ]);
   });
 
@@ -425,7 +426,7 @@ describe('SettingsModal 手机端：两级结构', () => {
 
     // 一级：居中标题是「设置」，三个列表行都在，板块内容与底部操作条都不渲染
     expect(screen.getByText('设置')).toBeInTheDocument();
-    expect(row('智能对话配置')).toBeInTheDocument();
+    expect(row('AI 搜索配置')).toBeInTheDocument();
     expect(row('账户信息')).toBeInTheDocument();
     expect(row('外观')).toBeInTheDocument();
     expect(screen.queryByLabelText('API Key')).toBeNull();
@@ -433,7 +434,7 @@ describe('SettingsModal 手机端：两级结构', () => {
     expect(screen.getByRole('button', { name: '关闭' })).toBeInTheDocument();
 
     // 进二级：内容出现、列表收起、左上角按钮变成「返回」
-    fireEvent.click(row('智能对话配置'));
+    fireEvent.click(row('AI 搜索配置'));
     expect(screen.getByLabelText('API Key')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '账户信息' })).toBeNull();
