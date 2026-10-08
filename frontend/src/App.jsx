@@ -171,16 +171,18 @@ export default function App() {
   // about fill the viewport width; everything else is a centered column.
   let mainLayout;
   if (isBrowse) {
-    // Left rail padding collapses when the sidebar is toggled off, matching the
-    // rail's transform easing — but **only for that toggle**: the transition class
-    // must not be on while a route change grows this padding 0 → 266/316px, or the
-    // middle column plays an unintended "both sides slide inward" animation
-    // (BUG-112). Hence `layoutAnimating`, a short window opened by the toggles.
+    // 收起侧栏时左内边距**不能归零**：左上角「展开侧边栏」浮动按钮占 x=18~46，中列若从
+    // x=16 起排，搜索框就会和按钮叠在同一块地方（原先只靠 z-index 分先后，看着就是盖住）。
+    // 留 62px 让中列整体从按钮右缘右侧起排——46 + 16 间隙，实测搜索胶囊左缘 = 62。
+    // Left-rail padding transitions only for the manual toggle: the transition class must not
+    // be on while a route change grows this padding, or the middle column plays an unintended
+    // "both sides slide inward" animation (BUG-112) — hence `layoutAnimating`, a short window
+    // opened by the toggles.
     // ⚠️ 任意值类名后面必须留空格再进 ${}：贴成 `lg:pr-[316px]${...}` 会被 Tailwind
     // 的扫描器并成一个非法候选而不生成规则（BUG-94 同族陷阱，改这段务必回看产物）。
     // Tailwind 4 不再为 calc(+/- 无空格) 形式的任意值生成 CSS，显式像素 = 轨道宽 + 1rem 间隙
     mainLayout = `w-full ${
-      sidebarOpen ? 'lg:pl-[266px]' : 'lg:pl-0'
+      sidebarOpen ? 'lg:pl-[266px]' : 'lg:pl-[62px]'
     } lg:pr-[316px] ${layoutAnimating ? 'lg:transition-[padding]' : ''}`;
   } else if (isDashboard || isAbout) {
     mainLayout = 'mx-auto w-full';
@@ -242,10 +244,8 @@ export default function App() {
       )}
       {/* 折叠后，左上角浮现一个固定的「展开侧边栏」按钮；展开时它淡出消失，
           避免与侧边栏内的收起按钮同时出现。
-          z 必须高于中列内容：收起后 main 的 lg:pl-0 让搜索框回到 x≈16，而这个浮动按钮
-          在 x=18~46，只压住搜索框左缘 2px 就会被整块盖住（搜索框外壳 z-[70]）——原先
-          z-20 时按钮直接消失且点不到。取 75：压过搜索框，但仍低于搜索候选栏 z-[200]
-          与各弹窗（z-[80] 起）、大图预览（z-[150]），浮层打开时不会压在它们上面。 */}
+          与中列不重叠靠的是 mainLayout 给收起态留的 lg:pl-[62px]（中列从本按钮右缘
+          右侧起排），不是靠 z-index 压住——两者重叠时“看得见”也只是盖在搜索框上。 */}
       {isBrowse && (
         <button
           type="button"
@@ -254,7 +254,7 @@ export default function App() {
           title={t('app.expandSidebar')}
           aria-hidden={sidebarOpen}
           tabIndex={sidebarOpen ? -1 : 0}
-          className={`fixed left-[18px] top-[13px] z-[75] hidden lg:flex h-7 w-7 items-center justify-center rounded-[7px] text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-700 ${
+          className={`fixed left-[18px] top-[13px] z-20 hidden lg:flex h-7 w-7 items-center justify-center rounded-[7px] text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-700 ${
             sidebarOpen ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'
           }`}
           style={SIDEBAR_TRANSITION}
