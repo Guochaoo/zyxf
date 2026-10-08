@@ -188,8 +188,11 @@ export default function BrowsePage() {
 
   return (
     <div className="space-y-4">
-      {/* Toolbar — sits above the file list */}
-      <div className="flex w-full items-center gap-2">
+      {/* 工具栏这一行在侧栏收起时要让开左上角的「展开侧边栏」浮动按钮（占 x=18~46）：
+          留 46px 正好从按钮右缘起排，于是搜索胶囊左缘 = 46，与按钮右缘相接而不重叠
+          （搜索框从按钮右侧展开，不再压住按钮）。收起与否看 App 根节点的 data-sidebar。
+          缩进只给工具栏：给整列会让文件列表一起右移、左侧空出一条。 */}
+      <div className="flex w-full items-center gap-2 [.app-theme[data-sidebar='collapsed']_&]:lg:pl-[46px]">
         <div className="hidden lg:block min-w-0 flex-1">
           <SearchBar className="w-full max-w-none" />
         </div>

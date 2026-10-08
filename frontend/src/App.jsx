@@ -171,9 +171,9 @@ export default function App() {
   // about fill the viewport width; everything else is a centered column.
   let mainLayout;
   if (isBrowse) {
-    // 收起侧栏时左内边距**不能归零**：左上角「展开侧边栏」浮动按钮占 x=18~46，中列若从
-    // x=16 起排，搜索框就会和按钮叠在同一块地方（原先只靠 z-index 分先后，看着就是盖住）。
-    // 留 62px 让中列整体从按钮右缘右侧起排——46 + 16 间隙，实测搜索胶囊左缘 = 62。
+    // Left-rail padding. 收起态归零：中列整体仍从 x=16 起排（文件列表保持原来的左边距）；
+    // 需要让开左上角浮动按钮（x=18~46）的只有工具栏那一行，由 BrowsePage 的工具栏自己
+    // 按 data-sidebar 加 lg:pl-[46px]，与这里的 266px 一起构成开合动画。
     // Left-rail padding transitions only for the manual toggle: the transition class must not
     // be on while a route change grows this padding, or the middle column plays an unintended
     // "both sides slide inward" animation (BUG-112) — hence `layoutAnimating`, a short window
@@ -182,7 +182,7 @@ export default function App() {
     // 的扫描器并成一个非法候选而不生成规则（BUG-94 同族陷阱，改这段务必回看产物）。
     // Tailwind 4 不再为 calc(+/- 无空格) 形式的任意值生成 CSS，显式像素 = 轨道宽 + 1rem 间隙
     mainLayout = `w-full ${
-      sidebarOpen ? 'lg:pl-[266px]' : 'lg:pl-[62px]'
+      sidebarOpen ? 'lg:pl-[266px]' : 'lg:pl-0'
     } lg:pr-[316px] ${layoutAnimating ? 'lg:transition-[padding]' : ''}`;
   } else if (isDashboard || isAbout) {
     mainLayout = 'mx-auto w-full';
@@ -200,7 +200,12 @@ export default function App() {
   }
 
   return (
-    <div className="app-theme min-h-full flex flex-col relative bg-page">
+    // data-sidebar 供中列内部的元素按开合态调布局（工具栏要让开收起后左上角的浮动按钮，
+    // 见 BrowsePage 工具栏的 [.app-theme[data-sidebar='collapsed']_&]:lg:pl-[46px]）。
+    <div
+      className="app-theme min-h-full flex flex-col relative bg-page"
+      data-sidebar={sidebarOpen ? 'open' : 'collapsed'}
+    >
       {/* Mobile-only brand row on browse pages (no topbar on any layout) */}
       {isBrowse && (
         <div className="flex h-14 items-center px-4 lg:hidden">
@@ -244,8 +249,8 @@ export default function App() {
       )}
       {/* 折叠后，左上角浮现一个固定的「展开侧边栏」按钮；展开时它淡出消失，
           避免与侧边栏内的收起按钮同时出现。
-          与中列不重叠靠的是 mainLayout 给收起态留的 lg:pl-[62px]（中列从本按钮右缘
-          右侧起排），不是靠 z-index 压住——两者重叠时“看得见”也只是盖在搜索框上。 */}
+          让开它的是工具栏那一行自己（BrowsePage 按 data-sidebar 加 lg:pl-[46px]），
+          不是整列内边距——整列右移会让文件列表左侧空出一条。 */}
       {isBrowse && (
         <button
           type="button"
