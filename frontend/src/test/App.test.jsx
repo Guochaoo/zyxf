@@ -182,7 +182,14 @@ describe('App', () => {
       .getAllByRole('button', { name: '展开侧边栏' })
       .find((b) => b.className.includes('fixed') && b.className.includes('top-[13px]'));
     expect(expand).toBeTruthy();
-    expect(expand.style.transitionDuration).toBe('320ms');
+    // 浮动按钮的过渡是刻意偏置的，三处数值都是「防闪动」调出来的（见 DESIGN.md §6）：
+    //   - transitionProperty 只留 opacity：初始值 all 会把 left 也带上过渡，悬停时按钮横向漂移
+    //   - 淡入 150ms + 延迟 240ms：左轨滑完（实测让开 x=2 在 243ms）之后才可见，
+    //     既不等满 320ms 显得晚，也不在轨道还没让开时就淡入（那会两个图标叠着闪）
+    //   - 缓动沿用项目级 EASE_COLLAPSE
+    expect(expand.style.transitionProperty).toBe('opacity');
+    expect(expand.style.transitionDuration).toBe('150ms');
+    expect(expand.style.transitionDelay).toBe('240ms');
     expect(expand.style.transitionTimingFunction).toBe(ease);
 
     // 中列 padding 与轨道同步，且只在手动开合窗口内挂 transition-property

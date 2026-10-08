@@ -46,10 +46,16 @@ const SIDEBAR_TRANSITION = {
   transitionDuration: `${SIDEBAR_MS}ms`,
   transitionTimingFunction: SIDEBAR_EASE,
 };
-// 浮动「展开侧边栏」按钮的淡入淡出时长。取与开合动画同长（320ms）：展开时左轨滑回来
-// 要 320ms，按钮若淡得更快，会在轨道还没盖住它时就先消失（实测 58ms 处已只剩 0.28），
-// 看起来是「先没了」而不是「被轨道收走」。同长则两者贴合。
-const SIDEBAR_FADE_MS = SIDEBAR_MS;
+// 浮动「展开侧边栏」按钮的淡入延迟：左轨滑完要 320ms，但按钮不是「瞬间出现」——
+// 淡入是渐进的，opacity 爬到肉眼可见还需要几十毫秒。所以起点可以提前到 240ms：
+// 实测左轨让开按钮所在的 x=2 是 243ms，而按钮要到 276ms 才爬到 5% 可见，两者错开，
+// 看不出重叠。取 320ms 则是「一帧都不重叠」的保守值，代价是约 300ms 空窗、显得出现得晚。
+const SIDEBAR_FADE_DELAY_MS = 240;
+// 淡入比淡出快（150ms vs 320ms）：淡入只需「尽快就位」——150ms 让它在 376ms 完全
+// 显示出来；若也取 320ms，要到 640ms 才到 1，看着懒洋洋地浮出来。淡出必须与开合同长
+// 320ms——展开时左轨滑回来要 320ms，按钮若淡得更快，会在轨道还没盖住它时就先消失
+// （实测 150ms 时 58ms 处已只剩 0.28），看起来是「先没了」而不是「被轨道收走」。
+const SIDEBAR_FADE_IN_MS = 150;
 
 export default function App() {
   const { t } = useTranslation();
@@ -280,8 +286,8 @@ export default function App() {
           style={{
             ...SIDEBAR_TRANSITION,
             transitionProperty: 'opacity',
-            transitionDuration: `${SIDEBAR_FADE_MS}ms`,
-            transitionDelay: sidebarOpen ? '0ms' : `${SIDEBAR_MS}ms`,
+            transitionDuration: `${sidebarOpen ? SIDEBAR_MS : SIDEBAR_FADE_IN_MS}ms`,
+            transitionDelay: sidebarOpen ? '0ms' : `${SIDEBAR_FADE_DELAY_MS}ms`,
           }}
         >
           <PanelLeftOpen className="h-[18px] w-[18px]" strokeWidth={1.7} />
