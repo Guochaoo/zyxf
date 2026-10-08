@@ -258,19 +258,25 @@ a:focus-visible,
 
 /* ---- AI 搜索卡（搜索候选框顶部，DESIGN.md §4）----
    候选框里的一次性 AI 检索：入口 → 查找中（流光泛光）→ 结果卡。
-   ⚠️ 彩虹渐变（描边与泛光）是**AI 专属例外**，DESIGN.md §2 已记录其自有配色，
-   别把 --rb-ai-* 这几支挪去别的组件——全站其余部分保持克制单色。
+   ⚠️ 彩虹渐变（图标填充、描边、泛光）是**AI 专属例外**，DESIGN.md §2 已记录其自有
+   配色，别把 --rb-ai-* 这几支挪去别的组件——全站其余部分保持克制单色。
    自定义属性放这里而不是 Tailwind token：它只服务这一处自绘视觉。 */
 :root {
+  --rb-ai-c1: #5227ff;
+  --rb-ai-c2: #a64bff;
+  --rb-ai-c3: #ff3d9a;
+  --rb-ai-c4: #ffb03d;
+  --rb-ai-c5: #3ddc97;
+  --rb-ai-c6: #3d9aff;
   --rb-ai-rainbow: linear-gradient(
     100deg,
-    #5227ff,
-    #a64bff,
-    #ff3d9a,
-    #ffb03d,
-    #3ddc97,
-    #3d9aff,
-    #5227ff
+    var(--rb-ai-c1),
+    var(--rb-ai-c2),
+    var(--rb-ai-c3),
+    var(--rb-ai-c4),
+    var(--rb-ai-c5),
+    var(--rb-ai-c6),
+    var(--rb-ai-c1)
   );
 }
 
@@ -293,23 +299,16 @@ a:focus-visible,
   }
 }
 
-/* 23px 渐变小方块 + 白色星芒：入口与卡片头部共用。 */
-.rb-ai-badge {
+/* AI 图标（react-icons 的 RiSearchAiLine）：**透明底 + 图标自身渐变填充**，
+   填充色由组件内联成 `url(#<每实例唯一的渐变 id>)`，渐变 stop 直接引上面那几支
+   变量。刻意不做彩色底块——底色块在小尺寸下显得重，且和卡片描边抢注意力。 */
+.rb-ai-icon {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 23px;
-  height: 23px;
   flex: none;
-  border-radius: 7px;
-  background: var(--rb-ai-rainbow);
-  background-size: 300% 100%;
-  animation: rb-ai-flow 6s linear infinite;
 }
-/* 图标必须显式给白色：`.rb-search-dropdown *` 把候选框内一切文字/图标刷成 var(--ink)，
-   渐变底上的墨色星芒几乎看不见（同 BUG-107 的染色坑）。 */
-.rb-ai-badge svg {
-  color: #fff !important;
+.rb-ai-icon svg {
+  width: 19px;
+  height: 19px;
 }
 
 /* 描边是「1.5px 渐变环」（外层渐变 + 内层 var(--surface) 卡片），

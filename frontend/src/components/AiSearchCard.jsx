@@ -1,6 +1,8 @@
+import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BsFolder } from 'react-icons/bs';
-import { ChevronRight, Loader2, RotateCw, Sparkles } from 'lucide-react';
+import { RiSearchAiLine } from 'react-icons/ri';
+import { ChevronRight, Loader2, RotateCw } from 'lucide-react';
 import FileIcon from './FileIcon.jsx';
 
 /* ─────────────────────────────────────────────────────────
@@ -22,11 +24,28 @@ const stripCitations = (value) =>
     .join('\n')
     .trim();
 
-function AiBadge() {
+// AI 图标：RiSearchAiLine（放大镜 + 星芒），透明底、图标自身走渐变填充。
+// 渐变要在文档里有个 <defs> 才解析得出来，所以随图标渲染一段 0×0 的 svg；
+// id 按实例唯一（移动端 / 桌面端两个 SearchBar 可能同时挂载），React 的 useId
+// 带冒号，塞进 CSS 的 url() 前先洗掉。
+function AiIcon() {
+  const gid = `rb-ai-grad-${useId().replace(/:/g, '')}`;
   return (
-    <span className="rb-ai-badge" aria-hidden="true">
-      <Sparkles size={13} strokeWidth={2.2} />
-    </span>
+    <>
+      <svg aria-hidden="true" className="absolute h-0 w-0 overflow-hidden">
+        <defs>
+          <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" style={{ stopColor: 'var(--rb-ai-c1)' }} />
+            <stop offset="45%" style={{ stopColor: 'var(--rb-ai-c3)' }} />
+            <stop offset="100%" style={{ stopColor: 'var(--rb-ai-c6)' }} />
+          </linearGradient>
+        </defs>
+      </svg>
+      <span className="rb-ai-icon" aria-hidden="true">
+        {/* 末尾那支颜色是兜底：渐变引用万一解析不到，图标仍以品牌紫渲染而不是消失。 */}
+        <RiSearchAiLine style={{ fill: `url(#${gid}) var(--rb-ai-c1)` }} />
+      </span>
+    </>
   );
 }
 
@@ -69,7 +88,7 @@ export default function AiSearchCard({ query, ai, onOpenItem, onOpenSettings }) 
         onClick={() => run(q)}
         className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left transition-colors duration-200 enabled:hover:bg-black/5 disabled:cursor-default dark:enabled:hover:bg-white/5"
       >
-        <AiBadge />
+        <AiIcon />
         <span className="min-w-0 flex-1 truncate text-[13px]">
           {loginRequired ? t('aiSearch.loginRequired') : t('aiSearch.entry')}
         </span>
@@ -90,7 +109,7 @@ export default function AiSearchCard({ query, ai, onOpenItem, onOpenSettings }) 
       {loading && <span className="rb-ai-card__halo" aria-hidden="true" />}
       <div className="rb-ai-card__inner">
         <div className="flex items-center gap-2.5 px-3 pt-2.5 pb-1.5">
-          <AiBadge />
+          <AiIcon />
           <span className="min-w-0 flex-1 truncate text-[13px] font-medium" aria-live="polite">
             {loading ? t('aiSearch.searching') : t('aiSearch.title')}
           </span>

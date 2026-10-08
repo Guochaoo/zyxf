@@ -27,6 +27,20 @@ describe('AiSearchCard', () => {
     expect(ai.run).toHaveBeenCalledWith('高数');
   });
 
+  // 图标是透明底 + 自身渐变填充（不再用彩色底块）；渐变必须在文档里，
+  // 否则 url(#…) 解析不出来、图标整块不渲染。
+  test('AI 图标走渐变填充且渐变已随图标渲染', () => {
+    const { container } = renderCard();
+    const svg = container.querySelector('.rb-ai-icon svg');
+    expect(svg).toBeTruthy();
+
+    const match = (svg.getAttribute('style') || '').match(/url\(["']?#([\w-]+)/);
+    expect(match).toBeTruthy();
+    const gradient = document.getElementById(match[1]);
+    expect(gradient).toBeTruthy();
+    expect(gradient.querySelectorAll('stop').length).toBe(3);
+  });
+
   test('关键词为空时入口不可点', () => {
     renderCard({}, { query: '   ' });
     expect(screen.getByRole('button', { name: /AI 搜索更多结果/ })).toBeDisabled();
@@ -44,6 +58,7 @@ describe('AiSearchCard', () => {
     const { container } = renderCard({ status: 'loading', text: '正在检索资料库' });
     expect(screen.getByText('AI 搜索正在查找…')).toBeInTheDocument();
     expect(container.querySelector('.rb-ai-card__halo')).toBeTruthy();
+    expect(container.querySelector('.rb-ai-icon')).toBeTruthy(); // 卡片头部同一枚图标
     expect(screen.getByText('正在检索资料库')).toBeInTheDocument();
   });
 

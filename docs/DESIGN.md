@@ -48,7 +48,7 @@
 ### 三处自有配色（改动时不要再扩散）
 - **导航菜单 `StaggeredMenu`**：开关按钮黑底白字（hover #1a1a1a + 双层投影 rgba(0,0,0,.25) 0 0 0 1px / rgba(0,0,0,.2) 0 2px 4px）；面板是白底（`--surface`），但强调色用紫 `--sm-accent` = #5227FF（社交标题与链接 hover）；账号操作图标分色——登录 #3fae6b（底 rgba(63,174,107,.12)）、退出 #d10d0d（底 rgba(209,13,13,.1)）。
 - **关于我们页**：DM Sans + 直角 + 细边，配色自成一页（见 §4）。
-- **AI 搜索卡（`.rb-ai-card` / `.rb-ai-badge`，`index.css` 的 `--rb-ai-rainbow`）**：`linear-gradient(100deg, #5227FF → #A64BFF → #FF3D9A → #FFB03D → #3DDC97 → #3D9AFF → #5227FF)`，`background-size: 300% 100%` + `rb-ai-flow` 6s 线性流动。三处用途：AI 图标徽章底、结果卡 1.5px 描边环、查找中卡片外溢的模糊泛光（`rb-ai-card__halo`，`blur(7px)` + `rb-ai-halo` 呼吸）。它是**刻意的例外**（参考效果的彩虹流光就是这样），别把这支渐变挪到别的组件上；牌面其余部分仍消费 token（卡片内层 `var(--surface)`、次级文字 `--ink-2`）。
+- **AI 搜索卡（`.rb-ai-card` / `.rb-ai-icon`，`index.css` 的 `--rb-ai-c1…c6` 与 `--rb-ai-rainbow`）**：`linear-gradient(100deg, #5227FF → #A64BFF → #FF3D9A → #FFB03D → #3DDC97 → #3D9AFF → #5227FF)`，`background-size: 300% 100%` + `rb-ai-flow` 6s 线性流动。三处用途：AI 图标自身的渐变填充（`RiSearchAiLine`，**透明底**——不做彩色底块，渐变 stop 引 `--rb-ai-c1/c3/c6` 紫→粉→蓝，小尺寸下橙/绿会显脏）、结果卡 1.5px 描边环、查找中卡片外溢的模糊泛光（`rb-ai-card__halo`，`blur(7px)` + `rb-ai-halo` 呼吸）。它是**刻意的例外**（参考效果的彩虹流光就是这样），别把这支渐变挪到别的组件上；牌面其余部分仍消费 token（卡片内层 `var(--surface)`、次级文字 `--ink-2`）。
 
 ### 中性色阶（Tailwind `slate` 被重映射为 Vercel 中性灰）
 | token | 值 | 用途 |
@@ -193,7 +193,7 @@
 - **下拉 `.rb-search-dropdown`**：圆角 14px、毛玻璃背景（`blur(16px) saturate(180%)` + 亮色 65% / 暗色 72% 表面色半透明）、1px 细环 + 内嵌高光 + 柔光投影；结果行 hover 浅灰半透遮罩（`bg-black/5` / `dark:bg-white/5`），纵向高度按候选条目自适应包裹（无底部空白），上限 **70vh**——候选很多时面板涨到浏览器高度的 70% 后在结果区内部滚动；矮窗口下再被「输入框下方剩余高度」夹住，绝不溢出视口底部。**有输入就展开**（不再等本地搜索返回）：AI 入口不依赖命中结果，等请求回来才展开会让入口慢半拍
 - ⚠️ 下拉内的文字颜色被 `.rb-search-dropdown *` 统一刷成 `var(--ink)`（非分层规则，压过 Tailwind 的 utilities 层）——需要次级色 / 语义色时不能用 `text-slate-400` / `text-red` 之类的类，得用同特异性、靠后定义的类（如 `.rb-ai-card__sub` / `.rb-ai-card__error`）。下拉里既有的 `text-slate-*` / `text-amber-400` 按此规则实际渲染为墨色（待办见 issue #69）
 - **AI 搜索卡 `.rb-ai-card`**（下拉顶部常驻，三态）：
-  - **入口态**：一行 hover 高亮（与结果行同语汇，不是卡片）＝ 彩虹渐变 AI 图标徽章（23px、圆角 7px、白色星芒）+ 「AI 搜索更多结果」+ 右 chevron
+  - **入口态**：一行 hover 高亮（与结果行同语汇，不是卡片）＝ 渐变填充的 AI 图标 `RiSearchAiLine`（19px、**透明底**，紫→粉→蓝）+ 「AI 搜索更多结果」+ 右 chevron
   - **查找中**：换成渐变描边卡片——外层 1.5px 渐变环 + 内层 `var(--surface)`，环外再叠一层 `blur(7px)` 的模糊泛光（`rb-ai-card__halo`，呼吸 + 流动），标题行「AI 搜索正在查找…」+ 转圈；流式正文已到达的部分直接显示在下方
   - **结果卡**：标题「AI 搜索」+ 正文（12.5px `--ink-2`；**剥掉【文件N】引用标记**——条目已以列表给出）+ 命中条目行（`bg-inset` 圆角 9px，文件夹琥珀色图标 / 文件族别图标 + 名称 + 所属路径 + chevron，整行可点，与普通搜索结果同一条打开路径）；无命中给空态，失败给错误 + 「重试」+ 「AI 搜索配置」（齿轮进设置板块）
   - 关键词一变即作废回入口态；请求走 `POST /api/chat`（与后端同一套检索工具），流式增量 50ms 批量落地（IMPROVE-52）
