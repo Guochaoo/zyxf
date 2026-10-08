@@ -354,6 +354,13 @@ a:focus-visible,
 .rb-ai-card--idle .rb-ai-card__inner {
   background: none;
 }
+/* ⚠️ hover 底色必须写在这里：上面那条 `background: none` 是未分层规则，会压过
+   Tailwind 的 `hover:bg-black/5`（分层的 utilities）——照抄普通结果行那套类名，
+   悬停时一点变化都看不到（issue #69 的同一族层序坑）。用 --hover token 表达，
+   暗色下自动变成白色 6%。`:enabled` 让禁用态（无关键词 / 需登录）不出现悬停底色。 */
+.rb-ai-card--idle .rb-ai-card__inner:enabled:hover {
+  background: var(--hover);
+}
 
 /* 次级文字：同样要压过 `.rb-search-dropdown *` 的墨色（同特异性，靠源码顺序取胜）。 */
 .rb-ai-card__sub {

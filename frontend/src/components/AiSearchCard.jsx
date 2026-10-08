@@ -77,7 +77,7 @@ export default function AiSearchCard({ query, ai, onOpenItem, onOpenSettings }) 
           type="button"
           disabled={!q || loginRequired}
           onClick={() => run(q)}
-          className="rb-ai-card__inner flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors duration-200 enabled:hover:bg-black/5 disabled:cursor-default dark:enabled:hover:bg-white/5"
+          className="rb-ai-card__inner flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors duration-200 disabled:cursor-default"
         >
           <AiIcon />
           <span className="min-w-0 flex-1 truncate text-[13px]">
