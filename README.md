@@ -22,7 +22,7 @@
 | 构建 / 测试 | Vite 8 · Vitest 5 + Testing Library | 前端测试跑 jsdom；后端测试用 Node 内置 node:test |
 | 样式 | TailwindCSS 4 | 设计 token 与断点覆写见 `tailwind.config.js` / [docs/DESIGN.md](docs/DESIGN.md) |
 | 动效 / 可视化 | framer-motion · GSAP · three.js · d3-force · lucide-react · react-icons | three.js 渲染登录页 WebGL 背景；d3-force 驱动知识图谱；图标用 lucide-react 与 react-icons |
-| 后端 | Node.js ≥ 24 · Express 5 · node:sqlite | SQLite 为 Node 24 内置模块（WAL 模式），无原生编译依赖 |
+| 后端 | Node.js ≥ 24.15 · Express 5 · node:sqlite | SQLite 为 Node 24 内置模块（WAL 模式），无原生编译依赖；24.15 是测试用的 `mock.module({ exports })` 的下界 |
 | 后端安全 | jsonwebtoken（JWT）· bcryptjs · helmet · express-rate-limit | 生产启动时强校验 `JWT_SECRET` / `ADMIN_PASSWORD` / `CORS_ORIGIN` |
 | 搜索辅助 | pinyin-pro | 拼音全拼 / 首字母 / 汉字缩写匹配 |
 | 云服务（阿里云） | OSS · IMM WebOffice · DirectMail | 文件前端直传 OSS（后端仅签名）；文档在线预览；注册验证码邮件 |
@@ -33,7 +33,8 @@
 
 ### 前置条件
 
-- Node.js ≥ 24（`node:sqlite` 内置模块与测试用的 module-mocks 均要求；CI/部署统一 24）
+- Node.js **≥ 24.15**（`node:sqlite` 内置模块与测试用的 `mock.module({ exports })` 均要求；后者从 24.15 才有，24.13 / 24.14 上后端测试会在 import 阶段大面积崩。CI 与部署统一 24）
+  - 前端单独跑只要求 ≥ 24（前端不用 `mock.module`，`frontend/package.json` 的 engines 未收紧）
 - 一个阿里云 OSS Bucket（[CORS 规则](docs/DEPLOY.md)需允许你的来源域名，Methods 含 `GET, POST, PUT, HEAD`）
 
 ### 启动

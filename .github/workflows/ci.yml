@@ -27,7 +27,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 24
+          # ⚠️ 必须 pin 到具体版本，别写裸 `24`：裸 `24` 会浮到最新的 24.x，于是只测「最新」
+          # 而永远不测 engines 声明的下界。这个坑真踩过（issue #68）：`mock.module(..., {
+          # exports })` 从 Node 24.15 才有，24.13/24.14 会静默忽略它，本地后端测试 16/30 个
+          # 文件 import 阶段就崩，而 CI 因为浮在 24.21 一直是绿的。
+          # 这里的 24.15 = backend/package.json engines 的下界，改 engines 时必须同步改这里，
+          # 让「声明的最老版本」在 CI 上真被跑一遍。
+          node-version: 24.15
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci --no-audit --no-fund
@@ -51,6 +57,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
+          # 前端不 pin：它没有 mock.module 那条 24.15 硬约束（frontend/package.json 的
+          # engines 也保持 ">=24" 不收紧），所以刻意让这条跟随最新的 24.x。
           node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json

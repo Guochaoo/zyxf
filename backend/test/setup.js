@@ -5,6 +5,13 @@
 // mock.module is experimental on Node 24 and requires the
 // --experimental-test-module-mocks flag in package.json's `test` script.
 // Do not drop that flag (tests fail without it); re-verify when bumping Node.
+//
+// ⚠️ 下面用的是 `mock.module(spec, { exports })` 这个**单一对象**选项，它从 Node 24.15.0
+// 才有（24.13 / 24.14 会静默忽略该选项 → mock 出来的模块零命名导出 → 所有 import 它的
+// 测试文件在 import 阶段 SyntaxError，表现为「16/30 个文件崩、pass 117/fail 16」）。
+// 所以 backend/package.json 的 engines 是 ">=24.15"，CI 也 pin 在 24.15 上跑。
+// 别为了兼容更旧的 24.x 把 exports 换回 namedExports：后者已 deprecated、Node 25 会移除
+// （engines 的 <25 上界就是留给这次迁移的）。
 import './env.js';
 import { mock } from 'node:test';
 import * as realOss from '../src/oss.js';

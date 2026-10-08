@@ -48,7 +48,7 @@ OSS 控制台 → 你的 Bucket → **数据安全 → 跨域设置** → 添加
 需要：
 
 - **Nginx**（系统包，`apt install nginx`；托管前端 + 反代 `/api`）
-- **Node 24**（系统包走 NodeSource：`curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && apt install -y nodejs`；项目使用内置 `node:sqlite`，无原生编译依赖）
+- **Node 24**（系统包走 NodeSource：`curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && apt install -y nodejs`；项目使用内置 `node:sqlite`，无原生编译依赖）。若要在服务器上跑后端测试，需 **≥ 24.15**（`mock.module({ exports })` 的下界，见 issue #68）；NodeSource 的 `setup_24.x` 给的是 24.21+，满足要求
 - **certbot + python3-certbot-nginx**（HTTPS 证书签发与自动续期）
 - **systemd**（Linux 标配，无需额外安装）
 
