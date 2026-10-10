@@ -1,7 +1,7 @@
 // data/resource.js 专属单测（IMPROVE-56 审计跟进：重构核心模块此前零覆盖，
 // Dashboard 的旧竞态用例在数据层迁移后也已测不到守卫本体，守护卫的职责收拢到这里）。
 // 覆盖：同 key 去重、迟到响应丢弃、换 key 中止在途请求、stale-while-revalidate、
-// revalidateOnMount:false、keepPrevious、cache:false、invalidateResource、错误与恢复、enabled:false。
+// revalidateOnMount:false、cache:false、invalidateResource、错误与恢复、enabled:false。
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useResource, invalidateResource, __resetResourceStore } from '../data/resource.js';
@@ -139,28 +139,7 @@ describe('useResource：缓存语义', () => {
   });
 });
 
-describe('useResource：keepPrevious 与开关', () => {
-  test('keepPrevious：换 key 加载期保留上一个 key 的数据（切区间不闪空）', async () => {
-    let resolveB;
-    const fetcher = vi.fn((key) =>
-      key === 'a' ? Promise.resolve('A') : new Promise((res) => { resolveB = res; })
-    );
-    const { result, rerender } = renderHook(
-      ({ k }) => useResource(k, fetcher, { keepPrevious: true }),
-      { initialProps: { k: 'a' } }
-    );
-    await waitFor(() => expect(result.current.data).toBe('A'));
-
-    rerender({ k: 'b' });
-    // B 未返回：保留 A 展示、处于加载态（fetcher 在微任务里启动，先等它就绪）
-    expect(result.current.data).toBe('A');
-    await waitFor(() => expect(result.current.loading).toBe(true));
-    await waitFor(() => expect(typeof resolveB).toBe('function'));
-
-    await act(async () => { resolveB('B'); });
-    await waitFor(() => expect(result.current.data).toBe('B'));
-  });
-
+describe('useResource：开关', () => {
   test('enabled:false 不发请求', () => {
     const fetcher = vi.fn(() => Promise.resolve('x'));
     const { result } = renderHook(() => useResource('k', fetcher, { enabled: false }));

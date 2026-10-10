@@ -105,7 +105,6 @@ const en = {
   },
   dashboard: {
     title: 'Dashboard',
-    refresh: 'Refresh',
     downloadHeatmap: 'Download heatmap',
     heatmapCell: '{{date}}: {{count}} downloads',
     recentUploads: 'Recent uploads',
@@ -133,11 +132,6 @@ const en = {
     vsYesterday: 'vs yesterday',
     // 热力图月份轴：按下标取用（Jan = index 0），替代原 '9m'（易误读为 9 months）。
     monthShort: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-    rangeDays: {
-      seven: 'Last 7 days',
-      thirty: 'Last 30 days',
-      ninety: 'Last 90 days',
-    },
   },
   about: {
     // 与中文短名「仲英学辅」对称：这是关于页顶部的身份标签，用品牌短名。

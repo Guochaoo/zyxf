@@ -101,19 +101,18 @@ export function __resetResourceStore() {
 }
 
 /**
- * 读取一个资源。key 变化（切目录/切区间）自动重取；同 key 多实例共享请求与数据。
+ * 读取一个资源。key 变化（切目录/换关键词）自动重取；同 key 多实例共享请求与数据。
  *
  * @param {string} key 缓存键（必须编码全部请求参数）
  * @param {(key: string, ctx: { signal: AbortSignal }) => Promise<any>} fetcher
- * @param {{ enabled?: boolean, keepPrevious?: boolean, revalidateOnMount?: boolean|'silent', cache?: boolean }} opts
- *   - keepPrevious: 换 key 的加载期保留上一个 key 的数据（Dashboard 切区间）。
+ * @param {{ enabled?: boolean, revalidateOnMount?: boolean|'silent', cache?: boolean }} opts
  *   - revalidateOnMount: true=有缓存也静默刷新（默认）；false=有缓存不重取（目录树，
  *     依赖 invalidateResource 保鲜）；'silent' 同 true。
  *   - cache: false=不落缓存（搜索——旧关键词的命中列表绝不能展示给新关键词）。
  * @returns {{ data: any, error: Error|null, loading: boolean, reload: () => void }}
  */
 export function useResource(key, fetcher, opts = {}) {
-  const { enabled = true, keepPrevious = false, revalidateOnMount = true, cache = true } = opts;
+  const { enabled = true, revalidateOnMount = true, cache = true } = opts;
   const [, forceRender] = useState(0);
   const rerender = useCallback(() => forceRender((c) => c + 1), []);
 
@@ -175,10 +174,7 @@ export function useResource(key, fetcher, opts = {}) {
   }, [key, enabled, cache, revalidateOnMount, start, rerender]);
 
   const entry = enabled ? entries.get(key) : null;
-  // keepPrevious：换 key 加载期保留上一个 key 的数据（用 ref 存最近一次非空 data）。
-  const prevRef = useRef(undefined);
-  if (entry?.data !== undefined) prevRef.current = entry.data;
-  const data = entry?.data !== undefined ? entry.data : keepPrevious ? prevRef.current : undefined;
+  const data = entry?.data;
   // key 刚换、effect 还没来得及发请求的一帧里 entry 为 null：按「加载中」处理，
   // 避免消费方用 undefined 数据渲染出空态闪一下。
   const loading = enabled ? (entry ? !!entry.loading : true) : false;
