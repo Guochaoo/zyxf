@@ -152,6 +152,31 @@ describe('StaggeredMenu 菜单开着时 hover 开关不重置面板（BUG-106）
   }, 15000);
 });
 
+// 手机首访复刻：gsap chunk 还在下载时用户就点了开关。此时 pointerdown/click 已经把
+// openRef 置为 true，迟到的 preparePanel 被 BUG-106 的守卫跳过，preLayerElsRef 始终为空；
+// 打开时间线自己回查了预层元素，关闭时间线若照着空 ref 走，预层色带就留在屏上关不掉。
+describe('StaggeredMenu 首次点击遇 gsap 迟到，关闭不漏预层色带', () => {
+  test('打开时兜底取回的预层，关闭时同样被推回屏外', async () => {
+    const xPercent = (el) => Number(window.gsap.getProperty(el, 'xPercent'));
+    const layers = () => Array.from(document.querySelectorAll('.sm-prelayer'));
+
+    renderMenu();
+    // 手机上的一次 tap：pointerdown 启动 gsap chunk 下载，click 在同一帧内就把菜单置为
+    // 打开态——chunk 落地时 preparePanel 已被守卫跳过，preLayerElsRef 至此为空。
+    const toggle = document.querySelector('.sm-toggle');
+    toggle.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    toggle.click();
+    await new Promise((r) => setTimeout(r, 2800));
+    expect(xPercent(layers()[0])).toBe(0);
+
+    document.querySelector('.sm-toggle').click(); // 关
+    await new Promise((r) => setTimeout(r, 1000));
+
+    expect(xPercent(document.getElementById('staggered-menu-panel'))).toBe(100);
+    layers().forEach((el) => expect(xPercent(el)).toBe(100));
+  }, 20000);
+});
+
 // BUG-110 回归：preparePanel 曾把 textInner 的 yPercent 归零——开合一轮后
 // textLines[0] 是「关闭」，关闭态下悬停开关（未点击）会把可见文字打回「关闭」，
 // 与 aria/图标（关闭态应为「菜单」+ 加号）错位。
