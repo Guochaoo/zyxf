@@ -85,7 +85,6 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   const openRef = useRef(false);
   const panelRef = useRef(null);
   const preLayersRef = useRef(null);
-  const preLayerElsRef = useRef([]);
   const plusHRef = useRef(null);
   const plusVRef = useRef(null);
   const iconRef = useRef(null);
@@ -112,6 +111,12 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     return btn.getBoundingClientRect().right - starRight;
   };
 
+  // 预层元素的唯一取回入口：菜单开着时 preparePanel 会被 BUG-106 的守卫跳过，手机上网慢、
+  // gsap chunk 在点击之后才落地时，预层从未被 preparePanel 取过——开、关两条时间线都必须
+  // 自己回查，否则关闭只推走面板，预层色带留在屏上。
+  const resolvePreLayers = () =>
+    Array.from(preLayersRef.current?.querySelectorAll('.sm-prelayer') || []);
+
   const preparePanel = (g) => {
     // BUG-106：菜单开着时绝不重跑预置——开关按钮的 hover/focus 都会触发 ensureGsap，
     // 重跑会把面板打回屏外并复位图标/文字，而 React 开合态不变（遮罩留存、面板消失）。
@@ -124,11 +129,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     const textInner = textInnerRef.current;
     if (!panel || !plusH || !plusV || !icon || !textInner) return;
 
-    let preLayers = [];
-    if (preContainer) {
-      preLayers = Array.from(preContainer.querySelectorAll('.sm-prelayer'));
-    }
-    preLayerElsRef.current = preLayers;
+    const preLayers = resolvePreLayers();
 
     const offscreen = position === 'left' ? -100 : 100;
     g.set([panel, ...preLayers], { xPercent: offscreen, opacity: 1 });
@@ -198,12 +199,10 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
   // 拿到 gsap 实例后才构造时间线；返回 null 表示本环境没有动画（交互仍然可用）。
   const buildOpenTimeline = useCallback((g) => {
     const panel = panelRef.current;
+    if (!g || !panel) return null;
     // 预层元素就地取回（IMPROVE-52）：不依赖 React 是否已提交预置效果——
     // 首次打开时 playOpen 的微任务可能跑在 layout effect 之前。
-    const layers = preLayerElsRef.current.length
-      ? preLayerElsRef.current
-      : Array.from(preLayersRef.current?.querySelectorAll('.sm-prelayer') || []);
-    if (!g || !panel) return null;
+    const layers = resolvePreLayers();
 
     openTlRef.current?.kill();
     if (closeTweenRef.current) {
@@ -335,6 +334,9 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
       .catch(() => null)
       .then((g) => {
         if (gen !== openGenRef.current || !openRef.current) return;
+        // 这里可能刚刚才 loadGsap 成功（ensureGsap 未及写入 gRef）：实例必须落进 gRef，
+        // 否则随后关闭时 playClose 拿不到实例，面板会整块留在屏上。
+        if (g) gRef.current = g;
         const tl = buildOpenTimeline(g);
         if (tl) {
           tl.eventCallback('onComplete', () => {
@@ -356,7 +358,9 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
     busyRef.current = false;
 
     const panel = panelRef.current;
-    const layers = preLayerElsRef.current;
+    // 关闭必须自己回查预层（见 resolvePreLayers）：只信 preLayerElsRef 会在「首次点击时
+    // gsap 迟到」这一轮漏掉色带——面板滑走了，预层留在屏上。
+    const layers = resolvePreLayers();
     if (!panel) return;
 
     const all = [...layers, panel];
