@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getStats, getHeatmap } from '../api.js';
@@ -7,11 +7,10 @@ import { folderTarget } from '../ui.js';
 import { useResource } from '../data/resource.js';
 import FileIcon from '../components/FileIcon.jsx';
 import { AnomalyCard, AllocationCard, densifyBySpline } from '../components/InsightCards.jsx';
-import { BsArrowClockwise } from 'react-icons/bs';
 import { ArrowDown, ArrowUp, BarChart3 } from 'lucide-react';
 // 页面级子模块（IMPROVE-01）：无状态展示已迁出，页面只保留数据编排。
 import ActivityHeatmap from './Dashboard/ActivityHeatmap.jsx';
-import { Card, CardHeader, Empty, RangeSwitch } from './Dashboard/primitives.jsx';
+import { Card, CardHeader, Empty } from './Dashboard/primitives.jsx';
 
 /* ============================================================
  * Insight card design system — liveline-style cards
@@ -104,7 +103,7 @@ function RecentFileList({ items, timeKey }) {
   );
 }
 
-// RangeSwitch / Empty / Card / CardHeader 已迁至 ./Dashboard/primitives.jsx（IMPROVE-01）
+// Empty / Card / CardHeader 已迁至 ./Dashboard/primitives.jsx（IMPROVE-01）
 
 /* ============================================================
  * Page
@@ -112,21 +111,15 @@ function RecentFileList({ items, timeKey }) {
 
 export default function DashboardPage() {
   const { t } = useTranslation();
-  const [range, setRange] = useState(30);
-  // IMPROVE-54：数据获取下沉到 data/resource.js。stats 用 keepPrevious——切区间时
-  // 保留上一份数据继续展示（BUG-57 的 switching 半透明由此保留，但不再手写 reqId 守卫）；
-  // heatmap 与 range 无关（key 不变，切换区间不会重取）。
-  const statsRes = useResource(`stats:${range}`, (_key, { signal }) => getStats(range, { signal }), {
-    keepPrevious: true,
-  });
+  // IMPROVE-54：数据获取下沉到 data/resource.js。面板固定看 30 天（区间切换器已移除），
+  // 所以 stats 的 key 是常量；离开再回来由挂载时的静默 revalidate 保鲜，无需手动刷新。
+  const statsRes = useResource('stats', (_key, { signal }) => getStats({ signal }));
   const heatRes = useResource('heatmap', (_key, { signal }) => getHeatmap({ signal }));
 
   const stats = statsRes.data;
   const heat = heatRes.data;
+  // 只有「首次加载」（还没有任何 stats）才整页转圈；后台静默 revalidate 保留现有卡片。
   const loading = statsRes.loading && stats === undefined;
-  // 切区间/刷新在途：BUG-57——不回整页 loading（区间切换器保持在 DOM 里可点）。
-  const switching = statsRes.loading && stats !== undefined;
-  const refreshing = statsRes.loading || heatRes.loading;
   const err = statsRes.error && stats === undefined ? errMsg(statsRes.error, t('dashboard.noData')) : '';
 
   /* ---- derived stats for the insight cards ---- */
@@ -138,7 +131,7 @@ export default function DashboardPage() {
       series[0] || { downloads: 0, date: '-' }
     );
 
-    // full selected range for the card charts — follows the 7/30/90 switch
+    // full 30-day window for the card charts
     const dlPts = toPoints(series, 'downloads');
     const upPts = toPoints(series, 'uploads');
 
@@ -167,8 +160,7 @@ export default function DashboardPage() {
     }));
   }, [stats, t]);
 
-  // memoized so AnomalyCard doesn't re-render on unrelated dashboard state
-  // (e.g. refreshing toggles) when stats/insights are unchanged.
+  // memoized so AnomalyCard doesn't re-render when stats/insights are unchanged.
   const metrics = useMemo(() => {
     if (!stats || !insights) return null;
     const dlDod = pctChange(stats.today_downloads, stats.yesterday_downloads);
@@ -200,8 +192,8 @@ export default function DashboardPage() {
     ];
   }, [insights, stats, t]);
 
-  // 只有「首次加载」才整页转圈；后续请求（切换区间/刷新）保留现有卡片，避免布局跳空。
-  if (loading && !stats) {
+  // 只有「首次加载」才整页转圈；静默 revalidate 期间保留现有卡片，避免布局跳空。
+  if (loading) {
     return (
       <div className="py-24 text-center">
         <div className="mx-auto mb-3 h-5 w-5 animate-spin rounded-full border-2 border-line border-t-transparent" />
@@ -230,35 +222,19 @@ export default function DashboardPage() {
     // Card rhythm: sections are spaced like the cards inside them (gap-3).
     // App.jsx gives the dashboard main a fixed pt-[11px] (no sm breakpoint), so
     // the top offset matches the browse page logo (14px) and never jumps.
-    <div className={`space-y-3 transition-opacity duration-150 ${switching ? 'opacity-60' : ''}`}>
-      {/* Header */}
-      <header className="mb-5 flex min-h-[34px] flex-wrap items-center gap-4 pr-[110px] max-[480px]:pr-0">
-        <div className="flex h-[34px] items-center">
-          <h1 className="flex items-center gap-2">
-            <img
-              src="/favicon.png"
-              alt=""
-              aria-hidden="true"
-              className="h-7 w-7 rounded-full object-cover"
-            />
-            <span className="rb-brand-title whitespace-nowrap">{t('dashboard.title')}</span>
-          </h1>
-        </div>
-        <div className="ml-auto flex items-center gap-3 max-[480px]:basis-full max-[480px]:justify-end">
-          <RangeSwitch value={range} onChange={setRange} disabled={switching} />
-          <button
-            type="button"
-            onClick={() => {
-              statsRes.reload();
-              heatRes.reload();
-            }}
-            disabled={refreshing || switching}
-            className="inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-[12px] text-ink shadow-btn transition-colors duration-100 hover:bg-hover disabled:opacity-50"
-          >
-            <BsArrowClockwise className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            {t('dashboard.refresh')}
-          </button>
-        </div>
+    <div className="space-y-3">
+      {/* 标题行只剩品牌块：时间范围切换与刷新按钮已移除（固定看 30 天，
+          数据靠挂载时的静默 revalidate 保鲜）。 */}
+      <header className="mb-5 flex min-h-[34px] items-center">
+        <h1 className="flex items-center gap-2">
+          <img
+            src="/favicon.png"
+            alt=""
+            aria-hidden="true"
+            className="h-7 w-7 rounded-full object-cover"
+          />
+          <span className="rb-brand-title whitespace-nowrap">{t('dashboard.title')}</span>
+        </h1>
       </header>
 
       {/* Activity heatmap + file type breakdown */}

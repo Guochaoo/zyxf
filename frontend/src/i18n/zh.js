@@ -111,7 +111,6 @@ const zh = {
   },
   dashboard: {
     title: '统计面板',
-    refresh: '刷新',
     downloadHeatmap: '下载热力图',
     heatmapCell: '{{date}}：{{count}} 次下载',
     recentUploads: '近期上传',
@@ -135,11 +134,6 @@ const zh = {
     vsYesterday: 'vs 昨日',
     // 热力图月份轴：按下标取用（1 月 = 下标 0），避免各处自行拼「N月」。
     monthShort: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
-    rangeDays: {
-      seven: '近 7 日',
-      thirty: '近 30 日',
-      ninety: '近 90 日',
-    },
   },
   about: {
     tag: '仲英学辅',

@@ -169,57 +169,16 @@ describe('DashboardPage', () => {
     expect(document.querySelector('.bg-red svg.lucide-arrow-down')).toBeTruthy();
   });
 
-  // BUG-57：区间切换的竞态防护（数据层键隔离 + 迟到响应守卫）。
-  // 审计修正：旧写法 mockReset 摧毁工厂默认实现（乱序运行会让后续用例崩），
-  // 且迟到响应在键切换前就落地、根本测不到竞态。改为数据层下真正可达的时序：
-  // 7 日响应在当前键上迟到落地必须生效；回 30 日后七日数据不得串键。
-  test('过期响应不覆盖新区间统计', async () => {
-    const { getStats } = await import('../api.js');
-    getStats.mockClear();
-
-    const base = (range, today) => ({
-      range,
-      today_downloads: today,
-      yesterday_downloads: 0,
-      downloads_7d: 0,
-      downloads_prev_7d: 0,
-      total_files: 10,
-      total_folders: 2,
-      total_size: 100,
-      files_added_7d: 1,
-      size_added_7d: 1,
-      series: [],
-      type_breakdown: [],
-      top_downloads: [],
-      recent_uploads: [],
-      top_folders: [],
-    });
-
-    let resolveSeven;
-    // 按序三次调用：①首屏 30 日立即返回；②切 7 日后挂起（模拟慢响应）；
-    // ③回 30 日的后台 revalidate 返回新值。once 队列耗尽后工厂默认实现仍在，
-    // --sequence.shuffle 乱序不会影响其他用例。
-    getStats.mockImplementationOnce(() => Promise.resolve(base(30, 111)));
-    getStats.mockImplementationOnce(() => new Promise((res) => { resolveSeven = res; }));
-    getStats.mockImplementationOnce(() => Promise.resolve(base(30, 999)));
-
+  // 标题行只剩品牌块：时间范围切换（近 7/30/90 日）与刷新按钮已移除。
+  // 数据改为「挂载时静默 revalidate 保鲜」，这两个控件再出现即为回归。
+  test('标题行没有区间切换与刷新按钮', async () => {
     renderApp();
-    await waitFor(() => expect(screen.getByText('111 次下载')).toBeInTheDocument(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByText('类型分布')).toBeInTheDocument(), { timeout: 3000 });
 
-    fireEvent.click(screen.getByRole('button', { name: '近 7 日' }));
-    await waitFor(() => expect(getStats).toHaveBeenCalledTimes(2));
-
-    // 迟到的 7 日响应：它仍属于当前键（stats:7），必须生效——
-    // 不能因为「响应晚」被误判为过期丢弃；期间 keepPrevious 保持 30 日旧值展示。
-    resolveSeven(base(7, 222));
-    await waitFor(() => expect(screen.getByText('222 次下载')).toBeInTheDocument());
-
-    // 回 30 日：命中缓存先呈现（瞬时），后台 revalidate 落地后换 999；
-    // 七日数据不得串到 30 日视图。
-    fireEvent.click(screen.getByRole('button', { name: '近 30 日' }));
-    await waitFor(() => expect(screen.getByText('999 次下载')).toBeInTheDocument(), { timeout: 3000 });
-    expect(screen.queryByText('222 次下载')).toBeNull();
-    expect(screen.queryByText('111 次下载')).toBeNull();
-    expect(screen.getByRole('button', { name: '近 30 日' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: '近 7 日' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '近 30 日' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '近 90 日' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '刷新' })).toBeNull();
+    expect(screen.getByRole('heading', { name: '统计面板' })).toBeInTheDocument();
   });
 });

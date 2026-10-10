@@ -191,13 +191,15 @@ export async function refreshWebofficeToken(id, accessToken, refreshToken) {
   return data;
 }
 
-export async function getStats(range = 30, { signal } = {}) {
-  const { data } = await api.get('/stats', { params: { range }, signal });
+// 统计面板固定看 30 天（面板上的区间切换器已移除）：显式带上 range，既与后端默认值
+// 一致，也避免后端改默认值时面板口径被静默改掉。
+export async function getStats({ signal } = {}) {
+  const { data } = await api.get('/stats', { params: { range: 30 }, signal });
   return data;
 }
 
 // Trailing-year daily activity for the dashboard heatmap — independent of
-// getStats' range switch.
+// getStats' range.
 export async function getHeatmap({ signal } = {}) {
   const { data } = await api.get('/stats/heatmap', { signal });
   return data;
