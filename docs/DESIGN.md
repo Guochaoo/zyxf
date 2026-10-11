@@ -97,7 +97,7 @@
 - **主字体**：OPPO Sans（`@font-face` 名 `OPPOSans`，可变字重 100–900），回退栈 `-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Roboto, Arial, sans-serif`；`body/button/input/textarea/select` 统一继承，并开 `text-rendering: geometricPrecision` 与灰度抗锯齿。
 - **`'SF Mono'` 别名**：`index.css` 把 `'SF Mono'` 这个字体名指向同一份 OPPO 字体（与 `OPPOSans` 同样的常用/生僻两层声明）——liveline 图表内部硬编码 `"SF Mono", Menlo, monospace`，在 Windows 上不存在该族，别名后图表文字与应用一致。
 - **关于我们页例外**：整页用 **DM Sans**（Google Fonts，400/500），主标题 `font-light`（300），以拉开与资料库主页的调性。
-- **等宽**：本项目未覆写 `fontFamily`，`font-mono` 就是 Tailwind 默认栈（Menlo / Monaco / Consolas / "Liberation Mono" / "Courier New"）。全站唯一的使用处是 AI 消息小节头的耗时计时器（12px + `tabular-nums`）；AI 正文里的行内 `code` 只做了 12px 灰底，**没有**换字族。
+- **等宽**：本项目未覆写 `fontFamily`，`font-mono` 就是 Tailwind 默认栈（Menlo / Monaco / Consolas / "Liberation Mono" / "Courier New"）。对话卡片删除后全站已无 `font-mono` 消费方（AI 消息的耗时计时器与行内 `code` 随卡片一并删除，见 §4），代码里的等宽意图统一由 `tabular-nums` 承担（见 §1）。
 - **OpenType**：全仓未启用任何 `liga`；`tabular-nums` 用在图表提示、度量数字与统计面板的列表数字上（`font-variant-numeric: tabular-nums`）。
 
 ### 字距（CJK 适配，`index.css` 的 `.app-theme h1/h2/h3`）
@@ -313,16 +313,26 @@
 | 半径 | 用例 |
 |------|------|
 | 2px | 热力图格子与图例方块 |
-| 4px | 行内 code、聊天族别小徽章 |
+| 4px | 行内小控件的 `rounded-sm`：上传弹窗的关闭按钮与进度条、文件预览头部按钮、文件列表行内操作按钮 |
 | 6px | ghost 按钮、表单控件**默认**半径、目录树行、`.records-tag`、图标按钮、图谱全屏关闭按钮（`rounded-md`） |
 | 7px | 左栏开合按钮（`rounded-[7px]`） |
 | 8px | 上传 / 重命名弹窗容器（`rounded-lg`）、浮层选项、Toast |
-| 10px | `rounded-control`（内嵌面板）、设置浮层、图表提示、聊天输入槽、设置弹窗输入框与下拉触发器 |
+| 9px | AI 搜索卡结果区的命中条目行（`rounded-[9px]`，内缩 8px 后的 10.5px 内层里） |
+| 10px | `rounded-control`（内嵌面板）、设置浮层、图表提示、设置弹窗输入框与下拉触发器 |
 | 12px | `rounded-card`（Dashboard 卡片）、搜索下拉、文件预览弹窗（`sm:rounded-xl`） |
 | 14px | **按钮主导半径**（主 / 工具栏 / 搜索胶囊 / 排序指示器 / 登录页按钮与输入框）、浏览页三卡片、图谱全屏卡片、使用须知卡片 |
 | 16px | 设置弹窗卡片 |
 | 9999px | 胶囊按钮、建议 chip、徽章圆底、滚动条滑块 |
 | 50% | 头像、品牌 logo 圆 |
+
+**同心圆角**：内层贴合外层、四周等距内缩时，要满足 `外圆角 = 内圆角 + 内缩`，否则**转角处的间距会被挤得比直边窄**。AI 搜索卡就是这么定的：外 12 − 内缩 1.5 = 内 10.5。但这条**只在 `外圆角 > 内缩` 时成立**——当内缩 ≥ 外圆角时公式给出的「正确」内圆角是 0px，而 0px 在这里更难看：Dashboard 卡（外 12px + `p-3` 12px）的内嵌面板实测过 A/B，改成直角后灰色面板在圆角卡里显得又硬又割裂，所以那里**保留 `rounded-control` 的 10px**，接受轻微的挤角（结论见 issue [#76](https://github.com/Guochaoo/zyxf/issues/76)）。
+
+**档位纪律**：上表已是 10 档，够用。同一类元素必须同档（主按钮 14 / 卡片 12·14 / 表单与行 6 / 弹窗 8·16 / 内嵌面 10 各有分工），**不要再新增第 11 档**——6 与 7、8 与 9 与 10、12 与 14 都是肉眼难辨的近邻，再细分只会让「拼凑感」回来。
+
+### 动效
+- **可逆的交互状态一律用 `transition`，不用 `@keyframes`**：keyframes 被打断时会跳回起点重来，transition 会就地折返。侧栏开合、排序指示器、图谱高度、浮层与菜单项都是「随时可能被反向点击」的状态动效。全仓 `transition*` 出现 113 处，而 `@keyframes` 只剩 6 个，且都是**非状态**动效：跑马灯与 AI 流光 / 泛光（常驻循环）、`fade-up`（登录 ↔ 注册切换时的表单入场，靠 `key` 重挂载触发）、Toast 的进出场（自动消失，不可逆）。
+- **缓动与时长统一走项目级 `EASE_COLLAPSE`**（`components/ui.js`，`cubic-bezier(0.22, 1, 0.36, 1)`），并且**必须内联下发**——不能拼成 `lg:duration-[${MS}ms]` 这类模板插值类名（Tailwind 静态扫描扫不到，动画静默退化成默认 150ms，BUG-94）。同理，`transition-property` 只在「需要过渡的那段时间」挂：它的初始值是 `all`，常驻会把不该动的属性也带上（BUG-112 的假入场）。
+- 唯一用 gsap 时间线的是 `StaggeredMenu` 的开合（预层与色带的历史问题见 BUG-107/108/109）；它的开关是「随时可反向点击」的典型，改这里要按上面两条复核。
 
 ## 6. 层级与投影
 
