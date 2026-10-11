@@ -164,14 +164,8 @@ const en = {
   // test/i18n.test.js 强制一致）；items 与 pages/Disclosure/data.js 按**下标**对齐。
   disclosure: {
     title: 'Disclosure',
-    intro:
-      'Lecture schedule, material-writing progress and spending are published here and updated each term.',
     navAria: 'Disclosure contents',
-    updatedLabel: 'Updated',
-    termLabel: 'Term',
-    orgLabel: 'Issued by',
     term: 'Fall 2026',
-    org: 'ZYXF Study Center',
     status: {
       open: 'Open',
       done: 'Finished',

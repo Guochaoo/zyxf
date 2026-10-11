@@ -167,13 +167,8 @@ const zh = {
   // 按**下标**对齐，增删条目时两边必须一起改。
   disclosure: {
     title: '公示栏',
-    intro: '本页公示讲座安排、资料编写进度与经费支出，按学期更新，欢迎查阅与核对。',
     navAria: '公示内容目录',
-    updatedLabel: '更新于',
-    termLabel: '学期',
-    orgLabel: '责任单位',
     term: '2026 秋季学期',
-    org: '仲英书院学业辅导中心',
     status: {
       open: '报名中',
       done: '已结束',

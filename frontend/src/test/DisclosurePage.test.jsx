@@ -63,18 +63,15 @@ describe('公示栏 · 骨架', () => {
     expect(summary.parentElement.className).toContain('lg:flex');
   });
 
-  test('页头给出更新日期、学期与责任单位（公示的可信度来源）', () => {
+  test('页头是「logo + 页面名」（与统计面板同一个 PageTitle），正文不再有说明条', () => {
     renderPage();
-    expect(screen.getByText('更新于')).toBeInTheDocument();
-    expect(screen.getByText('2026 秋季学期')).toBeInTheDocument();
-    expect(screen.getByText('仲英书院学业辅导中心')).toBeInTheDocument();
-    // 日期不写死，按当天渲染（YYYY/MM/DD）
-    const today = new Intl.DateTimeFormat('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date());
-    expect(screen.getByText(today)).toBeInTheDocument();
+    const h1 = screen.getByRole('heading', { level: 1 });
+    expect(h1).toHaveTextContent('公示栏');
+    expect(h1.querySelector('img')).toBeTruthy();
+    // 说明句与「更新于 / 学期 / 责任单位」那一行已按需求删除
+    expect(screen.queryByText(/按学期更新/)).toBeNull();
+    expect(screen.queryByText('更新于')).toBeNull();
+    expect(screen.queryByText('责任单位')).toBeNull();
   });
 });
 

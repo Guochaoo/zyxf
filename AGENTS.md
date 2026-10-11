@@ -52,6 +52,7 @@ cd frontend && npm install && npm run dev
 ```
 
 - 首次启动自动创建 SQLite 数据库 `backend/data.db` 并按 `.env` 的 `ADMIN_USER`/`ADMIN_PASSWORD` 写入管理员账号；`.env` 至少需填写 `OSS_*` 凭证（见 README）。用户注册（邮箱验证码）需额外填写 `DM_*` 三项，未配置时仅注册功能返回 503。
+- ⚠️ **「测试过了但页面不对」先怀疑 Vite 的 transform 缓存**（2026-10-12 一天内踩了两次）：同一文件被连续写入（agent 批量编辑尤其常见）时，dev server 可能留着两份写入之间的**中间态模块**，表现为白屏或 `ReferenceError: X is not defined`，而磁盘上的源码与 `npm test` 都是对的。`touch` 那个文件或重启 dev server 即可恢复。**所以改完必须在真页面里看一遍**，测试绿不等于浏览器里跑的是新代码。
 
 ## 1. 文档维护（docs/ + README）
 

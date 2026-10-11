@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PageTitle from '../components/PageTitle.jsx';
@@ -320,14 +320,6 @@ export default function DisclosurePage() {
     el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
   }, []);
 
-  const updated = useMemo(
-    () =>
-      new Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(
-        new Date()
-      ),
-    [locale]
-  );
-
   const activePlans = PLAN_BASE.filter((p) => p.status === 'writing' || p.status === 'review').length;
 
   return (
@@ -340,31 +332,10 @@ export default function DisclosurePage() {
           （7 / 5 / 12），每张卡按自身内容取高（items-start，不被同行最高的
           那张拉伸），于是三块的大小、高低都不一样。 */}
       <section className="mx-auto w-full max-w-[1600px] pb-16">
-        {/* 一句话说明（左）与「更新于 / 学期 / 责任单位」（右）同排：公示内容的
-            可信度一半来自后者，所以让它和说明并排，而不是塞进页脚。 */}
-        <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
-          <p className="max-w-2xl text-[14px] leading-[1.7] text-ink-2">{t('disclosure.intro')}</p>
-
-          <dl className="w-full shrink-0 text-[12px] leading-[2] text-ink-3 sm:w-auto sm:text-right">
-            <div className="flex justify-between gap-3 sm:justify-end">
-              <dt>{t('disclosure.updatedLabel')}</dt>
-              <dd className="tabular-nums text-ink-2">{updated}</dd>
-            </div>
-            <div className="flex justify-between gap-3 sm:justify-end">
-              <dt>{t('disclosure.termLabel')}</dt>
-              <dd className="text-ink-2">{t('disclosure.term')}</dd>
-            </div>
-            <div className="flex justify-between gap-3 sm:justify-end">
-              <dt>{t('disclosure.orgLabel')}</dt>
-              <dd className="text-ink-2">{t('disclosure.org')}</dd>
-            </div>
-          </dl>
-        </div>
-
         {/* 目录：与区块头的序号一一对应（长页面的第一需求是「先知道有几节」）。 */}
         <nav
           aria-label={t('disclosure.navAria')}
-          className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2"
+          className="flex flex-wrap items-center gap-x-6 gap-y-2"
         >
           {SECTIONS.map((s) => (
             <a
