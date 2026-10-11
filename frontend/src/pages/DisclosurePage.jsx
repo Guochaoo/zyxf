@@ -328,10 +328,12 @@ export default function DisclosurePage() {
           页面左上角的位置由 App.jsx 的 main 内边距（px-4 pt-[11px]）给出。 */}
       <PageTitle title={t('disclosure.title')} />
 
-      {/* 宽屏不再是一条居中窄列：外层放到 1600px 上限，卡片按内容分列
-          （7 / 5 / 12），每张卡按自身内容取高（items-start，不被同行最高的
-          那张拉伸），于是三块的大小、高低都不一样。 */}
-      <section className="mx-auto w-full max-w-[1600px] pb-16">
+      {/* 四边边距全部由 App.jsx 的 main 给出（`px-4 pt-[11px] pb-6`），与统计面板同源：
+          页面铺满可用宽度、**不自设 max-width**——否则宽屏上左右会凭空多出一圈留白
+          （1920 视口实测 `max-w-[1600px]` 左右各多 137px，而统计面板是 16px）。
+          卡片按内容分列（7 / 5 / 12），每张卡按自身内容取高（items-start），
+          于是三块的大小、高低都不一样。 */}
+      <section className="w-full">
         {/* 目录：与区块头的序号一一对应（长页面的第一需求是「先知道有几节」）。 */}
         <nav
           aria-label={t('disclosure.navAria')}
