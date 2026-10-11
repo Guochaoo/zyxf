@@ -6,21 +6,23 @@ import {
   BUDGET_CENTS,
   EXPENSE_BASE,
   LECTURE_BASE,
-  PLAN_BASE,
   spentCents,
 } from './Disclosure/data.js';
 
 /* ============================================================
- * 公示栏（/disclosure）——纯前端版式样例
+ * 公示栏（/disclosure）
  *
- * 排版主张：三种内容（讲座 = 时间序列、编写计划 = 进度、经费 = 账目）
+ * 排版主张：三种内容（讲座 = 时间序列、编写计划 = 四列表、经费 = 账目）
  * 各用各的版式，但共用一套骨架，于是看起来是「一份文件的三节」而不是
  * 「三个小组件」：
  *   1. 区块头统一为「序号 + 标题 + 右侧元信息」（序号在目录里复用，
  *      点目录能对上号）；
- *   2. 行统一为「左对齐信息列 + 右侧状态位」，状态只用**单色**三档
+ *   2. 行统一为「左对齐信息列 + 右侧数值 / 状态位」，状态只用**单色**三档
  *      （实心墨 > 灰底 > 纯文字），不引入第四个强调色（DESIGN.md §2）；
  *   3. 数字统一 tabular-nums；金额一律右对齐（账目的可核对性靠对齐）。
+ *
+ * 讲座与经费两节目前仍是样例数据；编写计划一节是**真实计划**，来源见
+ * i18n 的 disclosure.plans 段。
  * ============================================================ */
 
 /* 目录与区块头共用同一份定义，序号只写一次。 */
@@ -57,16 +59,11 @@ const money = (cents, locale) =>
 /* 讲座状态由时间推导，样例因此不会「过期」：讲完自动变已结束。 */
 const isPast = (item) => new Date(item.start).getTime() + item.minutes * 60000 < Date.now();
 
-/* #75：字典里可缺省的字段不能只写真值判断——i18next 的 returnObjects 会把空串叶子
-   换成 defaultValue（[]），是 truthy。 */
-const hasText = (v) => typeof v === 'string' && v.length > 0;
-
-/* 状态位：三档**单色**强调，盒子几何完全一致（否则右列会参差不齐）。 */
+/* 状态位：两档**单色**强调，盒子几何完全一致（否则右列会参差不齐）。 */
 const CHIP_BASE =
   'shrink-0 rounded-full px-2.5 py-[3px] text-[11px] font-medium leading-[16px]';
 function StatusChip({ tone = 'plain', children }) {
   if (tone === 'strong') return <span className={`${CHIP_BASE} bg-ink text-page`}>{children}</span>;
-  if (tone === 'soft') return <span className={`${CHIP_BASE} bg-field text-ink-2`}>{children}</span>;
   return <span className={`${CHIP_BASE} text-ink-3`}>{children}</span>;
 }
 
@@ -145,62 +142,45 @@ function Lectures({ items, texts, locale }) {
   );
 }
 
-/* ---- 02 编写计划：名称 + 负责人/预计 + 右侧进度条（进度 = 本页主指标） ---- */
-const PLAN_TONE = { published: 'strong', review: 'soft', writing: 'soft', planned: 'plain' };
-
-function Plans({ items, texts }) {
+/* ---- 02 资料编写计划：四列 = 资料名 / 预计完成时间 / 志愿者人数 / 工资 ----
+   四列就是文档要求的四项，宽容器直接排成表（bg-field 表头，与经费表同一套语汇）；
+   窄容器（手机）四列塞不下，改成「名称 + 工资」一行、「时间 · 人数」一行的两行式。
+   切换看**卡片自身宽度**（@container @[540px]），不看视口——lg 刚生效时这张卡
+   只有约 616px，用视口断点会把四列压成一团。 */
+function Plans({ items }) {
   const { t } = useTranslation();
   return (
-    <ul>
-      {items.map((it, i) => {
-        const text = texts[i] ?? {};
-        return (
-          <li key={it.id}>
-            <div
-              className={`${ROW} grid grid-cols-1 items-center gap-x-4 gap-y-2 @[520px]:grid-cols-[1fr_auto]`}
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="text-[14px] font-medium text-ink">{text.title}</span>
-                  <StatusChip tone={PLAN_TONE[it.status] ?? 'plain'}>
-                    {t(`disclosure.status.${it.status}`)}
-                  </StatusChip>
-                </div>
-                <div className={`mt-1 ${META}`}>
-                  <span>{t('disclosure.plans.ownerLabel', { name: text.owner })}</span>
-                  {/* 已发布项没有「预计」时间（字典里不给 eta 键），状态已由徽章表达 */}
-                  {hasText(text.eta) ? (
-                    <>
-                      <Dot />
-                      <span>{t('disclosure.plans.etaLabel', { eta: text.eta })}</span>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5 @[520px]:w-[168px]">
-                <div
-                  className="h-1 flex-1 overflow-hidden rounded-full bg-field"
-                  role="progressbar"
-                  aria-valuenow={it.pct}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-label={text.title}
-                >
-                  <div className="h-full rounded-full bg-ink" style={{ width: `${it.pct}%` }} />
-                </div>
-                <span className="w-9 shrink-0 text-right text-[12px] tabular-nums text-ink-2">
-                  {it.pct}%
-                </span>
-              </div>
-            </div>
+    <div className="@container">
+      {/* 表头只在宽容器出现，两行式的窄卡片不需要 */}
+      <div className="hidden rounded-control bg-field px-3 py-2 text-[12px] font-medium text-ink @[540px]:grid @[540px]:grid-cols-[1fr_7rem_5rem_7rem] @[540px]:gap-x-3">
+        <span>{t('disclosure.plans.columns.item')}</span>
+        <span>{t('disclosure.plans.columns.time')}</span>
+        <span className="text-right">{t('disclosure.plans.columns.people')}</span>
+        <span className="text-right">{t('disclosure.plans.columns.pay')}</span>
+      </div>
+      <ul className="mt-1.5">
+        {items.map((it) => (
+          <li
+            key={it.title}
+            className="grid grid-cols-[1fr_auto] items-baseline gap-x-3 gap-y-0.5 rounded-lg px-3 py-2 transition-colors hover:bg-hover @[540px]:grid-cols-[1fr_7rem_5rem_7rem] @[540px]:gap-y-0 @[540px]:py-1.5"
+          >
+            <span className="min-w-0 text-[13px] text-ink">{it.title}</span>
+            {/* 窄容器：时间落到第二行；宽容器：回到第 2 列同一行 */}
+            <span className="col-start-1 row-start-2 text-[12px] tabular-nums text-ink-3 @[540px]:col-start-2 @[540px]:row-start-1 @[540px]:text-[13px]">
+              {it.time}
+            </span>
+            <span className="col-start-2 row-start-2 text-right text-[12px] tabular-nums text-ink-3 @[540px]:col-start-3 @[540px]:row-start-1 @[540px]:text-[13px]">
+              {it.people}
+            </span>
+            <span className="col-start-2 row-start-1 text-right text-[13px] font-medium tabular-nums text-ink @[540px]:col-start-4">
+              {it.pay}
+            </span>
           </li>
-        );
-      })}
-    </ul>
+        ))}
+      </ul>
+    </div>
   );
 }
-
 /* ---- 03 经费支出：先给三个数（预算 / 已支出 / 结余），再逐笔列账 ---- */
 function Expenses({ rows, texts, locale }) {
   const { t } = useTranslation();
@@ -307,6 +287,8 @@ export default function DisclosurePage() {
   const { t, i18n } = useTranslation();
   const locale = intlLocale(i18n.language);
 
+  // #75：这几个数组里的字段都别写空串——i18next 的 returnObjects 会把空串叶子
+  // 换成 defaultValue（[]），是 truthy，`{v ? …}` 这种判断会被静默误触发。
   const lectureTexts = t('disclosure.lectures.items', { returnObjects: true, defaultValue: [] });
   const planTexts = t('disclosure.plans.items', { returnObjects: true, defaultValue: [] });
   const expenseTexts = t('disclosure.expenses.items', { returnObjects: true, defaultValue: [] });
@@ -319,8 +301,6 @@ export default function DisclosurePage() {
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
     el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
   }, []);
-
-  const activePlans = PLAN_BASE.filter((p) => p.status === 'writing' || p.status === 'review').length;
 
   return (
     <>
@@ -352,11 +332,13 @@ export default function DisclosurePage() {
           ))}
         </nav>
 
+        {/* 错落栅格：01 讲座 5 列（行短）与 02 编写计划 7 列（四列表，吃宽度）并排，
+            03 经费支出独占一行全宽；items-start 让每张卡按自身内容取高。 */}
         <div className="mt-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
           <Section
             id="lectures"
             index="01"
-            className="lg:col-span-7"
+            className="lg:col-span-5"
             title={t('disclosure.sections.lectures.title')}
             meta={t('disclosure.sections.lectures.meta', {
               term: t('disclosure.term'),
@@ -366,17 +348,14 @@ export default function DisclosurePage() {
             <Lectures items={LECTURE_BASE} texts={lectureTexts} locale={locale} />
           </Section>
 
-          {/* @container：进度条是否与文字同排，按**卡片自己的宽度**决定，不看视口——
-              lg 刚生效时这张卡只有约 436px（1100 视口 / 12 栅格的第 5 列），用 sm:
-              视口断点会让标题被挤成两行、状态徽章掉行。 */}
           <Section
             id="plans"
             index="02"
-            className="@container lg:col-span-5"
+            className="@container lg:col-span-7"
             title={t('disclosure.sections.plans.title')}
-            meta={t('disclosure.sections.plans.meta', { n: PLAN_BASE.length, active: activePlans })}
+            meta={t('disclosure.sections.plans.meta', { n: planTexts.length })}
           >
-            <Plans items={PLAN_BASE} texts={planTexts} />
+            <Plans items={planTexts} />
           </Section>
 
           <Section

@@ -169,14 +169,10 @@ const en = {
     status: {
       open: 'Open',
       done: 'Finished',
-      published: 'Published',
-      review: 'In review',
-      writing: 'In progress',
-      planned: 'Not started',
     },
     sections: {
       lectures: { title: 'Lecture schedule', meta: '{{term}} · {{n}} sessions' },
-      plans: { title: 'Material writing plan', meta: '{{n}} items · {{active}} in progress' },
+      plans: { title: 'Material writing plan', meta: 'AY 2026-2027 · {{n}} items' },
       expenses: { title: 'Spending', meta: 'Last 60 days · {{n}} entries' },
     },
     lectures: {
@@ -190,16 +186,29 @@ const en = {
         { title: 'Workshop: library search and note taking', place: 'ZYXF A-101', speaker: 'Zhao' },
       ],
     },
+    // 与 zh.js 的 disclosure.plans 同构（键集合由 test/i18n.test.js 强制一致）
     plans: {
-      ownerLabel: 'Owner {{name}}',
-      etaLabel: 'Expected {{eta}}',
+      columns: {
+        item: 'Material',
+        time: 'Due',
+        people: 'Volunteers',
+        pay: 'Pay',
+      },
       items: [
-        // 已发布项**不给 eta 键**（不是给空串）：#75
-        { title: 'Probability past papers, 2019–2025', owner: 'Chen' },
-        { title: 'Chemistry lab safety handbook (2nd ed.)', owner: 'Liu', eta: 'late Oct' },
-        { title: 'Selected Calculus exercises, vol. 2', owner: 'Li', eta: 'mid Nov' },
-        { title: 'Physics lab report template', owner: 'Wang', eta: 'late Nov' },
-        { title: 'Linear Algebra revision outline', owner: 'Zhang', eta: 'early Dec' },
+        { title: 'Preparation · Template standard', time: 'October', people: '2', pay: '¥100 each' },
+        { title: 'Preparation · Reward allocation', time: 'October', people: '3', pay: '¥150 each' },
+        { title: 'Calculus tutor', time: 'By end of December', people: '3', pay: '¥1,300 total' },
+        { title: 'Linear Algebra tutor', time: 'By end of December', people: '3', pay: '¥800 total' },
+        { title: 'Discrete Math tutor', time: 'By end of December', people: '3', pay: '¥1,200 total' },
+        { title: 'Exercise book compilation', time: 'By end of December', people: '2', pay: 'By rate card' },
+        { title: 'Physics II homework solutions', time: 'By end of December', people: '4', pay: '¥80 each' },
+        { title: 'Data Structures tutor', time: 'By end of December', people: '6', pay: '¥875 total' },
+        { title: 'Circuits & Electronics tutor', time: 'By end of December', people: '4', pay: '¥1,125 total' },
+        { title: 'Engineering Drawing tutor', time: 'By end of December', people: 'TBD', pay: 'TBD' },
+        { title: 'Complex Analysis tutor', time: 'By end of December', people: '3', pay: '¥750 total' },
+        { title: 'Analog Electronics tutor', time: 'By end of December', people: '4', pay: '¥750 total' },
+        { title: 'Team lead assistant', time: 'Ongoing', people: '1-2', pay: 'Case by case' },
+        { title: 'Course guide co-build', time: 'Long term', people: '3-4', pay: '¥80 per guide' },
       ],
     },
     expenses: {
@@ -221,7 +230,8 @@ const en = {
       ],
     },
     footer: {
-      sample: 'This page is a layout sample with placeholder data; it is not wired to the backend yet.',
+      sample:
+        'The writing plan comes from the team’s AY 2026-2027 work plan; lectures and spending are still placeholder data (not wired to the backend yet).',
       contact: 'About us · contact',
     },
   },

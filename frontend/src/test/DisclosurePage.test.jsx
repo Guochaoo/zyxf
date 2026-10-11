@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import DisclosurePage from '../pages/DisclosurePage.jsx';
-import { EXPENSE_BASE, LECTURE_BASE, PLAN_BASE, spentCents } from '../pages/Disclosure/data.js';
+import { EXPENSE_BASE, LECTURE_BASE, spentCents } from '../pages/Disclosure/data.js';
 import i18n from '../i18n/index.js';
 
 // 公示栏（/disclosure）的版式样例。这里守的是三类**内容契约**，不是像素：
@@ -35,16 +35,15 @@ describe('公示栏 · 骨架', () => {
     expect(screen.getByRole('navigation', { name: '公示内容目录' })).toBeInTheDocument();
   });
 
-  // 宽屏不再是一条居中窄列：按内容把 12 栅格分成 7 / 5 / 12，且 items-start 让每张卡
-  // 按自身内容取高（不被同行最高的那张拉伸）。这两条一起构成「大小不一的错落」，
-  // 改回去不易被察觉，所以钉住。
-  test('宽屏按内容分列（7 / 5 / 12）且卡片不被拉伸', () => {
+  // 宽屏按内容分列（5 / 7 / 12），且 items-start 让每张卡按自身内容取高
+  // （不被同行最高的那张拉伸）。改回去不易被察觉，所以钉住。
+  test('宽屏按内容分列（5 / 7 / 12）且卡片不被拉伸', () => {
     const { container } = renderPage();
     const row = container.querySelector('#lectures').parentElement;
     expect(row.className).toContain('lg:grid-cols-12');
     expect(row.className).toContain('items-start');
 
-    const spans = { lectures: 'lg:col-span-7', plans: 'lg:col-span-5', expenses: 'lg:col-span-12' };
+    const spans = { lectures: 'lg:col-span-5', plans: 'lg:col-span-7', expenses: 'lg:col-span-12' };
     for (const [id, span] of Object.entries(spans)) {
       expect(container.querySelector(`#${id}`).className).toContain(span);
     }
@@ -114,38 +113,43 @@ describe('公示栏 · 01 讲座计划', () => {
 });
 
 describe('公示栏 · 02 资料编写计划', () => {
-  test('每项一条进度条，aria-valuenow 与百分比文本同源', () => {
-    renderPage();
-    const bars = screen.getAllByRole('progressbar');
-    expect(bars).toHaveLength(PLAN_BASE.length);
-    PLAN_BASE.forEach((plan, i) => {
-      expect(bars[i]).toHaveAttribute('aria-valuenow', String(plan.pct));
-      expect(screen.getByText(`${plan.pct}%`)).toBeInTheDocument();
+  test('14 项计划全渲染，且每项四列都有内容（资料名 / 时间 / 人数 / 工资）', () => {
+    const { container } = renderPage();
+    const items = i18n.t('disclosure.plans.items', { returnObjects: true });
+    expect(items).toHaveLength(14);
+
+    const rows = [...container.querySelectorAll('#plans li')];
+    expect(rows).toHaveLength(items.length);
+    items.forEach((it, i) => {
+      const text = rows[i].textContent;
+      expect(text).toContain(it.title);
+      expect(text).toContain(it.time);
+      expect(text).toContain(it.people);
+      expect(text).toContain(it.pay);
     });
   });
 
-  test('状态码 → 文案映射正确（同码多条时条数也要对）', () => {
+  test('表头四列来自字典，与文档要求的四项一致', () => {
     renderPage();
-    const labelOf = { published: '已发布', review: '校对中', writing: '编写中', planned: '待启动' };
-    for (const [code, label] of Object.entries(labelOf)) {
-      expect(screen.getAllByText(label)).toHaveLength(
-        PLAN_BASE.filter((p) => p.status === code).length
-      );
+    for (const label of ['资料名称', '预计完成时间', '志愿者人数', '工资']) {
+      expect(screen.getByText(label)).toBeInTheDocument();
     }
-    // 每种码在样例里都至少出现一次，映射表没有被写成死值
-    expect(new Set(PLAN_BASE.map((p) => p.status)).size).toBe(4);
   });
 
-  // 回归：i18next 的 returnObjects 会把空串叶子换成 defaultValue（[]），
-  // 只写 `{text.eta ? …}` 的话「预计」后面会跟一个空值（实测踩过）。
-  test('已发布项不渲染空的「预计」段', () => {
+  test('计划没有百分比：不渲染进度条（别为好看编一个进度）', () => {
     const { container } = renderPage();
-    const metaOf = (li) => li.querySelector('div > div').lastElementChild;
-    const rows = [...container.querySelectorAll('#plans li')];
+    expect(container.querySelector('#plans [role="progressbar"]')).toBeNull();
+  });
 
-    expect(metaOf(rows[0]).textContent).toBe('负责人 陈同学');
-    expect(metaOf(rows[0]).querySelectorAll('span')).toHaveLength(1);
-    expect(metaOf(rows[1]).textContent).toContain('预计 10 月下旬');
+  test('未定项如实标注「暂定」，不编数字', () => {
+    const { container } = renderPage();
+    const row = [...container.querySelectorAll('#plans li')].find((li) =>
+      li.textContent.includes('工图小助手')
+    );
+    expect(row.textContent).toContain('12 月末之前');
+    expect(row.textContent).toContain('暂定');
+    // 「习题集整理」的工资是「按标准计算」，也不该被填成一个具体数字
+    expect(screen.getByText('按标准计算')).toBeInTheDocument();
   });
 });
 

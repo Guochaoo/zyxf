@@ -172,14 +172,10 @@ const zh = {
     status: {
       open: '报名中',
       done: '已结束',
-      published: '已发布',
-      review: '校对中',
-      writing: '编写中',
-      planned: '待启动',
     },
     sections: {
       lectures: { title: '讲座计划', meta: '{{term}} · 共 {{n}} 场' },
-      plans: { title: '资料编写计划', meta: '共 {{n}} 项 · {{active}} 项进行中' },
+      plans: { title: '资料编写计划', meta: '2026-2027 学年 · 共 {{n}} 项' },
       expenses: { title: '经费支出', meta: '近 60 天 · 共 {{n}} 笔' },
     },
     lectures: {
@@ -193,16 +189,31 @@ const zh = {
         { title: '资料库检索与笔记整理工作坊', place: '仲英书院 A-101', speaker: '赵同学' },
       ],
     },
+    // 资料编写计划。内容来源：编写组 2026-2027 年度工作计划「工作安排」。
+    // 四列就是文档要求的四项：资料名 / 预计完成时间 / 志愿者人数（不含审核）/ 工资。
+    // 进度与状态不在这里——计划本身没有百分比，别为了好看编一个。
     plans: {
-      ownerLabel: '负责人 {{name}}',
-      etaLabel: '预计 {{eta}}',
+      columns: {
+        item: '资料名称',
+        time: '预计完成时间',
+        people: '志愿者人数',
+        pay: '工资',
+      },
       items: [
-        // 已发布项**不给 eta 键**（不是给空串）：#75
-        { title: '概率论历年真题汇编（2019–2025）', owner: '陈同学' },
-        { title: '化学实验安全手册（第二版）', owner: '刘同学', eta: '10 月下旬' },
-        { title: '高等数学习题精选（下册）', owner: '李同学', eta: '11 月中旬' },
-        { title: '大学物理实验报告模板', owner: '王同学', eta: '11 月底' },
-        { title: '线性代数期末复习提纲', owner: '张同学', eta: '12 月初' },
+        { title: '前期准备 · 模板规范', time: '10 月', people: '2 人', pay: '每人 ¥100' },
+        { title: '前期准备 · 奖励分配', time: '10 月', people: '3 人', pay: '每人 ¥150' },
+        { title: '高数小助手', time: '12 月末之前', people: '3 人', pay: '共 ¥1,300' },
+        { title: '线代小助手', time: '12 月末之前', people: '3 人', pay: '共 ¥800' },
+        { title: '离散数学小助手', time: '12 月末之前', people: '3 人', pay: '共 ¥1,200' },
+        { title: '习题集整理', time: '12 月末之前', people: '2 人', pay: '按标准计算' },
+        { title: '大物下作业解析', time: '12 月末之前', people: '4 人', pay: '每人 ¥80' },
+        { title: '数据结构小助手', time: '12 月末之前', people: '6 人', pay: '共 ¥875' },
+        { title: '电路电子学小助手', time: '12 月末之前', people: '4 人', pay: '共 ¥1,125' },
+        { title: '工图小助手', time: '12 月末之前', people: '暂定', pay: '暂定' },
+        { title: '复变函数小助手', time: '12 月末之前', people: '3 人', pay: '共 ¥750' },
+        { title: '模电小助手', time: '12 月末之前', people: '4 人', pay: '共 ¥750' },
+        { title: '组长小助手', time: '平时', people: '1-2 人', pay: '按实际情况发放' },
+        { title: '书院课程指南共建计划', time: '长期', people: '3-4 人', pay: '每篇 ¥80' },
       ],
     },
     expenses: {
@@ -224,7 +235,7 @@ const zh = {
       ],
     },
     footer: {
-      sample: '本页为版式样例，内容为示例数据，尚未接入后台。',
+      sample: '资料编写计划取自编写组 2026-2027 年度工作计划；讲座与经费暂为示例数据（尚未接入后台）。',
       contact: '关于我们 · 联系方式',
     },
   },

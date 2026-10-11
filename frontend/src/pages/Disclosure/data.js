@@ -28,15 +28,6 @@ export const LECTURE_BASE = [
   { id: 'l6', start: at(24, 19), minutes: LECTURE_MINUTES },
 ];
 
-/** 编写计划：进度 + 状态码（published / review / writing / planned）。 */
-export const PLAN_BASE = [
-  { id: 'p1', pct: 100, status: 'published' },
-  { id: 'p2', pct: 88, status: 'review' },
-  { id: 'p3', pct: 72, status: 'writing' },
-  { id: 'p4', pct: 45, status: 'writing' },
-  { id: 'p5', pct: 12, status: 'planned' },
-];
-
 /** 经费：金额一律以**分**为单位存整数，求和不会有浮点误差。 */
 export const BUDGET_CENTS = 2000000; // ¥20,000.00
 export const EXPENSE_BASE = [
