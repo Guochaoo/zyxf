@@ -296,9 +296,10 @@ export default function App() {
       )}
       <main
         className={`min-w-0 overflow-x-hidden ${
-          // Dashboard 与公示栏用固定的 pt-[11px] 把「logo + 页面名」页头按到与资料库
-          // 左栏品牌行同一水平线（14px）；其余页面自带更大的页头留白。
-          isDashboard || isDisclosure
+          // 统计面板 / 公示栏 / 关于我们都用同一个「logo + 页面名」页头
+          // （components/PageTitle），统一用固定的 pt-[11px] 把它按到与资料库左栏
+          // 品牌行同一水平线；登录注册页走自己的版式，用下面那档内边距。
+          isDashboard || isDisclosure || isAbout
             ? 'px-4 pt-[11px] pb-6'
             : 'px-3 pt-4 pb-2 sm:px-4 sm:pt-[10.5px] sm:pb-2'
         } ${mainLayout}`}

@@ -47,7 +47,7 @@
 
 ### 三处自有配色（改动时不要再扩散）
 - **导航菜单 `StaggeredMenu`**：开关按钮黑底白字（hover #1a1a1a + 双层投影 rgba(0,0,0,.25) 0 0 0 1px / rgba(0,0,0,.2) 0 2px 4px）；面板是白底（`--surface`），但强调色用紫 `--sm-accent` = #5227FF（社交标题与链接 hover）；账号操作图标分色——登录 #3fae6b（底 rgba(63,174,107,.12)）、退出 #d10d0d（底 rgba(209,13,13,.1)）。
-- **关于我们页**：DM Sans + 直角 + 细边，配色自成一页（见 §4）。
+- **关于我们页**：直角 + 细边，配色自成一页（字体与全站同一支 OPPOSans，早期文档里的 DM Sans 已不存在，见 §4）。
 - **AI 搜索卡（`.rb-ai-card` / `.rb-ai-icon`，`index.css` 的 `--rb-ai-c1…c6` 与 `--rb-ai-rainbow`）**：`linear-gradient(100deg, #5227FF → #A64BFF → #FF3D9A → #FFB03D → #3DDC97 → #3D9AFF → #5227FF)`，`background-size: 300% 100%` + `rb-ai-flow` 6s 线性流动。三处用途：AI 图标自身的渐变填充（`RiSearchAiLine`，**透明底**——不做彩色底块，渐变 stop 引 `--rb-ai-c1/c3/c6` 紫→粉→蓝，小尺寸下橙/绿会显脏）、结果卡 1.5px 描边环、查找中卡片外溢的模糊泛光（`rb-ai-card__halo`，`blur(7px)` + `rb-ai-halo` 呼吸）。它是**刻意的例外**（参考效果的彩虹流光就是这样），别把这支渐变挪到别的组件上；牌面其余部分仍消费 token（卡片内层 `var(--surface)`、次级文字 `--ink-2`）。
 
 ### 中性色阶（Tailwind `slate` 被重映射为 Vercel 中性灰）
@@ -96,7 +96,7 @@
 ### 字体
 - **主字体**：OPPO Sans（`@font-face` 名 `OPPOSans`，可变字重 100–900），回退栈 `-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Roboto, Arial, sans-serif`；`body/button/input/textarea/select` 统一继承，并开 `text-rendering: geometricPrecision` 与灰度抗锯齿。
 - **`'SF Mono'` 别名**：`index.css` 把 `'SF Mono'` 这个字体名指向同一份 OPPO 字体（与 `OPPOSans` 同样的常用/生僻两层声明）——liveline 图表内部硬编码 `"SF Mono", Menlo, monospace`，在 Windows 上不存在该族，别名后图表文字与应用一致。
-- **关于我们页例外**：整页用 **DM Sans**（Google Fonts，400/500），主标题 `font-light`（300），以拉开与资料库主页的调性。
+- **关于我们页**：字体与全站同一支 OPPOSans（早期文档写的 DM Sans / Google Fonts 已不在仓库里，`index.html` 也无外链字体）。它与资料库主页的调性差异只在**排版**：主标题 `font-light`（300）+ `clamp(1.8rem,3.2vw,2.8rem)`、直角 + 细边（见 §4）。
 - **等宽**：本项目未覆写 `fontFamily`，`font-mono` 就是 Tailwind 默认栈（Menlo / Monaco / Consolas / "Liberation Mono" / "Courier New"）。对话卡片删除后全站已无 `font-mono` 消费方（AI 消息的耗时计时器与行内 `code` 随卡片一并删除，见 §4），代码里的等宽意图统一由 `tabular-nums` 承担（见 §1）。
 - **OpenType**：全仓未启用任何 `liga`；`tabular-nums` 用在图表提示、度量数字与统计面板的列表数字上（`font-variant-numeric: tabular-nums`）。
 
@@ -258,7 +258,7 @@
 
 ### 资料库之外的页面
 - **统计面板 `/dashboard`**：独立页（`mx-auto w-full`），标题行 = `components/PageTitle`（28px 圆形 logo + `.rb-brand-title`，与公示栏**共用同一个组件**，位置逐像素一致：logo `x=16 / y=14`，标题 `x=52`、17px / 500 / −0.17px）（**没有**右侧控件：时间范围固定 30 天，数据靠挂载时的静默 revalidate 保鲜）；主体是三段 12 栅格（8/4、7/5、6/6，`gap-3`）：下载热力图 + 类型分布、今日动态 + 下载量、近期上传 + 近期下载
-- **关于我们 `/about`**：独立页，DM Sans 全页覆盖，**自成一套「直角 + 细边」语言**（标签是 0 圆角 + `--line-strong` 细边，按钮不遵循 14px 圆角规范）；「加入我们」CTA（`.about-cta`）是**黑底白字 + 无描边**的直角块（去掉描边时把 `px-3 py-2` 补偿成 `px-[13px] py-[9px]`，外框尺寸不变），hover 为**斜切扫过**——`::after` 铺 `var(--surface)`（亮色 = 纯白、暗色 = 面板色）、`skewX(-45deg) scale(0→1)` 0.5s 展开，文字同时翻成 `var(--ink)`；实现约束三条：宿主需 `position: relative; z-index: 1; overflow: hidden` 才能让 `z-index:-1` 的伪元素显形；**横向外扩必须 ≥ 高度的一半**（`left/right: -50%`），否则斜切后左上 / 右下会各露一个露黑的小三角（`-20%` 只够 `H/W ≤ 0.4`）；**按钮右侧没有紧贴的箭头方块**。案例卡是 4:3 直角图块（黑底 + 白信息牌，**图片上没有 hover 遮罩**），页脚是文案 CTA + 活动名跑马灯（`border-t border-line` 分隔，`md` 以上去掉该线）
+- **关于我们 `/about`**：独立页，**自成一套「直角 + 细边」语言**（字体仍是全站那支 OPPOSans，无 DM Sans / 外链字体）：页头用与统计面板、公示栏同一个 `PageTitle`（logo + 「关于我们」，三个页面位置逐像素一致；它挂在页面左上角、在关于页自己的 `<section>` **之外**，免得继承这一页的特殊排版），下面是居中的 hero（`仲英学辅` 黑底标签 + `我们做了什么` 大标题 + `资料 · 讲座 · 答疑`）；标签是 0 圆角 + `--line-strong` 细边，按钮不遵循 14px 圆角规范；「加入我们」CTA（`.about-cta`）是**黑底白字 + 无描边**的直角块（去掉描边时把 `px-3 py-2` 补偿成 `px-[13px] py-[9px]`，外框尺寸不变），hover 为**斜切扫过**——`::after` 铺 `var(--surface)`（亮色 = 纯白、暗色 = 面板色）、`skewX(-45deg) scale(0→1)` 0.5s 展开，文字同时翻成 `var(--ink)`；实现约束三条：宿主需 `position: relative; z-index: 1; overflow: hidden` 才能让 `z-index:-1` 的伪元素显形；**横向外扩必须 ≥ 高度的一半**（`left/right: -50%`），否则斜切后左上 / 右下会各露一个露黑的小三角（`-20%` 只够 `H/W ≤ 0.4`）；**按钮右侧没有紧贴的箭头方块**。案例卡是 4:3 直角图块（黑底 + 白信息牌，**图片上没有 hover 遮罩**），页脚是文案 CTA + 活动名跑马灯（`border-t border-line` 分隔，`md` 以上去掉该线）
 - **登录 / 注册 `/login`、`/register`**：外层是 `max-w-7xl`（1280px）的居中单列，卡片本身 `max-w-[1100px]`；左栏是 Silk WebGL 暗色品牌面板（40px 品牌主标题），右栏固定白底深字，输入框是 `#f5f5f5` 平底、`!rounded-[14px]`、无描边无聚焦效果；两路由共用同一个 `AuthPage` 实例（切换不重挂载）
 - **公示栏 `/disclosure`**：独立页（当前为**纯前端版式样例**，结构性数据在 `pages/Disclosure/data.js`，展示文案在 i18n 的 `disclosure` 段）。一页三节（讲座计划 / 资料编写计划 / 经费支出），**节内版式各不相同但共用一套骨架**——这是它不像「三个小组件拼起来」的原因：
   - **区块头**统一为「12px 序号（`--ink-3`、tabular-nums）+ 17px/600 标题 + 右侧 12px 元信息」，序号与顶部目录（`01 / 02 / 03`）一一对应；区块是无阴影无描边的 `rounded-card bg-surface` 白卡（与统计面板 / 浏览页卡片同一套语汇），区块之间 16px

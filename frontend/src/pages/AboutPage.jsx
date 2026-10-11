@@ -3,6 +3,7 @@ import { motion, useInView } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth.jsx';
 import { LogoIcon } from '../components/icons';
+import PageTitle from '../components/PageTitle.jsx';
 
 /* ─────────────────────────────────────────────────────────
  * Projects / Case Studies — About page rebuilt in this style.
@@ -96,129 +97,136 @@ export default function AboutPage() {
   const marqueeLogos = useMemo(() => t('about.marquee', { returnObjects: true, defaultValue: [] }), [t]);
 
   return (
-    <section
-      className="relative bg-page text-ink"
-      style={{ fontFamily: "'OPPOSans', -apple-system, BlinkMacSystemFont, sans-serif" }}
-    >
-      {/* marquee keyframes */}
-      <style>{`
-        @keyframes marqueeProjects {
-          from { transform: translateX(0); }
-          to   { transform: translateX(-50%); }
-        }
-        .marquee-projects {
-          animation: marqueeProjects 28s linear infinite;
-        }
-        .marquee-projects:hover {
-          animation-play-state: paused;
-        }
-        /* 「加入我们」CTA 的斜切扫过：与给定的 ::after + skewX(-45deg) scale(0→1) 等价。
-           底色用 --surface（亮色 = 纯白、暗色 = 面板色，避免暗色下白底压浅色字），
-           直角沿用关于页语言；宿主必须是层叠上下文（relative + z-index: 1），
-           否则 z-index: -1 的伪元素会被自己的黑底盖住。
-           横向外扩必须 ≥ 高度的一半：skewX(-45deg) 把上下边各平移 ±H/2，只扩 20%
-           时 H/W 超过 0.4 的按钮就会在左上 / 右下各漏出一个露黑的小三角。 */
-        .about-cta {
-          position: relative;
-          z-index: 1;
-          overflow: hidden;
-        }
-        .about-cta::after {
-          content: '';
-          position: absolute;
-          z-index: -1;
-          left: -50%;
-          right: -50%;
-          top: 0;
-          bottom: 0;
-          background: var(--surface);
-          transform: skewX(-45deg) scale(0, 1);
-          transition: transform 0.5s;
-        }
-        .about-cta:hover,
-        .about-cta:focus-visible {
-          color: var(--ink);
-        }
-        .about-cta:hover::after,
-        .about-cta:focus-visible::after {
-          transform: skewX(-45deg) scale(1, 1);
-        }
-      `}</style>
+    <>
+      {/* 页头与统计面板 / 公示栏同一个 PageTitle（logo + 页面名），位置由 App.jsx
+          的 main 内边距（px-4 pt-[11px]）给到页面左上角。它刻意放在下面这个
+          <section> 之外：section 上挂着关于页自己的字体与配色，页头要保持全站一致。 */}
+      <PageTitle title={t('menu.about')} />
 
-      {/* Top area — header */}
-      <div className="relative px-6 pb-10 pt-12 sm:px-10 lg:px-16 lg:pt-[60px]">
-        <div ref={headerRef} className="relative mx-auto max-w-7xl text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={headerInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.7, ease: EASE }}
-          >
-            <span className="mb-5 inline-block bg-ink px-4 py-1.5 text-[13px] font-medium tracking-wide text-page">
-              {t('about.tag')}
-            </span>
-            <div className="text-[clamp(1.8rem,3.2vw,2.8rem)] font-light leading-[1.25] tracking-tight">
-              <span className="text-ink">{t('about.title')}</span>
-              <br />
-              <span className="text-[clamp(1.1rem,1.8vw,1.5rem)] text-ink-3">{t('about.sub')}</span>
-            </div>
-          </motion.div>
-        </div>
-      </div>
+      <section
+        className="relative bg-page text-ink"
+        style={{ fontFamily: "'OPPOSans', -apple-system, BlinkMacSystemFont, sans-serif" }}
+      >
+        {/* marquee keyframes */}
+        <style>{`
+          @keyframes marqueeProjects {
+            from { transform: translateX(0); }
+            to   { transform: translateX(-50%); }
+          }
+          .marquee-projects {
+            animation: marqueeProjects 28s linear infinite;
+          }
+          .marquee-projects:hover {
+            animation-play-state: paused;
+          }
+          /* 「加入我们」CTA 的斜切扫过：与给定的 ::after + skewX(-45deg) scale(0→1) 等价。
+             底色用 --surface（亮色 = 纯白、暗色 = 面板色，避免暗色下白底压浅色字），
+             直角沿用关于页语言；宿主必须是层叠上下文（relative + z-index: 1），
+             否则 z-index: -1 的伪元素会被自己的黑底盖住。
+             横向外扩必须 ≥ 高度的一半：skewX(-45deg) 把上下边各平移 ±H/2，只扩 20%
+             时 H/W 超过 0.4 的按钮就会在左上 / 右下各漏出一个露黑的小三角。 */
+          .about-cta {
+            position: relative;
+            z-index: 1;
+            overflow: hidden;
+          }
+          .about-cta::after {
+            content: '';
+            position: absolute;
+            z-index: -1;
+            left: -50%;
+            right: -50%;
+            top: 0;
+            bottom: 0;
+            background: var(--surface);
+            transform: skewX(-45deg) scale(0, 1);
+            transition: transform 0.5s;
+          }
+          .about-cta:hover,
+          .about-cta:focus-visible {
+            color: var(--ink);
+          }
+          .about-cta:hover::after,
+          .about-cta:focus-visible::after {
+            transform: skewX(-45deg) scale(1, 1);
+          }
+        `}</style>
 
-      {/* Case study cards — 2x2 grid */}
-      <div className="mx-auto max-w-7xl px-6 pb-16 sm:px-10 lg:px-16">
-        <div className="grid gap-4 md:grid-cols-2">
-          {caseStudies.map((study, i) => (
-            <CaseCard key={study.id} study={study} index={i} isAdmin={isAdmin} />
-          ))}
-        </div>
-      </div>
-
-      {/* Footer area — CTA + marquee */}
-      <div className="mx-auto max-w-7xl px-6 pb-6 sm:px-10 lg:px-16">
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between">
-          {/* left — pitch + CTA */}
-          <div className="max-w-md">
-            {isAdmin && (
-              <div className="mb-4 flex h-7 w-7 items-center justify-center border border-line-strong text-xs text-ink">
-                +
-              </div>
-            )}
-            <p className="text-[14px] leading-[1.7] text-ink-2">
-              {t('about.pitch')}
-            </p>
-            {/* 「加入我们」CTA：hover 时斜切白色扫过（扫满后文字转深色）。尺寸与原来的
-                标签块完全一致；右侧原本紧贴的箭头方块按需求去掉。 */}
-            <button
-              type="button"
-              className="about-cta mt-6 inline-flex items-center bg-ink px-[13px] py-[9px] text-base font-medium text-page"
+        {/* Top area — header */}
+          <div className="relative px-6 pb-10 pt-4 sm:px-10 sm:pt-6 lg:px-16 lg:pt-8">
+          <div ref={headerRef} className="relative mx-auto max-w-7xl text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={headerInView ? { opacity: 1, y: 0 } : {}}
+              transition={{ duration: 0.7, ease: EASE }}
             >
-              {t('about.joinUs')}
-            </button>
+              <span className="mb-5 inline-block bg-ink px-4 py-1.5 text-[13px] font-medium tracking-wide text-page">
+                {t('about.tag')}
+              </span>
+              <div className="text-[clamp(1.8rem,3.2vw,2.8rem)] font-light leading-[1.25] tracking-tight">
+                <span className="text-ink">{t('about.title')}</span>
+                <br />
+                <span className="text-[clamp(1.1rem,1.8vw,1.5rem)] text-ink-3">{t('about.sub')}</span>
+              </div>
+            </motion.div>
           </div>
+        </div>
 
-          {/* right — logo marquee */}
-          <div className="mt-8 flex-1 overflow-hidden border-t border-line md:ml-12 md:mt-0 md:border-t-0">
-            <div className="overflow-hidden py-5">
-              <div className="marquee-projects flex w-max">
-                {[...marqueeLogos, ...marqueeLogos].map((logo, i) => (
-                  <div key={i} className="flex shrink-0 items-center gap-2.5 px-8">
-                    <span className="text-ink">
-                      <LogoIcon type={logo.icon} />
-                    </span>
-                    <span className="whitespace-nowrap text-sm font-medium tracking-wide text-ink">
-                      {logo.name}
-                    </span>
-                  </div>
-                ))}
+        {/* Case study cards — 2x2 grid */}
+        <div className="mx-auto max-w-7xl px-6 pb-16 sm:px-10 lg:px-16">
+          <div className="grid gap-4 md:grid-cols-2">
+            {caseStudies.map((study, i) => (
+              <CaseCard key={study.id} study={study} index={i} isAdmin={isAdmin} />
+            ))}
+          </div>
+        </div>
+
+        {/* Footer area — CTA + marquee */}
+        <div className="mx-auto max-w-7xl px-6 pb-6 sm:px-10 lg:px-16">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between">
+            {/* left — pitch + CTA */}
+            <div className="max-w-md">
+              {isAdmin && (
+                <div className="mb-4 flex h-7 w-7 items-center justify-center border border-line-strong text-xs text-ink">
+                  +
+                </div>
+              )}
+              <p className="text-[14px] leading-[1.7] text-ink-2">
+                {t('about.pitch')}
+              </p>
+              {/* 「加入我们」CTA：hover 时斜切白色扫过（扫满后文字转深色）。尺寸与原来的
+                  标签块完全一致；右侧原本紧贴的箭头方块按需求去掉。 */}
+              <button
+                type="button"
+                className="about-cta mt-6 inline-flex items-center bg-ink px-[13px] py-[9px] text-base font-medium text-page"
+              >
+                {t('about.joinUs')}
+              </button>
+            </div>
+
+            {/* right — logo marquee */}
+            <div className="mt-8 flex-1 overflow-hidden border-t border-line md:ml-12 md:mt-0 md:border-t-0">
+              <div className="overflow-hidden py-5">
+                <div className="marquee-projects flex w-max">
+                  {[...marqueeLogos, ...marqueeLogos].map((logo, i) => (
+                    <div key={i} className="flex shrink-0 items-center gap-2.5 px-8">
+                      <span className="text-ink">
+                        <LogoIcon type={logo.icon} />
+                      </span>
+                      <span className="whitespace-nowrap text-sm font-medium tracking-wide text-ink">
+                        {logo.name}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* bottom spacer */}
-      <div className="h-12" />
-    </section>
+        {/* bottom spacer */}
+          <div className="h-12" />
+      </section>
+    </>
   );
 }

@@ -43,6 +43,13 @@ beforeEach(() => {
 });
 
 describe('AboutPage 渲染', () => {
+  test('页头是「logo + 页面名」（与统计面板 / 公示栏同一个 PageTitle）', () => {
+    renderAbout();
+    const h1 = screen.getByRole('heading', { level: 1 });
+    expect(h1).toHaveTextContent('关于我们');
+    expect(h1.querySelector('img')).toBeTruthy();
+  });
+
   test('头部与行动区文案来自字典', () => {
     renderAbout();
     expect(screen.getByText('我们做了什么')).toBeInTheDocument();
