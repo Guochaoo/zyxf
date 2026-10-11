@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import PageTitle from '../components/PageTitle.jsx';
 import {
   BUDGET_CENTS,
   EXPENSE_BASE,
@@ -327,87 +328,91 @@ export default function DisclosurePage() {
   const activePlans = PLAN_BASE.filter((p) => p.status === 'writing' || p.status === 'review').length;
 
   return (
-    <section className="mx-auto w-full max-w-5xl px-4 pb-16 pt-10 sm:px-6 lg:pt-[60px]">
-      {/* 页头：左边是「这是什么」，右边是「谁、什么时候更新的」——公示内容的
-          可信度一半来自后者，所以它和标题同高，而不是塞进页脚。 */}
-      <header className="flex flex-wrap items-start justify-between gap-x-8 gap-y-6">
-        <div className="min-w-0 max-w-2xl">
-          <h1 className="text-[clamp(1.75rem,2.6vw,2.25rem)] font-semibold text-ink">
-            {t('disclosure.title')}
-          </h1>
-          <p className="mt-3 text-[14px] leading-[1.7] text-ink-2">{t('disclosure.intro')}</p>
+    <>
+      {/* 页头与统计面板同处同款：logo + 页面名（components/PageTitle），
+          页面左上角的位置由 App.jsx 的 main 内边距（px-4 pt-[11px]）给出。 */}
+      <PageTitle title={t('disclosure.title')} />
+
+      <section className="mx-auto w-full max-w-5xl pb-16">
+        {/* 一句话说明（左）与「更新于 / 学期 / 责任单位」（右）同排：公示内容的
+            可信度一半来自后者，所以让它和说明并排，而不是塞进页脚。 */}
+        <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
+          <p className="max-w-2xl text-[14px] leading-[1.7] text-ink-2">{t('disclosure.intro')}</p>
+
+          <dl className="w-full shrink-0 text-[12px] leading-[2] text-ink-3 sm:w-auto sm:text-right">
+            <div className="flex justify-between gap-3 sm:justify-end">
+              <dt>{t('disclosure.updatedLabel')}</dt>
+              <dd className="tabular-nums text-ink-2">{updated}</dd>
+            </div>
+            <div className="flex justify-between gap-3 sm:justify-end">
+              <dt>{t('disclosure.termLabel')}</dt>
+              <dd className="text-ink-2">{t('disclosure.term')}</dd>
+            </div>
+            <div className="flex justify-between gap-3 sm:justify-end">
+              <dt>{t('disclosure.orgLabel')}</dt>
+              <dd className="text-ink-2">{t('disclosure.org')}</dd>
+            </div>
+          </dl>
         </div>
 
-        <dl className="w-full shrink-0 text-[12px] leading-[2] text-ink-3 sm:w-auto sm:text-right">
-          <div className="flex justify-between gap-3 sm:justify-end">
-            <dt>{t('disclosure.updatedLabel')}</dt>
-            <dd className="tabular-nums text-ink-2">{updated}</dd>
-          </div>
-          <div className="flex justify-between gap-3 sm:justify-end">
-            <dt>{t('disclosure.termLabel')}</dt>
-            <dd className="text-ink-2">{t('disclosure.term')}</dd>
-          </div>
-          <div className="flex justify-between gap-3 sm:justify-end">
-            <dt>{t('disclosure.orgLabel')}</dt>
-            <dd className="text-ink-2">{t('disclosure.org')}</dd>
-          </div>
-        </dl>
-      </header>
+        {/* 目录：与区块头的序号一一对应（长页面的第一需求是「先知道有几节」）。 */}
+        <nav
+          aria-label={t('disclosure.navAria')}
+          className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2"
+        >
+          {SECTIONS.map((s) => (
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              onClick={(e) => goTo(e, s.id)}
+              className="group flex items-center gap-2 text-[13px] font-medium text-ink-2 transition-colors hover:text-ink"
+            >
+              <span className="text-[11px] tabular-nums text-ink-3">{s.index}</span>
+              {t(`disclosure.sections.${s.id}.title`)}
+            </a>
+          ))}
+        </nav>
 
-      {/* 目录：与区块头的序号一一对应（长页面的第一需求是「先知道有几节」）。 */}
-      <nav aria-label={t('disclosure.navAria')} className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2">
-        {SECTIONS.map((s) => (
-          <a
-            key={s.id}
-            href={`#${s.id}`}
-            onClick={(e) => goTo(e, s.id)}
-            className="group flex items-center gap-2 text-[13px] font-medium text-ink-2 transition-colors hover:text-ink"
+        <div className="mt-4 space-y-4">
+          <Section
+            id="lectures"
+            index="01"
+            title={t('disclosure.sections.lectures.title')}
+            meta={t('disclosure.sections.lectures.meta', {
+              term: t('disclosure.term'),
+              n: LECTURE_BASE.length,
+            })}
           >
-            <span className="text-[11px] tabular-nums text-ink-3">{s.index}</span>
-            {t(`disclosure.sections.${s.id}.title`)}
-          </a>
-        ))}
-      </nav>
+            <Lectures items={LECTURE_BASE} texts={lectureTexts} locale={locale} />
+          </Section>
 
-      <div className="mt-4 space-y-4">
-        <Section
-          id="lectures"
-          index="01"
-          title={t('disclosure.sections.lectures.title')}
-          meta={t('disclosure.sections.lectures.meta', {
-            term: t('disclosure.term'),
-            n: LECTURE_BASE.length,
-          })}
-        >
-          <Lectures items={LECTURE_BASE} texts={lectureTexts} locale={locale} />
-        </Section>
+          <Section
+            id="plans"
+            index="02"
+            title={t('disclosure.sections.plans.title')}
+            meta={t('disclosure.sections.plans.meta', { n: PLAN_BASE.length, active: activePlans })}
+          >
+            <Plans items={PLAN_BASE} texts={planTexts} />
+          </Section>
 
-        <Section
-          id="plans"
-          index="02"
-          title={t('disclosure.sections.plans.title')}
-          meta={t('disclosure.sections.plans.meta', { n: PLAN_BASE.length, active: activePlans })}
-        >
-          <Plans items={PLAN_BASE} texts={planTexts} />
-        </Section>
+          <Section
+            id="expenses"
+            index="03"
+            title={t('disclosure.sections.expenses.title')}
+            meta={t('disclosure.sections.expenses.meta', { n: EXPENSE_BASE.length })}
+          >
+            <Expenses rows={EXPENSE_BASE} texts={expenseTexts} locale={locale} />
+          </Section>
+        </div>
 
-        <Section
-          id="expenses"
-          index="03"
-          title={t('disclosure.sections.expenses.title')}
-          meta={t('disclosure.sections.expenses.meta', { n: EXPENSE_BASE.length })}
-        >
-          <Expenses rows={EXPENSE_BASE} texts={expenseTexts} locale={locale} />
-        </Section>
-      </div>
-
-      {/* 页脚：把「这是样例」与「去哪核对」并排放，示例数据不伪装成真账。 */}
-      <footer className="mt-8 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 text-[12px] text-ink-3">
-        <p>{t('disclosure.footer.sample')}</p>
-        <Link to="/about" className="text-ink-2 transition-colors hover:text-ink">
-          {t('disclosure.footer.contact')}
-        </Link>
-      </footer>
-    </section>
+        {/* 页脚：把「这是样例」与「去哪核对」并排放，示例数据不伪装成真账。 */}
+        <footer className="mt-8 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 text-[12px] text-ink-3">
+          <p>{t('disclosure.footer.sample')}</p>
+          <Link to="/about" className="text-ink-2 transition-colors hover:text-ink">
+            {t('disclosure.footer.contact')}
+          </Link>
+        </footer>
+      </section>
+    </>
   );
 }

@@ -296,10 +296,11 @@ export default function App() {
       )}
       <main
         className={`min-w-0 overflow-x-hidden ${
-          // Dashboard uses a fixed pt-[11px] to match the browse page logo top offset (14px).
-        isDashboard
-          ? 'px-4 pt-[11px] pb-6'
-          : 'px-3 pt-4 pb-2 sm:px-4 sm:pt-[10.5px] sm:pb-2'
+          // Dashboard 与公示栏用固定的 pt-[11px] 把「logo + 页面名」页头按到与资料库
+          // 左栏品牌行同一水平线（14px）；其余页面自带更大的页头留白。
+          isDashboard || isDisclosure
+            ? 'px-4 pt-[11px] pb-6'
+            : 'px-3 pt-4 pb-2 sm:px-4 sm:pt-[10.5px] sm:pb-2'
         } ${mainLayout}`}
         // 中列 padding 与左栏轨道同步成 320ms（BUG-94 补充），且只在手动开合窗口内挂
         // transition-property:padding——绝不能只给 transitionDuration：property 的初始值
