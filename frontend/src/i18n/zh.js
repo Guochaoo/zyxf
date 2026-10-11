@@ -200,8 +200,6 @@ const zh = {
         pay: '工资',
       },
       items: [
-        { title: '前期准备 · 模板规范', time: '10 月', people: '2 人', pay: '每人 ¥100' },
-        { title: '前期准备 · 奖励分配', time: '10 月', people: '3 人', pay: '每人 ¥150' },
         { title: '高数小助手', time: '12 月末之前', people: '3 人', pay: '共 ¥1,300' },
         { title: '线代小助手', time: '12 月末之前', people: '3 人', pay: '共 ¥800' },
         { title: '离散数学小助手', time: '12 月末之前', people: '3 人', pay: '共 ¥1,200' },

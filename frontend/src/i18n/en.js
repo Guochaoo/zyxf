@@ -195,8 +195,6 @@ const en = {
         pay: 'Pay',
       },
       items: [
-        { title: 'Preparation · Template standard', time: 'October', people: '2', pay: '¥100 each' },
-        { title: 'Preparation · Reward allocation', time: 'October', people: '3', pay: '¥150 each' },
         { title: 'Calculus tutor', time: 'By end of December', people: '3', pay: '¥1,300 total' },
         { title: 'Linear Algebra tutor', time: 'By end of December', people: '3', pay: '¥800 total' },
         { title: 'Discrete Math tutor', time: 'By end of December', people: '3', pay: '¥1,200 total' },

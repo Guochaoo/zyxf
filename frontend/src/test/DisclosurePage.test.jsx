@@ -113,10 +113,10 @@ describe('公示栏 · 01 讲座计划', () => {
 });
 
 describe('公示栏 · 02 资料编写计划', () => {
-  test('14 项计划全渲染，且每项四列都有内容（资料名 / 时间 / 人数 / 工资）', () => {
+  test('12 项计划全渲染，且每项四列都有内容（资料名 / 时间 / 人数 / 工资）', () => {
     const { container } = renderPage();
     const items = i18n.t('disclosure.plans.items', { returnObjects: true });
-    expect(items).toHaveLength(14);
+    expect(items).toHaveLength(12);
 
     const rows = [...container.querySelectorAll('#plans li')];
     expect(rows).toHaveLength(items.length);
