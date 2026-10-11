@@ -88,8 +88,8 @@ zyxf/
 │   └── test/
 ├── frontend/              # React 前端
 │   ├── src/
-│   │   ├── pages/         # BrowsePage / DashboardPage / AuthPage（登录+注册） / AboutPage
-│   │   │                  #   页面级子模块：pages/Browse/、pages/Dashboard/（容器 + 数据 hook + 纯展示件）
+│   │   ├── pages/         # BrowsePage / DashboardPage / AuthPage（登录+注册） / AboutPage / DisclosurePage（公示栏）
+│   │   │                  #   页面级子模块：pages/Browse/、pages/Dashboard/、pages/Disclosure/（样例数据）
 │   │   ├── components/    # 文件列表 / 预览 / 知识图谱 / AI 搜索卡 / 菜单等
 │   │   └── test/          # vitest 测试
 └── docs/

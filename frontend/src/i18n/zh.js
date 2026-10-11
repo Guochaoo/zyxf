@@ -1,6 +1,7 @@
 // 简体中文文案基准。
-// i18next 字典：key 分层按域组织（app / menu / browse / auth / dashboard /
-// about / settings / chat / kg / search / tree / notice / toast / preview / common）。
+// i18next 字典：key 分层按域组织（app / menu / browse / auth / dashboard / about /
+// disclosure / settings / aiSearch / kg / search / tree / notice / toast / upload /
+// preview / footer / common）。
 const zh = {
   app: {
     title: '仲英学辅',
@@ -23,6 +24,8 @@ const zh = {
     dashboardAria: '查看统计仪表盘',
     about: '关于我们',
     aboutAria: '了解仲英书院学业辅导中心',
+    disclosure: '公示栏',
+    disclosureAria: '查看讲座计划、编写计划与经费支出',
     toggleOpen: '菜单',
     toggleClose: '关闭',
     openAria: '打开菜单',
@@ -158,6 +161,77 @@ const zh = {
       { title: '朋辈互助', category: '学习互助 · 经验分享' },
       { title: '资料共建', category: '资料库建设 · 知识沉淀' },
     ],
+  },
+  // 公示栏（/disclosure）。骨架文案 + 三节的样例内容都住在这里：
+  // items 数组与 pages/Disclosure/data.js 里的结构性字段（时间 / 金额 / 进度）
+  // 按**下标**对齐，增删条目时两边必须一起改。
+  disclosure: {
+    title: '公示栏',
+    intro: '本页公示讲座安排、资料编写进度与经费支出，按学期更新，欢迎查阅与核对。',
+    navAria: '公示内容目录',
+    updatedLabel: '更新于',
+    termLabel: '学期',
+    orgLabel: '责任单位',
+    term: '2026 秋季学期',
+    org: '仲英书院学业辅导中心',
+    status: {
+      open: '报名中',
+      done: '已结束',
+      published: '已发布',
+      review: '校对中',
+      writing: '编写中',
+      planned: '待启动',
+    },
+    sections: {
+      lectures: { title: '讲座计划', meta: '{{term}} · 共 {{n}} 场' },
+      plans: { title: '资料编写计划', meta: '共 {{n}} 项 · {{active}} 项进行中' },
+      expenses: { title: '经费支出', meta: '近 60 天 · 共 {{n}} 笔' },
+    },
+    lectures: {
+      speakerLabel: '主讲 {{name}}',
+      items: [
+        { title: '大学物理期中题型串讲', place: '仲英书院 A-101', speaker: '王老师' },
+        { title: '高数下册期末题型串讲', place: '仲英书院 A-203', speaker: '李老师' },
+        { title: '线性代数解题方法', place: '仲英书院 A-101', speaker: '张同学' },
+        { title: '概率论与数理统计导学', place: '仲英书院 A-203', speaker: '陈老师' },
+        { title: '大学化学实验报告规范', place: '仲英书院 B-105', speaker: '刘同学' },
+        { title: '资料库检索与笔记整理工作坊', place: '仲英书院 A-101', speaker: '赵同学' },
+      ],
+    },
+    plans: {
+      ownerLabel: '负责人 {{name}}',
+      etaLabel: '预计 {{eta}}',
+      items: [
+        // 已发布项**不给 eta 键**（不是给空串）：#75
+        { title: '概率论历年真题汇编（2019–2025）', owner: '陈同学' },
+        { title: '化学实验安全手册（第二版）', owner: '刘同学', eta: '10 月下旬' },
+        { title: '高等数学习题精选（下册）', owner: '李同学', eta: '11 月中旬' },
+        { title: '大学物理实验报告模板', owner: '王同学', eta: '11 月底' },
+        { title: '线性代数期末复习提纲', owner: '张同学', eta: '12 月初' },
+      ],
+    },
+    expenses: {
+      budget: '预算总额',
+      spent: '已支出',
+      remaining: '结余',
+      usage: '已使用 {{pct}}%',
+      total: '合计 · 共 {{n}} 笔',
+      columns: { date: '日期', item: '事由', category: '类别', handler: '经办', amount: '金额' },
+      items: [
+        { item: '期末复习资料印刷（高数 / 线代 / 大物）', category: '印刷', handler: '李同学' },
+        { item: '资料库服务器与域名续费', category: '运维', handler: '王同学' },
+        { item: '讲座讲义与习题册打印', category: '印刷', handler: '张同学' },
+        { item: '讲座物料（易拉宝 / 台签 / 横幅）', category: '物料', handler: '陈同学' },
+        { item: '云端资料库存储扩容', category: '运维', handler: '王同学' },
+        { item: '教师与主讲答谢礼', category: '答谢', handler: '刘同学' },
+        { item: '活动场地布置耗材', category: '物料', handler: '赵同学' },
+        { item: '资料寄送快递费', category: '物流', handler: '赵同学' },
+      ],
+    },
+    footer: {
+      sample: '本页为版式样例，内容为示例数据，尚未接入后台。',
+      contact: '关于我们 · 联系方式',
+    },
   },
   settings: {
     title: '设置',

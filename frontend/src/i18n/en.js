@@ -21,6 +21,8 @@ const en = {
     dashboardAria: 'View statistics dashboard',
     about: 'About',
     aboutAria: 'Learn about the ZYXF Study Center',
+    disclosure: 'Disclosure',
+    disclosureAria: 'Read lecture plans, writing plans and spending',
     toggleOpen: 'Menu',
     toggleClose: 'Close',
     openAria: 'Open menu',
@@ -157,6 +159,77 @@ const en = {
       { title: 'Peer Support', category: 'Study aid · Experience sharing' },
       { title: 'Material Co-build', category: 'Resource building · Knowledge capture' },
     ],
+  },
+  // 公示栏（/disclosure），与 zh.js 的 disclosure 段一一对应（键集合由
+  // test/i18n.test.js 强制一致）；items 与 pages/Disclosure/data.js 按**下标**对齐。
+  disclosure: {
+    title: 'Disclosure',
+    intro:
+      'Lecture schedule, material-writing progress and spending are published here and updated each term.',
+    navAria: 'Disclosure contents',
+    updatedLabel: 'Updated',
+    termLabel: 'Term',
+    orgLabel: 'Issued by',
+    term: 'Fall 2026',
+    org: 'ZYXF Study Center',
+    status: {
+      open: 'Open',
+      done: 'Finished',
+      published: 'Published',
+      review: 'In review',
+      writing: 'In progress',
+      planned: 'Not started',
+    },
+    sections: {
+      lectures: { title: 'Lecture schedule', meta: '{{term}} · {{n}} sessions' },
+      plans: { title: 'Material writing plan', meta: '{{n}} items · {{active}} in progress' },
+      expenses: { title: 'Spending', meta: 'Last 60 days · {{n}} entries' },
+    },
+    lectures: {
+      speakerLabel: 'Speaker {{name}}',
+      items: [
+        { title: 'Midterm walkthrough: University Physics', place: 'ZYXF A-101', speaker: 'Mr. Wang' },
+        { title: 'Finals walkthrough: Calculus II', place: 'ZYXF A-203', speaker: 'Mr. Li' },
+        { title: 'Problem-solving in Linear Algebra', place: 'ZYXF A-101', speaker: 'Zhang' },
+        { title: 'Introduction to Probability and Statistics', place: 'ZYXF A-203', speaker: 'Mr. Chen' },
+        { title: 'Lab report standards for University Chemistry', place: 'ZYXF B-105', speaker: 'Liu' },
+        { title: 'Workshop: library search and note taking', place: 'ZYXF A-101', speaker: 'Zhao' },
+      ],
+    },
+    plans: {
+      ownerLabel: 'Owner {{name}}',
+      etaLabel: 'Expected {{eta}}',
+      items: [
+        // 已发布项**不给 eta 键**（不是给空串）：#75
+        { title: 'Probability past papers, 2019–2025', owner: 'Chen' },
+        { title: 'Chemistry lab safety handbook (2nd ed.)', owner: 'Liu', eta: 'late Oct' },
+        { title: 'Selected Calculus exercises, vol. 2', owner: 'Li', eta: 'mid Nov' },
+        { title: 'Physics lab report template', owner: 'Wang', eta: 'late Nov' },
+        { title: 'Linear Algebra revision outline', owner: 'Zhang', eta: 'early Dec' },
+      ],
+    },
+    expenses: {
+      budget: 'Budget',
+      spent: 'Spent',
+      remaining: 'Remaining',
+      usage: '{{pct}}% used',
+      total: 'Total · {{n}} entries',
+      columns: { date: 'Date', item: 'Purpose', category: 'Category', handler: 'Handled by', amount: 'Amount' },
+      items: [
+        { item: 'Printing final-review materials (calculus / linear algebra / physics)', category: 'Printing', handler: 'Li' },
+        { item: 'Server and domain renewal for the library', category: 'Ops', handler: 'Wang' },
+        { item: 'Lecture handouts and exercise books', category: 'Printing', handler: 'Zhang' },
+        { item: 'Lecture materials (banners / table signs)', category: 'Materials', handler: 'Chen' },
+        { item: 'Cloud storage expansion', category: 'Ops', handler: 'Wang' },
+        { item: 'Thank-you gifts for lecturers', category: 'Gifts', handler: 'Liu' },
+        { item: 'Venue decoration supplies', category: 'Materials', handler: 'Zhao' },
+        { item: 'Courier fees for mailed materials', category: 'Logistics', handler: 'Zhao' },
+      ],
+    },
+    footer: {
+      sample: 'This page is a layout sample with placeholder data; it is not wired to the backend yet.',
+      contact: 'About us · contact',
+    },
   },
   settings: {
     title: 'Settings',
