@@ -70,10 +70,11 @@ function StatusChip({ tone = 'plain', children }) {
   return <span className={`${CHIP_BASE} text-ink-3`}>{children}</span>;
 }
 
-/* 区块外壳：无阴影无描边的白卡（与统计面板 / 浏览页卡片同一套语汇）。 */
-function Section({ id, index, title, meta, children }) {
+/* 区块外壳：无阴影无描边的白卡（与统计面板 / 浏览页卡片同一套语汇）。
+   className 用来给宽屏栅格挂跨列（lg:col-span-*）。 */
+function Section({ id, index, title, meta, className = '', children }) {
   return (
-    <section id={id} className="scroll-mt-6 rounded-card bg-surface p-4 sm:p-5">
+    <section id={id} className={`scroll-mt-6 rounded-card bg-surface p-4 sm:p-5 ${className}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2 className="flex items-baseline gap-2.5 text-[17px] font-semibold text-ink">
           <span className="text-[12px] font-normal tabular-nums text-ink-3">{index}</span>
@@ -156,7 +157,7 @@ function Plans({ items, texts }) {
         return (
           <li key={it.id}>
             <div
-              className={`${ROW} grid grid-cols-1 items-center gap-x-4 gap-y-2 sm:grid-cols-[1fr_auto]`}
+              className={`${ROW} grid grid-cols-1 items-center gap-x-4 gap-y-2 @[520px]:grid-cols-[1fr_auto]`}
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -177,7 +178,7 @@ function Plans({ items, texts }) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2.5 sm:w-[168px]">
+              <div className="flex items-center gap-2.5 @[520px]:w-[168px]">
                 <div
                   className="h-1 flex-1 overflow-hidden rounded-full bg-field"
                   role="progressbar"
@@ -207,20 +208,22 @@ function Expenses({ rows, texts, locale }) {
   const pct = Math.round((spent / BUDGET_CENTS) * 100);
 
   return (
-    <>
-      <div className="rounded-control bg-inset px-4 py-3.5">
-        {/* 三个数在窄屏**竖排**（标签左、金额右），宽屏才并成三列：
-            390px 下三列各约 92px，而「¥20,000.00」本身就要 90px，
-            并排会挤成一团（whitespace-nowrap 只会让它溢出而不是换行）。 */}
-        <dl className="grid grid-cols-1 gap-y-1.5 sm:grid-cols-3 sm:gap-x-4 sm:gap-y-0">
+    // 宽屏（lg）下「小结」单独成一列窄轨、表格占满其余宽度：经费是唯一吃宽度的
+    // 一节，让表格自己摊到全宽会把「事由」列拉成一大片空白。
+    <div className="lg:flex lg:items-start lg:gap-6">
+      {/* @container + @[420px]：窄轨里三个数竖排（标签左 / 金额右），
+          全宽时才并成三列——用视口断点（sm:）在这里是错的，320px 的轨在
+          1440 视口下照样会排成三列，而「¥20,000.00」自己就要 90px。 */}
+      <div className="@container rounded-control bg-inset px-4 py-3.5 lg:w-[320px] lg:shrink-0">
+        <dl className="grid grid-cols-1 gap-y-1.5 @[420px]:grid-cols-3 @[420px]:gap-x-4 @[420px]:gap-y-0">
           {[
             { key: 'budget', value: BUDGET_CENTS },
             { key: 'spent', value: spent },
             { key: 'remaining', value: BUDGET_CENTS - spent },
           ].map((m) => (
-            <div key={m.key} className="flex items-baseline justify-between gap-3 sm:block">
+            <div key={m.key} className="flex items-baseline justify-between gap-3 @[420px]:block">
               <dt className="text-[12px] text-ink-3">{t(`disclosure.expenses.${m.key}`)}</dt>
-              <dd className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-ink sm:mt-1 sm:text-[17px]">
+              <dd className="whitespace-nowrap text-[17px] font-semibold tabular-nums text-ink @[420px]:mt-1">
                 {money(m.value, locale)}
               </dd>
             </div>
@@ -234,7 +237,7 @@ function Expenses({ rows, texts, locale }) {
         </p>
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-control">
+      <div className="mt-4 overflow-hidden rounded-control lg:mt-0 lg:min-w-0 lg:flex-1">
         <table className="w-full border-collapse text-left">
           <thead>
             <tr className="rb-table-heading bg-field text-[12px] font-medium">
@@ -296,7 +299,7 @@ function Expenses({ rows, texts, locale }) {
           </tbody>
         </table>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -333,7 +336,10 @@ export default function DisclosurePage() {
           页面左上角的位置由 App.jsx 的 main 内边距（px-4 pt-[11px]）给出。 */}
       <PageTitle title={t('disclosure.title')} />
 
-      <section className="mx-auto w-full max-w-5xl pb-16">
+      {/* 宽屏不再是一条居中窄列：外层放到 1600px 上限，卡片按内容分列
+          （7 / 5 / 12），每张卡按自身内容取高（items-start，不被同行最高的
+          那张拉伸），于是三块的大小、高低都不一样。 */}
+      <section className="mx-auto w-full max-w-[1600px] pb-16">
         {/* 一句话说明（左）与「更新于 / 学期 / 责任单位」（右）同排：公示内容的
             可信度一半来自后者，所以让它和说明并排，而不是塞进页脚。 */}
         <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
@@ -373,10 +379,11 @@ export default function DisclosurePage() {
           ))}
         </nav>
 
-        <div className="mt-4 space-y-4">
+        <div className="mt-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
           <Section
             id="lectures"
             index="01"
+            className="lg:col-span-7"
             title={t('disclosure.sections.lectures.title')}
             meta={t('disclosure.sections.lectures.meta', {
               term: t('disclosure.term'),
@@ -386,9 +393,13 @@ export default function DisclosurePage() {
             <Lectures items={LECTURE_BASE} texts={lectureTexts} locale={locale} />
           </Section>
 
+          {/* @container：进度条是否与文字同排，按**卡片自己的宽度**决定，不看视口——
+              lg 刚生效时这张卡只有约 436px（1100 视口 / 12 栅格的第 5 列），用 sm:
+              视口断点会让标题被挤成两行、状态徽章掉行。 */}
           <Section
             id="plans"
             index="02"
+            className="@container lg:col-span-5"
             title={t('disclosure.sections.plans.title')}
             meta={t('disclosure.sections.plans.meta', { n: PLAN_BASE.length, active: activePlans })}
           >
@@ -398,6 +409,7 @@ export default function DisclosurePage() {
           <Section
             id="expenses"
             index="03"
+            className="lg:col-span-12"
             title={t('disclosure.sections.expenses.title')}
             meta={t('disclosure.sections.expenses.meta', { n: EXPENSE_BASE.length })}
           >

@@ -35,6 +35,34 @@ describe('公示栏 · 骨架', () => {
     expect(screen.getByRole('navigation', { name: '公示内容目录' })).toBeInTheDocument();
   });
 
+  // 宽屏不再是一条居中窄列：按内容把 12 栅格分成 7 / 5 / 12，且 items-start 让每张卡
+  // 按自身内容取高（不被同行最高的那张拉伸）。这两条一起构成「大小不一的错落」，
+  // 改回去不易被察觉，所以钉住。
+  test('宽屏按内容分列（7 / 5 / 12）且卡片不被拉伸', () => {
+    const { container } = renderPage();
+    const row = container.querySelector('#lectures').parentElement;
+    expect(row.className).toContain('lg:grid-cols-12');
+    expect(row.className).toContain('items-start');
+
+    const spans = { lectures: 'lg:col-span-7', plans: 'lg:col-span-5', expenses: 'lg:col-span-12' };
+    for (const [id, span] of Object.entries(spans)) {
+      expect(container.querySelector(`#${id}`).className).toContain(span);
+    }
+  });
+
+  // 经费是唯一吃宽度的一节：宽屏下小结与表格并排（小结窄轨 + 表格占满其余），
+  // 不分栏的话「事由」列会被拉到一大片空白。
+  test('经费卡内部在宽屏分为「小结轨 + 表格」两栏', () => {
+    const { container } = renderPage();
+    const card = container.querySelector('#expenses');
+    const summary = card.querySelector('dl').parentElement;
+    const tableWrap = card.querySelector('table').parentElement;
+
+    expect(summary.className).toContain('bg-inset');
+    expect(tableWrap.className).toContain('lg:flex-1');
+    expect(summary.parentElement.className).toContain('lg:flex');
+  });
+
   test('页头给出更新日期、学期与责任单位（公示的可信度来源）', () => {
     renderPage();
     expect(screen.getByText('更新于')).toBeInTheDocument();
