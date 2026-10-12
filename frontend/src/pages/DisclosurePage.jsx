@@ -278,11 +278,15 @@ function CourseGuide() {
   );
 }
 
-/* ---- 04 经费支出：先给三个数（预算 / 已支出 / 结余），再逐笔列账 ---- */
+/* ---- 04 本网站经费支出：先给三个数（预算 / 已支出 / 结余），再逐笔列账 ----
+   预算**还没定**（`BUDGET_CENTS === null`）：那就显示「-」，结余同样算不出来也是「-」，
+   支出率细条与百分比整块不画——「已使用 57%」这种数是拿预算当分母算的，
+   没有预算就没有百分比，别为了这张卡好看编一个（与 02 计划卡不编进度条同一条原则）。 */
 function Expenses({ rows, texts, locale }) {
   const { t } = useTranslation();
   const spent = spentCents(rows);
-  const pct = Math.round((spent / BUDGET_CENTS) * 100);
+  const hasBudget = Number.isFinite(BUDGET_CENTS) && BUDGET_CENTS > 0;
+  const pct = hasBudget ? Math.round((spent / BUDGET_CENTS) * 100) : null;
 
   return (
     // 宽屏（lg）下「小结」单独成一列窄轨、表格占满其余宽度：经费是唯一吃宽度的
@@ -294,24 +298,35 @@ function Expenses({ rows, texts, locale }) {
       <div className="@container rounded-control bg-inset px-4 py-3.5 lg:w-[320px] lg:shrink-0">
         <dl className="grid grid-cols-1 gap-y-1.5 @[420px]:grid-cols-3 @[420px]:gap-x-4 @[420px]:gap-y-0">
           {[
-            { key: 'budget', value: BUDGET_CENTS },
+            { key: 'budget', value: hasBudget ? BUDGET_CENTS : null },
             { key: 'spent', value: spent },
-            { key: 'remaining', value: BUDGET_CENTS - spent },
+            { key: 'remaining', value: hasBudget ? BUDGET_CENTS - spent : null },
           ].map((m) => (
             <div key={m.key} className="flex items-baseline justify-between gap-3 @[420px]:block">
               <dt className="text-[12px] text-ink-3">{t(`disclosure.expenses.${m.key}`)}</dt>
-              <dd className="whitespace-nowrap text-[17px] font-semibold tabular-nums text-ink @[420px]:mt-1">
-                {money(m.value, locale)}
+              {/* 没数的那两格用三级色占位：位置和字号不变，一眼能看出「这格还没有数」 */}
+              <dd
+                className={`whitespace-nowrap text-[17px] font-semibold tabular-nums @[420px]:mt-1 ${
+                  m.value === null ? 'text-ink-3' : 'text-ink'
+                }`}
+              >
+                {m.value === null ? '-' : money(m.value, locale)}
               </dd>
             </div>
           ))}
         </dl>
-        <div className="mt-3.5 h-1 overflow-hidden rounded-full bg-field">
-          <div className="h-full rounded-full bg-ink" style={{ width: `${pct}%` }} />
-        </div>
-        <p className="mt-2 text-[12px] tabular-nums text-ink-3">
-          {t('disclosure.expenses.usage', { pct })}
-        </p>
+        {hasBudget ? (
+          <>
+            <div className="mt-3.5 h-1 overflow-hidden rounded-full bg-field">
+              <div className="h-full rounded-full bg-ink" style={{ width: `${pct}%` }} />
+            </div>
+            <p className="mt-2 text-[12px] tabular-nums text-ink-3">
+              {t('disclosure.expenses.usage', { pct })}
+            </p>
+          </>
+        ) : (
+          <p className="mt-3.5 text-[12px] text-ink-3">{t('disclosure.expenses.noBudget')}</p>
+        )}
       </div>
 
       <div className="mt-4 overflow-hidden rounded-control lg:mt-0 lg:min-w-0 lg:flex-1">

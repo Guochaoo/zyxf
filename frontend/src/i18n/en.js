@@ -175,7 +175,8 @@ const en = {
       plans: { title: 'Material writing plan', meta: 'AY 2026-2027 · {{n}} items' },
       // Nav and section head share this string; no decorative glyphs in headings
       courseGuide: { title: 'Course & contest guide co-build', meta: 'AY 2026-2027 · Ongoing' },
-      expenses: { title: 'Spending', meta: 'Last 60 days · {{n}} entries' },
+      // "this site": the section tracks the site's own running costs (server / domain / storage)
+      expenses: { title: 'Spending on this site', meta: 'Last 60 days · {{n}} entries' },
     },
     lectures: {
       speakerLabel: 'Speaker {{name}}',
@@ -265,11 +266,14 @@ const en = {
       noteLabel: 'Note',
       note: 'Assessment formats and contest dates may change over time; please mark the year and the source of such information.',
     },
+    // Mirrors zh.js disclosure.expenses. No budget yet (BUDGET_CENTS === null in data.js)
+    // → budget / remaining render "-" and noBudget is shown; `usage` waits for a budget.
     expenses: {
       budget: 'Budget',
       spent: 'Spent',
       remaining: 'Remaining',
       usage: '{{pct}}% used',
+      noBudget: 'No budget set yet',
       total: 'Total · {{n}} entries',
       columns: { date: 'Date', item: 'Purpose', category: 'Category', handler: 'Handled by', amount: 'Amount' },
       items: [
@@ -285,7 +289,7 @@ const en = {
     },
     footer: {
       sample:
-        'The course-guide co-build and the writing plan come from the organizing team; lectures and spending are still placeholder data (not wired to the backend yet).',
+        'The course-guide co-build and the writing plan come from the organizing team; the lecture schedule and the site spending entries are still placeholder data (not wired to the backend yet).',
       contact: 'About us · contact',
     },
   },

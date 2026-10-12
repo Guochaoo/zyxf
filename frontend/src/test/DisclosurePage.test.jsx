@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import DisclosurePage from '../pages/DisclosurePage.jsx';
 import {
+  BUDGET_CENTS,
   COURSE_GUIDE_EMAIL,
   EXPENSE_BASE,
   LECTURE_BASE,
@@ -37,7 +38,7 @@ describe('公示栏 · 骨架', () => {
       ['01', 'lectures', '讲座计划'],
       ['02', 'plans', '资料编写计划'],
       ['03', 'courseGuide', '书院课程指南共建计划'],
-      ['04', 'expenses', '经费支出'],
+      ['04', 'expenses', '本网站经费支出'],
     ]) {
       const link = nav.querySelector(`a[href="#${id}"]`);
       expect(link, `目录缺 ${id}`).toBeTruthy();
@@ -231,7 +232,7 @@ describe('公示栏 · 03 书院课程指南共建计划', () => {
   });
 });
 
-describe('公示栏 · 04 经费支出', () => {
+describe('公示栏 · 04 本网站经费支出', () => {
   test('合计行等于逐行金额之和（改数据不会错账）', () => {
     const { container } = renderPage();
     const rows = [...container.querySelectorAll('#expenses tbody tr')];
@@ -244,17 +245,29 @@ describe('公示栏 · 04 经费支出', () => {
     );
     expect(sum).toBeCloseTo(spentCents(EXPENSE_BASE) / 100, 2);
     expect(parseMoney(totalRow.textContent)).toBeCloseTo(sum, 2);
+    // 小结里的「已支出」必须与逐行之和一致（改数据不会错账）
+    expect(parseMoney(screen.getByText('已支出').nextElementSibling.textContent)).toBeCloseTo(sum, 2);
   });
 
-  test('概览三个数自洽：预算 − 已支出 = 结余，且已支出等于合计', () => {
-    renderPage();
-    const amount = (label) =>
-      parseMoney(screen.getByText(label).nextElementSibling.textContent);
-    const budget = amount('预算总额');
-    const spent = amount('已支出');
-    const remaining = amount('结余');
-    expect(spent).toBeCloseTo(spentCents(EXPENSE_BASE) / 100, 2);
-    expect(budget - spent).toBeCloseTo(remaining, 2);
+  // 预算还没定（data.js 的 BUDGET_CENTS === null）：显示「-」，结余同样算不出来也是「-」，
+  // 支出率细条与百分比整块不画——分母不存在，别为了这张卡好看编一个百分比。
+  test('预算未设置时显示「-」，且不画支出率 / 百分比', () => {
+    const { container } = renderPage();
+    const value = (label) => screen.getByText(label).nextElementSibling.textContent.trim();
+    expect(value('预算总额')).toBe('-');
+    expect(value('结余')).toBe('-');
+
+    const card = container.querySelector('#expenses');
+    expect(card.textContent).toContain('预算尚未设置');
+    expect(card.textContent).not.toContain('已使用');
+    expect(card.querySelector('[role="progressbar"]')).toBeNull();
+    // 细条本身（bg-field 的 h-1 槽）也不该留一条空槽
+    expect(card.querySelector('.h-1')).toBeNull();
+  });
+
+  // 定预算那天改的应当只有 data.js 一处：把 BUDGET_CENTS 填成分，这段就会回到「预算 − 已支出 = 结余 + 百分比」。
+  test('BUDGET_CENTS 仍是「未设置」（null），不是 0 或编出来的数字', () => {
+    expect(BUDGET_CENTS).toBeNull();
   });
 });
 

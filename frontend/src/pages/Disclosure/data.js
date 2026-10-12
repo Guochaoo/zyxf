@@ -33,8 +33,10 @@ export const LECTURE_BASE = [
 // 与日期 / 金额同类——改版式时不该顺手改掉；只有换投稿地址才动这一行。
 export const COURSE_GUIDE_EMAIL = 'hxhanxuan@stu.xjtu.edu.cn';
 
-/** 经费：金额一律以**分**为单位存整数，求和不会有浮点误差。 */
-export const BUDGET_CENTS = 2000000; // ¥20,000.00
+/** 经费：金额一律以**分**为单位存整数，求和不会有浮点误差。
+ *  预算目前**还没有** → 用 `null` 表示（小结里显示「-」、不画支出率细条），别填 0：
+ *  0 会被读成「预算为零」，`null` 才是「还没定」。定了预算就把分写成整数。 */
+export const BUDGET_CENTS = null;
 export const EXPENSE_BASE = [
   { id: 'e1', date: at(-52, 10), cents: 528000 },
   { id: 'e2', date: at(-45, 10), cents: 145000 },

@@ -178,7 +178,8 @@ const zh = {
       plans: { title: '资料编写计划', meta: '2026-2027 学年 · 共 {{n}} 项' },
       // 目录与区块头共用同一份文案（序号由页面给出），标题一律不带装饰字符
       courseGuide: { title: '书院课程指南共建计划', meta: '2026-2027 学年 · 长期开放' },
-      expenses: { title: '经费支出', meta: '近 60 天 · 共 {{n}} 笔' },
+      // 「本网站」：这一节记的是本站（服务器 / 域名 / 存储等）自己的开销，不是书院活动经费
+      expenses: { title: '本网站经费支出', meta: '近 60 天 · 共 {{n}} 笔' },
     },
     lectures: {
       speakerLabel: '主讲 {{name}}',
@@ -264,11 +265,14 @@ const zh = {
       noteLabel: '注意',
       note: '课程考核方式、竞赛时间等信息可能发生变化，请标注对应年份与信息来源。',
     },
+    // 本网站经费支出。预算尚未设置（data.js 的 BUDGET_CENTS === null）→ 小结里
+    // 预算 / 结余显示「-」，这一段用 noBudget；`usage` 留到有预算那天再用。
     expenses: {
       budget: '预算总额',
       spent: '已支出',
       remaining: '结余',
       usage: '已使用 {{pct}}%',
+      noBudget: '预算尚未设置',
       total: '合计 · 共 {{n}} 笔',
       columns: { date: '日期', item: '事由', category: '类别', handler: '经办', amount: '金额' },
       items: [
@@ -284,7 +288,7 @@ const zh = {
     },
     footer: {
       sample:
-        '课程指南共建计划与资料编写计划来自编写组；讲座与经费暂为示例数据（尚未接入后台）。',
+        '课程指南共建计划与资料编写计划来自编写组；讲座日程与本网站经费账目暂为示例数据（尚未接入后台）。',
       contact: '关于我们 · 联系方式',
     },
   },
