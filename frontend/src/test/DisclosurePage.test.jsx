@@ -51,9 +51,10 @@ describe('公示栏 · 骨架', () => {
     }
   });
 
-  // 宽屏按内容分列（5 / 7 / 12 / 12），且同一行的卡片**等高**：矮卡的下方留白收进
-  // 卡片内部，而不是在两张卡之间留一个洞（1280 下实测差 136px）。改回去不易被察觉。
-  test('宽屏按内容分列（5 / 7 / 12 / 12）且同行卡片等高', () => {
+  // 宽度按**内容**给：01 / 02 各 6 列（自然高度 482 / 466，差 16px），03 取 7 列
+  // （两条清单并排 + 参与方式横跨），04 只取 5 列（四列窄内容的表，给全宽会把「事由」
+  // 列撑到 438px）。同一行的卡片等高：矮卡的留白收进卡内，不在两卡之间留洞。
+  test('按内容分列（6 / 6 / 7 / 5）且同行卡片等高', () => {
     const { container } = renderPage();
     const row = container.querySelector('#lectures').parentElement;
     expect(row.className).toContain('lg:grid-cols-12');
@@ -66,10 +67,10 @@ describe('公示栏 · 骨架', () => {
     expect(panels.className).not.toContain('items-start');
 
     const spans = {
-      lectures: 'lg:col-span-5',
-      plans: 'lg:col-span-7',
-      courseGuide: 'lg:col-span-12',
-      expenses: 'lg:col-span-12',
+      lectures: 'lg:col-span-6',
+      plans: 'lg:col-span-6',
+      courseGuide: 'lg:col-span-7',
+      expenses: 'lg:col-span-5',
     };
     for (const [id, span] of Object.entries(spans)) {
       expect(container.querySelector(`#${id}`).className).toContain(span);

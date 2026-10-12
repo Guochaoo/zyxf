@@ -222,8 +222,11 @@ function CourseGuide() {
       </p>
 
       {/* 三块面板同样等高（`items-stretch`）：参与方式的文字量总比两张清单多，
-          同排拉伸后两张清单卡下方不会留洞，多出来的 36–80px 变成卡内底部留白 */}
-      <div className="mt-3.5 grid grid-cols-1 items-stretch gap-3 @[720px]:grid-cols-2 @[1080px]:grid-cols-3">
+          同排拉伸后两张清单卡下方不会留洞，多出来的 36–80px 变成卡内底部留白。
+          两栏档取 `@[660px]`（不是 720）：03 这一节在 12 栅格里只占 7 列，1280 视口下
+          卡片 713px、容器 673px——卡在 720 上会掉回单栏（三块竖排，高 816px），
+          与右边 636px 的经费卡差出 180px 的空白；660 让它在 1280 起就是两栏（573px）。 */}
+      <div className="mt-3.5 grid grid-cols-1 items-stretch gap-3 @[660px]:grid-cols-2 @[1080px]:grid-cols-3">
         <GuideList heading={guide.title} intro={guide.intro} items={guide.items ?? []} />
         <GuideList heading={contest.title} intro={contest.intro} items={contest.items ?? []} />
 
@@ -232,9 +235,9 @@ function CourseGuide() {
             ⚠️ 这里必须用**外层**（Section）的容器宽度分档：`@container` 只对
             后代生效，给面板自己挂 `@container` 再写 `@[560px]:` 判的是外面那张卡
             的宽度——面板只有 443px 也会走进两栏，正文被压成 271px 一列。 */}
-        <div className="rounded-control bg-inset px-4 py-3.5 @[720px]:col-span-2 @[1080px]:col-span-1 @[720px]:grid @[720px]:grid-cols-[7.5rem_1fr] @[720px]:gap-x-5 @[1080px]:block">
+        <div className="rounded-control bg-inset px-4 py-3.5 @[660px]:col-span-2 @[1080px]:col-span-1 @[660px]:grid @[660px]:grid-cols-[7.5rem_1fr] @[660px]:gap-x-5 @[1080px]:block">
           <h3 className="text-[13px] font-semibold text-ink">{join.title}</h3>
-          <div className="mt-2 space-y-1.5 text-[13px] leading-[22px] text-ink-2 @[720px]:mt-0 @[1080px]:mt-2">
+          <div className="mt-2 space-y-1.5 text-[13px] leading-[22px] text-ink-2 @[660px]:mt-0 @[1080px]:mt-2">
             <p>{join.open}</p>
             <p>
               {join.submit}{' '}
@@ -296,19 +299,21 @@ function Expenses({ rows, texts, locale }) {
     // 右边却有 10 行账目 —— 窄轨下方空出约 380px（1440 实测），一眼就是个洞。
     // 三个数横排后这节和 03 一样是「一条带 + 一块内容」，也不再需要给表格让宽度。
     <div className="@container">
-      {/* 三个数：宽容器里标签在上、数值在下（并排三格）；窄容器里退回「标签左 / 数值右」竖排。
-          用容器查询而不是 sm:：卡片的宽度不跟着视口走。 */}
-      <dl className="grid grid-cols-1 gap-y-1.5 rounded-control bg-inset px-4 py-3.5 @[420px]:grid-cols-3 @[420px]:gap-x-6">
+      {/* 三个数：宽容器里并排三格（每格「标签 + 数值」一行，两端对齐＝三列对齐的读数条）；
+          窄容器里竖排三行。用容器查询而不是 sm:：卡片的宽度不跟着视口走。
+          刻意**不**把标签压到数值上方：那样这条带子会从 50px 涨到 110px，
+          而它右边（改版前）的表格只有 570 上下，行内又会多出一截空白。 */}
+      <dl className="grid grid-cols-1 gap-y-1.5 rounded-control bg-inset px-4 py-3 @[420px]:grid-cols-3 @[420px]:gap-x-6 @[420px]:gap-y-0">
         {[
           { key: 'budget', value: hasBudget ? BUDGET_CENTS : null },
           { key: 'spent', value: spent },
           { key: 'remaining', value: hasBudget ? BUDGET_CENTS - spent : null },
         ].map((m) => (
-          <div key={m.key} className="flex items-baseline justify-between gap-3 @[420px]:block">
+          <div key={m.key} className="flex items-baseline justify-between gap-3">
             <dt className="text-[12px] text-ink-3">{t(`disclosure.expenses.${m.key}`)}</dt>
             {/* 没数的那两格用三级色占位：位置和字号不变，一眼能看出「这格还没有数」 */}
             <dd
-              className={`whitespace-nowrap text-[17px] font-semibold tabular-nums @[420px]:mt-1 ${
+              className={`whitespace-nowrap text-[15px] font-semibold tabular-nums ${
                 m.value === null ? 'text-ink-3' : 'text-ink'
               }`}
             >
@@ -353,17 +358,17 @@ function Expenses({ rows, texts, locale }) {
               const text = texts[i] ?? {};
               return (
                 <tr key={r.id} className="transition-colors hover:bg-hover">
-                  <td className="whitespace-nowrap px-2 py-2.5 text-[12px] tabular-nums text-ink-3 sm:px-3">
+                  <td className="whitespace-nowrap px-2 py-2 text-[12px] tabular-nums text-ink-3 sm:px-3">
                     <span className="sm:hidden">{monthShort(r.month, locale)}</span>
                     <span className="hidden sm:inline">{monthLong(r.month, locale)}</span>
                   </td>
-                  <td className="px-2 py-2.5 text-[13px] text-ink sm:px-3">{text.item}</td>
-                  <td className="hidden px-2 py-2.5 sm:table-cell sm:px-3">
+                  <td className="px-2 py-2 text-[13px] text-ink sm:px-3">{text.item}</td>
+                  <td className="hidden px-2 py-2 sm:table-cell sm:px-3">
                     <span className="whitespace-nowrap rounded-md bg-field px-2 py-0.5 text-[11px] text-ink-2">
                       {text.category}
                     </span>
                   </td>
-                  <td className="whitespace-nowrap px-2 py-2.5 text-right text-[13px] font-medium tabular-nums text-ink sm:px-3">
+                  <td className="whitespace-nowrap px-2 py-2 text-right text-[13px] font-medium tabular-nums text-ink sm:px-3">
                     {money(r.cents, locale)}
                   </td>
                 </tr>
@@ -372,7 +377,7 @@ function Expenses({ rows, texts, locale }) {
             {/* 合计行：colSpan 写满，内部再用 flex 两端对齐——窄屏会隐藏中间列，
                 逐列对位的写法在断点处一定会错位。 */}
             <tr className="bg-field">
-              <td colSpan={4} className="px-2 py-2.5 sm:px-3">
+              <td colSpan={4} className="px-2 py-2 sm:px-3">
                 <div className="flex items-baseline justify-between gap-4">
                   <span className="text-[12px] font-medium text-ink">
                     {t('disclosure.expenses.total', { n: rows.length })}
@@ -418,8 +423,7 @@ export default function DisclosurePage() {
       {/* 四边边距全部由 App.jsx 的 main 给出（`px-4 pt-[11px] pb-6`），与统计面板同源：
           页面铺满可用宽度、**不自设 max-width**——否则宽屏上左右会凭空多出一圈留白
           （1920 视口实测 `max-w-[1600px]` 左右各多 137px，而统计面板是 16px）。
-          卡片按内容分列（7 / 5 / 12），每张卡按自身内容取高（items-start），
-          于是三块的大小、高低都不一样。 */}
+          卡片按**内容需要的宽度**分列（6 / 6 / 7 / 5），见下面栅格那段注释。 */}
       <section className="w-full">
         {/* 目录：与区块头的序号一一对应（长页面的第一需求是「先知道有几节」）。 */}
         <nav
@@ -439,16 +443,22 @@ export default function DisclosurePage() {
           ))}
         </nav>
 
-        {/* 分列栅格：01 讲座 5 列（行短）与 02 编写计划 7 列（四列表，吃宽度）并排，
-            03 共建计划（清单 + 参与方式）与 04 经费支出各占一行全宽。
+        {/* 分列栅格：宽度按**内容**给，不是按"排满一行"给——四节各占多少列是量出来的：
+              06 / 06 ｜ 07 / 05
+            · 01 讲座 + 02 编写计划 各 6 列：两张卡在这档的自然高度是 482 / 466（差 16px）。
+              用 5 / 7 时 01 的「时间 · 地点 · 主讲」在 1280 视口下折行、长到 602px，
+              02 只有 466px，行内会空出 136px。
+            · 03 共建 7 列：@[720px] 档（卡片 ≥760）里两条清单并排、参与方式横跨两列，
+              自然高度约 573；再宽也只是把两栏拉长，不会多出信息。
+            · 04 经费 5 列：这张表只有四列窄内容（账期 / 事由 / 类别 / 金额），给 12 列时
+              「事由」列会被撑到 438px，一眼一大片空白；5 列（1440 下 571px）里事由列约 172px。
             `items-stretch`（默认值，这里显式写出来）：同一行的卡片**等高**，矮卡的下方
-            留白收进卡片内部，而不是在两张卡之间留一个洞——实测 1280 下 01 因为元信息
-            折行长到 602px、02 只有 466px，用 `items-start` 时 02 下面会空 136px。 */}
+            留白收进卡片内部，而不是在两张卡之间留一个洞。 */}
         <div className="mt-4 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-12">
           <Section
             id="lectures"
             index="01"
-            className="lg:col-span-5"
+            className="lg:col-span-6"
             title={t('disclosure.sections.lectures.title')}
             meta={t('disclosure.sections.lectures.meta', {
               term: t('disclosure.term'),
@@ -461,7 +471,7 @@ export default function DisclosurePage() {
           <Section
             id="plans"
             index="02"
-            className="@container lg:col-span-7"
+            className="@container lg:col-span-6"
             title={t('disclosure.sections.plans.title')}
             meta={t('disclosure.sections.plans.meta', { n: planTexts.length })}
           >
@@ -471,7 +481,7 @@ export default function DisclosurePage() {
           <Section
             id="courseGuide"
             index="03"
-            className="@container lg:col-span-12"
+            className="@container lg:col-span-7"
             title={t('disclosure.sections.courseGuide.title')}
             meta={t('disclosure.sections.courseGuide.meta')}
           >
@@ -481,7 +491,7 @@ export default function DisclosurePage() {
           <Section
             id="expenses"
             index="04"
-            className="lg:col-span-12"
+            className="lg:col-span-5"
             title={t('disclosure.sections.expenses.title')}
             meta={t('disclosure.sections.expenses.meta', { n: EXPENSE_BASE.length })}
           >
