@@ -291,47 +291,46 @@ function Expenses({ rows, texts, locale }) {
   const pct = hasBudget ? Math.round((spent / BUDGET_CENTS) * 100) : null;
 
   return (
-    // 宽屏（lg）下「小结」单独成一列窄轨、表格占满其余宽度：经费是唯一吃宽度的
-    // 一节，让表格自己摊到全宽会把「事由」列拉成一大片空白。
-    <div className="lg:flex lg:items-start lg:gap-6">
-      {/* @container + @[420px]：窄轨里三个数竖排（标签左 / 金额右），
-          全宽时才并成三列——用视口断点（sm:）在这里是错的，320px 的轨在
-          1440 视口下照样会排成三列，而「¥20,000.00」自己就要 90px。 */}
-      <div className="@container rounded-control bg-inset px-4 py-3.5 lg:w-[320px] lg:shrink-0">
-        <dl className="grid grid-cols-1 gap-y-1.5 @[420px]:grid-cols-3 @[420px]:gap-x-4 @[420px]:gap-y-0">
-          {[
-            { key: 'budget', value: hasBudget ? BUDGET_CENTS : null },
-            { key: 'spent', value: spent },
-            { key: 'remaining', value: hasBudget ? BUDGET_CENTS - spent : null },
-          ].map((m) => (
-            <div key={m.key} className="flex items-baseline justify-between gap-3 @[420px]:block">
-              <dt className="text-[12px] text-ink-3">{t(`disclosure.expenses.${m.key}`)}</dt>
-              {/* 没数的那两格用三级色占位：位置和字号不变，一眼能看出「这格还没有数」 */}
-              <dd
-                className={`whitespace-nowrap text-[17px] font-semibold tabular-nums @[420px]:mt-1 ${
-                  m.value === null ? 'text-ink-3' : 'text-ink'
-                }`}
-              >
-                {m.value === null ? '-' : money(m.value, locale)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-        {hasBudget ? (
-          <>
-            <div className="mt-3.5 h-1 overflow-hidden rounded-full bg-field">
-              <div className="h-full rounded-full bg-ink" style={{ width: `${pct}%` }} />
-            </div>
-            <p className="mt-2 text-[12px] tabular-nums text-ink-3">
-              {t('disclosure.expenses.usage', { pct })}
-            </p>
-          </>
-        ) : (
-          <p className="mt-3.5 text-[12px] text-ink-3">{t('disclosure.expenses.noBudget')}</p>
-        )}
-      </div>
+    // 小结**横排在卡片顶部**，表格在下面占满宽度。
+    // 早先是「320px 窄轨 + 表格」两栏，预算没定之后小结只剩三个数，
+    // 右边却有 10 行账目 —— 窄轨下方空出约 380px（1440 实测），一眼就是个洞。
+    // 三个数横排后这节和 03 一样是「一条带 + 一块内容」，也不再需要给表格让宽度。
+    <div className="@container">
+      {/* 三个数：宽容器里标签在上、数值在下（并排三格）；窄容器里退回「标签左 / 数值右」竖排。
+          用容器查询而不是 sm:：卡片的宽度不跟着视口走。 */}
+      <dl className="grid grid-cols-1 gap-y-1.5 rounded-control bg-inset px-4 py-3.5 @[420px]:grid-cols-3 @[420px]:gap-x-6">
+        {[
+          { key: 'budget', value: hasBudget ? BUDGET_CENTS : null },
+          { key: 'spent', value: spent },
+          { key: 'remaining', value: hasBudget ? BUDGET_CENTS - spent : null },
+        ].map((m) => (
+          <div key={m.key} className="flex items-baseline justify-between gap-3 @[420px]:block">
+            <dt className="text-[12px] text-ink-3">{t(`disclosure.expenses.${m.key}`)}</dt>
+            {/* 没数的那两格用三级色占位：位置和字号不变，一眼能看出「这格还没有数」 */}
+            <dd
+              className={`whitespace-nowrap text-[17px] font-semibold tabular-nums @[420px]:mt-1 ${
+                m.value === null ? 'text-ink-3' : 'text-ink'
+              }`}
+            >
+              {m.value === null ? '-' : money(m.value, locale)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {hasBudget ? (
+        <>
+          <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-field">
+            <div className="h-full rounded-full bg-ink" style={{ width: `${pct}%` }} />
+          </div>
+          <p className="mt-2 text-[12px] tabular-nums text-ink-3">
+            {t('disclosure.expenses.usage', { pct })}
+          </p>
+        </>
+      ) : (
+        <p className="mt-2 text-[12px] text-ink-3">{t('disclosure.expenses.noBudget')}</p>
+      )}
 
-      <div className="mt-4 overflow-hidden rounded-control lg:mt-0 lg:min-w-0 lg:flex-1">
+      <div className="mt-3.5 overflow-hidden rounded-control">
         <table className="w-full border-collapse text-left">
           <thead>
             <tr className="rb-table-heading bg-field text-[12px] font-medium">

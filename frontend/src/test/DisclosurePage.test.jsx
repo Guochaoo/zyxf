@@ -76,17 +76,22 @@ describe('公示栏 · 骨架', () => {
     }
   });
 
-  // 经费是唯一吃宽度的一节：宽屏下小结与表格并排（小结窄轨 + 表格占满其余），
-  // 不分栏的话「事由」列会被拉到一大片空白。
-  test('经费卡内部在宽屏分为「小结轨 + 表格」两栏', () => {
+  // 小结与账目是**上下**关系，不是「320px 窄轨 + 表格」两栏：预算未设置时小结只有三行，
+  // 右边却有 10 行表格，窄轨下方空出约 380px（1440 实测）。改回两栏就会重现那个洞。
+  test('小结横排在卡片顶部，表格在下方占满宽度', () => {
     const { container } = renderPage();
     const card = container.querySelector('#expenses');
-    const summary = card.querySelector('dl').parentElement;
-    const tableWrap = card.querySelector('table').parentElement;
+    const summary = card.querySelector('dl');
+    const wrap = summary.parentElement; // Expenses 的根节点
+    expect(wrap.className).toContain('@container');
+    expect(wrap.className).not.toContain('lg:flex');
 
+    const tableWrap = card.querySelector('table').parentElement;
     expect(summary.className).toContain('bg-inset');
-    expect(tableWrap.className).toContain('lg:flex-1');
-    expect(summary.parentElement.className).toContain('lg:flex');
+    expect(summary.className).toContain('@[420px]:grid-cols-3');
+    expect(tableWrap.className).not.toContain('lg:flex-1');
+    // dl 在表格之前：DOM 顺序 = 视觉顺序（先小结，后逐笔）
+    expect(summary.compareDocumentPosition(tableWrap) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   test('页头是「logo + 页面名」（与统计面板同一个 PageTitle），正文不再有说明条', () => {
