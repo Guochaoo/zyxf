@@ -208,9 +208,9 @@ const en = {
         { title: 'Engineering Drawing tutor', time: 'By end of December', people: 'TBD', pay: 'TBD' },
         { title: 'Complex Analysis tutor', time: 'By end of December', people: '3', pay: '¥750 total' },
         { title: 'Analog Electronics tutor', time: 'By end of December', people: '4', pay: '¥750 total' },
-        { title: 'Team lead assistant', time: 'Ongoing', people: '1-2', pay: 'Case by case' },
         // "Course guide co-build" is deliberately absent: it has its own section (03),
-        // where headcount / timeframe / reward live; a row here would duplicate it.
+        // where headcount / timeframe / reward live. "Team lead assistant" was removed
+        // on request; the section header's "N items" follows the actual count.
       ],
     },
     // Mirrors zh.js disclosure.courseGuide (keys enforced by test/i18n.test.js).

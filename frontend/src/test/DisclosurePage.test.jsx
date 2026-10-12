@@ -146,10 +146,10 @@ describe('公示栏 · 01 讲座计划', () => {
 });
 
 describe('公示栏 · 02 资料编写计划', () => {
-  test('11 项计划全渲染，且每项四列都有内容（资料名 / 时间 / 人数 / 工资）', () => {
+  test('10 项计划全渲染，且每项四列都有内容（资料名 / 时间 / 人数 / 工资）', () => {
     const { container } = renderPage();
     const items = i18n.t('disclosure.plans.items', { returnObjects: true });
-    expect(items).toHaveLength(11);
+    expect(items).toHaveLength(10);
 
     const rows = [...container.querySelectorAll('#plans li')];
     expect(rows).toHaveLength(items.length);
@@ -169,7 +169,7 @@ describe('公示栏 · 02 资料编写计划', () => {
     const rows = [...container.querySelectorAll('#plans li')];
     expect(rows.some((li) => li.textContent.includes('书院课程指南共建计划'))).toBe(false);
     // 区块头里的「共 N 项」跟着实际条数走
-    expect(container.querySelector('#plans').textContent).toContain('共 11 项');
+    expect(container.querySelector('#plans').textContent).toContain('共 10 项');
   });
 
   test('表头四列来自字典，与文档要求的四项一致', () => {
