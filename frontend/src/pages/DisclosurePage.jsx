@@ -1,5 +1,3 @@
-import { useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PageTitle from '../components/PageTitle.jsx';
 import {
@@ -16,8 +14,8 @@ import {
  * 排版主张：四种内容（讲座 = 时间序列、编写计划 = 四列表、共建计划 = 清单 + 参与
  * 方式、经费 = 账目）各用各的版式，但共用一套骨架，于是看起来是「一份文件的四节」
  * 而不是「四个小组件」：
- *   1. 区块头统一为「序号 + 标题 + 右侧元信息」（序号在目录里复用，
- *      点目录能对上号）；
+ *   1. 区块头统一为「序号 + 标题 + 右侧元信息」——序号只在区块头出现
+ *      （顶部目录已按需求删除）；
  *   2. 行统一为「左对齐信息列 + 右侧数值 / 状态位」，状态只用**单色**三档
  *      （实心墨 > 灰底 > 纯文字），不引入第四个强调色（DESIGN.md §2）；
  *   3. 数字统一 tabular-nums；金额一律右对齐（账目的可核对性靠对齐）。
@@ -25,14 +23,6 @@ import {
  * 讲座一节目前仍是样例数据；编写计划、共建计划与**本网站经费**三节是真实内容
  * （经费取自阿里云月度账单，来源与口径见 i18n 的 disclosure.footer 与 data.js 注释）。
  * ============================================================ */
-
-/* 目录与区块头共用同一份定义，序号只写一次。 */
-const SECTIONS = [
-  { id: 'lectures', index: '01' },
-  { id: 'plans', index: '02' },
-  { id: 'courseGuide', index: '03' },
-  { id: 'expenses', index: '04' },
-];
 
 /* ---- 语言相关的格式化：日期 / 时间 / 金额全部走 Intl，源码里不出现
    写死的「10月15日」「¥1,280.00」这类字面量。 ---- */
@@ -405,15 +395,6 @@ export default function DisclosurePage() {
   const planTexts = t('disclosure.plans.items', { returnObjects: true, defaultValue: [] });
   const expenseTexts = t('disclosure.expenses.items', { returnObjects: true, defaultValue: [] });
 
-  /* 目录跳转：尊重系统「减少动态效果」偏好；没有对应节点时退回浏览器原生锚点行为。 */
-  const goTo = useCallback((event, id) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    event.preventDefault();
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-  }, []);
-
   return (
     <>
       {/* 页头与统计面板同处同款：logo + 页面名（components/PageTitle），
@@ -423,26 +404,10 @@ export default function DisclosurePage() {
       {/* 四边边距全部由 App.jsx 的 main 给出（`px-4 pt-[11px] pb-6`），与统计面板同源：
           页面铺满可用宽度、**不自设 max-width**——否则宽屏上左右会凭空多出一圈留白
           （1920 视口实测 `max-w-[1600px]` 左右各多 137px，而统计面板是 16px）。
-          卡片按**内容需要的宽度**分列（6 / 6 / 7 / 5），见下面栅格那段注释。 */}
+          卡片按**内容需要的宽度**分列（6 / 6 / 7 / 5），见下面栅格那段注释。
+          正文直接开始：**顶部那行 01–04 锚点目录已按需求删除**（页面现在只有 ~1300px 高，
+          序号在区块头里还看得见）；区块的 `id` 保留，深链与测试仍在用。 */}
       <section className="w-full">
-        {/* 目录：与区块头的序号一一对应（长页面的第一需求是「先知道有几节」）。 */}
-        <nav
-          aria-label={t('disclosure.navAria')}
-          className="flex flex-wrap items-center gap-x-6 gap-y-2"
-        >
-          {SECTIONS.map((s) => (
-            <a
-              key={s.id}
-              href={`#${s.id}`}
-              onClick={(e) => goTo(e, s.id)}
-              className="group flex items-center gap-2 text-[13px] font-medium text-ink-2 transition-colors hover:text-ink"
-            >
-              <span className="text-[11px] tabular-nums text-ink-3">{s.index}</span>
-              {t(`disclosure.sections.${s.id}.title`)}
-            </a>
-          ))}
-        </nav>
-
         {/* 分列栅格：宽度按**内容**给，不是按"排满一行"给——四节各占多少列是量出来的：
               06 / 06 ｜ 07 / 05
             · 01 讲座 + 02 编写计划 各 6 列：两张卡在这档的自然高度是 482 / 466（差 16px）。
@@ -499,12 +464,10 @@ export default function DisclosurePage() {
           </Section>
         </div>
 
-        {/* 页脚：把「这是样例」与「去哪核对」并排放，示例数据不伪装成真账。 */}
-        <footer className="mt-8 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 text-[12px] text-ink-3">
+        {/* 页脚：只剩这一行来源 / 口径说明（原来右侧还有个「关于我们 · 联系方式」
+            链接，已按需求删除）——示例数据与账单来源都写清楚，不伪装成别的。 */}
+        <footer className="mt-8 text-[12px] text-ink-3">
           <p>{t('disclosure.footer.sample')}</p>
-          <Link to="/about" className="text-ink-2 transition-colors hover:text-ink">
-            {t('disclosure.footer.contact')}
-          </Link>
         </footer>
       </section>
     </>

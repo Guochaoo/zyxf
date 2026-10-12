@@ -164,7 +164,6 @@ const en = {
   // test/i18n.test.js 强制一致）；items 与 pages/Disclosure/data.js 按**下标**对齐。
   disclosure: {
     title: 'Disclosure',
-    navAria: 'Disclosure contents',
     term: 'Fall 2026',
     status: {
       open: 'Open',
@@ -294,7 +293,6 @@ const en = {
     footer: {
       sample:
         'The course-guide co-build and the writing plan come from the organizing team; the site spending figures come from the Aliyun monthly bills (Mar–Sep 2026, payable amounts, entries with actual charges only); the lecture schedule is still placeholder data.',
-      contact: 'About us · contact',
     },
   },
   settings: {

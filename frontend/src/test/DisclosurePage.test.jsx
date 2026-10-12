@@ -28,27 +28,31 @@ const renderPage = () =>
 const parseMoney = (text) => Number((text.match(/([\d,]+\.\d{2})/) || ['0'])[1].replace(/,/g, ''));
 
 describe('公示栏 · 骨架', () => {
-  // 目录项与区块头一对一：序号 + 标题两处都要对上（anchors 也一起核对）。
-  // ⚠️ 别按「标题出现 2 次」计数——「书院课程指南共建计划」在 02 资料编写计划里
-  // 也是一项（那是计划条目，不是区块头），数出来是 3 个。
-  test('四节与其目录项一一对应', () => {
+  // 区块头 = 「序号 + 标题」，四节一一对应。⚠️ 别按「标题出现 2 次」计数——
+  // 「书院课程指南共建计划」在 02 资料编写计划里也是一项（那是计划条目，不是区块头）。
+  test('四节的区块头序号与标题一一对应', () => {
     const { container } = renderPage();
-    const nav = screen.getByRole('navigation', { name: '公示内容目录' });
     for (const [index, id, title] of [
       ['01', 'lectures', '讲座计划'],
       ['02', 'plans', '资料编写计划'],
       ['03', 'courseGuide', '书院课程指南共建计划'],
       ['04', 'expenses', '本网站经费支出'],
     ]) {
-      const link = nav.querySelector(`a[href="#${id}"]`);
-      expect(link, `目录缺 ${id}`).toBeTruthy();
-      expect(link.textContent).toContain(title);
-      expect(link.textContent).toContain(index);
-
       const head = container.querySelector(`#${id} h2`);
       expect(head.textContent).toContain(title);
       expect(head.textContent).toContain(index);
     }
+  });
+
+  // 顶部目录（01–04 锚点）与页脚的「关于我们 · 联系方式」链接都已按需求删除；
+  // 区块的 id 保留（深链与下面的测试仍在用），改回来会被这两条拦住。
+  test('顶部目录与页脚链接已删除', () => {
+    const { container } = renderPage();
+    expect(screen.queryByRole('navigation')).toBeNull();
+    expect(container.querySelector('a[href^="#"]')).toBeNull();
+    const footer = container.querySelector('footer');
+    expect(footer.querySelector('a')).toBeNull();
+    expect(footer.textContent).toContain('阿里云月度账单');
   });
 
   // 宽度按**内容**给：01 / 02 各 6 列（自然高度 482 / 466，差 16px），03 取 7 列
