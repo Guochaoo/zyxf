@@ -179,7 +179,7 @@ const zh = {
       // 目录与区块头共用同一份文案（序号由页面给出），标题一律不带装饰字符
       courseGuide: { title: '书院课程指南共建计划', meta: '2026-2027 学年 · 长期开放' },
       // 「本网站」：这一节记的是本站（服务器 / 域名 / 存储等）自己的开销，不是书院活动经费
-      expenses: { title: '本网站经费支出', meta: '近 60 天 · 共 {{n}} 笔' },
+      expenses: { title: '本网站经费支出', meta: '2026-03 至 2026-09 · 共 {{n}} 笔' },
     },
     lectures: {
       speakerLabel: '主讲 {{name}}',
@@ -267,6 +267,8 @@ const zh = {
     },
     // 本网站经费支出。预算尚未设置（data.js 的 BUDGET_CENTS === null）→ 小结里
     // 预算 / 结余显示「-」，这一段用 noBudget；`usage` 留到有预算那天再用。
+    // items 与 data.js 的 EXPENSE_BASE **按下标对齐**：账期（月）在 data.js，事由 / 类别在这里。
+    // 内容取自阿里云月度账单概览（2026-03 至 2026-09）的应付金额，只列有实际支出的账目。
     expenses: {
       budget: '预算总额',
       spent: '已支出',
@@ -274,21 +276,25 @@ const zh = {
       usage: '已使用 {{pct}}%',
       noBudget: '预算尚未设置',
       total: '合计 · 共 {{n}} 笔',
-      columns: { date: '日期', item: '事由', category: '类别', handler: '经办', amount: '金额' },
+      // 阿里云账单里的商品名照抄（便于对着账单核），类别是本页归的档；
+      // 服务主体全是「阿里云」，所以没有「经办 / 服务商」列——恒定值的列只是占宽度。
+      columns: { date: '账期', item: '事由', category: '类别', amount: '金额' },
       items: [
-        { item: '期末复习资料印刷（高数 / 线代 / 大物）', category: '印刷', handler: '李同学' },
-        { item: '资料库服务器与域名续费', category: '运维', handler: '王同学' },
-        { item: '讲座讲义与习题册打印', category: '印刷', handler: '张同学' },
-        { item: '讲座物料（易拉宝 / 台签 / 横幅）', category: '物料', handler: '陈同学' },
-        { item: '云端资料库存储扩容', category: '运维', handler: '王同学' },
-        { item: '教师与主讲答谢礼', category: '答谢', handler: '刘同学' },
-        { item: '活动场地布置耗材', category: '物料', handler: '赵同学' },
-        { item: '资料寄送快递费', category: '物流', handler: '赵同学' },
+        { item: '对象存储 OSS', category: '存储' },
+        { item: '.top 域名', category: '域名' },
+        { item: '轻量应用服务器', category: '计算' },
+        { item: '.ASIA 域名', category: '域名' },
+        { item: '智能媒体管理', category: '媒体处理' },
+        { item: '对象存储 OSS', category: '存储' },
+        { item: '智能媒体管理', category: '媒体处理' },
+        { item: '对象存储 OSS', category: '存储' },
+        { item: '智能媒体管理', category: '媒体处理' },
+        { item: '对象存储 OSS', category: '存储' },
       ],
     },
     footer: {
       sample:
-        '课程指南共建计划与资料编写计划来自编写组；讲座日程与本网站经费账目暂为示例数据（尚未接入后台）。',
+        '课程指南共建计划与资料编写计划来自编写组；本网站经费账目取自阿里云月度账单（2026-03 至 2026-09，口径为应付金额，仅列有实际支出的账目）；讲座日程暂为示例数据。',
       contact: '关于我们 · 联系方式',
     },
   },

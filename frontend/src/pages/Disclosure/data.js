@@ -37,15 +37,24 @@ export const COURSE_GUIDE_EMAIL = 'hxhanxuan@stu.xjtu.edu.cn';
  *  预算目前**还没有** → 用 `null` 表示（小结里显示「-」、不画支出率细条），别填 0：
  *  0 会被读成「预算为零」，`null` 才是「还没定」。定了预算就把分写成整数。 */
 export const BUDGET_CENTS = null;
+/** 本网站经费：取自阿里云控制台导出的**月度账单概览** CSV（账期 2026-03 至 2026-09）里的
+ *  「应付金额」，以分为单位存整数（求和不会有浮点误差，页面上的合计由逐行相加得出）。
+ *  只收「应付 > 0」的账目：账单 21 行里有 11 行是 ¥0.00（免费额度 / 全额券抵扣 / 该月无
+ *  用量），列出来只是噪声——口径与来源写在页脚（「标年份与来源」是本页自己的要求）。
+ *  账号 ID / 账号名那几列属于隐私，不进仓库。
+ *  账期只有「月」没有「日」：这里存 'YYYY-MM'，由组件用 Intl 渲染成「2026年9月」。
+ *  与 i18n 的 disclosure.expenses.items **按下标对齐**，增删条目时两边一起改。 */
 export const EXPENSE_BASE = [
-  { id: 'e1', date: at(-52, 10), cents: 528000 },
-  { id: 'e2', date: at(-45, 10), cents: 145000 },
-  { id: 'e3', date: at(-38, 10), cents: 86000 },
-  { id: 'e4', date: at(-30, 10), cents: 112000 },
-  { id: 'e5', date: at(-22, 10), cents: 60000 },
-  { id: 'e6', date: at(-15, 10), cents: 140000 },
-  { id: 'e7', date: at(-9, 10), cents: 48000 },
-  { id: 'e8', date: at(-3, 10), cents: 24000 },
+  { id: 'b1', month: '2026-04', cents: 4 }, // 对象存储 OSS
+  { id: 'b2', month: '2026-05', cents: 2600 }, // .top 域名
+  { id: 'b3', month: '2026-07', cents: 2235 }, // 轻量应用服务器
+  { id: 'b4', month: '2026-07', cents: 800 }, // .ASIA 域名
+  { id: 'b5', month: '2026-07', cents: 19 }, // 智能媒体管理
+  { id: 'b6', month: '2026-07', cents: 1 }, // 对象存储 OSS
+  { id: 'b7', month: '2026-08', cents: 139 }, // 智能媒体管理
+  { id: 'b8', month: '2026-08', cents: 54 }, // 对象存储 OSS
+  { id: 'b9', month: '2026-09', cents: 629 }, // 智能媒体管理
+  { id: 'b10', month: '2026-09', cents: 615 }, // 对象存储 OSS
 ];
 
 export const spentCents = (rows = EXPENSE_BASE) => rows.reduce((sum, r) => sum + r.cents, 0);

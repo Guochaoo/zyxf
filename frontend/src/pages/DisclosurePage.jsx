@@ -22,8 +22,8 @@ import {
  *      （实心墨 > 灰底 > 纯文字），不引入第四个强调色（DESIGN.md §2）；
  *   3. 数字统一 tabular-nums；金额一律右对齐（账目的可核对性靠对齐）。
  *
- * 讲座与经费两节目前仍是样例数据；编写计划与共建计划两节是**真实内容**，
- * 来源见 i18n 的 disclosure.plans / disclosure.courseGuide 段。
+ * 讲座一节目前仍是样例数据；编写计划、共建计划与**本网站经费**三节是真实内容
+ * （经费取自阿里云月度账单，来源与口径见 i18n 的 disclosure.footer 与 data.js 注释）。
  * ============================================================ */
 
 /* 目录与区块头共用同一份定义，序号只写一次。 */
@@ -39,18 +39,18 @@ const SECTIONS = [
 const intlLocale = (lang) => (String(lang || '').startsWith('en') ? 'en-US' : 'zh-CN');
 
 /* 讲座日程用「10月15日」这种可扫读的短日期（下面是星期，两行一起看）；
-   账目用完整日期，便于逐笔核对。两者刻意不同：一个为「什么时候去」，
-   一个为「哪一笔」。 */
+   账目只有**账期（月）**——阿里云月账单没有「日」，所以这里不编一个日出来，
+   宽屏印「2026年9月」、窄屏只留「9月」（事由列会被长账期挤成三行）。
+   两者刻意不同：一个为「什么时候去」，一个为「哪一笔」。 */
 const dayLong = (iso, locale) =>
   new Intl.DateTimeFormat(locale, { month: 'long', day: 'numeric' }).format(new Date(iso));
-const dayFull = (iso, locale) =>
-  new Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(
-    new Date(iso)
-  );
-/* 窄屏上完整日期会把「事由」列挤成三行，所以 640px 以下只留月日
-   （年份在本页恒定，且完整日期在宽屏仍照常显示）。 */
-const dayShort = (iso, locale) =>
-  new Intl.DateTimeFormat(locale, { month: '2-digit', day: '2-digit' }).format(new Date(iso));
+/* 'YYYY-MM' 按**本地时间**构造，不用 new Date('2026-09')——后者按 UTC 解析，
+   UTC+8 下会滑成 9 月 1 日 08:00，跨月风险留给读代码的人是不必要的。 */
+const monthDate = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, 1);
+const monthLong = (ym, locale) =>
+  new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'long' }).format(monthDate(ym));
+const monthShort = (ym, locale) =>
+  new Intl.DateTimeFormat(locale, { month: 'short' }).format(monthDate(ym));
 const weekday = (iso, locale) =>
   new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(new Date(iso));
 const clock = (date, locale) =>
@@ -279,6 +279,8 @@ function CourseGuide() {
 }
 
 /* ---- 04 本网站经费支出：先给三个数（预算 / 已支出 / 结余），再逐笔列账 ----
+   账目取自阿里云月度账单概览：**账期只有月**（没有日），只列有实际支出的账目，
+   金额是账单的「应付金额」。全部服务主体都是阿里云，所以没有「经办 / 服务商」列。
    预算**还没定**（`BUDGET_CENTS === null`）：那就显示「-」，结余同样算不出来也是「-」，
    支出率细条与百分比整块不画——「已使用 57%」这种数是拿预算当分母算的，
    没有预算就没有百分比，别为了这张卡好看编一个（与 02 计划卡不编进度条同一条原则）。 */
@@ -342,9 +344,6 @@ function Expenses({ rows, texts, locale }) {
               <th scope="col" className="hidden px-2 py-2 font-medium sm:table-cell sm:px-3">
                 {t('disclosure.expenses.columns.category')}
               </th>
-              <th scope="col" className="hidden px-2 py-2 font-medium md:table-cell md:px-3">
-                {t('disclosure.expenses.columns.handler')}
-              </th>
               <th scope="col" className="px-2 py-2 text-right font-medium sm:px-3">
                 {t('disclosure.expenses.columns.amount')}
               </th>
@@ -356,17 +355,14 @@ function Expenses({ rows, texts, locale }) {
               return (
                 <tr key={r.id} className="transition-colors hover:bg-hover">
                   <td className="whitespace-nowrap px-2 py-2.5 text-[12px] tabular-nums text-ink-3 sm:px-3">
-                    <span className="sm:hidden">{dayShort(r.date, locale)}</span>
-                    <span className="hidden sm:inline">{dayFull(r.date, locale)}</span>
+                    <span className="sm:hidden">{monthShort(r.month, locale)}</span>
+                    <span className="hidden sm:inline">{monthLong(r.month, locale)}</span>
                   </td>
                   <td className="px-2 py-2.5 text-[13px] text-ink sm:px-3">{text.item}</td>
                   <td className="hidden px-2 py-2.5 sm:table-cell sm:px-3">
                     <span className="whitespace-nowrap rounded-md bg-field px-2 py-0.5 text-[11px] text-ink-2">
                       {text.category}
                     </span>
-                  </td>
-                  <td className="hidden px-2 py-2.5 text-[13px] text-ink-2 md:table-cell md:px-3">
-                    {text.handler}
                   </td>
                   <td className="whitespace-nowrap px-2 py-2.5 text-right text-[13px] font-medium tabular-nums text-ink sm:px-3">
                     {money(r.cents, locale)}
@@ -377,7 +373,7 @@ function Expenses({ rows, texts, locale }) {
             {/* 合计行：colSpan 写满，内部再用 flex 两端对齐——窄屏会隐藏中间列，
                 逐列对位的写法在断点处一定会错位。 */}
             <tr className="bg-field">
-              <td colSpan={5} className="px-2 py-2.5 sm:px-3">
+              <td colSpan={4} className="px-2 py-2.5 sm:px-3">
                 <div className="flex items-baseline justify-between gap-4">
                   <span className="text-[12px] font-medium text-ink">
                     {t('disclosure.expenses.total', { n: rows.length })}

@@ -176,7 +176,7 @@ const en = {
       // Nav and section head share this string; no decorative glyphs in headings
       courseGuide: { title: 'Course & contest guide co-build', meta: 'AY 2026-2027 · Ongoing' },
       // "this site": the section tracks the site's own running costs (server / domain / storage)
-      expenses: { title: 'Spending on this site', meta: 'Last 60 days · {{n}} entries' },
+      expenses: { title: 'Spending on this site', meta: 'Mar–Sep 2026 · {{n}} entries' },
     },
     lectures: {
       speakerLabel: 'Speaker {{name}}',
@@ -268,6 +268,8 @@ const en = {
     },
     // Mirrors zh.js disclosure.expenses. No budget yet (BUDGET_CENTS === null in data.js)
     // → budget / remaining render "-" and noBudget is shown; `usage` waits for a budget.
+    // items line up by index with EXPENSE_BASE (billing month lives in data.js).
+    // Figures come from the Aliyun monthly bills (Mar–Sep 2026), payable amounts only.
     expenses: {
       budget: 'Budget',
       spent: 'Spent',
@@ -275,21 +277,23 @@ const en = {
       usage: '{{pct}}% used',
       noBudget: 'No budget set yet',
       total: 'Total · {{n}} entries',
-      columns: { date: 'Date', item: 'Purpose', category: 'Category', handler: 'Handled by', amount: 'Amount' },
+      columns: { date: 'Billing month', item: 'Purpose', category: 'Category', amount: 'Amount' },
       items: [
-        { item: 'Printing final-review materials (calculus / linear algebra / physics)', category: 'Printing', handler: 'Li' },
-        { item: 'Server and domain renewal for the library', category: 'Ops', handler: 'Wang' },
-        { item: 'Lecture handouts and exercise books', category: 'Printing', handler: 'Zhang' },
-        { item: 'Lecture materials (banners / table signs)', category: 'Materials', handler: 'Chen' },
-        { item: 'Cloud storage expansion', category: 'Ops', handler: 'Wang' },
-        { item: 'Thank-you gifts for lecturers', category: 'Gifts', handler: 'Liu' },
-        { item: 'Venue decoration supplies', category: 'Materials', handler: 'Zhao' },
-        { item: 'Courier fees for mailed materials', category: 'Logistics', handler: 'Zhao' },
+        { item: 'Object Storage (OSS)', category: 'Storage' },
+        { item: '.top domain', category: 'Domain' },
+        { item: 'Lightweight server (SWAS)', category: 'Compute' },
+        { item: '.ASIA domain', category: 'Domain' },
+        { item: 'Intelligent Media Management', category: 'Media' },
+        { item: 'Object Storage (OSS)', category: 'Storage' },
+        { item: 'Intelligent Media Management', category: 'Media' },
+        { item: 'Object Storage (OSS)', category: 'Storage' },
+        { item: 'Intelligent Media Management', category: 'Media' },
+        { item: 'Object Storage (OSS)', category: 'Storage' },
       ],
     },
     footer: {
       sample:
-        'The course-guide co-build and the writing plan come from the organizing team; the lecture schedule and the site spending entries are still placeholder data (not wired to the backend yet).',
+        'The course-guide co-build and the writing plan come from the organizing team; the site spending figures come from the Aliyun monthly bills (Mar–Sep 2026, payable amounts, entries with actual charges only); the lecture schedule is still placeholder data.',
       contact: 'About us · contact',
     },
   },

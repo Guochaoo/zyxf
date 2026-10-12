@@ -249,6 +249,46 @@ describe('公示栏 · 04 本网站经费支出', () => {
     expect(parseMoney(screen.getByText('已支出').nextElementSibling.textContent)).toBeCloseTo(sum, 2);
   });
 
+  // 账目取自阿里云月度账单概览（2026-03 至 2026-09，口径为应付金额，只列有实际支出的账目）。
+  // 数字是从账单里抄的：更新账单时要连这里的总额一起改——这正是这条断言存在的意义，
+  // 公示页上的金额不能因为改数据而被悄悄改动。
+  test('账目与账单一致：10 笔、合计 ¥70.96', () => {
+    renderPage();
+    expect(EXPENSE_BASE).toHaveLength(10);
+    expect(spentCents(EXPENSE_BASE)).toBe(7096);
+    expect(parseMoney(screen.getByText('已支出').nextElementSibling.textContent)).toBeCloseTo(70.96, 2);
+    expect(
+      parseMoney(screen.getByText('合计 · 共 10 笔').nextElementSibling.textContent)
+    ).toBeCloseTo(70.96, 2);
+  });
+
+  test('逐条：账期（年）+ 事由 + 类别都对上字典，且不出现「日」', () => {
+    const { container } = renderPage();
+    const items = i18n.t('disclosure.expenses.items', { returnObjects: true });
+    expect(items).toHaveLength(EXPENSE_BASE.length);
+
+    const rows = [...container.querySelectorAll('#expenses tbody tr')].slice(0, -1);
+    expect(rows).toHaveLength(EXPENSE_BASE.length);
+    EXPENSE_BASE.forEach((r, i) => {
+      const text = rows[i].textContent;
+      expect(text).toContain(items[i].item);
+      expect(text).toContain(items[i].category);
+      expect(text).toContain(r.month.slice(0, 4)); // 账期年份
+    });
+    const card = container.querySelector('#expenses');
+    // 月账单没有「日」：账期列不许编出具体日期
+    expect(card.textContent).not.toMatch(/\d+月\d+日/);
+    // 账期由 Intl 渲染（zh → 2026年9月），源码里没有写死的月份字面量
+    expect(card.textContent).toContain('2026年9月');
+  });
+
+  test('列头是「账期」，且没有「经办 / 服务商」列（服务主体恒定，不占宽度）', () => {
+    renderPage();
+    expect(screen.getByText('账期')).toBeInTheDocument();
+    expect(screen.queryByText('日期')).toBeNull();
+    expect(screen.queryByText('经办')).toBeNull();
+  });
+
   // 预算还没定（data.js 的 BUDGET_CENTS === null）：显示「-」，结余同样算不出来也是「-」，
   // 支出率细条与百分比整块不画——分母不存在，别为了这张卡好看编一个百分比。
   test('预算未设置时显示「-」，且不画支出率 / 百分比', () => {
