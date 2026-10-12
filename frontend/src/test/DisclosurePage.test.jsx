@@ -50,13 +50,19 @@ describe('公示栏 · 骨架', () => {
     }
   });
 
-  // 宽屏按内容分列（5 / 7 / 12 / 12），且 items-start 让每张卡按自身内容取高
-  // （不被同行最高的那张拉伸）。改回去不易被察觉，所以钉住。
-  test('宽屏按内容分列（5 / 7 / 12 / 12）且卡片不被拉伸', () => {
+  // 宽屏按内容分列（5 / 7 / 12 / 12），且同一行的卡片**等高**：矮卡的下方留白收进
+  // 卡片内部，而不是在两张卡之间留一个洞（1280 下实测差 136px）。改回去不易被察觉。
+  test('宽屏按内容分列（5 / 7 / 12 / 12）且同行卡片等高', () => {
     const { container } = renderPage();
     const row = container.querySelector('#lectures').parentElement;
     expect(row.className).toContain('lg:grid-cols-12');
-    expect(row.className).toContain('items-start');
+    expect(row.className).toContain('items-stretch');
+    expect(row.className).not.toContain('items-start');
+
+    // 03 内部那三块面板同理（参与方式总比两张清单高）
+    const panels = container.querySelector('#courseGuide ul').closest('div').parentElement;
+    expect(panels.className).toContain('items-stretch');
+    expect(panels.className).not.toContain('items-start');
 
     const spans = {
       lectures: 'lg:col-span-5',

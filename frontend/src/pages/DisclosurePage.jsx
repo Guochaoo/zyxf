@@ -221,7 +221,9 @@ function CourseGuide() {
         {t('disclosure.courseGuide.lead')}
       </p>
 
-      <div className="mt-3.5 grid grid-cols-1 items-start gap-3 @[720px]:grid-cols-2 @[1080px]:grid-cols-3">
+      {/* 三块面板同样等高（`items-stretch`）：参与方式的文字量总比两张清单多，
+          同排拉伸后两张清单卡下方不会留洞，多出来的 36–80px 变成卡内底部留白 */}
+      <div className="mt-3.5 grid grid-cols-1 items-stretch gap-3 @[720px]:grid-cols-2 @[1080px]:grid-cols-3">
         <GuideList heading={guide.title} intro={guide.intro} items={guide.items ?? []} />
         <GuideList heading={contest.title} intro={contest.intro} items={contest.items ?? []} />
 
@@ -245,11 +247,16 @@ function CourseGuide() {
                 {COURSE_GUIDE_EMAIL}
               </a>
             </p>
-            {/* 「邮件请注明」一行：标签用三级色、内容用次级色，换行由顿号承担
-                （不用 · 分隔的 chips——行首会甩出一个孤立的点） */}
+            {/* 「邮件请注明」一行：标签用三级色、内容用次级色。每一项自己 nowrap，
+                分隔符（zh 顿号 / en 逗号）跟着前一项——窄面板里只会整项换行，
+                不会把「志愿汇编号（选择工时）」断成两行（1280 下出现过孤立的两字行） */}
             <div className="flex flex-wrap items-baseline gap-x-2">
               <span className="text-[12px] text-ink-3">{join.attachLabel}</span>
-              <span className="text-[12px] text-ink-2">{join.attach}</span>
+              {(join.attach ?? []).map((it, i, list) => (
+                <span key={it} className="whitespace-nowrap text-[12px] text-ink-2">
+                  {i < list.length - 1 ? `${it}${join.attachSep}` : it}
+                </span>
+              ))}
             </div>
             {/* 奖励：本节的「数字」。与资料编写计划「工资」列同一档处理——
                 13px / 500 / tabular-nums / --ink，比四周的说明文字重一档 */}
@@ -422,10 +429,12 @@ export default function DisclosurePage() {
           ))}
         </nav>
 
-        {/* 错落栅格：01 讲座 5 列（行短）与 02 编写计划 7 列（四列表，吃宽度）并排，
-            03 共建计划（清单 + 参与方式）与 04 经费支出各占一行全宽；items-start
-            让每张卡按自身内容取高。 */}
-        <div className="mt-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+        {/* 分列栅格：01 讲座 5 列（行短）与 02 编写计划 7 列（四列表，吃宽度）并排，
+            03 共建计划（清单 + 参与方式）与 04 经费支出各占一行全宽。
+            `items-stretch`（默认值，这里显式写出来）：同一行的卡片**等高**，矮卡的下方
+            留白收进卡片内部，而不是在两张卡之间留一个洞——实测 1280 下 01 因为元信息
+            折行长到 602px、02 只有 466px，用 `items-start` 时 02 下面会空 136px。 */}
+        <div className="mt-4 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-12">
           <Section
             id="lectures"
             index="01"

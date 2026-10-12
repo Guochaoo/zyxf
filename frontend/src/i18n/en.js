@@ -246,8 +246,16 @@ const en = {
         open: 'Students of any major or year may contribute to and help maintain the guides.',
         submit: 'Please send your contribution by email to',
         attachLabel: 'Please state in the email',
-        attach:
-          'class, name, student ID, Alipay account (payment option), Zhiyuanhui ID (service-hours option)',
+        // Separator lives in the dictionary (zh uses "、"); each item renders nowrap,
+        // so wraps only happen between items, never inside one.
+        attach: [
+          'class',
+          'name',
+          'student ID',
+          'Alipay account (payment option)',
+          'Zhiyuanhui ID (service-hours option)',
+        ],
+        attachSep: ',',
         rewardLabel: 'Reward',
         reward: '¥200 per guide',
         review: 'Once a contribution passes review, we will contact the author and issue the reward.',
