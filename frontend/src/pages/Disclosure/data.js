@@ -28,6 +28,11 @@ export const LECTURE_BASE = [
   { id: 'l6', start: at(24, 19), minutes: LECTURE_MINUTES },
 ];
 
+// 课程指南共建计划的投稿邮箱。它是**数据**而不是文案：i18n 字典里的「中文不含
+// 未翻译英文」校验会把这种纯 ASCII 串判成漏翻译（见 test/i18n.test.js），而且它
+// 与日期 / 金额同类——改版式时不该顺手改掉；只有换投稿地址才动这一行。
+export const COURSE_GUIDE_EMAIL = 'hxhanxuan@stu.xjtu.edu.cn';
+
 /** 经费：金额一律以**分**为单位存整数，求和不会有浮点误差。 */
 export const BUDGET_CENTS = 2000000; // ¥20,000.00
 export const EXPENSE_BASE = [

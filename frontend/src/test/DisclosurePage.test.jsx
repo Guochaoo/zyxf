@@ -2,12 +2,18 @@ import { describe, test, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import DisclosurePage from '../pages/DisclosurePage.jsx';
-import { EXPENSE_BASE, LECTURE_BASE, spentCents } from '../pages/Disclosure/data.js';
+import {
+  COURSE_GUIDE_EMAIL,
+  EXPENSE_BASE,
+  LECTURE_BASE,
+  spentCents,
+} from '../pages/Disclosure/data.js';
 import i18n from '../i18n/index.js';
 
 // 公示栏（/disclosure）的版式样例。这里守的是三类**内容契约**，不是像素：
 // 讲座状态必须由时间推导、进度条数值必须与数据一致、账目合计必须等于逐行之和
 // （合计写死过就会在加减条目时静默错账——公示页最不能错的就是这个）。
+// 共建计划一节守的是「投稿邮箱可点、两条线清单逐条在页面上」。
 const renderPage = () =>
   render(
     <MemoryRouter>
@@ -21,29 +27,43 @@ const renderPage = () =>
 const parseMoney = (text) => Number((text.match(/([\d,]+\.\d{2})/) || ['0'])[1].replace(/,/g, ''));
 
 describe('公示栏 · 骨架', () => {
-  test('三节与其目录项一一对应', () => {
-    renderPage();
-    for (const [index, title] of [
-      ['01', '讲座计划'],
-      ['02', '资料编写计划'],
-      ['03', '经费支出'],
+  // 目录项与区块头一对一：序号 + 标题两处都要对上（anchors 也一起核对）。
+  // ⚠️ 别按「标题出现 2 次」计数——「书院课程指南共建计划」在 02 资料编写计划里
+  // 也是一项（那是计划条目，不是区块头），数出来是 3 个。
+  test('四节与其目录项一一对应', () => {
+    const { container } = renderPage();
+    const nav = screen.getByRole('navigation', { name: '公示内容目录' });
+    for (const [index, id, title] of [
+      ['01', 'lectures', '讲座计划'],
+      ['02', 'plans', '资料编写计划'],
+      ['03', 'courseGuide', '书院课程指南共建计划'],
+      ['04', 'expenses', '经费支出'],
     ]) {
-      // 目录 + 区块头各一处标题
-      expect(screen.getAllByText(title).length).toBe(2);
-      expect(screen.getAllByText(index).length).toBe(2);
+      const link = nav.querySelector(`a[href="#${id}"]`);
+      expect(link, `目录缺 ${id}`).toBeTruthy();
+      expect(link.textContent).toContain(title);
+      expect(link.textContent).toContain(index);
+
+      const head = container.querySelector(`#${id} h2`);
+      expect(head.textContent).toContain(title);
+      expect(head.textContent).toContain(index);
     }
-    expect(screen.getByRole('navigation', { name: '公示内容目录' })).toBeInTheDocument();
   });
 
-  // 宽屏按内容分列（5 / 7 / 12），且 items-start 让每张卡按自身内容取高
+  // 宽屏按内容分列（5 / 7 / 12 / 12），且 items-start 让每张卡按自身内容取高
   // （不被同行最高的那张拉伸）。改回去不易被察觉，所以钉住。
-  test('宽屏按内容分列（5 / 7 / 12）且卡片不被拉伸', () => {
+  test('宽屏按内容分列（5 / 7 / 12 / 12）且卡片不被拉伸', () => {
     const { container } = renderPage();
     const row = container.querySelector('#lectures').parentElement;
     expect(row.className).toContain('lg:grid-cols-12');
     expect(row.className).toContain('items-start');
 
-    const spans = { lectures: 'lg:col-span-5', plans: 'lg:col-span-7', expenses: 'lg:col-span-12' };
+    const spans = {
+      lectures: 'lg:col-span-5',
+      plans: 'lg:col-span-7',
+      courseGuide: 'lg:col-span-12',
+      expenses: 'lg:col-span-12',
+    };
     for (const [id, span] of Object.entries(spans)) {
       expect(container.querySelector(`#${id}`).className).toContain(span);
     }
@@ -153,7 +173,47 @@ describe('公示栏 · 02 资料编写计划', () => {
   });
 });
 
-describe('公示栏 · 03 经费支出', () => {
+describe('公示栏 · 03 书院课程指南共建计划', () => {
+  test('课程 / 竞赛两条线各有一份清单，条目与字典逐条对齐（不是概括性的一句话）', () => {
+    const { container } = renderPage();
+    const card = container.querySelector('#courseGuide');
+    for (const key of ['guide', 'contest']) {
+      const block = i18n.t(`disclosure.courseGuide.${key}`, { returnObjects: true });
+      expect(block.items.length).toBeGreaterThanOrEqual(5);
+      expect(card.textContent).toContain(block.title);
+      expect(card.textContent).toContain(block.intro);
+      for (const it of block.items) expect(card.textContent).toContain(it);
+    }
+  });
+
+  test('投稿邮箱是 mailto 链接（地址来自 data.js，不写进字典）', () => {
+    const { container } = renderPage();
+    const link = container.querySelector('#courseGuide a[href^="mailto:"]');
+    expect(link).toBeTruthy();
+    expect(link.getAttribute('href')).toBe(`mailto:${COURSE_GUIDE_EMAIL}`);
+    expect(link.textContent).toBe(COURSE_GUIDE_EMAIL);
+  });
+
+  test('写明「邮件请注明」的信息与两种奖励口径', () => {
+    const { container } = renderPage();
+    const card = container.querySelector('#courseGuide');
+    for (const label of ['班级', '姓名', '学号', '支付宝账号（选择工资）', '志愿汇编号（选择工时）']) {
+      expect(card.textContent).toContain(label);
+    }
+    // 经审核通过后才联系作者并发放奖励，不是「投了就有」
+    expect(card.textContent).toContain('经审核通过后');
+    expect(card.textContent).toContain('发放相应奖励');
+  });
+
+  test('提醒标注年份与来源（考核方式 / 竞赛时间会变）', () => {
+    const { container } = renderPage();
+    const note = i18n.t('disclosure.courseGuide.note');
+    expect(note).toContain('年份');
+    expect(container.querySelector('#courseGuide').textContent).toContain(note);
+  });
+});
+
+describe('公示栏 · 04 经费支出', () => {
   test('合计行等于逐行金额之和（改数据不会错账）', () => {
     const { container } = renderPage();
     const rows = [...container.querySelectorAll('#expenses tbody tr')];

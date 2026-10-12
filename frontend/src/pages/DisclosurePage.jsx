@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import PageTitle from '../components/PageTitle.jsx';
 import {
   BUDGET_CENTS,
+  COURSE_GUIDE_EMAIL,
   EXPENSE_BASE,
   LECTURE_BASE,
   spentCents,
@@ -12,24 +13,25 @@ import {
 /* ============================================================
  * 公示栏（/disclosure）
  *
- * 排版主张：三种内容（讲座 = 时间序列、编写计划 = 四列表、经费 = 账目）
- * 各用各的版式，但共用一套骨架，于是看起来是「一份文件的三节」而不是
- * 「三个小组件」：
+ * 排版主张：四种内容（讲座 = 时间序列、编写计划 = 四列表、共建计划 = 清单 + 参与
+ * 方式、经费 = 账目）各用各的版式，但共用一套骨架，于是看起来是「一份文件的四节」
+ * 而不是「四个小组件」：
  *   1. 区块头统一为「序号 + 标题 + 右侧元信息」（序号在目录里复用，
  *      点目录能对上号）；
  *   2. 行统一为「左对齐信息列 + 右侧数值 / 状态位」，状态只用**单色**三档
  *      （实心墨 > 灰底 > 纯文字），不引入第四个强调色（DESIGN.md §2）；
  *   3. 数字统一 tabular-nums；金额一律右对齐（账目的可核对性靠对齐）。
  *
- * 讲座与经费两节目前仍是样例数据；编写计划一节是**真实计划**，来源见
- * i18n 的 disclosure.plans 段。
+ * 讲座与经费两节目前仍是样例数据；编写计划与共建计划两节是**真实内容**，
+ * 来源见 i18n 的 disclosure.plans / disclosure.courseGuide 段。
  * ============================================================ */
 
 /* 目录与区块头共用同一份定义，序号只写一次。 */
 const SECTIONS = [
   { id: 'lectures', index: '01' },
   { id: 'plans', index: '02' },
-  { id: 'expenses', index: '03' },
+  { id: 'courseGuide', index: '03' },
+  { id: 'expenses', index: '04' },
 ];
 
 /* ---- 语言相关的格式化：日期 / 时间 / 金额全部走 Intl，源码里不出现
@@ -181,7 +183,89 @@ function Plans({ items }) {
     </div>
   );
 }
-/* ---- 03 经费支出：先给三个数（预算 / 已支出 / 结余），再逐笔列账 ---- */
+
+/* ---- 03 书院课程指南共建计划：两条线各一份「整理什么」的清单 + 参与方式 ----
+   读法上分三段，段与段之间靠留白与表面色深浅分开（不画线）：
+     1. 导语；
+     2. 三块 `bg-inset` 内嵌面板：课程指南 / 竞赛指南 / 参与方式 —— 宽容器里并排
+        （`@[720px]` 两块一行、参与方式横跨两列，`@[1080px]` 起三块各占一列）；
+     3. 注意：要求标注年份与来源，是给贡献者的约束，不做成清单项。
+   清单里的圆点是自绘的 4px 静音标记（`bg-ink-3`），不用 `list-disc`：盘符圆点的
+   大小随字体变，且会带上默认缩进（DESIGN.md §2 的单色语汇里不需要第五种符号）。 */
+function GuideList({ heading, intro, items }) {
+  return (
+    <div className="rounded-control bg-inset px-4 py-3.5">
+      <h3 className="text-[13px] font-semibold text-ink">{heading}</h3>
+      <p className="mt-1 text-[12px] text-ink-3">{intro}</p>
+      <ul className="mt-2.5 space-y-1.5">
+        {items.map((it) => (
+          <li key={it} className="flex gap-2.5 text-[13px] leading-[20px] text-ink-2">
+            <span aria-hidden="true" className="mt-2 size-1 shrink-0 rounded-full bg-ink-3" />
+            <span className="min-w-0">{it}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function CourseGuide() {
+  const { t } = useTranslation();
+  const guide = t('disclosure.courseGuide.guide', { returnObjects: true, defaultValue: {} });
+  const contest = t('disclosure.courseGuide.contest', { returnObjects: true, defaultValue: {} });
+  const join = t('disclosure.courseGuide.join', { returnObjects: true, defaultValue: {} });
+
+  return (
+    <>
+      <p className="max-w-[70ch] text-[13px] leading-[22px] text-ink-2">
+        {t('disclosure.courseGuide.lead')}
+      </p>
+
+      <div className="mt-3.5 grid grid-cols-1 items-start gap-3 @[720px]:grid-cols-2 @[1080px]:grid-cols-3">
+        <GuideList heading={guide.title} intro={guide.intro} items={guide.items ?? []} />
+        <GuideList heading={contest.title} intro={contest.intro} items={contest.items ?? []} />
+
+        {/* 参与方式：横跨两列时是「标题在左、说明在右」的横条，到了三栏模式
+            （`@[1080px]` 起，面板只剩一列宽）落回上下两行。
+            ⚠️ 这里必须用**外层**（Section）的容器宽度分档：`@container` 只对
+            后代生效，给面板自己挂 `@container` 再写 `@[560px]:` 判的是外面那张卡
+            的宽度——面板只有 443px 也会走进两栏，正文被压成 271px 一列。 */}
+        <div className="rounded-control bg-inset px-4 py-3.5 @[720px]:col-span-2 @[1080px]:col-span-1 @[720px]:grid @[720px]:grid-cols-[7.5rem_1fr] @[720px]:gap-x-5 @[1080px]:block">
+          <h3 className="text-[13px] font-semibold text-ink">{join.title}</h3>
+          <div className="mt-2 space-y-1.5 text-[13px] leading-[22px] text-ink-2 @[720px]:mt-0 @[1080px]:mt-2">
+            <p>{join.open}</p>
+            <p>
+              {join.submit}{' '}
+              {/* 邮箱不是链接蓝色的锚文本：本页除页脚导航外没有蓝色，用墨色 + 下划线
+                  表达「可点」，暗色下也随之反转 */}
+              <a
+                href={`mailto:${COURSE_GUIDE_EMAIL}`}
+                className="font-medium text-ink underline decoration-ink-3 underline-offset-2 transition-colors hover:decoration-ink"
+              >
+                {COURSE_GUIDE_EMAIL}
+              </a>
+            </p>
+            {/* 「邮件请注明」一行：标签用三级色、内容用次级色，换行由顿号承担
+                （不用 · 分隔的 chips——行首会甩出一个孤立的点） */}
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <span className="text-[12px] text-ink-3">{join.attachLabel}</span>
+              <span className="text-[12px] text-ink-2">{join.attach}</span>
+            </div>
+            <p>{join.review}</p>
+            <p>{join.welcome}</p>
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-3 flex flex-wrap items-baseline gap-x-2 text-[12px] text-ink-3">
+        <span className="font-medium text-ink-2">{t('disclosure.courseGuide.noteLabel')}</span>
+        <span>{t('disclosure.courseGuide.note')}</span>
+      </p>
+    </>
+  );
+}
+
+/* ---- 04 经费支出：先给三个数（预算 / 已支出 / 结余），再逐笔列账 ---- */
 function Expenses({ rows, texts, locale }) {
   const { t } = useTranslation();
   const spent = spentCents(rows);
@@ -333,7 +417,8 @@ export default function DisclosurePage() {
         </nav>
 
         {/* 错落栅格：01 讲座 5 列（行短）与 02 编写计划 7 列（四列表，吃宽度）并排，
-            03 经费支出独占一行全宽；items-start 让每张卡按自身内容取高。 */}
+            03 共建计划（清单 + 参与方式）与 04 经费支出各占一行全宽；items-start
+            让每张卡按自身内容取高。 */}
         <div className="mt-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
           <Section
             id="lectures"
@@ -359,8 +444,18 @@ export default function DisclosurePage() {
           </Section>
 
           <Section
-            id="expenses"
+            id="courseGuide"
             index="03"
+            className="@container lg:col-span-12"
+            title={t('disclosure.sections.courseGuide.title')}
+            meta={t('disclosure.sections.courseGuide.meta')}
+          >
+            <CourseGuide />
+          </Section>
+
+          <Section
+            id="expenses"
+            index="04"
             className="lg:col-span-12"
             title={t('disclosure.sections.expenses.title')}
             meta={t('disclosure.sections.expenses.meta', { n: EXPENSE_BASE.length })}

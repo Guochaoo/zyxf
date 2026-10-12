@@ -173,6 +173,8 @@ const en = {
     sections: {
       lectures: { title: 'Lecture schedule', meta: '{{term}} · {{n}} sessions' },
       plans: { title: 'Material writing plan', meta: 'AY 2026-2027 · {{n}} items' },
+      // Nav and section head share this string; no decorative glyphs in headings
+      courseGuide: { title: 'Course & contest guide co-build', meta: 'AY 2026-2027 · Ongoing' },
       expenses: { title: 'Spending', meta: 'Last 60 days · {{n}} entries' },
     },
     lectures: {
@@ -209,6 +211,48 @@ const en = {
         { title: 'Course guide co-build', time: 'Long term', people: '3-4', pay: '¥80 per guide' },
       ],
     },
+    // Mirrors zh.js disclosure.courseGuide (keys enforced by test/i18n.test.js).
+    // Written register, matching the Chinese: "may / please / once reviewed",
+    // no second-person imperatives. The submission address lives in
+    // pages/Disclosure/data.js as data, not copy.
+    courseGuide: {
+      lead: 'This plan compiles a practical set of course and contest guides for every major at the college, as a reference for coursework and contest preparation.',
+      guide: {
+        title: 'Course guides',
+        intro: 'For the core courses of each major, covering:',
+        items: [
+          'Course content and study priorities',
+          'How the grade is made up: coursework, labs, midterms, finals',
+          'Recommended study methods and revision experience',
+          'Textbooks, online courses, problem sets, notes and other resources',
+          'Common difficulties and easy-to-miss points',
+        ],
+      },
+      contest: {
+        title: 'Contest guides',
+        intro: 'For the contests our students most often enter, covering:',
+        items: [
+          'What each contest involves, its format and who it suits',
+          'The basic skills required to take part',
+          'Team formation and division of work',
+          'Preparation schedule and study route',
+          'Past experience, strong projects and related resources',
+        ],
+      },
+      join: {
+        title: 'How to contribute',
+        open: 'Students of any major or year may contribute to and help maintain the guides.',
+        submit: 'Please send your contribution by email to',
+        attachLabel: 'Please state in the email',
+        attach:
+          'class, name, student ID, Alipay account (payment option), Zhiyuanhui ID (service-hours option)',
+        review: 'Once a contribution passes review, we will contact the author and issue the corresponding reward.',
+        welcome:
+          'Students who have taken a course may share their study experience, those who have entered a contest may write up their preparation, and good resources or other useful material are welcome at any time.',
+      },
+      noteLabel: 'Note',
+      note: 'Assessment formats and contest dates may change over time; please mark the year and the source of such information.',
+    },
     expenses: {
       budget: 'Budget',
       spent: 'Spent',
@@ -229,7 +273,7 @@ const en = {
     },
     footer: {
       sample:
-        'The writing plan comes from the team’s AY 2026-2027 work plan; lectures and spending are still placeholder data (not wired to the backend yet).',
+        'The course-guide co-build and the writing plan come from the organizing team; lectures and spending are still placeholder data (not wired to the backend yet).',
       contact: 'About us · contact',
     },
   },
