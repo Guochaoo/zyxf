@@ -251,6 +251,12 @@ function CourseGuide() {
               <span className="text-[12px] text-ink-3">{join.attachLabel}</span>
               <span className="text-[12px] text-ink-2">{join.attach}</span>
             </div>
+            {/* 奖励：本节的「数字」。与资料编写计划「工资」列同一档处理——
+                13px / 500 / tabular-nums / --ink，比四周的说明文字重一档 */}
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <span className="text-[12px] text-ink-3">{join.rewardLabel}</span>
+              <span className="text-[13px] font-medium tabular-nums text-ink">{join.reward}</span>
+            </div>
             <p>{join.review}</p>
             <p>{join.welcome}</p>
           </div>

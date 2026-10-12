@@ -208,13 +208,15 @@ const en = {
         { title: 'Complex Analysis tutor', time: 'By end of December', people: '3', pay: '¥750 total' },
         { title: 'Analog Electronics tutor', time: 'By end of December', people: '4', pay: '¥750 total' },
         { title: 'Team lead assistant', time: 'Ongoing', people: '1-2', pay: 'Case by case' },
-        { title: 'Course guide co-build', time: 'Long term', people: '3-4', pay: '¥80 per guide' },
+        // "Course guide co-build" is deliberately absent: it has its own section (03),
+        // where headcount / timeframe / reward live; a row here would duplicate it.
       ],
     },
     // Mirrors zh.js disclosure.courseGuide (keys enforced by test/i18n.test.js).
     // Written register, matching the Chinese: "may / please / once reviewed",
     // no second-person imperatives. The submission address lives in
-    // pages/Disclosure/data.js as data, not copy.
+    // pages/Disclosure/data.js as data, not copy; the reward stays a display string
+    // here (same as the "Pay" column above — Intl would render ¥200 as ¥200.00).
     courseGuide: {
       lead: 'This plan compiles a practical set of course and contest guides for every major at the college, as a reference for coursework and contest preparation.',
       guide: {
@@ -246,7 +248,9 @@ const en = {
         attachLabel: 'Please state in the email',
         attach:
           'class, name, student ID, Alipay account (payment option), Zhiyuanhui ID (service-hours option)',
-        review: 'Once a contribution passes review, we will contact the author and issue the corresponding reward.',
+        rewardLabel: 'Reward',
+        reward: '¥200 per guide',
+        review: 'Once a contribution passes review, we will contact the author and issue the reward.',
         welcome:
           'Students who have taken a course may share their study experience, those who have entered a contest may write up their preparation, and good resources or other useful material are welcome at any time.',
       },

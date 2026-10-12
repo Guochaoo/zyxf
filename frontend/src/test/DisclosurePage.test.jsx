@@ -133,10 +133,10 @@ describe('公示栏 · 01 讲座计划', () => {
 });
 
 describe('公示栏 · 02 资料编写计划', () => {
-  test('12 项计划全渲染，且每项四列都有内容（资料名 / 时间 / 人数 / 工资）', () => {
+  test('11 项计划全渲染，且每项四列都有内容（资料名 / 时间 / 人数 / 工资）', () => {
     const { container } = renderPage();
     const items = i18n.t('disclosure.plans.items', { returnObjects: true });
-    expect(items).toHaveLength(12);
+    expect(items).toHaveLength(11);
 
     const rows = [...container.querySelectorAll('#plans li')];
     expect(rows).toHaveLength(items.length);
@@ -147,6 +147,16 @@ describe('公示栏 · 02 资料编写计划', () => {
       expect(text).toContain(it.people);
       expect(text).toContain(it.pay);
     });
+  });
+
+  // 共建计划有自己的区块（03），时间 / 人数 / 奖励都在那一节里；
+  // 表格再留一行就是同一件事写两份（改一处漏一处），所以钉住「不重复出现」。
+  test('共建计划不在编写计划表里重复出现', () => {
+    const { container } = renderPage();
+    const rows = [...container.querySelectorAll('#plans li')];
+    expect(rows.some((li) => li.textContent.includes('书院课程指南共建计划'))).toBe(false);
+    // 区块头里的「共 N 项」跟着实际条数走
+    expect(container.querySelector('#plans').textContent).toContain('共 11 项');
   });
 
   test('表头四列来自字典，与文档要求的四项一致', () => {
@@ -194,15 +204,17 @@ describe('公示栏 · 03 书院课程指南共建计划', () => {
     expect(link.textContent).toBe(COURSE_GUIDE_EMAIL);
   });
 
-  test('写明「邮件请注明」的信息与两种奖励口径', () => {
+  test('写明「邮件请注明」的信息与奖励口径', () => {
     const { container } = renderPage();
     const card = container.querySelector('#courseGuide');
     for (const label of ['班级', '姓名', '学号', '支付宝账号（选择工资）', '志愿汇编号（选择工时）']) {
       expect(card.textContent).toContain(label);
     }
+    // 奖励每篇 ¥200（金额只写在这里，编写计划表里已不再重复）
+    expect(card.textContent).toContain('每篇指南 ¥200');
     // 经审核通过后才联系作者并发放奖励，不是「投了就有」
     expect(card.textContent).toContain('经审核通过后');
-    expect(card.textContent).toContain('发放相应奖励');
+    expect(card.textContent).toContain('发放奖励');
   });
 
   test('提醒标注年份与来源（考核方式 / 竞赛时间会变）', () => {
