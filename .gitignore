@@ -2,6 +2,10 @@ node_modules
 dist
 .env
 .env.local
+# 手工留的 .env 备份（.env.bak-*、.env.<name>.bak）也含密钥，绝不入库；
+# 生产机上这类备份已统一收到 /root/zyxf-env-backups/（600 root:root）
+.env.bak*
+.env.*.bak
 *.log
 data.db
 data.db-*
