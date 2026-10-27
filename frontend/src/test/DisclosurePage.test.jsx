@@ -12,7 +12,7 @@ import {
 } from '../pages/Disclosure/data.js';
 import i18n from '../i18n/index.js';
 
-// 公示栏（/disclosure）的版式样例。这里守的是三类**内容契约**，不是像素：
+// 公示栏（/disclosure）的内容契约。这里守的是三类**内容契约**，不是像素：
 // 讲座状态必须由时间推导、进度条数值必须与数据一致、账目合计必须等于逐行之和
 // （合计写死过就会在加减条目时静默错账——公示页最不能错的就是这个）。
 // 共建计划一节守的是「投稿邮箱可点、两条线清单逐条在页面上」。
@@ -143,12 +143,12 @@ describe('公示栏 · 01 讲座计划', () => {
       (it) => new Date(it.start).getTime() + it.minutes * 60000 < Date.now()
     ).length;
     expect(screen.getAllByText('已结束')).toHaveLength(done);
-    expect(screen.getAllByText('报名中')).toHaveLength(LECTURE_BASE.length - done);
-    expect(done).toBeGreaterThan(0); // 样例里过去 / 未来两种状态都要有
-    expect(done).toBeLessThan(LECTURE_BASE.length);
+    // 三场都是已举办的真实活动（2026-09-27 / 10-23 / 10-25），所以没有「报名中」
+    expect(screen.queryAllByText('报名中')).toHaveLength(0);
+    expect(done).toBe(LECTURE_BASE.length);
   });
 
-  test('时间按 90 分钟时长给出起止（不是只印开始时间）', () => {
+  test('时间按各自的时长给出起止（不是只印开始时间）', () => {
     renderPage();
     const fmt = (d) =>
       new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
@@ -165,7 +165,7 @@ describe('公示栏 · 01 讲座计划', () => {
     for (const [label, n] of Object.entries(counts)) {
       expect(screen.getAllByText(label)).toHaveLength(n);
     }
-    // 样例里必须存在一个非 19:00 的时段，否则「时长参与渲染」根本没被验证到
+    // 三场时长各不相同（60 / 110 / 120），这里能同时验证「时长参与渲染」
     expect(Object.keys(counts).length).toBeGreaterThan(1);
   });
 });

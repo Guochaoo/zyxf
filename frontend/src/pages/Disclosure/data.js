@@ -1,31 +1,23 @@
-// 公示页的样例数据（纯前端，尚未接入后台）。
+// 公示页的结构性数据（纯前端，尚未接入后台）。
 //
 // 这里只放**结构性字段**——时间、金额（分）、百分比、状态码；所有展示文案
 // （讲座题目 / 事由 / 经办人 …）都住在 i18n 字典的 disclosure 段，按数组下标对齐。
 // 与 about 页的 CASE_BASE + about.caseStudies 是同一套做法：
 // 源码里不得硬编码中文（test/i18n.test.js 强制），而日期 / 金额属于数据不属文案。
 //
-// 「今天」相关的日期一律**相对今天**生成（不是写死的 ISO 串）：样例页放一个月后
-// 仍然有「已结束 / 报名中」两种状态可看，不会退化成一张全过期的表。
+// 讲座是**真实排期**，起点写死成本地时间（带 +08:00 偏移），不再相对今天生成——
+// 这是实际活动记录，不能因为页面哪天打开就漂走；「已结束 / 报名中」仍由时间推导。
 
-// 相对今天偏移 N 天的本地 wall-clock 时间（用 setDate 而非加减毫秒：跨夏令时时
-// 后者会把 19:00 挪成 18:00 或 20:00）。
-function at(offsetDays, hour, minute = 0) {
-  const d = new Date();
-  d.setHours(hour, minute, 0, 0);
-  d.setDate(d.getDate() + offsetDays);
-  return d.toISOString();
-}
-
-/** 讲座：时间 + 时长；title / place / speaker 在字典里按下标对齐。 */
-export const LECTURE_MINUTES = 90;
+/** 讲座：真实排期（起始时间 + 各场自己的时长）；title / place / speaker 在字典里按下标对齐。
+ *  · 09-27 学习经验分享会 19:30–20:30 → 60 分钟
+ *  · 10-23 电子设计竞赛经验分享会 19:10–21:00 → 110 分钟
+ *  · 10-25 线性代数期中复习 15:00–17:00 → 120 分钟
+ *  时间按**本地 wall-clock** 写成带 +08:00 的 ISO 串：日期列与时钟都按本地时区渲染，
+ *  换一台机器打开也不会滑成前一天 / 前一小时。 */
 export const LECTURE_BASE = [
-  { id: 'l1', start: at(-18, 19), minutes: LECTURE_MINUTES },
-  { id: 'l2', start: at(-4, 19), minutes: LECTURE_MINUTES },
-  { id: 'l3', start: at(3, 19), minutes: LECTURE_MINUTES },
-  { id: 'l4', start: at(10, 14, 30), minutes: LECTURE_MINUTES },
-  { id: 'l5', start: at(17, 19), minutes: LECTURE_MINUTES },
-  { id: 'l6', start: at(24, 19), minutes: LECTURE_MINUTES },
+  { id: 'l1', start: '2026-09-27T19:30:00+08:00', minutes: 60 },
+  { id: 'l2', start: '2026-10-23T19:10:00+08:00', minutes: 110 },
+  { id: 'l3', start: '2026-10-25T15:00:00+08:00', minutes: 120 },
 ];
 
 // 课程指南共建计划的投稿邮箱。它是**数据**而不是文案：i18n 字典里的「中文不含
@@ -65,7 +57,7 @@ export const spentCents = (rows = EXPENSE_BASE) => rows.reduce((sum, r) => sum +
  *  改动某一节的内容或文案时，把对应字段改成改动当时的本地时间（带 +08:00 偏移，
  *  换时区读也不会滑到前一天）；没有历史记录可查的节，就写这次改动的时刻。 */
 export const UPDATED_AT = {
-  lectures: '2026-10-28T00:27:00+08:00',
+  lectures: '2026-10-28T00:36:00+08:00',
   plans: '2026-10-28T00:27:00+08:00',
   courseGuide: '2026-10-28T00:27:00+08:00',
   expenses: '2026-10-28T00:27:00+08:00',

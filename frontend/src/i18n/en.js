@@ -182,13 +182,23 @@ const en = {
     },
     lectures: {
       speakerLabel: 'Speaker {{name}}',
+      // Mirrors the notice provided by the students; lines up by index with LECTURE_BASE.
       items: [
-        { title: 'Midterm walkthrough: University Physics', place: 'ZYXF A-101', speaker: 'Mr. Wang' },
-        { title: 'Finals walkthrough: Calculus II', place: 'ZYXF A-203', speaker: 'Mr. Li' },
-        { title: 'Problem-solving in Linear Algebra', place: 'ZYXF A-101', speaker: 'Zhang' },
-        { title: 'Introduction to Probability and Statistics', place: 'ZYXF A-203', speaker: 'Mr. Chen' },
-        { title: 'Lab report standards for University Chemistry', place: 'ZYXF B-105', speaker: 'Liu' },
-        { title: 'Workshop: library search and note taking', place: 'ZYXF A-101', speaker: 'Zhao' },
+        {
+          title: 'Study experience sharing session',
+          place: 'Main A-102 (in person) / Tencent Meeting 363-705-194',
+          speaker: 'Qiu Tian',
+        },
+        {
+          title: 'National Undergraduate Electronic Design Contest: experience sharing',
+          place: 'Main A104 (in person only, no online option)',
+          speaker: 'Liu Wenhao, Wang Zichen, Jiang Zhouxia (Info 2404)',
+        },
+        {
+          title: 'Linear Algebra midterm review session',
+          place: 'Main Building D204',
+          speaker: 'Liu Qilin (Automation 2502), Qiu Tian (Automation 2501)',
+        },
       ],
     },
     // 与 zh.js 的 disclosure.plans 同构（键集合由 test/i18n.test.js 强制一致）
