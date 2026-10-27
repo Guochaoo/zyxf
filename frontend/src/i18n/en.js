@@ -164,18 +164,21 @@ const en = {
   // test/i18n.test.js 强制一致）；items 与 pages/Disclosure/data.js 按**下标**对齐。
   disclosure: {
     title: 'Disclosure',
-    term: 'Fall 2026',
+    // Only line shown at the top-right of each section head; the time comes from
+    // UPDATED_AT in data.js and is formatted with Intl. The old "term · N items"
+    // meta and the footer source note were removed on request.
+    updated: 'Updated {{time}}',
     status: {
       open: 'Open',
       done: 'Finished',
     },
     sections: {
-      lectures: { title: 'Lecture schedule', meta: '{{term}} · {{n}} sessions' },
-      plans: { title: 'Material writing plan', meta: 'AY 2026-2027 · {{n}} items' },
+      lectures: { title: 'Lecture schedule' },
+      plans: { title: 'Material writing plan' },
       // Nav and section head share this string; no decorative glyphs in headings
-      courseGuide: { title: 'Course & contest guide co-build', meta: 'AY 2026-2027 · Ongoing' },
+      courseGuide: { title: 'Course & contest guide co-build' },
       // "this site": the section tracks the site's own running costs (server / domain / storage)
-      expenses: { title: 'Spending on this site', meta: 'Mar–Sep 2026 · {{n}} entries' },
+      expenses: { title: 'Spending on this site' },
     },
     lectures: {
       speakerLabel: 'Speaker {{name}}',
@@ -289,10 +292,6 @@ const en = {
         { item: 'Intelligent Media Management', category: 'Media' },
         { item: 'Object Storage (OSS)', category: 'Storage' },
       ],
-    },
-    footer: {
-      sample:
-        'The course-guide co-build and the writing plan come from the organizing team; the site spending figures come from the Aliyun monthly bills (Mar–Sep 2026, payable amounts, entries with actual charges only); the lecture schedule is still placeholder data.',
     },
   },
   settings: {

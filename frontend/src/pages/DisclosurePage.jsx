@@ -5,6 +5,7 @@ import {
   COURSE_GUIDE_EMAIL,
   EXPENSE_BASE,
   LECTURE_BASE,
+  UPDATED_AT,
   spentCents,
 } from './Disclosure/data.js';
 
@@ -21,7 +22,7 @@ import {
  *   3. 数字统一 tabular-nums；金额一律右对齐（账目的可核对性靠对齐）。
  *
  * 讲座一节目前仍是样例数据；编写计划、共建计划与**本网站经费**三节是真实内容
- * （经费取自阿里云月度账单，来源与口径见 i18n 的 disclosure.footer 与 data.js 注释）。
+ * （经费取自阿里云月度账单，结构性数据与更新时间见 data.js）。
  * ============================================================ */
 
 /* ---- 语言相关的格式化：日期 / 时间 / 金额全部走 Intl，源码里不出现
@@ -47,6 +48,17 @@ const clock = (date, locale) =>
   new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hour12: false }).format(date);
 const money = (cents, locale) =>
   new Intl.NumberFormat(locale, { style: 'currency', currency: 'CNY' }).format(cents / 100);
+/* 区块头右上角只印「更新于 2026年10月28日 00:27」这种可核对的时间：
+   年月日 + 时刻都走 Intl（zh 月为「10月」、en 为「October」），源码里不写死日期字面量。 */
+const updatedAt = (iso, locale) =>
+  new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(iso));
 
 /* 讲座状态由时间推导，样例因此不会「过期」：讲完自动变已结束。 */
 const isPast = (item) => new Date(item.start).getTime() + item.minutes * 60000 < Date.now();
@@ -425,10 +437,7 @@ export default function DisclosurePage() {
             index="01"
             className="lg:col-span-6"
             title={t('disclosure.sections.lectures.title')}
-            meta={t('disclosure.sections.lectures.meta', {
-              term: t('disclosure.term'),
-              n: LECTURE_BASE.length,
-            })}
+            meta={t('disclosure.updated', { time: updatedAt(UPDATED_AT.lectures, locale) })}
           >
             <Lectures items={LECTURE_BASE} texts={lectureTexts} locale={locale} />
           </Section>
@@ -438,7 +447,7 @@ export default function DisclosurePage() {
             index="02"
             className="@container lg:col-span-6"
             title={t('disclosure.sections.plans.title')}
-            meta={t('disclosure.sections.plans.meta', { n: planTexts.length })}
+            meta={t('disclosure.updated', { time: updatedAt(UPDATED_AT.plans, locale) })}
           >
             <Plans items={planTexts} />
           </Section>
@@ -448,7 +457,7 @@ export default function DisclosurePage() {
             index="03"
             className="@container lg:col-span-7"
             title={t('disclosure.sections.courseGuide.title')}
-            meta={t('disclosure.sections.courseGuide.meta')}
+            meta={t('disclosure.updated', { time: updatedAt(UPDATED_AT.courseGuide, locale) })}
           >
             <CourseGuide />
           </Section>
@@ -458,17 +467,11 @@ export default function DisclosurePage() {
             index="04"
             className="lg:col-span-5"
             title={t('disclosure.sections.expenses.title')}
-            meta={t('disclosure.sections.expenses.meta', { n: EXPENSE_BASE.length })}
+            meta={t('disclosure.updated', { time: updatedAt(UPDATED_AT.expenses, locale) })}
           >
             <Expenses rows={EXPENSE_BASE} texts={expenseTexts} locale={locale} />
           </Section>
         </div>
-
-        {/* 页脚：只剩这一行来源 / 口径说明（原来右侧还有个「关于我们 · 联系方式」
-            链接，已按需求删除）——示例数据与账单来源都写清楚，不伪装成别的。 */}
-        <footer className="mt-8 text-[12px] text-ink-3">
-          <p>{t('disclosure.footer.sample')}</p>
-        </footer>
       </section>
     </>
   );

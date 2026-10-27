@@ -7,6 +7,7 @@ import {
   COURSE_GUIDE_EMAIL,
   EXPENSE_BASE,
   LECTURE_BASE,
+  UPDATED_AT,
   spentCents,
 } from '../pages/Disclosure/data.js';
 import i18n from '../i18n/index.js';
@@ -44,15 +45,35 @@ describe('公示栏 · 骨架', () => {
     }
   });
 
-  // 顶部目录（01–04 锚点）与页脚的「关于我们 · 联系方式」链接都已按需求删除；
-  // 区块的 id 保留（深链与下面的测试仍在用），改回来会被这两条拦住。
-  test('顶部目录与页脚链接已删除', () => {
+  // 顶部目录（01–04 锚点）与整条页脚都已按需求删除；区块的 id 保留
+  // （深链与下面的测试仍在用），改回来会被这两条拦住。
+  test('顶部目录与页脚均已删除', () => {
     const { container } = renderPage();
     expect(screen.queryByRole('navigation')).toBeNull();
     expect(container.querySelector('a[href^="#"]')).toBeNull();
-    const footer = container.querySelector('footer');
-    expect(footer.querySelector('a')).toBeNull();
-    expect(footer.textContent).toContain('阿里云月度账单');
+    // 页脚那行来源 / 口径说明已按需求删除
+    expect(container.querySelector('footer')).toBeNull();
+  });
+
+  // 四节区块头右上角只记「更新于 <年月日 时刻>」。以前这里写的是「学期 / 学年 ·
+  // 共 N 场（项 / 笔）」：条数随增删条目漂移，同一页还要四处各读一句口径。
+  test('四节区块头右上角只记更新于时间，不再写条数或学期', () => {
+    const { container } = renderPage();
+    const stamp = (iso) =>
+      `更新于 ${new Intl.DateTimeFormat('zh-CN', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(new Date(iso))}`;
+    for (const id of ['lectures', 'plans', 'courseGuide', 'expenses']) {
+      const head = container.querySelector(`#${id} h2`).parentElement;
+      const meta = head.querySelector('p');
+      expect(meta.textContent).toBe(stamp(UPDATED_AT[id]));
+      expect(meta.textContent).not.toMatch(/共 \d+ (场|项|笔)|学期|学年/);
+    }
   });
 
   // 宽度按**内容**给：01 / 02 各 6 列（自然高度 482 / 466，差 16px），03 取 7 列
@@ -104,9 +125,9 @@ describe('公示栏 · 骨架', () => {
     const h1 = screen.getByRole('heading', { level: 1 });
     expect(h1).toHaveTextContent('公示栏');
     expect(h1.querySelector('img')).toBeTruthy();
-    // 说明句与「更新于 / 学期 / 责任单位」那一行已按需求删除
+    // 说明句与「按学期更新 / 责任单位」那一行已按需求删除
+    //（「更新于」现在只出现在四节区块头，见上面的断言）
     expect(screen.queryByText(/按学期更新/)).toBeNull();
-    expect(screen.queryByText('更新于')).toBeNull();
     expect(screen.queryByText('责任单位')).toBeNull();
   });
 });
@@ -172,8 +193,7 @@ describe('公示栏 · 02 资料编写计划', () => {
     const { container } = renderPage();
     const rows = [...container.querySelectorAll('#plans li')];
     expect(rows.some((li) => li.textContent.includes('书院课程指南共建计划'))).toBe(false);
-    // 区块头里的「共 N 项」跟着实际条数走
-    expect(container.querySelector('#plans').textContent).toContain('共 10 项');
+    // 区块头不再写「共 10 项」（右上角只记更新于时间），行数由上面的断言守住
   });
 
   test('表头四列来自字典，与文档要求的四项一致', () => {
@@ -286,8 +306,8 @@ describe('公示栏 · 04 本网站经费支出', () => {
       expect(text).toContain(r.month.slice(0, 4)); // 账期年份
     });
     const card = container.querySelector('#expenses');
-    // 月账单没有「日」：账期列不许编出具体日期
-    expect(card.textContent).not.toMatch(/\d+月\d+日/);
+    // 月账单没有「日」：账期列不许编出具体日期（区块头的「更新于」不在表内，另算）
+    expect(card.querySelector('table').textContent).not.toMatch(/\d+月\d+日/);
     // 账期由 Intl 渲染（zh → 2026年9月），源码里没有写死的月份字面量
     expect(card.textContent).toContain('2026年9月');
   });

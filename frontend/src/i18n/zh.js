@@ -167,18 +167,20 @@ const zh = {
   // 按**下标**对齐，增删条目时两边必须一起改。
   disclosure: {
     title: '公示栏',
-    term: '2026 秋季学期',
+    // 四节区块头右上角只印这一句（时间由 data.js 的 UPDATED_AT 给出，走 Intl 格式化）；
+    // 以前的「学期 / 学年 · 共 N 场（项 / 笔）」与页脚的口径说明都已按需求删除。
+    updated: '更新于 {{time}}',
     status: {
       open: '报名中',
       done: '已结束',
     },
     sections: {
-      lectures: { title: '讲座计划', meta: '{{term}} · 共 {{n}} 场' },
-      plans: { title: '资料编写计划', meta: '2026-2027 学年 · 共 {{n}} 项' },
+      lectures: { title: '讲座计划' },
+      plans: { title: '资料编写计划' },
       // 目录与区块头共用同一份文案（序号由页面给出），标题一律不带装饰字符
-      courseGuide: { title: '书院课程指南共建计划', meta: '2026-2027 学年 · 长期开放' },
+      courseGuide: { title: '书院课程指南共建计划' },
       // 「本网站」：这一节记的是本站（服务器 / 域名 / 存储等）自己的开销，不是书院活动经费
-      expenses: { title: '本网站经费支出', meta: '2026-03 至 2026-09 · 共 {{n}} 笔' },
+      expenses: { title: '本网站经费支出' },
     },
     lectures: {
       speakerLabel: '主讲 {{name}}',
@@ -289,10 +291,6 @@ const zh = {
         { item: '智能媒体管理', category: '媒体处理' },
         { item: '对象存储 OSS', category: '存储' },
       ],
-    },
-    footer: {
-      sample:
-        '课程指南共建计划与资料编写计划来自编写组；本网站经费账目取自阿里云月度账单（2026-03 至 2026-09，口径为应付金额，仅列有实际支出的账目）；讲座日程暂为示例数据。',
     },
   },
   settings: {
