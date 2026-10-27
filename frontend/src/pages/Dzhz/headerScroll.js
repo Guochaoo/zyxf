@@ -39,6 +39,9 @@ export default function initHeaderScroll(root) {
   headerBar.style.transition =
     'max-width .5s cubic-bezier(.22,1,.36,1), padding-left .5s cubic-bezier(.22,1,.36,1), padding-right .5s cubic-bezier(.22,1,.36,1), background-color .3s ease, border-color .3s ease, backdrop-filter .3s ease';
 
+  // 菜单按钮在宽屏下的宽度（40px 汉堡模式下不覆盖），用于算相撞点。
+  let wideMenuWidth = 0;
+
   const apply = () => {
     const scrolled = window.scrollY > SCROLL_THRESHOLD;
     const wide = window.innerWidth >= WIDE_VIEWPORT;
@@ -51,24 +54,23 @@ export default function initHeaderScroll(root) {
     if (actions) actions.style.display = scrolled ? 'flex' : 'none';
     if (localeWrap) localeWrap.style.display = scrolled ? 'none' : '';
 
-    // 站点菜单按钮固定右上角、与原页 header 同一条水平线。顶态 header 更宽，
-    // 右端会压到按钮上——按「目标宽度」算出重叠量，把右侧内容左移刚好让开；
-    // 滚动态收窄后通常不再重叠，padding 归零，按钮回到原页的位置。
+    // 窄屏切换点不再用固定的 768px：按「顶态 bar 右缘」与「菜单按钮左缘」
+    // 实时判断，两个按钮即将相撞时（<8px）切换成汉堡，避免语言切换被挤压。
     const toggle = document.querySelector('.sm-toggle');
-    if (rightCluster && toggle) {
-      const toggleRect = toggle.getBoundingClientRect();
-      if (toggleRect.width > 0) {
-        const wrapperRect = headerBar.parentElement.getBoundingClientRect();
-        const targetWidth = Math.min(
-          wrapperRect.width,
-          scrolled ? (wide ? 1180 : 980) : 1280
-        );
-        const barRight =
-          wrapperRect.left + (wrapperRect.width + targetWidth) / 2;
-        const overlap = barRight - toggleRect.left;
-        rightCluster.style.paddingRight =
-          overlap > 0 ? `${Math.ceil(overlap) + 8}px` : '';
+    if (toggle) {
+      if (!document.documentElement.classList.contains('dzhz-narrow')) {
+        const current = toggle.getBoundingClientRect().width;
+        if (current > 0) wideMenuWidth = current;
       }
+      const wrapperRect = headerBar.parentElement.getBoundingClientRect();
+      const toggleRect = toggle.getBoundingClientRect();
+      const targetTopWidth = Math.min(wrapperRect.width, 1280);
+      const barRight =
+        wrapperRect.left + (wrapperRect.width + targetTopWidth) / 2;
+      const pillLeft = toggleRect.right - (wideMenuWidth || 80);
+      const narrow = barRight + 8 > pillLeft;
+      document.documentElement.classList.toggle('dzhz-narrow', narrow);
+      root.dataset.headerMode = narrow ? 'narrow' : 'wide';
     }
   };
 
@@ -119,5 +121,7 @@ export default function initHeaderScroll(root) {
     document.removeEventListener('click', onDocClick);
     document.removeEventListener('keydown', onKey);
     viewObserver?.disconnect();
+    document.documentElement.classList.remove('dzhz-narrow');
+    delete root.dataset.headerMode;
   };
 }

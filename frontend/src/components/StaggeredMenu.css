@@ -114,6 +114,15 @@
   outline: none;
 }
 
+/* /dzhz 窄屏的汉堡/关闭图标：默认不参与布局，只在 html.dzhz-narrow 下显示。 */
+.sm-burger-icon,
+.sm-burger-close {
+  display: none;
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
 /* ---- GitHub Star 按钮（wrapper 锚定，gsap 驱动从开关下方流出/流回）----
    终位 left = 100% - 面板宽 + 2em，与面板条目（资料库…）左缘同源对齐
    （面板宽引用 --sm-panel-w，断点变化自动同步）；top 12px 与开关垂直持平。
