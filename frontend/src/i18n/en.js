@@ -23,6 +23,8 @@ const en = {
     aboutAria: 'Learn about the ZYXF Study Center',
     disclosure: 'Disclosure',
     disclosureAria: 'Read lecture plans, writing plans and spending',
+    dzhz: 'Daizong Box',
+    dzhzAria: 'Explore Daizong Box',
     toggleOpen: 'Menu',
     toggleClose: 'Close',
     openAria: 'Open menu',

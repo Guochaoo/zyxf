@@ -88,8 +88,9 @@ zyxf/
 │   └── test/
 ├── frontend/              # React 前端
 │   ├── src/
-│   │   ├── pages/         # BrowsePage / DashboardPage / AuthPage（登录+注册） / AboutPage / DisclosurePage（公示栏）
-│   │   │                  #   页面级子模块：pages/Browse/、pages/Dashboard/、pages/Disclosure/（结构性数据 + 投稿邮箱）
+│   │   ├── pages/         # BrowsePage / DashboardPage / AuthPage（登录+注册） / AboutPage / DisclosurePage（公示栏） / DzhzPage（岱宗盒子）
+│   │   │                  #   页面级子模块：pages/Browse/、pages/Dashboard/、pages/Disclosure/（结构性数据 + 投稿邮箱）、
+│   │   │                  #   pages/Dzhz/（/dzhz 临时复刻页：page.html + base.css + WebGL/滚动脚本；图片在 public/dzhz/）
 │   │   ├── components/    # 文件列表 / 预览 / 知识图谱 / AI 搜索卡 / 菜单等
 │   │   └── test/          # vitest 测试
 └── docs/

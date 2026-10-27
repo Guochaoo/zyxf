@@ -26,6 +26,8 @@ const zh = {
     aboutAria: '了解仲英书院学业辅导中心',
     disclosure: '公示栏',
     disclosureAria: '查看讲座计划、编写计划与经费支出',
+    dzhz: '岱宗盒子',
+    dzhzAria: '查看岱宗盒子介绍页',
     toggleOpen: '菜单',
     toggleClose: '关闭',
     openAria: '打开菜单',
