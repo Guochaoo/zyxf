@@ -57,7 +57,7 @@ export const spentCents = (rows = EXPENSE_BASE) => rows.reduce((sum, r) => sum +
  *  改动某一节的内容或文案时，把对应字段改成改动当时的本地时间（带 +08:00 偏移，
  *  换时区读也不会滑到前一天）；没有历史记录可查的节，就写这次改动的时刻。 */
 export const UPDATED_AT = {
-  lectures: '2026-10-28T00:36:00+08:00',
+  lectures: '2026-10-28T00:41:00+08:00',
   plans: '2026-10-28T00:27:00+08:00',
   courseGuide: '2026-10-28T00:27:00+08:00',
   expenses: '2026-10-28T00:27:00+08:00',

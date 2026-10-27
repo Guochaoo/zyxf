@@ -168,6 +168,15 @@ describe('公示栏 · 01 讲座计划', () => {
     // 三场时长各不相同（60 / 110 / 120），这里能同时验证「时长参与渲染」
     expect(Object.keys(counts).length).toBeGreaterThan(1);
   });
+
+  // 列表下方的小字是面向同学征集下一场分享：它在 <ul> 之外，不属于任何一条记录。
+  test('三条记录下方有征集分享的小字', () => {
+    const { container } = renderPage();
+    const invite = i18n.t('disclosure.lectures.invite');
+    const card = container.querySelector('#lectures');
+    expect(card.textContent).toContain(invite);
+    expect(card.querySelector('ul').textContent).not.toContain(invite);
+  });
 });
 
 describe('公示栏 · 02 资料编写计划', () => {

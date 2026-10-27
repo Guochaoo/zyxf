@@ -101,48 +101,55 @@ const Dot = () => (
 function Lectures({ items, texts, locale }) {
   const { t } = useTranslation();
   return (
-    <ul>
-      {items.map((it, i) => {
-        const past = isPast(it);
-        const text = texts[i] ?? {};
-        const end = new Date(new Date(it.start).getTime() + it.minutes * 60000);
-        return (
-          <li key={it.id}>
-            <div
-              className={`${ROW} grid grid-cols-[auto_1fr] items-start gap-x-4 gap-y-1.5 sm:grid-cols-[104px_1fr_auto] sm:gap-y-0`}
-            >
-              <div className="whitespace-nowrap sm:pt-[1px]">
-                <div className={`text-[13px] font-semibold tabular-nums ${past ? 'text-ink-3' : 'text-ink'}`}>
-                  {dayLong(it.start, locale)}
+    <>
+      <ul>
+        {items.map((it, i) => {
+          const past = isPast(it);
+          const text = texts[i] ?? {};
+          const end = new Date(new Date(it.start).getTime() + it.minutes * 60000);
+          return (
+            <li key={it.id}>
+              <div
+                className={`${ROW} grid grid-cols-[auto_1fr] items-start gap-x-4 gap-y-1.5 sm:grid-cols-[104px_1fr_auto] sm:gap-y-0`}
+              >
+                <div className="whitespace-nowrap sm:pt-[1px]">
+                  <div className={`text-[13px] font-semibold tabular-nums ${past ? 'text-ink-3' : 'text-ink'}`}>
+                    {dayLong(it.start, locale)}
+                  </div>
+                  <div className="text-[12px] text-ink-3">{weekday(it.start, locale)}</div>
                 </div>
-                <div className="text-[12px] text-ink-3">{weekday(it.start, locale)}</div>
-              </div>
 
-              <div className="col-start-2 min-w-0">
-                <div className={`text-[14px] font-medium ${past ? 'text-ink-2' : 'text-ink'}`}>
-                  {text.title}
+                <div className="col-start-2 min-w-0">
+                  <div className={`text-[14px] font-medium ${past ? 'text-ink-2' : 'text-ink'}`}>
+                    {text.title}
+                  </div>
+                  <div className={`mt-1 ${META}`}>
+                    <span className="tabular-nums">
+                      {clock(new Date(it.start), locale)}–{clock(end, locale)}
+                    </span>
+                    <Dot />
+                    <span>{text.place}</span>
+                    <Dot />
+                    <span>{t('disclosure.lectures.speakerLabel', { name: text.speaker })}</span>
+                  </div>
                 </div>
-                <div className={`mt-1 ${META}`}>
-                  <span className="tabular-nums">
-                    {clock(new Date(it.start), locale)}–{clock(end, locale)}
-                  </span>
-                  <Dot />
-                  <span>{text.place}</span>
-                  <Dot />
-                  <span>{t('disclosure.lectures.speakerLabel', { name: text.speaker })}</span>
-                </div>
-              </div>
 
-              <div className="col-start-2 sm:col-start-3 sm:self-start">
-                <StatusChip tone={past ? 'plain' : 'strong'}>
-                  {past ? t('disclosure.status.done') : t('disclosure.status.open')}
-                </StatusChip>
+                <div className="col-start-2 sm:col-start-3 sm:self-start">
+                  <StatusChip tone={past ? 'plain' : 'strong'}>
+                    {past ? t('disclosure.status.done') : t('disclosure.status.open')}
+                  </StatusChip>
+                </div>
               </div>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+            </li>
+          );
+        })}
+      </ul>
+      {/* 征集下一场的主讲：比逐条内容低一档（12px / --ink-3），左缘与行的 px-3 对齐，
+          不画分隔线、不加底色——它不是某一条记录，而是对整节的补充。 */}
+      <p className="mt-1 px-3 text-[12px] leading-[20px] text-ink-3">
+        {t('disclosure.lectures.invite')}
+      </p>
+    </>
   );
 }
 

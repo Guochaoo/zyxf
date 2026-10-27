@@ -182,6 +182,9 @@ const en = {
     },
     lectures: {
       speakerLabel: 'Speaker {{name}}',
+      // Small note under the list: open call for future speakers
+      invite:
+        'If you would like to give a talk and feel up to it, please message a Study Fans group admin or the group owner.',
       // Mirrors the notice provided by the students; lines up by index with LECTURE_BASE.
       items: [
         {
