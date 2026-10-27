@@ -6,14 +6,12 @@
  * 语言切换换成 GitHub + 下载分体按钮；英雄区的「预览版」小标签滚出视口后，
  * logo 右侧再补一个同样的标签。
  *
- * 节点与文案都在 page.html 里预置（静态复刻件），这里只负责开关与缓动，
+ * 节点与文案都在 content.html 里预置（静态复刻件），这里只负责开关与缓动，
  * 不引入 framer-motion。
  */
 
 const SCROLL_THRESHOLD = 80;
 const WIDE_VIEWPORT = 1560;
-// 站点自己的菜单按钮固定在右上角（80px 宽），滚动后右侧按钮要让开它。
-const MENU_CLEARANCE = 88;
 
 const MAC_DOWNLOAD =
   'https://download.deepseek.com/desktop/dsh-latest-macos-arm64.dmg';
@@ -52,7 +50,26 @@ export default function initHeaderScroll(root) {
 
     if (actions) actions.style.display = scrolled ? 'flex' : 'none';
     if (localeWrap) localeWrap.style.display = scrolled ? 'none' : '';
-    if (rightCluster) rightCluster.style.paddingRight = wide ? '' : `${MENU_CLEARANCE}px`;
+
+    // 站点菜单按钮固定右上角、与原页 header 同一条水平线。顶态 header 更宽，
+    // 右端会压到按钮上——按「目标宽度」算出重叠量，把右侧内容左移刚好让开；
+    // 滚动态收窄后通常不再重叠，padding 归零，按钮回到原页的位置。
+    const toggle = document.querySelector('.sm-toggle');
+    if (rightCluster && toggle) {
+      const toggleRect = toggle.getBoundingClientRect();
+      if (toggleRect.width > 0) {
+        const wrapperRect = headerBar.parentElement.getBoundingClientRect();
+        const targetWidth = Math.min(
+          wrapperRect.width,
+          scrolled ? (wide ? 1180 : 980) : 1280
+        );
+        const barRight =
+          wrapperRect.left + (wrapperRect.width + targetWidth) / 2;
+        const overlap = barRight - toggleRect.left;
+        rightCluster.style.paddingRight =
+          overlap > 0 ? `${Math.ceil(overlap) + 8}px` : '';
+      }
+    }
   };
 
   const onScroll = () => apply();

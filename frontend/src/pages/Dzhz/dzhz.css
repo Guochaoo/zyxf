@@ -6,7 +6,7 @@
  * 不要按本项目 DESIGN.md 重写，否则时序会对不上。
  *
  * ⚠️ 版权：可见文案、DeepSeek 商标与产品截图仍属原站，上线前必须替换（待办）。
- * 本文件与 base.css、page.html 一起构成完整的复刻范围。
+ * 本文件与 base.css、content.html 一起构成完整的复刻范围。
  */
 @import './base.css';
 
@@ -41,7 +41,7 @@ body:has(.dzhz-page),
 
 /* ---- 顶部栏滚动过渡（JS 见 headerScroll.js） ----
  * 原页滚动后把语言切换换成 GitHub + 下载，并把 header 收成毛玻璃胶囊。
- * 这些节点是 JS 动态插进去的，位置/下拉菜单的样式只能在这里补。 */
+ * 右侧按钮/下拉菜单的节点在 content.html 里预置，这里只补下拉层的定位与配色。 */
 .dzhz-header-actions {
   position: relative;
   align-items: center;
@@ -85,8 +85,15 @@ body:has(.dzhz-page),
   color: rgba(0, 0, 0, 0.45);
 }
 
-/* 原页的移动端菜单按钮没有 JS 绑定（静态复刻了 DOM），而本站右上角已有
- * 自己的菜单按钮，隐藏它避免两个汉堡叠在一起。 */
+/* Lucide 图标的白底白图标修复：原页的 svg 在本项目里会从别处继承到浅色
+ * （实测 #ededed），而按钮底色是白色。强制跟随按钮文字色。 */
+.dzhz-page .ds-btn-primary svg,
+.dzhz-page .ds-btn-primary svg * {
+  color: inherit;
+}
+
+/* 原页自带的移动端汉堡没有 JS 绑定；本站的菜单按钮固定在同一位置且全站一致，
+ * 两个汉堡会重叠，所以隐藏原页这一个。 */
 .dzhz-page .ds-header-bar > button[aria-controls='harness-mobile-menu'] {
   display: none;
 }

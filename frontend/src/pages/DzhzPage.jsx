@@ -3,7 +3,7 @@ import initHeroBackground from './Dzhz/heroBackground.js';
 import initHeroScroll from './Dzhz/heroScroll.js';
 import initHeaderScroll from './Dzhz/headerScroll.js';
 import initCopyButtons from './Dzhz/copyButtons.js';
-import html from './Dzhz/page.html?raw';
+import html from './Dzhz/content.html?raw';
 import './Dzhz/dzhz.css';
 
 /* ============================================================
@@ -12,11 +12,11 @@ import './Dzhz/dzhz.css';
  * 为什么是 dangerouslySetInnerHTML：
  *   原页是 Next.js 的 SSR 产物，整页 2300+ 个节点、42 条 CSS 关键帧、一堆
  *   CSS Modules 哈希类名。逐节点改写成 JSX 只会引入静默的版式漂移，而这里的
- *   目标就是「先一模一样」。所以 page.html 保存原样 DOM，base.css 保存原样样式，
+ *   目标就是「先一模一样」。所以 content.html 保存原样 DOM，base.css 保存原样样式，
  *   React 只负责挂载、启动 WebGL 背景、按可见性开关四段演示动画。
  *
  * ⚠️ 待办（版权）：可见文案、DeepSeek 商标/logo、产品截图（feat-*.webp、二维码）
- *   仍属原站，上线前必须替换为自有内容。替换范围 = page.html + base.css 的图片。
+ *   仍属原站，上线前必须替换为自有内容。替换范围 = content.html + base.css 的图片。
  * ============================================================ */
 
 /* 四段「假直播」演示：原页用 IntersectionObserver 控制 running，
