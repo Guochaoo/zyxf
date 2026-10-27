@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { CircleUserRound, LogIn, LogOut, Menu, Settings, X } from 'lucide-react';
+import { CircleUserRound, LogIn, LogOut, Settings } from 'lucide-react';
 import { useClickOutside } from '../hooks/useClickOutside.js';
 import GithubStarButton from './GithubStarButton.jsx';
 import './StaggeredMenu.css';
@@ -558,9 +558,6 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
               <span ref={plusHRef} className="sm-icon-line" />
               <span ref={plusVRef} className="sm-icon-line sm-icon-line-v" />
             </span>
-            {/* /dzhz 窄屏时由 html.dzhz-narrow 切换成三横线 / X（见 Dzhz/dzhz.css）。 */}
-            <Menu className="sm-burger-icon" strokeWidth={2} aria-hidden="true" />
-            <X className="sm-burger-close" strokeWidth={2} aria-hidden="true" />
           </button>
         )}
       </header>

@@ -365,7 +365,8 @@ export default function App() {
         </div>
       )}
 
-      {!graphFull && (
+      {/* 岱宗盒子页头自带「返回资料库」，不叠全局菜单按钮。 */}
+      {!graphFull && !isDzhz && (
         <StaggeredMenu
           position="right"
           items={menuItems}

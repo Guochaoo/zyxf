@@ -98,35 +98,6 @@ body:has(.dzhz-page),
   display: none;
 }
 
-/* ---- /dzhz 窄屏：菜单按钮收成三横线 ----
- * 语言切换与右上角菜单按钮即将相撞时（阈值由 headerScroll.js 动态计算，
- * 不再用原页固定的 768px），隐藏语言切换，把全局菜单按钮收成 40×40 的汉堡；
- * 打开后变成 X，仍由同一个按钮关闭。 */
-html.dzhz-narrow .sm-toggle {
-  width: 40px;
-  height: 40px;
-  min-height: 40px;
-  padding: 0;
-  border-radius: 12px;
-}
-html.dzhz-narrow .sm-toggle .sm-toggle-textWrap,
-html.dzhz-narrow .sm-toggle .sm-icon {
-  display: none;
-}
-html.dzhz-narrow .sm-burger-icon {
-  display: block;
-}
-html.dzhz-narrow .staggered-menu-wrapper[data-open] .sm-burger-icon {
-  display: none;
-}
-html.dzhz-narrow .staggered-menu-wrapper[data-open] .sm-burger-close {
-  display: block;
-}
-/* 语言切换 / GitHub / 下载整组收起（原页 <768 的形态提前到相撞点）。 */
-html.dzhz-narrow .dzhz-page .ds-header-bar > div.md\:flex {
-  display: none !important;
-}
-
 /* logo 右侧的「预览版」徽标：英雄区标签滚出视口后由 JS 淡入。 */
 .dzhz-header-badge {
   display: none;

@@ -20,10 +20,6 @@ export default function initHeaderScroll(root) {
   const headerBar = root.querySelector('.ds-header-bar');
   if (!headerBar) return () => {};
 
-  const rightCluster = Array.from(headerBar.children).find(
-    (el) => el.tagName === 'DIV' && el.className.includes('md:flex')
-  );
-  const localeWrap = rightCluster ? rightCluster.firstElementChild : null;
   const actions = headerBar.querySelector('.dzhz-header-actions');
   const arrow = actions?.querySelector('.HarnessDownloadMenu_arrow__60_9L');
   const primaryDownload = actions?.querySelector(
@@ -39,9 +35,6 @@ export default function initHeaderScroll(root) {
   headerBar.style.transition =
     'max-width .5s cubic-bezier(.22,1,.36,1), padding-left .5s cubic-bezier(.22,1,.36,1), padding-right .5s cubic-bezier(.22,1,.36,1), background-color .3s ease, border-color .3s ease, backdrop-filter .3s ease';
 
-  // 菜单按钮在宽屏下的宽度（40px 汉堡模式下不覆盖），用于算相撞点。
-  let wideMenuWidth = 0;
-
   const apply = () => {
     const scrolled = window.scrollY > SCROLL_THRESHOLD;
     const wide = window.innerWidth >= WIDE_VIEWPORT;
@@ -52,26 +45,6 @@ export default function initHeaderScroll(root) {
     headerBar.style.paddingRight = scrolled ? '6px' : '0px';
 
     if (actions) actions.style.display = scrolled ? 'flex' : 'none';
-    if (localeWrap) localeWrap.style.display = scrolled ? 'none' : '';
-
-    // 窄屏切换点不再用固定的 768px：按「顶态 bar 右缘」与「菜单按钮左缘」
-    // 实时判断，两个按钮即将相撞时（<8px）切换成汉堡，避免语言切换被挤压。
-    const toggle = document.querySelector('.sm-toggle');
-    if (toggle) {
-      if (!document.documentElement.classList.contains('dzhz-narrow')) {
-        const current = toggle.getBoundingClientRect().width;
-        if (current > 0) wideMenuWidth = current;
-      }
-      const wrapperRect = headerBar.parentElement.getBoundingClientRect();
-      const toggleRect = toggle.getBoundingClientRect();
-      const targetTopWidth = Math.min(wrapperRect.width, 1280);
-      const barRight =
-        wrapperRect.left + (wrapperRect.width + targetTopWidth) / 2;
-      const pillLeft = toggleRect.right - (wideMenuWidth || 80);
-      const narrow = barRight + 8 > pillLeft;
-      document.documentElement.classList.toggle('dzhz-narrow', narrow);
-      root.dataset.headerMode = narrow ? 'narrow' : 'wide';
-    }
   };
 
   const onScroll = () => apply();
@@ -121,7 +94,5 @@ export default function initHeaderScroll(root) {
     document.removeEventListener('click', onDocClick);
     document.removeEventListener('keydown', onKey);
     viewObserver?.disconnect();
-    document.documentElement.classList.remove('dzhz-narrow');
-    delete root.dataset.headerMode;
   };
 }
