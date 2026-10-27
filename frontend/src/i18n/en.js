@@ -21,6 +21,8 @@ const en = {
     dashboardAria: 'View statistics dashboard',
     about: 'About',
     aboutAria: 'Learn about the ZYXF Study Center',
+    disclosure: 'Disclosure',
+    disclosureAria: 'Read lecture plans, writing plans and spending',
     toggleOpen: 'Menu',
     toggleClose: 'Close',
     openAria: 'Open menu',
@@ -157,6 +159,153 @@ const en = {
       { title: 'Peer Support', category: 'Study aid · Experience sharing' },
       { title: 'Material Co-build', category: 'Resource building · Knowledge capture' },
     ],
+  },
+  // 公示栏（/disclosure），与 zh.js 的 disclosure 段一一对应（键集合由
+  // test/i18n.test.js 强制一致）；items 与 pages/Disclosure/data.js 按**下标**对齐。
+  disclosure: {
+    title: 'Disclosure',
+    // Only line shown at the top-right of each section head; the time comes from
+    // UPDATED_AT in data.js and is formatted with Intl. The old "term · N items"
+    // meta and the footer source note were removed on request.
+    updated: 'Updated {{time}}',
+    status: {
+      open: 'Open',
+      done: 'Finished',
+    },
+    sections: {
+      lectures: { title: 'Lecture schedule' },
+      plans: { title: 'Material writing plan' },
+      // Nav and section head share this string; no decorative glyphs in headings
+      courseGuide: { title: 'Course & contest guide co-build' },
+      // "this site": the section tracks the site's own running costs (server / domain / storage)
+      expenses: { title: 'Spending on this site' },
+    },
+    lectures: {
+      speakerLabel: 'Speaker {{name}}',
+      // Small note under the list: open call for future speakers
+      invite:
+        'If you would like to give a talk and feel up to it, please message a Study Fans group admin or the group owner.',
+      // Mirrors the notice provided by the students; lines up by index with LECTURE_BASE.
+      items: [
+        {
+          title: 'Study experience sharing session',
+          place: 'Main A-102 (in person) / Tencent Meeting 363-705-194',
+          speaker: 'Qiu Tian',
+        },
+        {
+          title: 'National Undergraduate Electronic Design Contest: experience sharing',
+          place: 'Main A104 (in person only, no online option)',
+          speaker: 'Liu Wenhao, Wang Zichen, Jiang Zhouxia (Info 2404)',
+        },
+        {
+          title: 'Linear Algebra midterm review session',
+          place: 'Main Building D204',
+          speaker: 'Liu Qilin (Automation 2502), Qiu Tian (Automation 2501)',
+        },
+      ],
+    },
+    // 与 zh.js 的 disclosure.plans 同构（键集合由 test/i18n.test.js 强制一致）
+    plans: {
+      columns: {
+        item: 'Material',
+        time: 'Due',
+        people: 'Volunteers',
+        pay: 'Pay',
+      },
+      items: [
+        { title: 'Calculus tutor', time: 'By end of December', people: '3', pay: '¥1,300 total' },
+        { title: 'Linear Algebra tutor', time: 'By end of December', people: '3', pay: '¥800 total' },
+        { title: 'Discrete Math tutor', time: 'By end of December', people: '3', pay: '¥1,200 total' },
+        { title: 'Exercise book compilation', time: 'By end of December', people: '2', pay: 'By rate card' },
+        { title: 'Physics II homework solutions', time: 'By end of December', people: '4', pay: '¥80 each' },
+        { title: 'Data Structures tutor', time: 'By end of December', people: '6', pay: '¥875 total' },
+        { title: 'Circuits & Electronics tutor', time: 'By end of December', people: '4', pay: '¥1,125 total' },
+        { title: 'Engineering Drawing tutor', time: 'By end of December', people: 'TBD', pay: 'TBD' },
+        { title: 'Complex Analysis tutor', time: 'By end of December', people: '3', pay: '¥750 total' },
+        { title: 'Analog Electronics tutor', time: 'By end of December', people: '4', pay: '¥750 total' },
+        // "Course guide co-build" is deliberately absent: it has its own section (03),
+        // where headcount / timeframe / reward live. "Team lead assistant" was removed
+        // on request; the section header's "N items" follows the actual count.
+      ],
+    },
+    // Mirrors zh.js disclosure.courseGuide (keys enforced by test/i18n.test.js).
+    // Written register, matching the Chinese: "may / please / once reviewed",
+    // no second-person imperatives. The submission address lives in
+    // pages/Disclosure/data.js as data, not copy; the reward stays a display string
+    // here (same as the "Pay" column above — Intl would render ¥200 as ¥200.00).
+    courseGuide: {
+      lead: 'This plan compiles a practical set of course and contest guides for every major at the college, as a reference for coursework and contest preparation.',
+      guide: {
+        title: 'Course guides',
+        intro: 'For the core courses of each major, covering:',
+        items: [
+          'Course content and study priorities',
+          'How the grade is made up: coursework, labs, midterms, finals',
+          'Recommended study methods and revision experience',
+          'Textbooks, online courses, problem sets, notes and other resources',
+          'Common difficulties and easy-to-miss points',
+        ],
+      },
+      contest: {
+        title: 'Contest guides',
+        intro: 'For the contests our students most often enter, covering:',
+        items: [
+          'What each contest involves, its format and who it suits',
+          'The basic skills required to take part',
+          'Team formation and division of work',
+          'Preparation schedule and study route',
+          'Past experience, strong projects and related resources',
+        ],
+      },
+      join: {
+        title: 'How to contribute',
+        open: 'Students of any major or year may contribute to and help maintain the guides.',
+        submit: 'Please send your contribution by email to',
+        attachLabel: 'Please state in the email',
+        // Separator lives in the dictionary (zh uses "、"); each item renders nowrap,
+        // so wraps only happen between items, never inside one.
+        attach: [
+          'class',
+          'name',
+          'student ID',
+          'Alipay account (payment option)',
+          'Zhiyuanhui ID (service-hours option)',
+        ],
+        attachSep: ',',
+        rewardLabel: 'Reward',
+        reward: '¥200 per guide',
+        review: 'Once a contribution passes review, we will contact the author and issue the reward.',
+        welcome:
+          'Students who have taken a course may share their study experience, those who have entered a contest may write up their preparation, and good resources or other useful material are welcome at any time.',
+      },
+      noteLabel: 'Note',
+      note: 'Assessment formats and contest dates may change over time; please mark the year and the source of such information.',
+    },
+    // Mirrors zh.js disclosure.expenses. No budget yet (BUDGET_CENTS === null in data.js)
+    // → budget / remaining render "-" and noBudget is shown; `usage` waits for a budget.
+    // items line up by index with EXPENSE_BASE (billing month lives in data.js).
+    // Figures come from the Aliyun monthly bills (Mar–Sep 2026), payable amounts only.
+    expenses: {
+      budget: 'Budget',
+      spent: 'Spent',
+      remaining: 'Remaining',
+      usage: '{{pct}}% used',
+      noBudget: 'No budget set yet',
+      total: 'Total · {{n}} entries',
+      columns: { date: 'Billing month', item: 'Purpose', category: 'Category', amount: 'Amount' },
+      items: [
+        { item: 'Object Storage (OSS)', category: 'Storage' },
+        { item: '.top domain', category: 'Domain' },
+        { item: 'Lightweight server (SWAS)', category: 'Compute' },
+        { item: '.ASIA domain', category: 'Domain' },
+        { item: 'Intelligent Media Management', category: 'Media' },
+        { item: 'Object Storage (OSS)', category: 'Storage' },
+        { item: 'Intelligent Media Management', category: 'Media' },
+        { item: 'Object Storage (OSS)', category: 'Storage' },
+        { item: 'Intelligent Media Management', category: 'Media' },
+        { item: 'Object Storage (OSS)', category: 'Storage' },
+      ],
+    },
   },
   settings: {
     title: 'Settings',

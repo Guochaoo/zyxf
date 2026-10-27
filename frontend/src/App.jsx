@@ -9,6 +9,9 @@ import BrowsePage from './pages/BrowsePage.jsx';
 const AuthPage = lazy(() => import('./pages/AuthPage.jsx'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
 const AboutPage = lazy(() => import('./pages/AboutPage.jsx'));
+// 公示栏：纯前端版式样例（数据在 pages/Disclosure/data.js），无重依赖，
+// 同样懒加载——首屏不为它多下一个字节。
+const DisclosurePage = lazy(() => import('./pages/DisclosurePage.jsx'));
 // 右栏知识图谱同样按需加载（IMPROVE-43）：它静态依赖 d3-force，原先被静态 import，
 // 于是这个库进了入口的同步依赖图并出现在 index.html 的 modulepreload 里——只看
 // 文件列表、不开图谱的访客照样要下载约 45 KB(gzip)。改成 lazy 后只有真的渲染右栏
@@ -69,6 +72,7 @@ export default function App() {
     () => [
       { label: t('menu.library'), ariaLabel: t('menu.libraryAria'), link: '/' },
       { label: t('menu.dashboard'), ariaLabel: t('menu.dashboardAria'), link: '/dashboard' },
+      { label: t('menu.disclosure'), ariaLabel: t('menu.disclosureAria'), link: '/disclosure' },
       { label: t('menu.about'), ariaLabel: t('menu.aboutAria'), link: '/about' },
     ],
     [t]
@@ -122,6 +126,9 @@ export default function App() {
   const isBrowse = pagePath === '/' || pagePath.startsWith('/folder/') || pagePath.startsWith('/settings');
   const isDashboard = pagePath === '/dashboard';
   const isAbout = pagePath === '/about';
+  // 公示栏也是文档流独立页：铺满可用宽度，宽度由页面自己用 max-w-5xl 收窄
+  // （读长文 / 看表格都需要比 7xl 更短的测量宽度）。
+  const isDisclosure = pagePath === '/disclosure';
   const folderId = Number(pagePath.match(/^\/folder\/(\d+)/)?.[1]) || 0;
 
   // Bottom account card on the menu panel. Logged-in shows username + role;
@@ -188,7 +195,7 @@ export default function App() {
     mainLayout = `w-full ${
       sidebarOpen ? 'lg:pl-[266px]' : 'lg:pl-0'
     } lg:pr-[316px] ${layoutAnimating ? 'lg:transition-[padding]' : ''}`;
-  } else if (isDashboard || isAbout) {
+  } else if (isDashboard || isAbout || isDisclosure) {
     mainLayout = 'mx-auto w-full';
   } else {
     mainLayout = 'mx-auto w-full max-w-7xl';
@@ -289,10 +296,12 @@ export default function App() {
       )}
       <main
         className={`min-w-0 overflow-x-hidden ${
-          // Dashboard uses a fixed pt-[11px] to match the browse page logo top offset (14px).
-        isDashboard
-          ? 'px-4 pt-[11px] pb-6'
-          : 'px-3 pt-4 pb-2 sm:px-4 sm:pt-[10.5px] sm:pb-2'
+          // 统计面板 / 公示栏 / 关于我们都用同一个「logo + 页面名」页头
+          // （components/PageTitle），统一用固定的 pt-[11px] 把它按到与资料库左栏
+          // 品牌行同一水平线；登录注册页走自己的版式，用下面那档内边距。
+          isDashboard || isDisclosure || isAbout
+            ? 'px-4 pt-[11px] pb-6'
+            : 'px-3 pt-4 pb-2 sm:px-4 sm:pt-[10.5px] sm:pb-2'
         } ${mainLayout}`}
         // 中列 padding 与左栏轨道同步成 320ms（BUG-94 补充），且只在手动开合窗口内挂
         // transition-property:padding——绝不能只给 transitionDuration：property 的初始值
@@ -316,6 +325,7 @@ export default function App() {
               {/* 直接访问 /settings 时，弹窗背后渲染资料库（否则会落到下面的通配重定向、把 URL 冲掉） */}
               <Route path="/settings/*" element={<BrowsePage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/disclosure" element={<DisclosurePage />} />
               <Route path="/about" element={<AboutPage />} />
               {/* /login 与 /register 渲染同一 AuthPage 实例：切换不重挂载，仅表单区过渡 */}
               <Route path="/login" element={<AuthPage />} />

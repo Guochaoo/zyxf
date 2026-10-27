@@ -1,6 +1,7 @@
 // 简体中文文案基准。
-// i18next 字典：key 分层按域组织（app / menu / browse / auth / dashboard /
-// about / settings / chat / kg / search / tree / notice / toast / preview / common）。
+// i18next 字典：key 分层按域组织（app / menu / browse / auth / dashboard / about /
+// disclosure / settings / aiSearch / kg / search / tree / notice / toast / upload /
+// preview / footer / common）。
 const zh = {
   app: {
     title: '仲英学辅',
@@ -23,6 +24,8 @@ const zh = {
     dashboardAria: '查看统计仪表盘',
     about: '关于我们',
     aboutAria: '了解仲英书院学业辅导中心',
+    disclosure: '公示栏',
+    disclosureAria: '查看讲座计划、编写计划与经费支出',
     toggleOpen: '菜单',
     toggleClose: '关闭',
     openAria: '打开菜单',
@@ -158,6 +161,146 @@ const zh = {
       { title: '朋辈互助', category: '学习互助 · 经验分享' },
       { title: '资料共建', category: '资料库建设 · 知识沉淀' },
     ],
+  },
+  // 公示栏（/disclosure）。骨架文案 + 三节的样例内容都住在这里：
+  // items 数组与 pages/Disclosure/data.js 里的结构性字段（时间 / 金额 / 进度）
+  // 按**下标**对齐，增删条目时两边必须一起改。
+  disclosure: {
+    title: '公示栏',
+    // 四节区块头右上角只印这一句（时间由 data.js 的 UPDATED_AT 给出，走 Intl 格式化）；
+    // 以前的「学期 / 学年 · 共 N 场（项 / 笔）」与页脚的口径说明都已按需求删除。
+    updated: '更新于 {{time}}',
+    status: {
+      open: '报名中',
+      done: '已结束',
+    },
+    sections: {
+      lectures: { title: '讲座计划' },
+      plans: { title: '资料编写计划' },
+      // 目录与区块头共用同一份文案（序号由页面给出），标题一律不带装饰字符
+      courseGuide: { title: '书院课程指南共建计划' },
+      // 「本网站」：这一节记的是本站（服务器 / 域名 / 存储等）自己的开销，不是书院活动经费
+      expenses: { title: '本网站经费支出' },
+    },
+    lectures: {
+      speakerLabel: '主讲 {{name}}',
+      // 列表下方的小字：面向同学征集下一场分享（不是某一条记录，故放在 items 之外）
+      invite: '如果有同学有意愿也认为自己有能力做讲座分享，欢迎私聊学粉群管理或群主。',
+      // 与学生提供的通知原文一致（时间 / 时长 / 地点 / 主讲见 data.js 与这里的下标对齐）。
+      // 第三场线上线下同时进行，地址里的分隔用「/」，避免和行内元信息的「·」混淆。
+      items: [
+        { title: '学习经验分享会', place: '主A-102（线下）/ 腾讯会议 363-705-194', speaker: '邱天' },
+        {
+          title: '全国大学生电子设计竞赛经验分享会',
+          place: '主A104（线下，本次讲座无线上形式）',
+          speaker: '信息2404 刘文昊、王梓辰、江周夏',
+        },
+        {
+          title: '线性代数期中考前复习讲座',
+          place: '主楼D204',
+          speaker: '自动化2502 刘其霖、自动化2501 邱天',
+        },
+      ],
+    },
+    // 资料编写计划。内容来源：编写组 2026-2027 年度工作计划「工作安排」。
+    // 四列就是文档要求的四项：资料名 / 预计完成时间 / 志愿者人数（不含审核）/ 工资。
+    // 进度与状态不在这里——计划本身没有百分比，别为了好看编一个。
+    plans: {
+      columns: {
+        item: '资料名称',
+        time: '预计完成时间',
+        people: '志愿者人数',
+        pay: '工资',
+      },
+      items: [
+        { title: '高数小助手', time: '12 月末之前', people: '3 人', pay: '共 ¥1,300' },
+        { title: '线代小助手', time: '12 月末之前', people: '3 人', pay: '共 ¥800' },
+        { title: '离散数学小助手', time: '12 月末之前', people: '3 人', pay: '共 ¥1,200' },
+        { title: '习题集整理', time: '12 月末之前', people: '2 人', pay: '按标准计算' },
+        { title: '大物下作业解析', time: '12 月末之前', people: '4 人', pay: '每人 ¥80' },
+        { title: '数据结构小助手', time: '12 月末之前', people: '6 人', pay: '共 ¥875' },
+        { title: '电路电子学小助手', time: '12 月末之前', people: '4 人', pay: '共 ¥1,125' },
+        { title: '工图小助手', time: '12 月末之前', people: '暂定', pay: '暂定' },
+        { title: '复变函数小助手', time: '12 月末之前', people: '3 人', pay: '共 ¥750' },
+        { title: '模电小助手', time: '12 月末之前', people: '4 人', pay: '共 ¥750' },
+        // 「书院课程指南共建计划」与「组长小助手」都不在这里：前者有自己的区块（03），
+        // 人数 / 时间 / 奖励都在那一节里；后者已按需求删除（区块头的「共 N 项」跟着实际条数走）。
+      ],
+    },
+    // 课程指南共建计划。内容来自编写组的公开征集通知，但**通知原文是口头语的口语稿**
+    // （「同学们可以……附带上自己的班级……」），公示栏是正式桌面，这里按书面语重写：
+    // 一律用「可 / 请 / 经审核通过后」，不用第二人称祈使句。
+    // 投稿邮箱在 pages/Disclosure/data.js（属数据不属文案）；奖励金额留在字典里当展示串
+    // （与上面「工资」列同一做法——¥200 走 Intl 会渲染成 ¥200.00，整数报酬不想要分位）。
+    courseGuide: {
+      lead: '本计划面向书院各专业，整理一套实用的课程与竞赛指南，为课程学习与竞赛备赛提供参考。',
+      guide: {
+        title: '课程指南',
+        intro: '面向各专业核心课程，重点整理以下内容：',
+        items: [
+          '课程主要内容与学习重点',
+          '平时成绩、实验、期中、期末等考核方式',
+          '推荐学习方法与复习经验',
+          '教材、网课、习题、笔记等学习资源',
+          '常见难点与容易踩坑之处',
+        ],
+      },
+      contest: {
+        title: '竞赛指南',
+        intro: '面向书院学生常参加的竞赛，重点整理以下内容：',
+        items: [
+          '竞赛内容、赛制与适合人群',
+          '参赛所需的基础能力',
+          '组队与分工建议',
+          '备赛时间安排与学习路线',
+          '往届经验、优秀项目与相关资源',
+        ],
+      },
+      join: {
+        title: '参与方式',
+        open: '各专业、各年级学生均可参与指南的补充与维护。',
+        submit: '请将拟贡献的内容发送至邮箱',
+        attachLabel: '邮件请注明',
+        // 顿号分隔写在字典里（en 用「, 」）：组件按项渲染并给每项 whitespace-nowrap，
+        // 于是换行只发生在项与项之间——窄面板里不会把「志愿汇编号（选择工时）」拦腰断开
+        attach: ['班级', '姓名', '学号', '支付宝账号（选择工资）', '志愿汇编号（选择工时）'],
+        attachSep: '、',
+        rewardLabel: '奖励',
+        reward: '每篇指南 ¥200',
+        review: '来稿经审核通过后，我们会联系作者并发放奖励。',
+        welcome:
+          '已修读某门课程的学生可分享学习经验，参加过竞赛的学生可整理备赛过程；优质学习资源及其他补充内容同样欢迎提交。',
+      },
+      noteLabel: '注意',
+      note: '课程考核方式、竞赛时间等信息可能发生变化，请标注对应年份与信息来源。',
+    },
+    // 本网站经费支出。预算尚未设置（data.js 的 BUDGET_CENTS === null）→ 小结里
+    // 预算 / 结余显示「-」，这一段用 noBudget；`usage` 留到有预算那天再用。
+    // items 与 data.js 的 EXPENSE_BASE **按下标对齐**：账期（月）在 data.js，事由 / 类别在这里。
+    // 内容取自阿里云月度账单概览（2026-03 至 2026-09）的应付金额，只列有实际支出的账目。
+    expenses: {
+      budget: '预算总额',
+      spent: '已支出',
+      remaining: '结余',
+      usage: '已使用 {{pct}}%',
+      noBudget: '预算尚未设置',
+      total: '合计 · 共 {{n}} 笔',
+      // 阿里云账单里的商品名照抄（便于对着账单核），类别是本页归的档；
+      // 服务主体全是「阿里云」，所以没有「经办 / 服务商」列——恒定值的列只是占宽度。
+      columns: { date: '账期', item: '事由', category: '类别', amount: '金额' },
+      items: [
+        { item: '对象存储 OSS', category: '存储' },
+        { item: '.top 域名', category: '域名' },
+        { item: '轻量应用服务器', category: '计算' },
+        { item: '.ASIA 域名', category: '域名' },
+        { item: '智能媒体管理', category: '媒体处理' },
+        { item: '对象存储 OSS', category: '存储' },
+        { item: '智能媒体管理', category: '媒体处理' },
+        { item: '对象存储 OSS', category: '存储' },
+        { item: '智能媒体管理', category: '媒体处理' },
+        { item: '对象存储 OSS', category: '存储' },
+      ],
+    },
   },
   settings: {
     title: '设置',

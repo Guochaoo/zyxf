@@ -6,6 +6,7 @@ import { errMsg, formatSize, timeAgo } from '../utils.js';
 import { folderTarget } from '../ui.js';
 import { useResource } from '../data/resource.js';
 import FileIcon from '../components/FileIcon.jsx';
+import PageTitle from '../components/PageTitle.jsx';
 import { AnomalyCard, AllocationCard, densifyBySpline } from '../components/InsightCards.jsx';
 import { ArrowDown, ArrowUp, BarChart3 } from 'lucide-react';
 // 页面级子模块（IMPROVE-01）：无状态展示已迁出，页面只保留数据编排。
@@ -224,18 +225,9 @@ export default function DashboardPage() {
     // the top offset matches the browse page logo (14px) and never jumps.
     <div className="space-y-3">
       {/* 标题行只剩品牌块：时间范围切换与刷新按钮已移除（固定看 30 天，
-          数据靠挂载时的静默 revalidate 保鲜）。 */}
-      <header className="mb-5 flex min-h-[34px] items-center">
-        <h1 className="flex items-center gap-2">
-          <img
-            src="/favicon.png"
-            alt=""
-            aria-hidden="true"
-            className="h-7 w-7 rounded-full object-cover"
-          />
-          <span className="rb-brand-title whitespace-nowrap">{t('dashboard.title')}</span>
-        </h1>
-      </header>
+          数据靠挂载时的静默 revalidate 保鲜）。样式与公示栏共用
+          components/PageTitle.jsx，防止两处各抄一份后漂移。 */}
+      <PageTitle title={t('dashboard.title')} />
 
       {/* Activity heatmap + file type breakdown */}
       <section className="grid grid-cols-1 gap-3 lg:grid-cols-12">
