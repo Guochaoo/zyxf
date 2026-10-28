@@ -266,6 +266,8 @@ body:has(.dzhz-page),
 }
 .dzhz-page [class*='HarnessCapabilitiesSection_media'] {
   border: 0;
+  /* 不能留上游的 overflow:hidden：会按直角矩形裁断手机框投影，圆角处露出直角灰块 */
+  overflow: visible;
 }
 /* 文字与迷你手机左右排布：文案在左、手机在右，卡片更矮更紧凑 */
 .dzhz-page [class*='HarnessCapabilitiesSection_card'] {
