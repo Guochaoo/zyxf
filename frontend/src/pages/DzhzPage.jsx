@@ -13,8 +13,8 @@ import './Dzhz/dzhz.css';
  *   目标就是「先一模一样」。所以 content.html 保存原样 DOM，base.css 保存原样样式，
  *   React 只负责挂载、启动 WebGL 背景、按可见性开关四段演示动画。
  *
- * ⚠️ 待办（版权）：可见文案、DeepSeek 商标/logo、产品截图（feat-*.webp、二维码）
- *   仍属原站，上线前必须替换为自有内容。替换范围 = content.html + base.css 的图片。
+ * ⚠️ 待办（版权）：base.css 里的字体与少数组件样式仍来自原站；可见文案、产品截图
+ *   已换成自有内容（Hero 是真机截图、能力卡是按 App 功能画的迷你界面）。
  * ============================================================ */
 
 /* 四段「假直播」演示：原页用 IntersectionObserver 控制 running，
