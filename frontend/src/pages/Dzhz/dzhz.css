@@ -221,3 +221,37 @@ body:has(.dzhz-page),
   overflow: clip;
   overflow-clip-margin: 1px;
 }
+
+/* ============================================================
+ * Hero 里的手机预览：真机截图（Pixel 7 模拟器，1264×2780）+ 纯 CSS 手机外框
+ * 截图数据是展示用的假数据（同学 / ¥999.9 / 999.9 / 计算机网络 周五第 1-2 节），
+ * 由 App 里一处临时的 SHOT_MODE 注入，截完已还原，仓库里不保留。
+ * ============================================================ */
+.dz-app-stage {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+  will-change: transform;
+}
+.dz-app-phone {
+  position: relative;
+  width: 358px;
+  padding: 9px;
+  border-radius: 48px;
+  background: linear-gradient(155deg, #2b2d33 0%, #0c0d10 48%, #23252b 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.16) inset,
+    0 30px 70px rgba(23, 28, 40, 0.3),
+    0 8px 18px rgba(23, 28, 40, 0.16);
+}
+.dz-app-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 40px;
+}
+@media (max-width: 430px) {
+  .dz-app-phone {
+    width: min(358px, 100%);
+  }
+}

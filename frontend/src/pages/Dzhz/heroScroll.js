@@ -11,7 +11,8 @@ const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
 export default function initHeroScroll(root) {
   const hero = root.querySelector('main > section');
-  const surface = root.querySelector('[class*="HarnessHero_previewSurface"]');
+  // Hero 预览已从「DeepSeek 桌面窗口」换成手机界面（.dz-app-stage），后仰挂在它身上。
+  const surface = root.querySelector('[data-dz-preview]');
   if (!hero || !surface) return () => {};
 
   let target = 0;
