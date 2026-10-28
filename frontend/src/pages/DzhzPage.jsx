@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 import initHeroBackground from './Dzhz/heroBackground.js';
 import initHeroScroll from './Dzhz/heroScroll.js';
 import initHeaderScroll from './Dzhz/headerScroll.js';
-import initCopyButtons from './Dzhz/copyButtons.js';
 import html from './Dzhz/content.html?raw';
 import './Dzhz/dzhz.css';
 
@@ -37,7 +36,6 @@ export default function DzhzPage() {
     // Hero 的滚动视差：预览窗口后仰 + 背景模糊。
     const stopHeroScroll = initHeroScroll(root);
     // 开发者体验区的两条命令补上复制行为。
-    const stopCopyButtons = initCopyButtons(root);
 
     const observers = [];
     root.querySelectorAll(DEMO_FIGURES).forEach((figure) => {
@@ -56,7 +54,6 @@ export default function DzhzPage() {
 
     return () => {
       observers.forEach((observer) => observer.disconnect());
-      stopCopyButtons();
       stopHeroScroll();
       stopHeader();
       stopBackground();
