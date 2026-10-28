@@ -267,15 +267,27 @@ body:has(.dzhz-page),
 .dzhz-page [class*='HarnessCapabilitiesSection_media'] {
   border: 0;
 }
-/* 整屏截图不再裁切：原样按宽缩放，卡片随图变高 */
+/* 整屏截图装进一个迷你手机框：完整可见、不裁切，卡片高度也稳定 */
 .dz-feat {
-  display: block;
-  overflow: hidden;
-  border-radius: 20px 20px 0 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  min-height: 470px;
+  padding: 24px 20px 0;
   background: transparent;
+}
+.dz-feat-frame {
+  width: 206px;
+  padding: 5px;
+  border-radius: 32px 32px 0 0;
+  background: linear-gradient(160deg, #2b2d33 0%, #0c0d10 55%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset,
+    0 18px 40px rgba(23, 28, 40, 0.22);
 }
 .dz-feat-shot {
   display: block;
   width: 100%;
   height: auto;
+  border-radius: 28px 28px 0 0;
 }
