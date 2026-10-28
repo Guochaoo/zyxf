@@ -130,10 +130,10 @@ body:has(.dzhz-page),
 }
 
 /* 品牌字：原 wordmark 是 SVG 路径（deepseek + HARNESS 小标签），改成中文后
- * 用文本承接，字号/字重对齐原 24px 高的 wordmark。 */
+ * 用文本承接。20px/500 是压轻后的取值，重心仍在 28px 的头像上。 */
 .dz-brand-name {
-  font-size: 22px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 500;
   line-height: 1;
   letter-spacing: -0.02em;
   color: var(--harness-logo-foreground, #f9fafb);
