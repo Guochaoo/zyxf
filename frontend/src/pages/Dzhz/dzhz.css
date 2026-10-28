@@ -140,6 +140,14 @@ body:has(.dzhz-page),
   white-space: nowrap;
 }
 
+/* 品牌标记：绿幕抠底的小人（public/dzhz/images/brand-avatar.webp）。
+ * 高度比原鲸鱼 wordmark 的 24px 略高，否则脸部细节在 22px 的品牌字旁糊成一团。 */
+.dz-brand-mark {
+  display: block;
+  height: 28px;
+  width: auto;
+}
+
 /* ---- 页脚：去掉微信公众号后的对齐 ----
  * 原布局是三列 1fr auto 1fr，靠第一列的微信块撑开；删掉后版权会落到第一列。
  * 桌面端改成 flex 居中 + 导航绝对贴右，版权保持视觉居中；移动端仍是竖排居中。 */
