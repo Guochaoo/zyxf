@@ -260,22 +260,54 @@ body:has(.dzhz-page),
  * 「多项功能，一手掌握」八张卡：画面是 App 真机截图（各功能的页面片段）
  * 截图为展示用假数据（同学 / ¥999.9 / 999.9 / 计算机网络 …），源数据改了又还原。
  * ============================================================ */
-.dzhz-page [class*='HarnessCapabilitiesSection_card'] {
-  border: 0;
-  background: #ececee;
-}
 .dzhz-page [class*='HarnessCapabilitiesSection_media'] {
   border: 0;
   /* 不能留上游的 overflow:hidden：会按直角矩形裁断手机框投影，圆角处露出直角灰块 */
   overflow: visible;
 }
-/* 文字与迷你手机左右排布：文案在左、手机在右，卡片更矮更紧凑 */
+/* 文案在上、截图在下的紧凑网格：文案占满卡片顶部，手机居中放下面，
+ * 不再出现文字缩在左半边、右侧一大片空白。8 张卡在 xl 排成 4×2
+ * （lg 3 列、sm 2 列、手机 1 列），区块高度约为原来的六成。 */
+.dz-feat-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+@media (min-width: 640px) {
+  .dz-feat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1024px) {
+  /* 3 列时用 6 栏给最后两张居中，避免末行只剩左对齐的两张 */
+  .dz-feat-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .dz-feat-grid > article {
+    grid-column: span 2;
+  }
+  .dz-feat-grid > article:nth-child(7) {
+    grid-column: 2 / span 2;
+  }
+  .dz-feat-grid > article:nth-child(8) {
+    grid-column: 4 / span 2;
+  }
+}
+@media (min-width: 1280px) {
+  .dz-feat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .dz-feat-grid > article,
+  .dz-feat-grid > article:nth-child(7),
+  .dz-feat-grid > article:nth-child(8) {
+    grid-column: span 1;
+  }
+}
 .dzhz-page [class*='HarnessCapabilitiesSection_card'] {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 16px;
-  padding: 26px 22px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  padding: 20px 16px 22px;
   border: 0;
   background: #ececee;
 }
@@ -283,7 +315,17 @@ body:has(.dzhz-page),
   flex: 1 1 auto;
   min-width: 0;
   padding-bottom: 0;
-  gap: 10px;
+  gap: 8px;
+}
+.dzhz-page [class*='HarnessCapabilitiesSection_copy'] h3 {
+  font-size: 17px;
+  line-height: 1.4;
+}
+.dzhz-page [class*='HarnessCapabilitiesSection_copy'] p {
+  font-size: 13px;
+  line-height: 1.55;
+  /* 描述统一预留两行，同一行卡片里的手机才能顶部对齐 */
+  min-height: calc(1.55em * 2);
 }
 .dz-feat {
   flex: none;
@@ -292,17 +334,17 @@ body:has(.dzhz-page),
   background: transparent;
 }
 .dz-feat-frame {
-  width: 182px;
+  width: 168px;
   padding: 4px;
-  border-radius: 28px;
+  border-radius: 26px;
   background: linear-gradient(160deg, #2b2d33 0%, #0c0d10 55%);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.14) inset,
-    0 16px 36px rgba(23, 28, 40, 0.22);
+    0 14px 30px rgba(23, 28, 40, 0.2);
 }
 .dz-feat-shot {
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 24px;
+  border-radius: 22px;
 }
