@@ -182,3 +182,12 @@ body:has(.dzhz-page),
     font-size: 34px;
   }
 }
+
+/* hover 层是 .ds-btn-primary::after 的圆形覆盖层，而按钮的 overflow:hidden 会裁到
+ * padding box——1px 透明边框那一圈留在裁剪区外，只露出底色，圆环内缘就有一道黑边。
+ * overflow: clip + 1px 裁剪余量把裁剪区扩到边框盒，覆盖层才能盖满整颗按钮。 */
+.dzhz-page .ds-btn-primary {
+  overflow: hidden;
+  overflow: clip;
+  overflow-clip-margin: 1px;
+}
