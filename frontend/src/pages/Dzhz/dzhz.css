@@ -115,3 +115,21 @@ body:has(.dzhz-page),
   color: var(--harness-logo-foreground, #f9fafb);
   white-space: nowrap;
 }
+
+/* ---- 页脚：去掉微信公众号后的对齐 ----
+ * 原布局是三列 1fr auto 1fr，靠第一列的微信块撑开；删掉后版权会落到第一列。
+ * 桌面端改成 flex 居中 + 导航绝对贴右，版权保持视觉居中；移动端仍是竖排居中。 */
+@media (min-width: 1280px) {
+  .dzhz-page .dzhz-footer-row {
+    position: relative;
+    display: flex;
+    justify-content: center;
+  }
+  .dzhz-page .dzhz-footer-row > nav {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0;
+  }
+}
