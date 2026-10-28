@@ -130,10 +130,10 @@ body:has(.dzhz-page),
 }
 
 /* 品牌字：原 wordmark 是 SVG 路径（deepseek + HARNESS 小标签），改成中文后
- * 用文本承接。20px/500 是压轻后的取值，重心仍在 28px 的头像上。 */
+ * 用文本承接。20px/600 配 28px 的头像：字号小于原 wordmark，字重补回视觉重量。 */
 .dz-brand-name {
   font-size: 20px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1;
   letter-spacing: -0.02em;
   color: var(--harness-logo-foreground, #f9fafb);
@@ -150,19 +150,15 @@ body:has(.dzhz-page),
 
 /* ---- 页脚：去掉微信公众号后的对齐 ----
  * 原布局是三列 1fr auto 1fr，靠第一列的微信块撑开；删掉后版权会落到第一列。
- * 桌面端改成 flex 居中 + 导航绝对贴右，版权保持视觉居中；移动端仍是竖排居中。 */
+ * 桌面端改成单行 flex：版权与政策链接作为一个整体居中。行间距取 12px，跟 nav 内部
+ * 的 gap-x 一致，三项之间才等距（页脚已不靠「·」分隔）。移动端仍是竖排居中。 */
 @media (min-width: 1280px) {
   .dzhz-page .dzhz-footer-row {
-    position: relative;
     display: flex;
+    flex-direction: row;
+    align-items: center;
     justify-content: center;
-  }
-  .dzhz-page .dzhz-footer-row > nav {
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    margin: 0;
+    gap: var(--ds-space-3);
   }
 }
 
