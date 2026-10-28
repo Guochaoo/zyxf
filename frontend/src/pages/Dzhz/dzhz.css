@@ -48,6 +48,13 @@ body:has(.dzhz-page),
   gap: var(--ds-space-2, 8px);
   flex: none;
 }
+/* 右栏容器是 gap-ds-2 lg:gap-ds-4；内部 GitHub/下载也要跟着切到 16px，
+ * 否则 ≥1024 时「返回资料库↔GitHub」16px、「GitHub↔下载」仍是 8px。 */
+@media (min-width: 1024px) {
+  .dzhz-header-actions {
+    gap: var(--ds-space-4, 16px);
+  }
+}
 
 /* 下拉菜单必须挂到 actions 上：原页用 floating portal 渲染，而分体按钮本身
  * （.ds-btn-primary）带 overflow:hidden，放里面会被裁掉。 */
