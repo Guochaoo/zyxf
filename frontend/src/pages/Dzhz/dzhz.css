@@ -107,6 +107,27 @@ body:has(.dzhz-page),
   left: 50%;
   translate: -50% 0;
 }
+/* 原站菜单进场是 scale(.95) → scale(1)、原点在顶部：盒子整体从 95% 撑到 100%，
+ * 底边会先缩进约 3px 再落回，看起来像「高度跳变」。换成位移 + 淡入，盒子尺寸恒定：
+ * 实测底边 top/bottom 全程不动，只有 opacity 和 4px 的位移。 */
+.dzhz-page .dzhz-dl-menu {
+  animation: dz-dl-enter 0.18s cubic-bezier(0.19, 1, 0.22, 1);
+}
+@keyframes dz-dl-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dzhz-page .dzhz-dl-menu {
+    animation: none;
+  }
+}
 .dzhz-dl-menu .dzhz-dl-option {
   display: block;
   padding: 8px 10px;
