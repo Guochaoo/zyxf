@@ -41,8 +41,8 @@ body:has(.dzhz-page),
   background: #f8f8f8 !important;
 }
 
-/* 原页的流体背景是深蓝底，light 主题下会变成一整块深色。保留 canvas 动画，
- * 盖一层页面底色的渐变，只留很淡的冷色流动；Hero 文字随主题变深后可读。 */
+/* 原页的 hero 底是深蓝 radial-gradient（WebGL 流体已移除），light 主题下
+ * 会变成一整块深色；盖一层页面底色渐变，只留很淡的冷色底。 */
 .dzhz-page main > section:first-child > .absolute.inset-0.z-0.overflow-hidden::after {
   content: '';
   position: absolute;

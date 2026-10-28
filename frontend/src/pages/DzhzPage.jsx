@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import initHeroBackground from './Dzhz/heroBackground.js';
 import initHeroScroll from './Dzhz/heroScroll.js';
 import initHeaderScroll from './Dzhz/headerScroll.js';
 import html from './Dzhz/content.html?raw';
@@ -29,8 +28,6 @@ export default function DzhzPage() {
     const root = rootRef.current;
     if (!root) return undefined;
 
-    // Hero 的 WebGL 流体背景：原页把着色器内联在 JS 里，这里逐字移植。
-    const stopBackground = initHeroBackground(root.querySelector('canvas'));
     // 顶部栏滚动过渡：收窄成毛玻璃胶囊，语言切换换成 GitHub + 下载。
     const stopHeader = initHeaderScroll(root);
     // Hero 的滚动视差：预览窗口后仰 + 背景模糊。
@@ -56,7 +53,6 @@ export default function DzhzPage() {
       observers.forEach((observer) => observer.disconnect());
       stopHeroScroll();
       stopHeader();
-      stopBackground();
     };
   }, []);
 
