@@ -261,14 +261,21 @@ body:has(.dzhz-page),
  * 配色取自 ServiceColors（课表 #315FD4、考勤 #37474F、成绩 #7B1FA2、
  * 屁岱 #00695C、校园卡 #2E7D32、学辅 #5D4037、空教室 #283593、图书馆 #E65100）。
  * ============================================================ */
+/* 卡片：无描边的平灰底；预览区不再单独上底色，跟着卡片走 */
+.dzhz-page [class*='HarnessCapabilitiesSection_card'] {
+  border: 0;
+  background: #ececee;
+}
+.dzhz-page [class*='HarnessCapabilitiesSection_media'] {
+  border: 0;
+}
 .dz-feat {
   display: flex;
   align-items: flex-end;
   justify-content: center;
   min-height: 208px;
   padding: 16px 20px 0;
-  background:
-    radial-gradient(90% 70% at 50% 0%, #f7f9fc 0%, #eceff4 60%, #e6eaf1 100%);
+  background: transparent;
 }
 .dz-feat-card {
   width: 100%;
