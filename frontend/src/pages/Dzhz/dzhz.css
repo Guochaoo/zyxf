@@ -174,3 +174,11 @@ body:has(.dzhz-page),
   background: #1a1a1c;
   border-radius: 8px 8px 0 0;
 }
+
+/* Hero 标题在窄屏放不下 9 个汉字（9 × 40px = 360px > 375 - 48），会掉成
+ * 「简洁方便的校园助 / 手」的孤字换行；降到 34px 保持单行。≥408px 仍是 40px。 */
+@media (max-width: 407px) {
+  .dzhz-page .ds-text-hero {
+    font-size: 34px;
+  }
+}
