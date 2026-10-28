@@ -105,12 +105,13 @@ body:has(.dzhz-page),
   display: none;
 }
 
-/* logo 右侧的「预览版」徽标：英雄区标签滚出视口后由 JS 淡入。 */
-.dzhz-header-badge {
-  display: none;
-}
-@media (min-width: 1024px) {
-  .dzhz-header-badge {
-    display: inline-flex;
-  }
+/* 品牌字：原 wordmark 是 SVG 路径（deepseek + HARNESS 小标签），改成中文后
+ * 用文本承接，字号/字重对齐原 24px 高的 wordmark。 */
+.dz-brand-name {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--harness-logo-foreground, #f9fafb);
+  white-space: nowrap;
 }

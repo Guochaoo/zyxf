@@ -25,7 +25,6 @@ export default function initHeaderScroll(root) {
   const primaryDownload = actions?.querySelector(
     '.HarnessDownloadMenu_action__Qe9nK'
   );
-  const badgeHost = headerBar.querySelector('.dzhz-header-badge');
 
   // 原页按访客平台决定主按钮指向哪个安装包；文案不变，只换 href。
   if (primaryDownload && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)) {
@@ -71,28 +70,11 @@ export default function initHeaderScroll(root) {
   document.addEventListener('click', onDocClick);
   document.addEventListener('keydown', onKey);
 
-  // ---- 英雄区标签 → header 徽标 ----
-  const heroLabel = root.querySelector('[data-hero-preview-label]');
-  let viewObserver;
-  if (heroLabel && badgeHost) {
-    viewObserver = new IntersectionObserver(
-      ([entry]) => {
-        const show = !entry.isIntersecting;
-        badgeHost.style.opacity = show ? '1' : '0';
-        badgeHost.style.visibility = show ? 'visible' : 'hidden';
-        badgeHost.style.transform = show ? 'none' : 'translateX(-6px)';
-      },
-      { threshold: 0 }
-    );
-    viewObserver.observe(heroLabel);
-  }
-
   return () => {
     window.removeEventListener('scroll', onScroll);
     window.removeEventListener('resize', onResize);
     arrow?.removeEventListener('click', onArrow);
     document.removeEventListener('click', onDocClick);
     document.removeEventListener('keydown', onKey);
-    viewObserver?.disconnect();
   };
 }
