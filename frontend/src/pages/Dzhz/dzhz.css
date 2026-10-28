@@ -12,7 +12,13 @@
 
 /* 字体改用本项目自托管的 OPPOSans（见 src/index.css 的字体说明）。
  * 变量声明在 .harness-site 自己身上，所以必须用更高优先级的选择器覆盖，
- * 挂在父级 .dzhz-page 上不会生效。 */
+ * 挂在父级 .dzhz-page 上不会生效。
+ *
+ * 配色跟随 privacy 页的浅色主题：主按钮黑底白字、玻璃顶栏用
+ * rgba(255,255,255,.84) + blur(12px)、边框 rgba(32,33,36,.14)；
+ * 页面底色按需求固定 #F8F8F8。--harness-logo-foreground 在浅色下
+ * 没有公共声明（只有 legal-page 里有），必须显式给深色，否则会落到
+ * fallback 的 #F9FAFB（白 logo 白底）。 */
 .dzhz-page .harness-site[data-theme] {
   --ds-font-body: 'OPPOSans', -apple-system, BlinkMacSystemFont, 'Segoe UI',
     'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Roboto, Arial,
@@ -21,15 +27,33 @@
   --ds-font-display: var(--ds-font-body);
   --ds-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas,
     'PingFang SC', 'Microsoft YaHei', monospace;
+  --ds-color-bg-page: #f8f8f8;
+  --ds-color-bg-surface-raised: hsla(0, 0%, 100%, 0.84);
+  --ds-color-border-default: rgba(32, 33, 36, 0.14);
+  --harness-logo-foreground: #202124;
 }
 
-/* 页面是深色落地页：把本项目浅色的页面底色压掉（index.css 用了 !important，
- * 这里只能同样用 !important + 更高优先级覆盖）。 */
+/* 页面底色跟随站点浅色界面（index.css 用了 !important，这里同样覆盖）。 */
 html:has(.dzhz-page),
 body:has(.dzhz-page),
 #root:has(.dzhz-page),
 .app-theme:has(.dzhz-page) {
-  background: #0a0a0a !important;
+  background: #f8f8f8 !important;
+}
+
+/* 原页的流体背景是深蓝底，light 主题下会变成一整块深色。保留 canvas 动画，
+ * 盖一层页面底色的渐变，只留很淡的冷色流动；Hero 文字随主题变深后可读。 */
+.dzhz-page main > section:first-child > .absolute.inset-0.z-0.overflow-hidden::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(248, 248, 248, 0.82) 0%,
+    rgba(248, 248, 248, 0.9) 55%,
+    rgba(248, 248, 248, 0.96) 100%
+  );
+  pointer-events: none;
 }
 
 /* 原页在移动端/减少动效时把预览缩放归零；保留这条行为时页脚文案会跟着变窄，
@@ -132,4 +156,14 @@ body:has(.dzhz-page),
     transform: translateY(-50%);
     margin: 0;
   }
+}
+
+/* ---- 浅色卡片里的预览画布保持深色 ----
+ * 原页的能力卡是深色底，插件/工作流画布本身透明，里面的工具行、状态字
+ * 用的是浅色固定色。换成浅色卡片后这些字会落在 #F8F8F8 上，必须给画布
+ * 补一层深色底（交付物/轨迹画布本来就有深色面板，不用动）。 */
+.dzhz-page [class*='HarnessPluginsPreview_canvas'],
+.dzhz-page [class*='HarnessWorkflowPreview_canvas'] {
+  background: #1a1a1c;
+  border-radius: 8px 8px 0 0;
 }
