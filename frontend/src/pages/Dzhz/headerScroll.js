@@ -13,23 +13,11 @@
 const SCROLL_THRESHOLD = 80;
 const WIDE_VIEWPORT = 1560;
 
-const MAC_DOWNLOAD =
-  'https://download.deepseek.com/desktop/dsh-latest-macos-arm64.dmg';
-
 export default function initHeaderScroll(root) {
   const headerBar = root.querySelector('.ds-header-bar');
   if (!headerBar) return () => {};
 
   const actions = headerBar.querySelector('.dzhz-header-actions');
-  const arrow = actions?.querySelector('.HarnessDownloadMenu_arrow__60_9L');
-  const primaryDownload = actions?.querySelector(
-    '.HarnessDownloadMenu_action__Qe9nK'
-  );
-
-  // 原页按访客平台决定主按钮指向哪个安装包；文案不变，只换 href。
-  if (primaryDownload && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)) {
-    primaryDownload.href = MAC_DOWNLOAD;
-  }
 
   headerBar.style.transition =
     'max-width .5s cubic-bezier(.22,1,.36,1), padding-left .5s cubic-bezier(.22,1,.36,1), padding-right .5s cubic-bezier(.22,1,.36,1), background-color .3s ease, border-color .3s ease, backdrop-filter .3s ease';
@@ -53,27 +41,44 @@ export default function initHeaderScroll(root) {
   window.addEventListener('resize', onResize, { passive: true });
 
   // ---- 下载分体按钮的下拉菜单 ----
-  const setOpen = (open) => {
-    if (!actions || !arrow) return;
-    actions.classList.toggle('dzhz-dl-open', open);
-    arrow.setAttribute('aria-expanded', String(open));
-  };
+  // 顶栏一份、Hero 一份。菜单挂在分体按钮外层的定位容器上（按钮自身 overflow 会裁掉它），
+  // 所以这里按「菜单 → 父元素」反查容器，而不是写死 .dzhz-header-actions。
+  const dropdowns = Array.from(root.querySelectorAll('.dzhz-dl-menu')).map(
+    (menu) => ({
+      holder: menu.parentElement,
+      arrow: menu.parentElement?.querySelector('[aria-haspopup="menu"]'),
+    })
+  );
+
+  const closeAll = () =>
+    dropdowns.forEach(({ holder, arrow }) => {
+      holder?.classList.remove('dzhz-dl-open');
+      arrow?.setAttribute('aria-expanded', 'false');
+    });
+
   const onArrow = (event) => {
     event.stopPropagation();
-    setOpen(!actions.classList.contains('dzhz-dl-open'));
+    const holder = event.currentTarget.closest('.dzhz-header-actions, .dz-hero-dl');
+    if (!holder) return;
+    const open = !holder.classList.contains('dzhz-dl-open');
+    closeAll();
+    holder.classList.toggle('dzhz-dl-open', open);
+    event.currentTarget.setAttribute('aria-expanded', String(open));
   };
-  const onDocClick = () => setOpen(false);
+
+  dropdowns.forEach(({ arrow }) => arrow?.addEventListener('click', onArrow));
+
+  const onDocClick = () => closeAll();
   const onKey = (event) => {
-    if (event.key === 'Escape') setOpen(false);
+    if (event.key === 'Escape') closeAll();
   };
-  arrow?.addEventListener('click', onArrow);
   document.addEventListener('click', onDocClick);
   document.addEventListener('keydown', onKey);
 
   return () => {
     window.removeEventListener('scroll', onScroll);
     window.removeEventListener('resize', onResize);
-    arrow?.removeEventListener('click', onArrow);
+    dropdowns.forEach(({ arrow }) => arrow?.removeEventListener('click', onArrow));
     document.removeEventListener('click', onDocClick);
     document.removeEventListener('keydown', onKey);
   };

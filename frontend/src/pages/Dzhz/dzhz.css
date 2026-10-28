@@ -87,16 +87,25 @@ body:has(.dzhz-page),
   top: calc(100% + 8px);
   right: 0;
   display: none;
-  min-width: 236px;
+  min-width: 260px;
   padding: 4px;
   border-radius: 12px;
   background: #fff;
   box-shadow: rgba(0, 0, 0, 0.2) 0 0 1px 0, rgba(0, 0, 0, 0.02) 0 0 4px 0,
     rgba(0, 0, 0, 0.08) 0 12px 32px 0;
   z-index: 60;
+  /* Hero 外层是 text-center，菜单不锁左对齐的话条目会跟着居中。 */
+  text-align: left;
 }
-.dzhz-header-actions.dzhz-dl-open .dzhz-dl-menu {
+.dzhz-dl-open .dzhz-dl-menu {
   display: block;
+}
+/* Hero 的菜单挂在分体按钮下方居中。这里只能动 translate 不能动 transform：
+ * HarnessDownloadMenu 自带的 scale 进场动画会覆盖 transform。 */
+.dz-hero-dl .dzhz-dl-menu {
+  right: auto;
+  left: 50%;
+  translate: -50% 0;
 }
 .dzhz-dl-menu .dzhz-dl-option {
   display: block;
