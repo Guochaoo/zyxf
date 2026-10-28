@@ -35,3 +35,6 @@ __pycache__/
 # 构建期生成的字体子集：源字体走 npm（@fontpkg/oppo-sans-4-0），
 # 由 frontend/scripts/build-font.mjs 生成，不经版本控制（BUG-99）
 frontend/src/assets/fonts/*.woff2
+
+# 本地临时截图与自测用的浏览器 profile
+.tmpimg/
