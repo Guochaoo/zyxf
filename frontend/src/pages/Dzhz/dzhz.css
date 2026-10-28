@@ -267,11 +267,12 @@ body:has(.dzhz-page),
 .dzhz-page [class*='HarnessCapabilitiesSection_media'] {
   border: 0;
 }
+/* 整屏截图不再裁切：原样按宽缩放，卡片随图变高 */
 .dz-feat {
   display: block;
   overflow: hidden;
   border-radius: 20px 20px 0 0;
-  background: #fff;
+  background: transparent;
 }
 .dz-feat-shot {
   display: block;
