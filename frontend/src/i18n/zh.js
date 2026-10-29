@@ -1,7 +1,7 @@
 // 简体中文文案基准。
 // i18next 字典：key 分层按域组织（app / menu / browse / auth / dashboard / about /
-// disclosure / settings / aiSearch / kg / search / tree / notice / toast / upload /
-// preview / footer / common）。
+// disclosure / dzhzLegal / settings / aiSearch / kg / search / tree / notice / toast /
+// upload / preview / footer / common）。
 const zh = {
   app: {
     title: '仲英学辅',
@@ -38,6 +38,14 @@ const zh = {
     login: '登录',
     logout: '退出登录',
     currentAccount: '当前账户',
+  },
+  dzhzLegal: {
+    back: '返回岱宗盒子',
+    title: '用户协议与隐私政策',
+    meta: '岱宗盒子 App · 协议版本 v{{version}}',
+    intro:
+      '本页与 App 内「设置 → 关于 → 用户协议与隐私政策」的正文一致。协议更新后以 App 内展示的版本为准；继续使用本应用即视为接受修改后的条款。',
+    source: '正文来自 App 仓库的 Eula.kt（v{{version}}），与 App 内一字不差。',
   },
   browse: {
     defaultSort: '默认',

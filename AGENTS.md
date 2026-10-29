@@ -25,7 +25,7 @@ zyxf/
 │   └── test/
 ├── frontend/              # React 前端（Vite + TailwindCSS）
 │   ├── src/
-│   │   ├── pages/         # BrowsePage / DashboardPage / AuthPage（登录+注册） / AboutPage / DisclosurePage（公示栏） / DzhzPage（岱宗盒子）
+│   │   ├── pages/         # BrowsePage / DashboardPage / AuthPage（登录+注册） / AboutPage / DisclosurePage（公示栏） / DzhzPage（岱宗盒子） / DzhzLegalPage（/dzhz/legal 用户协议与隐私政策）
 │   │   │                  #   页面级子模块：pages/Browse/、pages/Dashboard/（容器 + 数据 hook + 纯展示件）、
 │   │   │                  #   pages/Disclosure/（公示页结构性数据 + 投稿邮箱，展示文案在 i18n 的 disclosure 段）、
 │   │   │                  #   pages/Dzhz/（deepseek.com/harness 的临时 1:1 复刻：content.html + base.css + Hero 着色器/滚动脚本）

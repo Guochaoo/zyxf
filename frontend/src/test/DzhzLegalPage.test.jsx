@@ -1,0 +1,56 @@
+import { describe, test, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import DzhzLegalPage from '../pages/DzhzLegalPage.jsx';
+import legalDoc from '../pages/Dzhz/legalContent.json';
+import dzhzHtml from '../pages/Dzhz/content.html?raw';
+
+const { version: LEGAL_VERSION, sections: LEGAL_SECTIONS } = legalDoc;
+
+/* ============================================================
+ * 岱宗盒子 · 用户协议与隐私政策（/dzhz/legal）的内容契约。
+ *
+ * 这里守三件事：
+ *   1. 八节正文按 App 的 Eula.kt 顺序逐节渲染（顺序错 = 与 App 内不是同一份）；
+ *   2. 页脚的两个深链锚点 #terms / #privacy 真的存在；
+ *   3. dzhz 页脚的「隐私政策 / 用户协议」指向本站协议页，不再外链 DeepSeek
+ *      （复刻件遗留的地址，主体与著作权都对不上）。
+ * ============================================================ */
+
+const renderPage = () =>
+  render(
+    <MemoryRouter initialEntries={['/dzhz/legal']}>
+      <DzhzLegalPage />
+    </MemoryRouter>
+  );
+
+describe('岱宗盒子 · 用户协议与隐私政策', () => {
+  test('八节正文按 App 的 Eula 顺序渲染', () => {
+    renderPage();
+    const headings = screen.getAllByRole('heading', { level: 2 });
+    expect(headings.map((h) => h.textContent)).toEqual(LEGAL_SECTIONS.map((s) => s.title));
+  });
+
+  test('版本号、隐私条款与合规条款都在页面上', () => {
+    const { container } = renderPage();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('用户协议与隐私政策');
+    expect(container.textContent).toContain(`协议版本 v${LEGAL_VERSION}`);
+    expect(container.textContent).toContain('您的账号凭据（用户名和密码）仅加密存储在本地设备中');
+    expect(container.textContent).toContain('本应用不提供抢选、抢课、刷分等牟利功能。');
+    // 关键句在 App 里是强调样式，搬到网页后不能退化成普通正文
+    expect(container.querySelectorAll('strong').length).toBeGreaterThanOrEqual(4);
+  });
+
+  test('页脚深链的 #terms / #privacy 锚点存在', () => {
+    const { container } = renderPage();
+    expect(container.querySelector('#terms')).toBeTruthy();
+    expect(container.querySelector('#privacy')).toBeTruthy();
+  });
+
+  test('dzhz 页脚的隐私政策 / 用户协议已改为站内协议页', () => {
+    expect(dzhzHtml).toContain('href="/dzhz/legal#privacy">隐私政策</a>');
+    expect(dzhzHtml).toContain('href="/dzhz/legal#terms">用户协议</a>');
+    expect(dzhzHtml).not.toContain('deepseek.com/harness/privacy');
+    expect(dzhzHtml).not.toContain('deepseek.com/harness/terms-of-use');
+  });
+});
