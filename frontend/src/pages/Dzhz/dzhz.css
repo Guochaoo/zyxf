@@ -5,7 +5,7 @@
  * 把直写的 Montserrat 换成令牌。页面的"假直播"动效全部是这份 CSS 里的关键帧，
  * 不要按本项目 DESIGN.md 重写，否则时序会对不上。
  *
- * ⚠️ 版权：可见文案、DeepSeek 商标与产品截图仍属原站，上线前必须替换（待办）。
+ * ⚠️ 版权：base.css 与 content.html 的 DOM/类名仍是原站复刻；可见文案、品牌与截图已换成自有内容。上线前需取得授权或重写。
  * 本文件与 base.css、content.html 一起构成完整的复刻范围。
  */
 @import './base.css';
