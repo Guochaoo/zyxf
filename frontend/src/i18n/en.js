@@ -43,6 +43,11 @@ const en = {
     intro:
       'This page matches the text under “Settings → About → User Agreement & Privacy Policy” in the app. If the agreement is updated, the version shown in the app prevails. The legal text below is currently available in Chinese only.',
   },
+  dzhzLicense: {
+    title: 'Open Source License',
+    intro:
+      'Daizong Box is open source under the GNU General Public License v3.0. The full license text follows, unmodified.',
+  },
   browse: {
     defaultSort: 'Default',
     name: 'Name',

@@ -1,6 +1,6 @@
 // 简体中文文案基准。
 // i18next 字典：key 分层按域组织（app / menu / browse / auth / dashboard / about /
-// disclosure / dzhzLegal / settings / aiSearch / kg / search / tree / notice / toast /
+// disclosure / dzhzLegal / dzhzLicense / settings / aiSearch / kg / search / tree / notice / toast /
 // upload / preview / footer / common）。
 const zh = {
   app: {
@@ -45,6 +45,11 @@ const zh = {
     meta: '协议版本：v{{version}}',
     intro:
       '本页与 App 内「设置 → 关于 → 用户协议与隐私政策」的正文一致，协议更新后以应用内展示的版本为准，继续使用本应用即视为接受修改后的条款。',
+  },
+  dzhzLicense: {
+    title: '开源协议',
+    intro:
+      '岱宗盒子源代码基于 GNU General Public License v3.0 开源，以下是许可证全文（官方原文，未改动）。',
   },
   browse: {
     defaultSort: '默认',

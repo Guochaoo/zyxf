@@ -50,7 +50,13 @@ describe('岱宗盒子 · 用户协议与隐私政策', () => {
     expect(container.querySelector('#privacy')).toBeTruthy();
   });
 
-  test('dzhz 页脚合并为一个「用户协议与隐私政策」站内入口', () => {
+  test('页脚链到开源协议页', () => {
+    const { container } = renderPage();
+    expect(container.querySelector('footer a[href="/dzhz/license"]')).toBeTruthy();
+  });
+
+  test('dzhz 页脚的两个站内入口：开源协议 / 用户协议与隐私政策', () => {
+    expect(dzhzHtml).toContain('href="/dzhz/license">开源协议</a>');
     expect(dzhzHtml).toContain('href="/dzhz/legal">用户协议与隐私政策</a>');
     expect(dzhzHtml).not.toContain('>隐私政策</a>');
     expect(dzhzHtml).not.toContain('>用户协议</a>');
