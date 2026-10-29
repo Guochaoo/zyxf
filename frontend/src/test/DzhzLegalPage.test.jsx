@@ -12,8 +12,8 @@ const { version: LEGAL_VERSION, sections: LEGAL_SECTIONS } = legalDoc;
  *
  * 这里守三件事：
  *   1. 八节正文按 App 的 Eula.kt 顺序逐节渲染（顺序错 = 与 App 内不是同一份）；
- *   2. 页脚的两个深链锚点 #terms / #privacy 真的存在；
- *   3. dzhz 页脚的「隐私政策 / 用户协议」指向本站协议页，不再外链 DeepSeek
+ *   2. 页面保留 #terms / #privacy 两个深链锚点；
+ *   3. dzhz 页脚只有一个「用户协议与隐私政策」站内入口，不再外链 DeepSeek
  *      （复刻件遗留的地址，主体与著作权都对不上）。
  * ============================================================ */
 
@@ -34,7 +34,10 @@ describe('岱宗盒子 · 用户协议与隐私政策', () => {
   test('版本号、隐私条款与合规条款都在页面上', () => {
     const { container } = renderPage();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('用户协议与隐私政策');
-    expect(container.textContent).toContain(`协议版本 v${LEGAL_VERSION}`);
+    expect(container.textContent).toContain(`协议版本：v${LEGAL_VERSION}`);
+    expect(container.textContent).toContain(
+      '本页与 App 内「设置 → 关于 → 用户协议与隐私政策」的正文一致，协议更新后以应用内展示的版本为准，继续使用本应用即视为接受修改后的条款。'
+    );
     expect(container.textContent).toContain('您的账号凭据（用户名和密码）仅加密存储在本地设备中');
     expect(container.textContent).toContain('本应用不提供抢选、抢课、刷分等牟利功能。');
     // 关键句在 App 里是强调样式，搬到网页后不能退化成普通正文
