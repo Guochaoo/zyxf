@@ -41,15 +41,16 @@ describe('岱宗盒子 · 用户协议与隐私政策', () => {
     expect(container.querySelectorAll('strong').length).toBeGreaterThanOrEqual(4);
   });
 
-  test('页脚深链的 #terms / #privacy 锚点存在', () => {
+  test('页面保留 #terms / #privacy 深链锚点', () => {
     const { container } = renderPage();
     expect(container.querySelector('#terms')).toBeTruthy();
     expect(container.querySelector('#privacy')).toBeTruthy();
   });
 
-  test('dzhz 页脚的隐私政策 / 用户协议已改为站内协议页', () => {
-    expect(dzhzHtml).toContain('href="/dzhz/legal#privacy">隐私政策</a>');
-    expect(dzhzHtml).toContain('href="/dzhz/legal#terms">用户协议</a>');
+  test('dzhz 页脚合并为一个「用户协议与隐私政策」站内入口', () => {
+    expect(dzhzHtml).toContain('href="/dzhz/legal">用户协议与隐私政策</a>');
+    expect(dzhzHtml).not.toContain('>隐私政策</a>');
+    expect(dzhzHtml).not.toContain('>用户协议</a>');
     expect(dzhzHtml).not.toContain('deepseek.com/harness/privacy');
     expect(dzhzHtml).not.toContain('deepseek.com/harness/terms-of-use');
   });

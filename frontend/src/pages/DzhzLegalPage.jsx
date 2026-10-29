@@ -11,9 +11,9 @@ import legalDoc from './Dzhz/legalContent.json';
  * （version = App 的 CURRENT_EULA_VERSION）。App 改条款时重新生成该 JSON
  * 并同步 version，两处才不会出现「设置里读到的不是网页上这份」。
  *
- * /dzhz 页脚的「隐私政策 / 用户协议」都指向本页：正文是一份合并文档，
- * #terms 落在标题、#privacy 落在第二节「数据来源与使用」（隐私相关内容起点），
- * 不把八节拆成两份各自维护。正文只有中文版，英文界面会在导语里如实说明。
+ * /dzhz 页脚的「用户协议与隐私政策」指向本页：正文是一份合并文档，不拆成两份
+ * 各自维护。页面保留 #terms（标题）与 #privacy（第二节「数据来源与使用」）两个
+ * 锚点，供外部直接深链。正文只有中文版，英文界面会在导语里如实说明。
  * ============================================================ */
 
 const { version: LEGAL_VERSION, sections: LEGAL_SECTIONS } = legalDoc;
@@ -59,7 +59,7 @@ export default function DzhzLegalPage() {
         <div className="mt-8 space-y-7">
           {LEGAL_SECTIONS.map((section) => (
             <section key={section.id} id={section.id} className="scroll-mt-6">
-              {/* #privacy 是页脚「隐私政策」的落点：第二节开始讲数据与隐私 */}
+              {/* #privacy 供直接深链：第二节开始讲数据与隐私 */}
               {section.id === 'data' && <span id="privacy" className="block scroll-mt-6" aria-hidden="true" />}
               <h2 className="text-[16px] font-semibold text-ink sm:text-[17px]">{section.title}</h2>
               <div className="mt-2 space-y-2">
