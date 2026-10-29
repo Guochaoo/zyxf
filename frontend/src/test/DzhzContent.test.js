@@ -7,7 +7,7 @@ import dzhzHtml from '../pages/Dzhz/content.html?raw';
 /* ============================================================
  * 岱宗盒子落地页的复刻残留守卫：
  *   1. 移动端菜单不能再出现原站专属入口（开发者文档 / 社区插件 / Cordis 论文）；
- *   2. public/dzhz 下的每个静态资源都必须在页面的 HTML/CSS/JS 里被引用，
+ *   2. public/dzhz-assets 下的每个静态资源都必须在页面的 HTML/CSS/JS 里被引用，
  *      防止再出现 file-types 那种「加了但没人用」的原站图标。
  * ============================================================ */
 
@@ -29,7 +29,7 @@ describe('岱宗盒子落地页 · 复刻残留', () => {
     }
   });
 
-  test('public/dzhz 下所有资源都被页面引用', () => {
+  test('public/dzhz-assets 下所有资源都被页面引用', () => {
     const sources = [
       'src/pages/Dzhz/content.html',
       'src/pages/Dzhz/base.css',
@@ -50,7 +50,10 @@ describe('岱宗盒子落地页 · 复刻残留', () => {
         else assets.push(target);
       }
     };
-    walk(path.join(frontendRoot, 'public/dzhz'));
+    // 资源目录不能叫 public/dzhz：构建后会生成 dist/dzhz/，和 /dzhz 路由撞名，
+    // nginx 的 try_files $uri $uri/ 会命中目录并 403。
+    expect(fs.existsSync(path.join(frontendRoot, 'public/dzhz'))).toBe(false);
+    walk(path.join(frontendRoot, 'public/dzhz-assets'));
 
     expect(assets.length).toBeGreaterThan(0);
     for (const asset of assets) {

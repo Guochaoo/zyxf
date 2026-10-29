@@ -170,7 +170,7 @@ body:has(.dzhz-page),
   white-space: nowrap;
 }
 
-/* 品牌标记：绿幕抠底的小人（public/dzhz/images/brand-avatar.webp）。
+/* 品牌标记：绿幕抠底的小人（public/dzhz-assets/images/brand-avatar.webp）。
  * 高度比原鲸鱼 wordmark 的 24px 略高，否则脸部细节在 20px 的品牌字旁糊成一团。
  * 抠图在主体边缘是直切（右侧发梢、下方卫衣），底部两角给 10px 圆角收口：
  * 只落到发梢和衣角，脸和头顶不受影响。 */

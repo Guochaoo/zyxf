@@ -12,6 +12,9 @@ const { __resetResourceStore } = await import('../data/resource.js');
 vi.mock('../components/SearchBar.jsx', () => ({
   default: () => <input aria-label="搜索" placeholder="搜索" />,
 }));
+vi.mock('../pages/DzhzPage.jsx', () => ({
+  default: () => <div data-testid="dzhz-page" />,
+}));
 vi.mock('../components/StaggeredMenu.jsx', () => ({
   default: ({ items, account, onOpenSettings }) => (
     <nav>
@@ -139,6 +142,18 @@ describe('App', () => {
   test('active nav item matches the route', async () => {
     renderApp('/dashboard');
     expect(await screen.findByText('统计面板')).toBeInTheDocument();
+  });
+
+  // 线上直接输入 /dzhz 曾 301 到 /dzhz/ 再 403：nginx 把静态资源目录当成了
+  // 路由。资源目录已迁到 /dzhz-assets；这里守住带斜杠的路径也必须走落地页布局
+  // （p-0、不叠全局菜单），否则 /dzhz/ 会按普通页面渲染。
+  test('/dzhz/ 带斜杠也按独立落地页布局', async () => {
+    renderApp('/dzhz/');
+    expect(await screen.findByTestId('dzhz-page')).toBeInTheDocument();
+    const main = screen.getByRole('main');
+    expect(main.className).toContain('p-0');
+    expect(main.className).not.toContain('px-4');
+    expect(screen.queryByRole('navigation')).toBeNull();
   });
 
   test('unknown routes redirect home', async () => {
