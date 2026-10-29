@@ -399,6 +399,7 @@ nginx -t && systemctl reload nginx
 #### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 
 - **刷新任何前端路由都是 404**（`/folder/6`、`/dashboard`、`/about`、`/settings`）：缺 `location / { try_files $uri $uri/ /index.html; }`（BUG-97）。dist/ 里没有这些文件，必须交给 index.html 由前端路由接管。
+- **直接访问 `/dzhz` 是 301 → `/dzhz/` 然后 403**：图片原先放在 `public/dzhz/`，构建后是 `dist/dzhz/` 目录；`try_files $uri $uri/` 命中目录、里面没有 `index.html`，nginx 返回 403。资源已迁到 `public/dzhz-assets/`（URL `/dzhz-assets/…`），**不要再把资源放回 `public/dzhz/`**。服务器上残留旧的 `dist/dzhz/` 时，重新构建（Vite 会清空 dist）或手动删掉。
 - **静态资源必须有 `Cache-Control`**（BUG-100），否则浏览器退回「10% × (Date − Last-Modified)」启发式缓存，字体每次冷启动重新协商：
   - `location ^~ /assets/`（文件名带内容 hash，含 `opposans-subset-<hash>.woff2`）→ `max-age=31536000, immutable` + `try_files $uri =404`；
   - `location ~* \.(?:ttf|otf|woff2?|png|jpe?g|webp|gif|svg|ico)$`（文件名无 hash，如 `/favicon.png`、`/images/*.webp`）→ `max-age=604800`。

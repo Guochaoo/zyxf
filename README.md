@@ -90,7 +90,7 @@ zyxf/
 │   ├── src/
 │   │   ├── pages/         # BrowsePage / DashboardPage / AuthPage（登录+注册） / AboutPage / DisclosurePage（公示栏） / DzhzPage（岱宗盒子） / DzhzLegalPage（/dzhz/legal 用户协议与隐私政策） / DzhzLicensePage（/dzhz/license 开源协议）
 │   │   │                  #   页面级子模块：pages/Browse/、pages/Dashboard/、pages/Disclosure/（结构性数据 + 投稿邮箱）、
-│   │   │                  #   pages/Dzhz/（/dzhz 临时复刻页：content.html + base.css + WebGL/滚动脚本；legalContent.json 是 App 的 EULA 正文、gpl-3.0.txt 是 GPL 原文；图片在 public/dzhz/）
+│   │   │                  #   pages/Dzhz/（/dzhz 临时复刻页：content.html + base.css + WebGL/滚动脚本；legalContent.json 是 App 的 EULA 正文、gpl-3.0.txt 是 GPL 原文；图片在 public/dzhz-assets/）
 │   │   ├── components/    # 文件列表 / 预览 / 知识图谱 / AI 搜索卡 / 菜单等
 │   │   └── test/          # vitest 测试
 └── docs/

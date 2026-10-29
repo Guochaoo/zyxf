@@ -137,7 +137,7 @@ export default function App() {
   // （读长文 / 看表格都需要比 7xl 更短的测量宽度）。
   const isDisclosure = pagePath === '/disclosure';
   // 岱宗盒子是独立落地页：铺满宽度、无内边距，使用须知不拦在它前面。
-  const isDzhz = pagePath === '/dzhz';
+  const isDzhz = pagePath === '/dzhz' || pagePath === '/dzhz/';
   // 协议页 / 开源协议页沿用 /dzhz 的公开属性（不弹使用须知、不叠全局菜单），也
   // 铺满宽度、内边距归零——版式与顶栏都由页面自己按 /dzhz 那套来。
   const isDzhzLegal = pagePath === '/dzhz/legal' || pagePath === '/dzhz/legal/';
