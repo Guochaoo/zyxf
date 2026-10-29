@@ -2,6 +2,10 @@ node_modules
 dist
 .env
 .env.local
+# 手工留的 .env 备份（.env.bak-*、.env.<name>.bak）也含密钥，绝不入库；
+# 生产机上这类备份已统一收到 /root/zyxf-env-backups/（600 root:root）
+.env.bak*
+.env.*.bak
 *.log
 data.db
 data.db-*
@@ -31,3 +35,6 @@ __pycache__/
 # 构建期生成的字体子集：源字体走 npm（@fontpkg/oppo-sans-4-0），
 # 由 frontend/scripts/build-font.mjs 生成，不经版本控制（BUG-99）
 frontend/src/assets/fonts/*.woff2
+
+# 本地临时截图与自测用的浏览器 profile
+.tmpimg/

@@ -25,9 +25,10 @@ zyxf/
 │   └── test/
 ├── frontend/              # React 前端（Vite + TailwindCSS）
 │   ├── src/
-│   │   ├── pages/         # BrowsePage / DashboardPage / AuthPage（登录+注册） / AboutPage / DisclosurePage（公示栏）
+│   │   ├── pages/         # BrowsePage / DashboardPage / AuthPage（登录+注册） / AboutPage / DisclosurePage（公示栏） / DzhzPage（岱宗盒子） / DzhzLegalPage（/dzhz/legal 用户协议与隐私政策） / DzhzLicensePage（/dzhz/license 开源协议）
 │   │   │                  #   页面级子模块：pages/Browse/、pages/Dashboard/（容器 + 数据 hook + 纯展示件）、
-│   │   │                  #   pages/Disclosure/（公示页结构性数据 + 投稿邮箱，展示文案在 i18n 的 disclosure 段）
+│   │   │                  #   pages/Disclosure/（公示页结构性数据 + 投稿邮箱，展示文案在 i18n 的 disclosure 段）、
+│   │   │                  #   pages/Dzhz/（deepseek.com/harness 的临时 1:1 复刻：content.html + base.css + Hero 着色器/滚动脚本）
 │   │   ├── components/    # 文件列表 / 预览 / 知识图谱 / AI 搜索卡 / 菜单等
 │   │   ├── hooks/         # 跨组件复用的 hook（useAiSearch / useSettingsRoute / useMediaQuery 等）
 │   │   ├── data/          # resource.js：轻量数据层（请求去重/取消/缓存/失效），新数据请求优先复用

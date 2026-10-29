@@ -23,6 +23,8 @@ const en = {
     aboutAria: 'Learn about the ZYXF Study Center',
     disclosure: 'Disclosure',
     disclosureAria: 'Read lecture plans, writing plans and spending',
+    dzhz: 'Daizong Box',
+    dzhzAria: 'Explore Daizong Box',
     toggleOpen: 'Menu',
     toggleClose: 'Close',
     openAria: 'Open menu',
@@ -33,6 +35,16 @@ const en = {
     login: 'Sign in',
     logout: 'Sign out',
     currentAccount: 'Current account',
+  },
+  dzhzLegal: {
+    back: 'Back to Daizong Box',
+    title: 'User Agreement & Privacy Policy',
+    meta: 'Agreement version: v{{version}}',
+    intro:
+      'This page matches the text under “Settings → About → User Agreement & Privacy Policy” in the app. If the agreement is updated, the version shown in the app prevails. The legal text below is currently available in Chinese only.',
+  },
+  dzhzLicense: {
+    title: 'Open Source License',
   },
   browse: {
     defaultSort: 'Default',

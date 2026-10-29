@@ -1,0 +1,358 @@
+/* /dzhz（岱宗盒子）—— deepseek.com/harness 的临时 1:1 复刻件。
+ *
+ * base.css 是原站四个生产 CSS 文件（含设计令牌 / Tailwind 工具类 / CSS Modules）的
+ * 原样拼接，只做了三件事：删掉 @font-face、把 /harness/ 资源路径换成本地 /dzhz/、
+ * 把直写的 Montserrat 换成令牌。页面的"假直播"动效全部是这份 CSS 里的关键帧，
+ * 不要按本项目 DESIGN.md 重写，否则时序会对不上。
+ *
+ * ⚠️ 版权：base.css 与 content.html 的 DOM/类名仍是原站复刻；可见文案、品牌与截图已换成自有内容。上线前需取得授权或重写。
+ * 本文件与 base.css、content.html 一起构成完整的复刻范围。
+ */
+@import './base.css';
+
+/* 字体改用本项目自托管的 OPPOSans（见 src/index.css 的字体说明）。
+ * 变量声明在 .harness-site 自己身上，所以必须用更高优先级的选择器覆盖，
+ * 挂在父级 .dzhz-page 上不会生效。
+ *
+ * 配色跟随 privacy 页的浅色主题：主按钮黑底白字、玻璃顶栏用
+ * rgba(255,255,255,.84) + blur(12px)、边框 rgba(32,33,36,.14)；
+ * 页面底色按需求固定 #F8F8F8。--harness-logo-foreground 在浅色下
+ * 没有公共声明（只有 legal-page 里有），必须显式给深色，否则会落到
+ * fallback 的 #F9FAFB（白 logo 白底）。 */
+.dzhz-page .harness-site[data-theme] {
+  --ds-font-body: 'OPPOSans', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Roboto, Arial,
+    sans-serif;
+  --ds-font-sans: var(--ds-font-body);
+  --ds-font-display: var(--ds-font-body);
+  --ds-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas,
+    'PingFang SC', 'Microsoft YaHei', monospace;
+  --ds-color-bg-page: #f8f8f8;
+  --ds-color-bg-surface-raised: hsla(0, 0%, 100%, 0.84);
+  --ds-color-border-default: rgba(32, 33, 36, 0.14);
+  --harness-logo-foreground: #202124;
+}
+
+/* 页面底色跟随站点浅色界面（index.css 用了 !important，这里同样覆盖）。 */
+html:has(.dzhz-page),
+body:has(.dzhz-page),
+#root:has(.dzhz-page),
+.app-theme:has(.dzhz-page) {
+  background: #f8f8f8 !important;
+}
+
+/* 原页的 hero 底是深蓝 radial-gradient（WebGL 流体已移除），light 主题下
+ * 会变成一整块深色；盖一层页面底色渐变，只留很淡的冷色底。 */
+.dzhz-page main > section:first-child > .absolute.inset-0.z-0.overflow-hidden::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(248, 248, 248, 0.82) 0%,
+    rgba(248, 248, 248, 0.9) 55%,
+    rgba(248, 248, 248, 0.96) 100%
+  );
+  pointer-events: none;
+}
+
+/* 原页在移动端/减少动效时把预览缩放归零；保留这条行为时页脚文案会跟着变窄，
+ * 这里只确保容器不因本项目 main 的内边距产生横向滚动。 */
+.dzhz-page {
+  width: 100%;
+  overflow-x: clip;
+}
+
+/* ---- 顶部栏滚动过渡（JS 见 headerScroll.js） ----
+ * 原页滚动后把语言切换换成 GitHub + 下载，并把 header 收成毛玻璃胶囊。
+ * 右侧按钮/下拉菜单的节点在 content.html 里预置，这里只补下拉层的定位与配色。 */
+.dzhz-header-actions {
+  position: relative;
+  align-items: center;
+  gap: var(--ds-space-2, 8px);
+  flex: none;
+}
+/* 右栏容器是 gap-ds-2 lg:gap-ds-4；内部 GitHub/下载也要跟着切到 16px，
+ * 否则 ≥1024 时「返回资料库↔GitHub」16px、「GitHub↔下载」仍是 8px。 */
+@media (min-width: 1024px) {
+  .dzhz-header-actions {
+    gap: var(--ds-space-4, 16px);
+  }
+}
+
+/* 下拉菜单必须挂到 actions 上：原页用 floating portal 渲染，而分体按钮本身
+ * （.ds-btn-primary）带 overflow:hidden，放里面会被裁掉。 */
+.dzhz-dl-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  display: none;
+  min-width: 260px;
+  padding: 4px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: rgba(0, 0, 0, 0.2) 0 0 1px 0, rgba(0, 0, 0, 0.02) 0 0 4px 0,
+    rgba(0, 0, 0, 0.08) 0 12px 32px 0;
+  z-index: 60;
+  /* Hero 外层是 text-center，菜单不锁左对齐的话条目会跟着居中。 */
+  text-align: left;
+}
+.dzhz-dl-open .dzhz-dl-menu {
+  display: block;
+}
+/* Hero 的菜单挂在分体按钮下方居中。这里只能动 translate 不能动 transform：
+ * HarnessDownloadMenu 自带的 scale 进场动画会覆盖 transform。 */
+.dz-hero-dl .dzhz-dl-menu {
+  right: auto;
+  left: 50%;
+  translate: -50% 0;
+}
+/* 原站菜单进场是 scale(.95) → scale(1)、原点在顶部：盒子整体从 95% 撑到 100%，
+ * 底边会先缩进约 3px 再落回，看起来像「高度跳变」。换成位移 + 淡入，盒子尺寸恒定：
+ * 实测底边 top/bottom 全程不动，只有 opacity 和 4px 的位移。 */
+.dzhz-page .dzhz-dl-menu {
+  animation: dz-dl-enter 0.18s cubic-bezier(0.19, 1, 0.22, 1);
+}
+@keyframes dz-dl-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dzhz-page .dzhz-dl-menu {
+    animation: none;
+  }
+}
+.dzhz-dl-menu .dzhz-dl-option {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: rgb(15, 17, 21);
+  text-decoration: none;
+}
+.dzhz-dl-menu .dzhz-dl-option:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+.dzhz-dl-menu .HarnessDownloadMenu_optionTitle__nJ95l {
+  font-size: 14px;
+  font-weight: 500;
+}
+.dzhz-dl-menu .HarnessDownloadMenu_optionNote__Oly7K {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+/* Lucide 图标的白底白图标修复：原页的 svg 在本项目里会从别处继承到浅色
+ * （实测 #ededed），而按钮底色是白色。强制跟随按钮文字色。 */
+.dzhz-page .ds-btn-primary svg,
+.dzhz-page .ds-btn-primary svg * {
+  color: inherit;
+}
+
+/* 原页自带的移动端汉堡没有 JS 绑定；本站的菜单按钮固定在同一位置且全站一致，
+ * 两个汉堡会重叠，所以隐藏原页这一个。 */
+.dzhz-page .ds-header-bar > button[aria-controls='harness-mobile-menu'] {
+  display: none;
+}
+
+/* 品牌字：原 wordmark 是 SVG 路径（deepseek + HARNESS 小标签），改成中文后
+ * 用文本承接。20px/600 配 28px 的头像：字号小于原 wordmark，字重补回视觉重量。 */
+.dz-brand-name {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--harness-logo-foreground, #f9fafb);
+  white-space: nowrap;
+}
+
+/* 品牌标记：绿幕抠底的小人（public/dzhz/images/brand-avatar.webp）。
+ * 高度比原鲸鱼 wordmark 的 24px 略高，否则脸部细节在 20px 的品牌字旁糊成一团。
+ * 抠图在主体边缘是直切（右侧发梢、下方卫衣），底部两角给 10px 圆角收口：
+ * 只落到发梢和衣角，脸和头顶不受影响。 */
+.dz-brand-mark {
+  display: block;
+  height: 28px;
+  width: auto;
+  border-radius: 0 0 10px 10px;
+}
+
+/* ---- 页脚：去掉微信公众号后的对齐 ----
+ * 原布局是三列 1fr auto 1fr，靠第一列的微信块撑开；删掉后版权会落到第一列。
+ * 桌面端改成单行 flex：版权与政策链接作为一个整体居中。行间距取 12px，跟 nav 内部
+ * 的 gap-x 一致，三项之间才等距（页脚已不靠「·」分隔）。移动端仍是竖排居中。 */
+@media (min-width: 1280px) {
+  .dzhz-page .dzhz-footer-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: var(--ds-space-3);
+  }
+}
+
+/* ---- 浅色卡片里的预览画布保持深色 ----
+ * 原页的能力卡是深色底，插件/工作流画布本身透明，里面的工具行、状态字
+ * 用的是浅色固定色。换成浅色卡片后这些字会落在 #F8F8F8 上，必须给画布
+ * 补一层深色底（交付物/轨迹画布本来就有深色面板，不用动）。 */
+.dzhz-page [class*='HarnessPluginsPreview_canvas'],
+.dzhz-page [class*='HarnessWorkflowPreview_canvas'] {
+  background: #1a1a1c;
+  border-radius: 8px 8px 0 0;
+}
+
+/* Hero 标题在窄屏放不下 9 个汉字（9 × 40px = 360px > 375 - 48），会掉成
+ * 「简洁方便的校园助 / 手」的孤字换行；降到 34px 保持单行。≥408px 仍是 40px。 */
+@media (max-width: 407px) {
+  .dzhz-page .ds-text-hero {
+    font-size: 34px;
+  }
+}
+
+/* hover 层是 .ds-btn-primary::after 的圆形覆盖层，而按钮的 overflow:hidden 会裁到
+ * padding box——1px 透明边框那一圈留在裁剪区外，只露出底色，圆环内缘就有一道黑边。
+ * overflow: clip + 1px 裁剪余量把裁剪区扩到边框盒，覆盖层才能盖满整颗按钮。 */
+.dzhz-page .ds-btn-primary {
+  overflow: hidden;
+  overflow: clip;
+  overflow-clip-margin: 1px;
+}
+
+/* ============================================================
+ * Hero 里的手机预览：真机截图（Pixel 7 模拟器，1264×2780）+ 纯 CSS 手机外框
+ * 截图数据是展示用的假数据（同学 / ¥999.9 / 999.9 / 计算机网络 周五第 1-2 节），
+ * 由 App 里一处临时的 SHOT_MODE 注入，截完已还原，仓库里不保留。
+ * ============================================================ */
+.dz-app-stage {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+  will-change: transform;
+}
+.dz-app-phone {
+  position: relative;
+  width: 358px;
+  padding: 9px;
+  border-radius: 48px;
+  background: linear-gradient(155deg, #2b2d33 0%, #0c0d10 48%, #23252b 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.16) inset,
+    0 30px 70px rgba(23, 28, 40, 0.3),
+    0 8px 18px rgba(23, 28, 40, 0.16);
+}
+.dz-app-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 40px;
+}
+@media (max-width: 430px) {
+  .dz-app-phone {
+    width: min(358px, 100%);
+  }
+}
+
+/* ============================================================
+ * 「多项功能，一手掌握」八张卡：画面是 App 真机截图（各功能的页面片段）
+ * 截图为展示用假数据（同学 / ¥999.9 / 999.9 / 计算机网络 …），源数据改了又还原。
+ * ============================================================ */
+.dzhz-page [class*='HarnessCapabilitiesSection_media'] {
+  border: 0;
+  /* 不能留上游的 overflow:hidden：会按直角矩形裁断手机框投影，圆角处露出直角灰块 */
+  overflow: visible;
+}
+/* 文案在上、截图在下的紧凑网格：文案占满卡片顶部，手机居中放下面，
+ * 不再出现文字缩在左半边、右侧一大片空白。8 张卡在 xl 排成 4×2
+ * （lg 3 列、sm 2 列、手机 1 列），区块高度约为原来的六成。 */
+.dz-feat-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+@media (min-width: 640px) {
+  .dz-feat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1024px) {
+  /* 3 列时用 6 栏给最后两张居中，避免末行只剩左对齐的两张 */
+  .dz-feat-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .dz-feat-grid > article {
+    grid-column: span 2;
+  }
+  .dz-feat-grid > article:nth-child(7) {
+    grid-column: 2 / span 2;
+  }
+  .dz-feat-grid > article:nth-child(8) {
+    grid-column: 4 / span 2;
+  }
+}
+@media (min-width: 1280px) {
+  .dz-feat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .dz-feat-grid > article,
+  .dz-feat-grid > article:nth-child(7),
+  .dz-feat-grid > article:nth-child(8) {
+    grid-column: span 1;
+  }
+}
+.dzhz-page [class*='HarnessCapabilitiesSection_card'] {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  /* 底部不留白：手机渐隐到卡片底边，像还在往下延伸 */
+  padding: 20px 16px 0;
+  border: 0;
+  background: #ececee;
+}
+.dzhz-page [class*='HarnessCapabilitiesSection_copy'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-bottom: 0;
+  gap: 8px;
+}
+.dzhz-page [class*='HarnessCapabilitiesSection_copy'] h3 {
+  font-size: 17px;
+  line-height: 1.4;
+}
+.dzhz-page [class*='HarnessCapabilitiesSection_copy'] p {
+  font-size: 13px;
+  line-height: 1.55;
+  /* 描述统一预留两行，同一行卡片里的手机才能顶部对齐 */
+  min-height: calc(1.55em * 2);
+}
+.dz-feat {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  background: transparent;
+}
+.dz-feat-frame {
+  /* 截图统一 900×1979：只显示上面 80%，底部 20% 由 mask 淡出到卡片底色。
+   * 高度里的 8px 是上下各 4px 的边框内边距。 */
+  --dz-feat-w: 168px;
+  width: var(--dz-feat-w);
+  height: calc((var(--dz-feat-w) - 8px) * 1979 / 900 * 0.8 + 8px);
+  overflow: hidden;
+  padding: 4px;
+  border-radius: 26px;
+  background: linear-gradient(160deg, #2b2d33 0%, #0c0d10 55%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset,
+    0 14px 30px rgba(23, 28, 40, 0.2);
+  -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
+}
+.dz-feat-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 22px;
+}

@@ -12,6 +12,12 @@ const AboutPage = lazy(() => import('./pages/AboutPage.jsx'));
 // 公示栏：纯前端版式样例（数据在 pages/Disclosure/data.js），无重依赖，
 // 同样懒加载——首屏不为它多下一个字节。
 const DisclosurePage = lazy(() => import('./pages/DisclosurePage.jsx'));
+// 岱宗盒子（/dzhz）：临时 1:1 复刻的独立落地页，样式与图片都在页面自己的 chunk 里。
+const DzhzPage = lazy(() => import('./pages/DzhzPage.jsx'));
+// 岱宗盒子 · 用户协议与隐私政策（/dzhz/legal）：正文由 App 的 Eula.kt 解析而来。
+const DzhzLegalPage = lazy(() => import('./pages/DzhzLegalPage.jsx'));
+// 岱宗盒子 · 开源协议（/dzhz/license）：正文是 App 仓库 LICENSE 的 GPL-3.0 原文。
+const DzhzLicensePage = lazy(() => import('./pages/DzhzLicensePage.jsx'));
 // 右栏知识图谱同样按需加载（IMPROVE-43）：它静态依赖 d3-force，原先被静态 import，
 // 于是这个库进了入口的同步依赖图并出现在 index.html 的 modulepreload 里——只看
 // 文件列表、不开图谱的访客照样要下载约 45 KB(gzip)。改成 lazy 后只有真的渲染右栏
@@ -73,6 +79,7 @@ export default function App() {
       { label: t('menu.library'), ariaLabel: t('menu.libraryAria'), link: '/' },
       { label: t('menu.dashboard'), ariaLabel: t('menu.dashboardAria'), link: '/dashboard' },
       { label: t('menu.disclosure'), ariaLabel: t('menu.disclosureAria'), link: '/disclosure' },
+      { label: t('menu.dzhz'), ariaLabel: t('menu.dzhzAria'), link: '/dzhz' },
       { label: t('menu.about'), ariaLabel: t('menu.aboutAria'), link: '/about' },
     ],
     [t]
@@ -129,6 +136,13 @@ export default function App() {
   // 公示栏也是文档流独立页：铺满可用宽度，宽度由页面自己用 max-w-5xl 收窄
   // （读长文 / 看表格都需要比 7xl 更短的测量宽度）。
   const isDisclosure = pagePath === '/disclosure';
+  // 岱宗盒子是独立落地页：铺满宽度、无内边距，使用须知不拦在它前面。
+  const isDzhz = pagePath === '/dzhz';
+  // 协议页 / 开源协议页沿用 /dzhz 的公开属性（不弹使用须知、不叠全局菜单），也
+  // 铺满宽度、内边距归零——版式与顶栏都由页面自己按 /dzhz 那套来。
+  const isDzhzLegal = pagePath === '/dzhz/legal' || pagePath === '/dzhz/legal/';
+  const isDzhzLicense = pagePath === '/dzhz/license' || pagePath === '/dzhz/license/';
+  const isDzhzDoc = isDzhzLegal || isDzhzLicense;
   const folderId = Number(pagePath.match(/^\/folder\/(\d+)/)?.[1]) || 0;
 
   // Bottom account card on the menu panel. Logged-in shows username + role;
@@ -195,7 +209,7 @@ export default function App() {
     mainLayout = `w-full ${
       sidebarOpen ? 'lg:pl-[266px]' : 'lg:pl-0'
     } lg:pr-[316px] ${layoutAnimating ? 'lg:transition-[padding]' : ''}`;
-  } else if (isDashboard || isAbout || isDisclosure) {
+  } else if (isDashboard || isAbout || isDisclosure || isDzhz || isDzhzDoc) {
     mainLayout = 'mx-auto w-full';
   } else {
     mainLayout = 'mx-auto w-full max-w-7xl';
@@ -203,8 +217,14 @@ export default function App() {
 
   // ---- Document title ----
   useEffect(() => {
-    document.title = t('app.title');
-  }, [t]);
+    document.title = isDzhzLegal
+      ? `${t('dzhzLegal.title')} · ${t('menu.dzhz')}`
+      : isDzhzLicense
+        ? `${t('dzhzLicense.title')} · ${t('menu.dzhz')}`
+        : isDzhz
+          ? t('menu.dzhz')
+          : t('app.title');
+  }, [t, isDzhz, isDzhzLegal, isDzhzLicense]);
 
   if (!ready) {
     return <div className="h-full flex items-center justify-center text-slate-400">{t('app.loading')}</div>;
@@ -299,9 +319,12 @@ export default function App() {
           // 统计面板 / 公示栏 / 关于我们都用同一个「logo + 页面名」页头
           // （components/PageTitle），统一用固定的 pt-[11px] 把它按到与资料库左栏
           // 品牌行同一水平线；登录注册页走自己的版式，用下面那档内边距。
-          isDashboard || isDisclosure || isAbout
-            ? 'px-4 pt-[11px] pb-6'
-            : 'px-3 pt-4 pb-2 sm:px-4 sm:pt-[10.5px] sm:pb-2'
+          // 岱宗盒子是整页自带页头的落地页，内边距必须归零（否则出现白边与横向滚动）。
+          isDzhz || isDzhzDoc
+            ? 'p-0'
+            : isDashboard || isDisclosure || isAbout
+              ? 'px-4 pt-[11px] pb-6'
+              : 'px-3 pt-4 pb-2 sm:px-4 sm:pt-[10.5px] sm:pb-2'
         } ${mainLayout}`}
         // 中列 padding 与左栏轨道同步成 320ms（BUG-94 补充），且只在手动开合窗口内挂
         // transition-property:padding——绝不能只给 transitionDuration：property 的初始值
@@ -326,6 +349,9 @@ export default function App() {
               <Route path="/settings/*" element={<BrowsePage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/disclosure" element={<DisclosurePage />} />
+              <Route path="/dzhz" element={<DzhzPage />} />
+              <Route path="/dzhz/legal" element={<DzhzLegalPage />} />
+              <Route path="/dzhz/license" element={<DzhzLicensePage />} />
               <Route path="/about" element={<AboutPage />} />
               {/* /login 与 /register 渲染同一 AuthPage 实例：切换不重挂载，仅表单区过渡 */}
               <Route path="/login" element={<AuthPage />} />
@@ -356,7 +382,8 @@ export default function App() {
         </div>
       )}
 
-      {!graphFull && (
+      {/* 岱宗盒子页头自带「返回资料库」，不叠全局菜单按钮；协议页也不叠。 */}
+      {!graphFull && !isDzhz && !isDzhzDoc && (
         <StaggeredMenu
           position="right"
           items={menuItems}
@@ -384,8 +411,9 @@ export default function App() {
         onClose={closeSettings}
       />
 
-      {/* 首次访问的注意清单弹窗：同意后写入 localStorage 才放行站点操作 */}
-      <NoticeModal />
+      {/* 首次访问的注意清单弹窗：同意后写入 localStorage 才放行站点操作。
+          /dzhz 是独立的公开落地页，不拦在须知后面；协议页本身就是要给人看的正文。 */}
+      {!isDzhz && !isDzhzDoc && <NoticeModal />}
     </div>
   );
 }
