@@ -307,7 +307,8 @@ body:has(.dzhz-page),
   flex-direction: column;
   align-items: stretch;
   gap: 14px;
-  padding: 20px 16px 22px;
+  /* 底部不留白：手机渐隐到卡片底边，像还在往下延伸 */
+  padding: 20px 16px 0;
   border: 0;
   background: #ececee;
 }
@@ -334,13 +335,20 @@ body:has(.dzhz-page),
   background: transparent;
 }
 .dz-feat-frame {
-  width: 168px;
+  /* 截图统一 900×1979：只显示上面 80%，底部 20% 由 mask 淡出到卡片底色。
+   * 高度里的 8px 是上下各 4px 的边框内边距。 */
+  --dz-feat-w: 168px;
+  width: var(--dz-feat-w);
+  height: calc((var(--dz-feat-w) - 8px) * 1979 / 900 * 0.8 + 8px);
+  overflow: hidden;
   padding: 4px;
   border-radius: 26px;
   background: linear-gradient(160deg, #2b2d33 0%, #0c0d10 55%);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.14) inset,
     0 14px 30px rgba(23, 28, 40, 0.2);
+  -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
 }
 .dz-feat-shot {
   display: block;
