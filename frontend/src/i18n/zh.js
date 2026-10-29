@@ -45,7 +45,6 @@ const zh = {
     meta: '岱宗盒子 App · 协议版本 v{{version}}',
     intro:
       '本页与 App 内「设置 → 关于 → 用户协议与隐私政策」的正文一致。协议更新后以 App 内展示的版本为准；继续使用本应用即视为接受修改后的条款。',
-    source: '正文来自 App 仓库的 Eula.kt（v{{version}}），与 App 内一字不差。',
   },
   browse: {
     defaultSort: '默认',

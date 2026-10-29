@@ -136,8 +136,8 @@ export default function App() {
   const isDisclosure = pagePath === '/disclosure';
   // 岱宗盒子是独立落地页：铺满宽度、无内边距，使用须知不拦在它前面。
   const isDzhz = pagePath === '/dzhz';
-  // 协议页沿用 /dzhz 的公开属性（不弹使用须知、不叠全局菜单），但正文是文档流，
-  // 页边距跟公示栏 / 关于同一档。
+  // 协议页沿用 /dzhz 的公开属性（不弹使用须知、不叠全局菜单），也铺满宽度、
+  // 内边距归零——版式与顶栏都由页面自己按 /dzhz 那套来。
   const isDzhzLegal = pagePath === '/dzhz/legal' || pagePath === '/dzhz/legal/';
   const folderId = Number(pagePath.match(/^\/folder\/(\d+)/)?.[1]) || 0;
 
@@ -314,9 +314,9 @@ export default function App() {
           // （components/PageTitle），统一用固定的 pt-[11px] 把它按到与资料库左栏
           // 品牌行同一水平线；登录注册页走自己的版式，用下面那档内边距。
           // 岱宗盒子是整页自带页头的落地页，内边距必须归零（否则出现白边与横向滚动）。
-          isDzhz
+          isDzhz || isDzhzLegal
             ? 'p-0'
-            : isDashboard || isDisclosure || isAbout || isDzhzLegal
+            : isDashboard || isDisclosure || isAbout
               ? 'px-4 pt-[11px] pb-6'
               : 'px-3 pt-4 pb-2 sm:px-4 sm:pt-[10.5px] sm:pb-2'
         } ${mainLayout}`}
