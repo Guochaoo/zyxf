@@ -48,8 +48,6 @@ const zh = {
   },
   dzhzLicense: {
     title: '开源协议',
-    intro:
-      '岱宗盒子源代码基于 GNU General Public License v3.0 开源，以下是许可证全文（官方原文，未改动）。',
   },
   browse: {
     defaultSort: '默认',

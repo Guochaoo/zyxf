@@ -45,8 +45,6 @@ const en = {
   },
   dzhzLicense: {
     title: 'Open Source License',
-    intro:
-      'Daizong Box is open source under the GNU General Public License v3.0. The full license text follows, unmodified.',
   },
   browse: {
     defaultSort: 'Default',
