@@ -103,7 +103,7 @@ describe('Preview：不可预览类型', () => {
   test('压缩包不发起任何取数请求，直接给出下载提示', () => {
     render(<Preview file={zipFile} onClose={() => {}} />);
 
-    expect(screen.getByText('预览服务出错，暂时无法在线预览')).toBeInTheDocument();
+    expect(screen.getByText('暂不支持预览此文件类型，请下载查看')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '下载文件' })).toBeInTheDocument();
     expect(getFileUrlMock).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();

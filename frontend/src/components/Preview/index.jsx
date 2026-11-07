@@ -21,7 +21,7 @@ import PreviewUnavailable from './PreviewUnavailable.jsx';
  * Preview — full-screen overlay for a file.
  *
  * 第一阶段只接「浏览器自己能渲染」的两类：PDF 内嵌签名 URL、TXT 取回按纯文本
- * 渲染；Office 与压缩包仍走「预览服务出错 + 下载」。Office 若要在线看，得先在
+ * 渲染；Office 与压缩包仍走「暂不支持预览 + 下载」。Office 若要在线看，得先在
  * 服务端转成 PDF 再回到这里。
  *
  * 签名 URL 每次打开都重新取，不进 data/resource.js 的缓存：缓存会让二次打开先
