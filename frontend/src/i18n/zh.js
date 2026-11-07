@@ -433,16 +433,12 @@ const zh = {
   preview: {
     aria: '文件预览',
     download: '下载',
+    downloading: '下载中…',
     close: '关闭',
-    loading: '正在获取文件地址…',
-    officeLoading: '文档加载中，首次加载可能需要较长时间…',
     unavailable: '预览服务出错，暂时无法在线预览',
     downloadDirect: '请点击下方按钮直接下载文件查看',
-    downloadTop: '请点击右上角下载按钮保存文件',
     downloadFile: '下载文件',
-    unsupported: '该文件类型暂不支持在线预览',
-    reload: '重新加载',
-    largeFileHint: '文件较大（>{{size}}），建议在 WiFi 下预览或直接下载',
+    largeFileHint: '文件较大（>{{size}}），建议在 WiFi 下下载',
     downloadFailedHint: '下载失败，请关闭后重新打开',
   },
   // 页脚署名条（与 ICP 备案号同行）。字体署名是 OPPO Sans 授权的硬性要求：条件 1

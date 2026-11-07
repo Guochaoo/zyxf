@@ -5,7 +5,7 @@
 // async handler so a rejection is forwarded to the error middleware as a 500.
 export const wrapAsync = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
-// Log + 502 JSON for a failed external-service call (OSS / IMM / upstream).
+// Log + 502 JSON for a failed external-service call (OSS / LLM upstream).
 // Keeps the "log the real error, never leak internals to clients" shape
 // identical across route files.
 export function serviceError(res, e, message) {

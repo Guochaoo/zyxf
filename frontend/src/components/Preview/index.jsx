@@ -1,44 +1,26 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { Download, X, Loader2 } from 'lucide-react';
-import { getFileUrl, getWebofficeToken } from '../../api.js';
-import { downloadFileById, errMsg, formatSize, getPreviewKind, isLargeFile, LARGE_FILE_THRESHOLD } from '../../utils.js';
+import { getFileUrl } from '../../api.js';
+import { downloadFileById, errMsg, formatSize, isLargeFile, LARGE_FILE_THRESHOLD } from '../../utils.js';
 import useMediaQuery from '../../hooks/useMediaQuery.js';
 import { useModalDialog } from '../../hooks/useModalDialog.js';
-import { useResource } from '../../data/resource.js';
-import PreviewBody from './Body.jsx';
+import PreviewUnavailable from './PreviewUnavailable.jsx';
 
 /**
- * Preview — full-screen overlay that fetches a file's OSS signed URL and (for
- * previewable types) WebOffice credentials, then renders the right viewer.
- * IMPROVE-54：取数下沉到 data/resource.js——签名 URL 与 WebOffice 凭证并行取，
- * URL 失败视为致命（error，可重试），凭证失败仅降级为本地预览；按文件 id 缓存，
- * 同一文件再次打开先出缓存再静默刷新。
+ * Preview — full-screen overlay for a file.
+ *
+ * 在线预览能力已下线（原先走阿里云 IMM WebOffice + JS-SDK，按次付费且需绑定
+ * IMM 项目）。现在所有类型统一落到「预览服务出错 + 直接下载」：浮层只负责文件名、
+ * 下载、移动端大文件提示，不再取签名 URL / 预览凭证。日后重做预览时，在这里接回
+ * 一个 viewer 即可（列层面板与关闭/焦点语义都不必动）。
  */
 export default function Preview({ file, onClose }) {
   const { t } = useTranslation();
   const [downloadErr, setDownloadErr] = useState('');
   const [downloading, setDownloading] = useState(false);
-  const kind = useMemo(() => getPreviewKind(file.ext), [file.ext]);
   const isMobile = useMediaQuery('(max-width: 640px)');
-
-  const { data, error, loading, reload } = useResource(
-    `preview:${file.id}`,
-    async (_key, { signal }) => {
-      const [urlMeta, wb] = await Promise.allSettled([
-        getFileUrl(file.id, { signal }),
-        getWebofficeToken(file.id, { signal }),
-      ]);
-      // A signed-URL failure is fatal; a WebOffice-token failure just falls
-      // back to the native/iframe preview path.
-      if (urlMeta.status === 'rejected') throw urlMeta.reason;
-      return { url: urlMeta.value.url, wb: wb.status === 'fulfilled' ? wb.value : null };
-    }
-  );
-  const signedUrl = data?.url ?? null;
-  const wbToken = data?.wb ?? null;
-  const err = error ? errMsg(error, t('common.loadFailed')) : '';
 
   // Download: fetch a fresh signed URL with ?download=1 so the backend
   // applies rate limiting and logs the event.
@@ -83,7 +65,7 @@ export default function Preview({ file, onClose }) {
             )}
             <button
               onClick={download}
-              disabled={loading || downloading || !signedUrl}
+              disabled={downloading}
               className="flex items-center gap-1 text-sm text-ink-2 hover:text-brand-600 px-2 py-1 rounded-sm disabled:opacity-50 transition-colors"
               title={t('preview.download')}
             >
@@ -92,7 +74,7 @@ export default function Preview({ file, onClose }) {
               ) : (
                 <Download className="w-4 h-4" />
               )}
-              <span className="hidden sm:inline">{downloading ? t('preview.loading') : t('preview.download')}</span>
+              <span className="hidden sm:inline">{downloading ? t('preview.downloading') : t('preview.download')}</span>
             </button>
             <button
               onClick={onClose}
@@ -106,41 +88,13 @@ export default function Preview({ file, onClose }) {
 
         {/* Content area */}
         <div className="min-h-0 flex-1 bg-inset overflow-auto">
-          {largeFileWarn && !loading && !err && (
+          {largeFileWarn && (
             <div className="mx-3 mt-2 sm:mx-4 sm:mt-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
               {t('preview.largeFileHint', { size: formatSize(LARGE_FILE_THRESHOLD) })}
             </div>
           )}
 
-          {loading && (
-            <div className="h-full flex flex-col items-center justify-center text-ink-2 gap-2">
-              <Loader2 className="w-6 h-6 animate-spin" />
-              <div className="text-xs">{t('preview.loading')}</div>
-            </div>
-          )}
-
-          {!loading && err && (
-            <div className="h-full flex flex-col items-center justify-center gap-3 p-4">
-              <div className="text-red text-sm text-center">{err}</div>
-              <button
-                onClick={reload}
-                className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm hover:bg-brand-700 transition-colors"
-              >
-                {t('preview.reload')}
-              </button>
-            </div>
-          )}
-
-          {!loading && !err && (
-            <PreviewBody
-              kind={kind}
-              signedUrl={signedUrl}
-              wbToken={wbToken}
-              fileId={file.id}
-              name={file.name}
-              onDownload={download}
-            />
-          )}
+          <PreviewUnavailable onDownload={download} />
         </div>
       </div>
     </div>

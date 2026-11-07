@@ -1,6 +1,6 @@
 # 仲英学辅 · 资料库（zyxf）
 
-> 西安交通大学仲英书院学业辅导中心的全栈在线资料库：按文件夹层级组织 PPT / Word / PDF / 图片等学习资料，提供智能搜索、AI 搜索、在线预览、知识图谱与下载统计。文件直存阿里云 OSS，不占应用服务器带宽。
+> 西安交通大学仲英书院学业辅导中心的全栈在线资料库：按文件夹层级组织 PPT / Word / PDF / 图片等学习资料，提供智能搜索、AI 搜索、知识图谱与下载统计。文件直存阿里云 OSS，不占应用服务器带宽。
 
 线上地址：<https://zyxf.top>
 
@@ -9,10 +9,10 @@
 - **资料管理**：文件夹任意嵌套；按名称、大小、时间排序，升降序可切换；拖拽 / 点击上传（前端直传 OSS）；后端提供面包屑数据（前端当前未在 UI 展示）
 - **智能搜索**：名称子串、汉字缩写（搜「高数」命中「高等数学」）、拼音全拼与首字母（`gaoshu` / `gdsx`）、所在文件夹路径命中；名称命中排在路径命中之前，结果标注所属文件夹
 - **AI 搜索**（可选）：搜索候选框顶部常驻「AI 搜索更多结果」入口，点一下即用当前关键词做一次 AI 检索——LLM 按需调用智能检索，命中的资料以可点击条目列在卡片里（跳转 / 预览），**不展示 LLM 正文**（只有一句固定说明）；查找中卡片四周为彩虹流光泛光。支持三种上游协议（OpenAI Chat Completions / OpenAI Responses / Anthropic Messages），浏览器端配置或服务器端 env 配置均可；游客限流、管理员豁免
-- **在线预览**：PDF / PPT / Word / Excel / TXT 走阿里云 IMM WebOffice；zip / rar 等归档仅提供下载
-- **知识图谱**：按目录连接关系的力导向图，点击节点跳转或预览，支持全库视图与当前文件夹邻域放大
+- **下载**：点列表条目打开浮层，一键下载原文件。在线预览已下线（原先走阿里云 IMM WebOffice，按次付费），浮层当前统一提示「预览服务出错」并给出下载按钮，后续重做
+- **知识图谱**：按目录连接关系的力导向图，点击节点跳转到对应文件夹或打开文件浮层，支持全库视图与当前文件夹邻域放大
 - **统计面板**（`/dashboard`）：近一年 GitHub 式下载热力图、文件类型分布、下载 / 占用排行、今日上传下载动态
-- **权限模型**：管理员可新建文件夹、上传、删除、改名、移动、排序；游客与登录用户只读，但均可点「刷新」触发 OSS→本地库同步（按身份分层限流：游客 2 次/分钟 < 登录用户 5 次/分钟 < 管理员豁免）。全站还有一层 300 次/分钟/IP 的匿名兜底，昂贵的读接口另挂专属分层配额：智能搜索 60/240、统计（概览 + 热力图共用一桶）30/120、预览凭证（WebOffice token 与 refresh 共用一桶，与下载配额**分开**）20/60（依次为游客次/分钟 · 登录用户次/分钟，管理员一律豁免、登录用户按 user id 计数不占出口 IP）
+- **权限模型**：管理员可新建文件夹、上传、删除、改名、移动、排序；游客与登录用户只读，但均可点「刷新」触发 OSS→本地库同步（按身份分层限流：游客 2 次/分钟 < 登录用户 5 次/分钟 < 管理员豁免）。全站还有一层 300 次/分钟/IP 的匿名兜底，昂贵的读接口另挂专属分层配额：智能搜索 60/240、统计（概览 + 热力图共用一桶）30/120（依次为游客次/分钟 · 登录用户次/分钟，管理员一律豁免、登录用户按 user id 计数不占出口 IP）
 
 ## 技术栈
 
@@ -25,7 +25,7 @@
 | 后端 | Node.js ≥ 24.15 · Express 5 · node:sqlite | SQLite 为 Node 24 内置模块（WAL 模式），无原生编译依赖；24.15 是测试用的 `mock.module({ exports })` 的下界 |
 | 后端安全 | jsonwebtoken（JWT）· bcryptjs · helmet · express-rate-limit | 生产启动时强校验 `JWT_SECRET` / `ADMIN_PASSWORD` / `CORS_ORIGIN` |
 | 搜索辅助 | pinyin-pro | 拼音全拼 / 首字母 / 汉字缩写匹配 |
-| 云服务（阿里云） | OSS · IMM WebOffice · DirectMail | 文件前端直传 OSS（后端仅签名）；文档在线预览；注册验证码邮件 |
+| 云服务（阿里云） | OSS · DirectMail | 文件前端直传 OSS（后端仅签名）；注册验证码邮件 |
 | AI（可选） | OpenAI `/chat/completions` · OpenAI `/responses` · Anthropic `/messages` | 三种上游协议，均支持 SSE 流式 + 工具调用 |
 | 部署 | systemd · nginx · Let's Encrypt | 后端 systemd 托管；nginx 托管前端静态产物并反代 `/api`（见 [docs/DEPLOY.md](docs/DEPLOY.md)） |
 
@@ -64,7 +64,6 @@ cd frontend && npm install && npm run dev
 | `PORT` |  | 后端端口（默认 4000） |
 | `CORS_ORIGIN` |  | 跨域来源；同源反代部署可留空 |
 | `OSS_KEY_PREFIX` / `OSS_ENDPOINT` |  | 上传根前缀 / 自定义直传 endpoint |
-| `IMM_PROJECT` |  | IMM 项目名（默认 `zyxf`），与 OSS Bucket 绑定的 IMM 项目名不同才需设置 |
 | `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` |  | 三者齐备才启用 AI 搜索，留空则该接口返回 503 |
 | `LLM_PROTOCOL` |  | 上游协议：`openai-completions`（默认，OpenAI/GLM/DeepSeek 等 `/chat/completions` 接口）/ `openai-responses`（OpenAI `/responses`）/ `anthropic-messages`（Anthropic `/messages`）。旧值 `openai` / `anthropic` 仍兼容。前端设置里的「API 协议」可让用户用自带 Key 覆盖它 |
 | `DM_ACCESS_KEY_ID` / `DM_ACCESS_KEY_SECRET` / `DM_ACCOUNT_NAME` |  | 三者齐备才启用用户注册（阿里云邮件推送 DirectMail 发送邮箱验证码），留空则注册发码接口返回 503 |
@@ -80,7 +79,6 @@ zyxf/
 │   │   ├── db.js          # SQLite 初始化
 │   │   ├── auth.js        # JWT 签发与鉴权
 │   │   ├── oss.js         # OSS 直传 / 下载签名
-│   │   ├── imm.js         # IMM WebOffice 预览令牌
 │   │   ├── searchService.js / searchMatch.js   # 智能搜索（路由与 AI 工具共用）
 │   │   ├── llm.js         # LLM 流式客户端（OpenAI / Anthropic，可选启用）
 │   │   ├── llmProtocols.js # 上游协议适配（请求体与 SSE 形状翻译，纯函数）
@@ -111,7 +109,7 @@ cd frontend && npm test    # vitest + Testing Library
 
 ## 部署
 
-生产部署（阿里云 ECS + **systemd 托管后端 + nginx 托管前端 + Let's Encrypt 配 HTTPS**）见 **[docs/DEPLOY.md](docs/DEPLOY.md)**，含安全组、OSS 跨域、IMM 绑定与常见故障排查。
+生产部署（阿里云 ECS + **systemd 托管后端 + nginx 托管前端 + Let's Encrypt 配 HTTPS**）见 **[docs/DEPLOY.md](docs/DEPLOY.md)**，含安全组、OSS 跨域与常见故障排查。
 
 ## 设计规范
 

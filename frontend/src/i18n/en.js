@@ -438,16 +438,12 @@ const en = {
   preview: {
     aria: 'File preview',
     download: 'Download',
+    downloading: 'Downloading…',
     close: 'Close',
-    loading: 'Fetching file address…',
-    officeLoading: 'Loading document, first load may take a while…',
     unavailable: 'Preview service error, unable to preview online',
     downloadDirect: 'Click the button below to download and view the file',
-    downloadTop: 'Click the download button at top-right to save the file',
     downloadFile: 'Download file',
-    unsupported: 'This file type is not supported for preview',
-    reload: 'Reload',
-    largeFileHint: 'This file is large (>{{size}}). Preview over WiFi or download it directly.',
+    largeFileHint: 'This file is large (>{{size}}). Download it over WiFi.',
     downloadFailedHint: 'Download failed. Close and reopen the preview.',
   },
   // Footer attribution strip (same line as the ICP filing number). Crediting the

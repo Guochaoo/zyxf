@@ -1,7 +1,7 @@
 // Centralized file-extension policy.
 // ---------------------------------------------------------------
 // ALLOWED_EXTS    -> accepted by the upload endpoint
-// PREVIEWABLE_EXTS -> inline-previewable documents (allow-list minus archives)
+// INLINE_SAFE_EXTS -> allow-listed documents that may be served inline
 // INLINE_IMAGE_EXTS -> legacy raster images may still be served inline
 // BLOCKED_EXTS    -> never accepted, even if mis-listed above.
 // ---------------------------------------------------------------
@@ -18,13 +18,11 @@ export const BLOCKED_EXTS = new Set([
   'dll', 'so', 'dylib',
 ]);
 
-// Archives are download-only (never previewed); unknown types are also forced
-// to download at serve time.
-// IMPROVE-19：导出给前端复用（前端可预览集合 = ALLOWED_EXTS − ARCHIVE_EXTS），避免手抄漂移。
+// Archives are download-only; unknown types are also forced to download at
+// serve time.
 export const ARCHIVE_EXTS = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2']);
 
 // Only these file types are allowed for upload.
-// All previewable files go through Alibaba Cloud WebOffice (IMM doc/preview).
 // Archives are download-only. Macro-enabled Office formats (docm/dotm/xlsm/xltm/
 // pptm/potm/ppsm/ppam) are rejected: they are the standard malware vector (BUG-50)。
 export const ALLOWED_EXTS = new Set([
@@ -42,8 +40,9 @@ export const ALLOWED_EXTS = new Set([
   ...ARCHIVE_EXTS,
 ]);
 
-// Everything on the allow-list that isn't an archive is previewable.
-export const PREVIEWABLE_EXTS = new Set(
+// Everything on the allow-list that isn't an archive may be served inline;
+// archives and unknown types are forced to attachment.
+export const INLINE_SAFE_EXTS = new Set(
   [...ALLOWED_EXTS].filter((e) => !ARCHIVE_EXTS.has(e))
 );
 
@@ -63,7 +62,7 @@ export function isExtAllowed(ext) {
   return ALLOWED_EXTS.has(e);
 }
 
-// Default-deny inline: only known-previewable document types and inert
+// Default-deny inline: only allow-listed non-archive documents and inert
 // raster images are served inline; everything else (svg, html-ish, unknown
 // extensions imported from OSS) is forced to download. The OSS bucket is
 // bound to the site's own domain (custom domain), so an inline SVG/HTML
@@ -72,5 +71,5 @@ export function shouldForceDownload(ext) {
   const e = normalizeExt(ext);
   if (!e) return true;
   if (BLOCKED_EXTS.has(e)) return true;
-  return !(PREVIEWABLE_EXTS.has(e) || INLINE_IMAGE_EXTS.has(e));
+  return !(INLINE_SAFE_EXTS.has(e) || INLINE_IMAGE_EXTS.has(e));
 }

@@ -33,7 +33,7 @@ vi.mock('../api.js', () => ({
   chatStream: vi.fn(),
 }));
 
-// 预览/上传弹窗会拉 OSS、IMM 等重依赖，本文件不测它们，用轻量替身。
+// 预览浮层与上传弹窗会拉 OSS 等重依赖，本文件不测它们，用轻量替身。
 vi.mock('../components/Preview/index.jsx', () => ({ default: () => <div data-testid="preview" /> }));
 vi.mock('../components/UploadDialog.jsx', () => ({ default: () => <div data-testid="upload" /> }));
 

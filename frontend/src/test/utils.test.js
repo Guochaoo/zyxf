@@ -2,7 +2,6 @@ import { describe, test, expect, vi } from 'vitest';
 import {
   formatSize,
   formatDate,
-  getPreviewKind,
   isLargeFile,
   LARGE_FILE_THRESHOLD,
   errMsg,
@@ -38,26 +37,6 @@ describe('formatDate', () => {
   test('zero-pads month/day', () => {
     const d = new Date(2026, 10, 2, 3, 4);
     expect(formatDate(d.getTime())).toBe('2026-11-02');
-  });
-});
-
-describe('getPreviewKind', () => {
-  test('office extensions', () => {
-    for (const ext of ['pdf', 'docx', 'xlsx', 'pptx', 'txt', 'csv', 'wps', 'dps', 'et', '.DOCX']) {
-      expect(getPreviewKind(ext)).toBe('office');
-    }
-  });
-
-  test('archives', () => {
-    for (const ext of ['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2']) {
-      expect(getPreviewKind(ext)).toBe('archive');
-    }
-  });
-
-  test('everything else is unknown', () => {
-    expect(getPreviewKind('exe')).toBe('unknown');
-    expect(getPreviewKind('')).toBe('unknown');
-    expect(getPreviewKind(null)).toBe('unknown');
   });
 });
 

@@ -1,7 +1,7 @@
 import i18n from './i18n/index.js';
-// IMPROVE-19：扩展名分类直接复用后端 extPolicy（别名见 vite.config.js 的 @backend），
-// 手抄副本会让「后端加了类型、前端仍判 unknown → 预览退化成只能下载」。
-import { ARCHIVE_EXTS, PREVIEWABLE_EXTS, normalizeExt } from '@backend/extPolicy.js';
+// 扩展名归一化复用后端 extPolicy（别名见 vite.config.js 的 @backend），
+// 手抄一份实现容易与后端定义漂移。
+import { normalizeExt } from '@backend/extPolicy.js';
 
 export function formatSize(bytes) {
   if (bytes == null) return '-';
@@ -36,10 +36,6 @@ export function timeAgo(ts) {
   return i18n.t('common.monthsAgo', { count: mo });
 }
 
-// 分类集合直接取后端导出：可预览（白名单 − 压缩包）与压缩包。
-const OFFICE_EXT = PREVIEWABLE_EXTS;
-const ARCHIVE_EXT = ARCHIVE_EXTS;
-
 // 大文件提示阈值。文案里的数值由这个常量注入（见 Preview/index.jsx），
 // 两边不再各写一份——原先 i18n 字典里硬写着「>20MB」，改阈值就会说不一致。
 export const LARGE_FILE_THRESHOLD = 20 * 1024 * 1024; // 20 MB
@@ -69,13 +65,6 @@ export async function downloadAndAlert(file, getFileUrl) {
   } catch (e) {
     alert(e.message || i18n.t('common.downloadFailed'));
   }
-}
-
-export function getPreviewKind(ext) {
-  ext = normalizeExt(ext);
-  if (OFFICE_EXT.has(ext)) return 'office';
-  if (ARCHIVE_EXT.has(ext)) return 'archive';
-  return 'unknown';
 }
 
 export function isLargeFile(size) {

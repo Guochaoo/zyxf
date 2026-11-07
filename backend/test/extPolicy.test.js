@@ -6,7 +6,7 @@ import {
   normalizeExt,
   isExtAllowed,
   shouldForceDownload,
-  PREVIEWABLE_EXTS,
+  INLINE_SAFE_EXTS,
 } from '../src/extPolicy.js';
 
 describe('extPolicy', () => {
@@ -56,19 +56,19 @@ describe('extPolicy', () => {
     assert.ok(shouldForceDownload(''));
   });
 
-  test('shouldForceDownload: previewable types are inline', () => {
+  test('shouldForceDownload: allow-listed documents are inline', () => {
     for (const ext of ['pdf', 'docx', 'xlsx', 'pptx', 'txt', 'csv']) {
       assert.ok(!shouldForceDownload(ext), `expected ${ext} to be inline`);
     }
   });
 
-  test('PREVIEWABLE_EXTS = allowed minus archives', () => {
-    for (const ext of PREVIEWABLE_EXTS) {
+  test('INLINE_SAFE_EXTS = allowed minus archives', () => {
+    for (const ext of INLINE_SAFE_EXTS) {
       assert.ok(ALLOWED_EXTS.has(ext), `${ext} must be allowed`);
       assert.ok(!shouldForceDownload(ext), `${ext} must not force download`);
     }
     for (const ext of ['zip', 'rar', '7z']) {
-      assert.ok(!PREVIEWABLE_EXTS.has(ext));
+      assert.ok(!INLINE_SAFE_EXTS.has(ext));
     }
   });
 });

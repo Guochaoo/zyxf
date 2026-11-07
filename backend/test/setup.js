@@ -38,21 +38,6 @@ mock.module('../src/oss.js', {
   },
 });
 
-// IMM WebOffice token generation hits the live IMM API — stub it.
-mock.module('../src/imm.js', {
-  exports: {
-    generateWebofficeToken: async (file) => ({
-      url: `https://imm.test/office/f/${encodeURIComponent(file.oss_key)}`,
-      token: 'test-access-token',
-      refresh_token: 'test-refresh-token',
-    }),
-    refreshWebofficeToken: async ({ accessToken }) => ({
-      token: `refreshed-${accessToken}`,
-      refresh_token: 'test-refresh-token-2',
-    }),
-  },
-});
-
 // LLM client — scriptable fake. Tests set llmState.enabled and load
 // llmState.script with one array of yielded events per upstream call.
 // 纯函数（resolveClientLlmConfig 等）保留真实实现，仅 stub 网络相关导出。
