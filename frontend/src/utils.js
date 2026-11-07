@@ -71,6 +71,17 @@ export function isLargeFile(size) {
   return size != null && size > LARGE_FILE_THRESHOLD;
 }
 
+// 能在浏览器里直接看、不必下载的类型。
+//   pdf  → 内嵌签名 URL，用浏览器自带阅读器
+//   text → 取到本地按纯文本渲染（编码与截断在 TextViewer 里处理）
+// 其余（Office / 压缩包 / 未知）仍走下载提示；Office 若要在线看需服务端转 PDF。
+export function getPreviewMode(ext) {
+  const e = normalizeExt(ext);
+  if (e === 'pdf') return 'pdf';
+  if (e === 'txt') return 'text';
+  return 'none';
+}
+
 // Pull the backend error message out of an axios error, with a fallback.
 export function errMsg(e, fallback = i18n.t('common.actionFailed')) {
   return e?.response?.data?.error || e?.message || fallback;

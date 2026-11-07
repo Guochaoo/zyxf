@@ -78,15 +78,21 @@ export function buildPostPolicy({ key, maxSizeBytes = 200 * 1024 * 1024, expires
  * ⚠️ 只能覆盖 `response-content-disposition`：OSS **拒绝** `response-content-type`，
  * 带上它整个请求会 400（`InvalidRequest: Can not override response header on
  * content-type`），下载直接失败。attachment 已经足以阻止内联渲染，不需要再改 MIME。
+ *
+ * 反向也要显式声明 `inline`：默认域名的对象会带 `x-oss-force-download: true`
+ * 与 `Content-Disposition: attachment`（桶开了强制下载 / 默认域名的安全策略），
+ * 此时这个参数**会被 OSS 覆盖**，PDF 在 iframe 里仍不渲染——前端因此改成
+ * fetch 成 blob URL 再交给阅读器。这里保留 inline 声明，是为了在绑定了备案
+ * 自有域名或关掉强制下载之后能直接内嵌。
  */
 export function signedGetUrl(key, expiresSec = 1800, { forceDownload = false, filename } = {}) {
-  const options = { expires: expiresSec };
-  if (forceDownload) {
-    const name = encodeURIComponent(filename || key.split('/').pop() || 'download');
-    options.response = {
-      'content-disposition': `attachment; filename="${name}"`,
-    };
-  }
+  const name = encodeURIComponent(filename || key.split('/').pop() || 'download');
+  const options = {
+    expires: expiresSec,
+    response: {
+      'content-disposition': forceDownload ? `attachment; filename="${name}"` : 'inline',
+    },
+  };
   const url = ossClient().signatureUrl(key, options);
   return url.replace(/^http:/, 'https:');
 }

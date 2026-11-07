@@ -350,10 +350,10 @@ server {
     # CSP 管不到页面。若某个 location 自己写了 add_header，会屏蔽本级继承，需重复声明。
     # 策略含义：script-src 仅 self（构建产物无内联脚本）；style-src 需 unsafe-inline
     # （React 内联 style）再加 fonts.googleapis.com（index.html 引入的 DM Sans 样式表，
-    # 缺它会被静默拦掉）；connect-src https: 覆盖 OSS 与用户自带 LLM；frame-src https:
-    # 留给日后重做的在线预览（当前无 iframe）；font-src 给 Google Fonts。
+    # 缺它会被静默拦掉）；connect-src https: 覆盖 OSS 与用户自带 LLM；frame-src 需要
+    # 'self' + blob:（PDF 预览把文件转成 blob URL 再塞进 iframe）；font-src 给 Google Fonts。
     # 建议先用 Report-Only 观察。
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
@@ -393,7 +393,7 @@ nginx -t && systemctl reload nginx
 - **`add_header` 不会被子级 location 继承**：任何自己写了 `add_header` 的 location 都会屏蔽 server 级的 HSTS / 安全头，所以模板里每个 location 都把 `Strict-Transport-Security` / `X-Content-Type-Options` / `Referrer-Policy` / CSP 重复声明了一遍。
 - **`index.html` 必须 `Cache-Control: no-cache`**：它没有内容 hash，缓存里的旧 HTML 引用构建后**已被删除**的 chunk 文件名，那次请求落到 SPA 回退拿到 HTML，浏览器按 `type="module"` 解析失败 → **整页白屏**（BUG-100，发版后最容易复现的事故）。前端另有一层兜底：路由出口的 `ErrorBoundary` 会给出可恢复界面，且识别到「懒 chunk 加载失败」时把「重试」直接接成整页重载——`React.lazy` 会把失败的 import 缓存在模块级 payload 上，原地重试不可能恢复（issue #63）。
 - **不存在的 `/assets/*` 必须回 404**：回 200 + `text/html` 同样会让模块脚本因 MIME 不符拒绝执行。
-- **CSP 先以 `Content-Security-Policy-Report-Only` 上线**（模板现为 Report-Only）。真实浏览器把下载 / 上传 / 图谱 / AI 搜索全点一遍、控制台无违规后，再去掉每处 `-Report-Only`（模板里共 4 处）。⚠️ 若日后重做在线预览并引入外链 SDK（如 `g.alicdn.com` 的 WebOffice），`script-src` 必须放行该域名，否则预览会整块失效。
+- **CSP 先以 `Content-Security-Policy-Report-Only` 上线**（模板现为 Report-Only）。真实浏览器把预览 / 下载 / 上传 / 图谱 / AI 搜索全点一遍、控制台无违规后，再去掉每处 `-Report-Only`（模板里共 4 处）。⚠️ `frame-src` 必须含 `blob:`：PDF 预览是 `fetch` 成 blob URL 后塞进 iframe（见 `Preview/PdfViewer.jsx`），少了它生产环境 PDF 会整块白屏；日后若引入外链 SDK（如 `g.alicdn.com` 的 WebOffice），还要放行对应域名。
 - **`/api` 反代必须覆写 `X-Forwarded-For` 为 `$remote_addr`**（不能 append 透传客户端带来的值）：后端按 trust proxy 取 XFF 做限流，可直连时伪造 XFF 能绕过所有限流（BUG-36）。这条成立的前提是后端只监听 `127.0.0.1`、无法被公网直连。
 - **`X-Forwarded-For` 必须覆盖而不是追加**。宝塔的 `proxy/<域名>/*.conf` 默认写的是 `$proxy_add_x_forwarded_for`（追加），而 `backend/src/index.js` 的 `app.set('trust proxy', 1)` 明确要求 nginx 用 `$remote_addr` 覆盖，否则客户端自带的 XFF 会一并传进后端，限流按伪造 IP 计数（BUG-36 的前提被破坏）。改成：
 
@@ -428,7 +428,7 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 - [ ] `https://zyxf.top` 能看到首页
 - [ ] 展开右侧菜单 → 底部账户卡右侧箭头展开菜单 → 「登录」 → 用 `.env` 账号密码能登录
 - [ ] 上传一个 PDF → 不报 CORS 错
-- [ ] 点击 PDF → 浮层给出下载按钮，能下载到文件（在线预览已下线，这里是预期行为）
+- [ ] 点击 PDF → 能在浮层里直接看；点击 TXT → 显示文本；Word / PPT / 压缩包 → 给出下载按钮（在线预览只覆盖浏览器原生可渲染的两类）
 - [ ] 点「下载」→ 文件名是原中文文件名
 
 ---
