@@ -37,7 +37,23 @@ OSS 控制台 → 你的 Bucket → **数据安全 → 跨域设置** → 添加
 - 允许 Headers：`*`
 - 暴露 Headers：`ETag, x-oss-request-id, Content-Length, Content-Range`
 
-### 0.3 域名解析
+### 0.3 OSS TLS 版本设置
+
+OSS 控制台 → 你的 Bucket → **数据安全 → TLS版本设置** → 开启，勾 **TLS 1.2 + TLS 1.3**，加密算法套件保持「全部（默认）」。
+
+不开的话 OSS 默认允许 TLS 1.0 / 1.1 / 1.2，**且不支持 TLS 1.3**：既留着两个已废弃协议，又用不上 1.3 的握手性能。开完约 1 分钟生效，实测 1.0/1.1 会收到 `tlsv1 alert protocol version`（alert 70）。
+
+用 CLI 等价设置（`aliyun` 内置新版 ossutil）：
+
+```bash
+aliyun ossutil api put-bucket-https-config --bucket <bucket> --region cn-beijing \
+  --https-configuration '{"TLS":{"Enable":"true","TLSVersion":["TLSv1.2","TLSv1.3"]}}'
+# 回滚：把 --https-configuration 换成 '{"TLS":{"Enable":"false"}}'
+```
+
+⚠️ 只支持 TLS 1.0 的老旧 WebView 会连不上（校园里偶有老安卓机）；开了之后要确认「上传 / 下载 / PDF 预览」三条链路都正常。
+
+### 0.4 域名解析
 
 将域名 A 记录指向服务器公网 IP（在云控制台的实例详情里查看）。文档统一用 RFC 5737 保留段 `203.0.113.10` 作示例占位——**不要把真实 IP 写进仓库**。
 
