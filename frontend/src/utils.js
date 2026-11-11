@@ -1,7 +1,7 @@
 import i18n from './i18n/index.js';
-// IMPROVE-19：扩展名分类直接复用后端 extPolicy（别名见 vite.config.js 的 @backend），
-// 手抄副本会让「后端加了类型、前端仍判 unknown → 预览退化成只能下载」。
-import { ARCHIVE_EXTS, PREVIEWABLE_EXTS, normalizeExt } from '@backend/extPolicy.js';
+// 扩展名归一化复用后端 extPolicy（别名见 vite.config.js 的 @backend），
+// 手抄一份实现容易与后端定义漂移。
+import { normalizeExt } from '@backend/extPolicy.js';
 
 export function formatSize(bytes) {
   if (bytes == null) return '-';
@@ -36,10 +36,6 @@ export function timeAgo(ts) {
   return i18n.t('common.monthsAgo', { count: mo });
 }
 
-// 分类集合直接取后端导出：可预览（白名单 − 压缩包）与压缩包。
-const OFFICE_EXT = PREVIEWABLE_EXTS;
-const ARCHIVE_EXT = ARCHIVE_EXTS;
-
 // 大文件提示阈值。文案里的数值由这个常量注入（见 Preview/index.jsx），
 // 两边不再各写一份——原先 i18n 字典里硬写着「>20MB」，改阈值就会说不一致。
 export const LARGE_FILE_THRESHOLD = 20 * 1024 * 1024; // 20 MB
@@ -71,15 +67,19 @@ export async function downloadAndAlert(file, getFileUrl) {
   }
 }
 
-export function getPreviewKind(ext) {
-  ext = normalizeExt(ext);
-  if (OFFICE_EXT.has(ext)) return 'office';
-  if (ARCHIVE_EXT.has(ext)) return 'archive';
-  return 'unknown';
-}
-
 export function isLargeFile(size) {
   return size != null && size > LARGE_FILE_THRESHOLD;
+}
+
+// 能在浏览器里直接看、不必下载的类型。
+//   pdf  → 内嵌签名 URL，用浏览器自带阅读器
+//   text → 取到本地按纯文本渲染（编码与截断在 TextViewer 里处理）
+// 其余（Office / 压缩包 / 未知）仍走下载提示；Office 若要在线看需服务端转 PDF。
+export function getPreviewMode(ext) {
+  const e = normalizeExt(ext);
+  if (e === 'pdf') return 'pdf';
+  if (e === 'txt') return 'text';
+  return 'none';
 }
 
 // Pull the backend error message out of an axios error, with a fallback.

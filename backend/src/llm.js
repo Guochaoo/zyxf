@@ -1,5 +1,5 @@
 // OpenAI 兼容 / Anthropic 兼容 LLM 客户端（流式）。零依赖：Node 24 全局 fetch + ReadableStream。
-// 参照 imm.js 的外部服务调用模式：envOrThrow、非 2xx 抛结构化错误。
+// 外部服务调用约定：envOrThrow、非 2xx 抛结构化错误。
 // 协议差异（请求体、鉴权头、SSE 形状）收敛在 llmProtocols.js，本文件只负责取配置、发请求、转发事件。
 
 import net from 'node:net';

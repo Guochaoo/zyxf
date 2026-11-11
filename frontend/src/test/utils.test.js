@@ -2,7 +2,7 @@ import { describe, test, expect, vi } from 'vitest';
 import {
   formatSize,
   formatDate,
-  getPreviewKind,
+  getPreviewMode,
   isLargeFile,
   LARGE_FILE_THRESHOLD,
   errMsg,
@@ -41,31 +41,31 @@ describe('formatDate', () => {
   });
 });
 
-describe('getPreviewKind', () => {
-  test('office extensions', () => {
-    for (const ext of ['pdf', 'docx', 'xlsx', 'pptx', 'txt', 'csv', 'wps', 'dps', 'et', '.DOCX']) {
-      expect(getPreviewKind(ext)).toBe('office');
-    }
-  });
-
-  test('archives', () => {
-    for (const ext of ['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2']) {
-      expect(getPreviewKind(ext)).toBe('archive');
-    }
-  });
-
-  test('everything else is unknown', () => {
-    expect(getPreviewKind('exe')).toBe('unknown');
-    expect(getPreviewKind('')).toBe('unknown');
-    expect(getPreviewKind(null)).toBe('unknown');
-  });
-});
-
 describe('isLargeFile', () => {
   test('threshold check', () => {
     expect(isLargeFile(LARGE_FILE_THRESHOLD + 1)).toBe(true);
     expect(isLargeFile(LARGE_FILE_THRESHOLD)).toBe(false);
     expect(isLargeFile(null)).toBe(false);
+  });
+});
+
+describe('getPreviewMode', () => {
+  test('browser-native types', () => {
+    expect(getPreviewMode('pdf')).toBe('pdf');
+    expect(getPreviewMode('.PDF')).toBe('pdf');
+    expect(getPreviewMode('txt')).toBe('text');
+  });
+
+  test('Office 与压缩包暂时仍然只能下载', () => {
+    for (const ext of ['docx', 'xlsx', 'pptx', 'wps', 'dps', 'et', 'csv', 'rtf', 'zip', 'rar']) {
+      expect(getPreviewMode(ext)).toBe('none');
+    }
+  });
+
+  test('未知 / 空扩展名按不可预览处理', () => {
+    expect(getPreviewMode('exe')).toBe('none');
+    expect(getPreviewMode('')).toBe('none');
+    expect(getPreviewMode(null)).toBe('none');
   });
 });
 

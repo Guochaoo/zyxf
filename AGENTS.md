@@ -15,7 +15,6 @@ zyxf/
 │   │   ├── db.js          # SQLite 初始化
 │   │   ├── auth.js        # JWT 签发与鉴权
 │   │   ├── oss.js         # OSS 直传 / 下载签名
-│   │   ├── imm.js         # IMM WebOffice 预览令牌
 │   │   ├── searchService.js / searchMatch.js   # 智能搜索（路由与 AI 工具共用）
 │   │   ├── llm.js         # LLM 流式客户端（OpenAI / Anthropic，可选启用）
 │   │   ├── llmProtocols.js # 上游协议适配（请求体与 SSE 形状翻译，纯函数）

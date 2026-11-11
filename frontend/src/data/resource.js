@@ -1,7 +1,7 @@
 // 轻量数据层（IMPROVE-54）：同 key 请求去重 + AbortController 取消 + 内存缓存 +
 // 统一失效入口。替代散落在 useFolderContents / DashboardPage / SearchBar /
 // Preview / useFolderTree 里各自手写的「reqId 丢弃过期响应」守卫（同一模式重复
-// 了五遍）。刻意不引 TanStack Query——本项目连 LLM/IMM 客户端都是零依赖手写。
+// 了五遍）。刻意不引 TanStack Query——本项目连 LLM 客户端都是零依赖手写。
 //
 // 形态是「模块级 store + useSyncExternalStore 式订阅」（同 useFolderTree 的既有
 // 模式，IMPROVE-24）：请求结果写进 store，挂载中的订阅者各自重渲染，卸载的

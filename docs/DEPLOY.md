@@ -37,7 +37,23 @@ OSS 控制台 → 你的 Bucket → **数据安全 → 跨域设置** → 添加
 - 允许 Headers：`*`
 - 暴露 Headers：`ETag, x-oss-request-id, Content-Length, Content-Range`
 
-### 0.3 域名解析
+### 0.3 OSS TLS 版本设置
+
+OSS 控制台 → 你的 Bucket → **数据安全 → TLS版本设置** → 开启，勾 **TLS 1.2 + TLS 1.3**，加密算法套件保持「全部（默认）」。
+
+不开的话 OSS 默认允许 TLS 1.0 / 1.1 / 1.2，**且不支持 TLS 1.3**：既留着两个已废弃协议，又用不上 1.3 的握手性能。开完约 1 分钟生效，实测 1.0/1.1 会收到 `tlsv1 alert protocol version`（alert 70）。
+
+用 CLI 等价设置（`aliyun` 内置新版 ossutil）：
+
+```bash
+aliyun ossutil api put-bucket-https-config --bucket <bucket> --region cn-beijing \
+  --https-configuration '{"TLS":{"Enable":"true","TLSVersion":["TLSv1.2","TLSv1.3"]}}'
+# 回滚：把 --https-configuration 换成 '{"TLS":{"Enable":"false"}}'
+```
+
+⚠️ 只支持 TLS 1.0 的老旧 WebView 会连不上（校园里偶有老安卓机）；开了之后要确认「上传 / 下载 / PDF 预览」三条链路都正常。
+
+### 0.4 域名解析
 
 将域名 A 记录指向服务器公网 IP（在云控制台的实例详情里查看）。文档统一用 RFC 5737 保留段 `203.0.113.10` 作示例占位——**不要把真实 IP 写进仓库**。
 
@@ -86,10 +102,7 @@ OSS_ACCESS_KEY_SECRET=<RAM 子账号 SK>
 OSS_KEY_PREFIX=zyxf/
 OSS_ENDPOINT=
 
-# 可选：IMM 文档预览、AI 助手
-# IMM 项目名必须与 OSS 控制台「IMM 绑定」里创建的项目名一致（留空按 zyxf 处理）；
-# 名字不对会返回 InvalidProjectName，而凭证没授权 imm 动作会返回 AccessDenied——两者都表现为前端「预览服务出错」。
-IMM_PROJECT=
+# 可选：AI 助手
 # AI 助手：三个变量齐备才启用（地址填到版本层，如 https://open.bigmodel.cn/api/paas/v4）
 LLM_API_KEY=
 LLM_BASE_URL=
@@ -148,18 +161,14 @@ sudo -u www node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync
 | 后端调用 | 需要的动作 |
 |---|---|
 | `listOssObjects`（同步扫描） | `oss:ListObjects` |
-| `signedGetUrl`（下载/预览签名） | `oss:GetObject` |
+| `signedGetUrl`（下载签名） | `oss:GetObject` |
 | `putEmptyOssObject`（文件夹占位符） | `oss:PutObject` |
 | 前端直传（PostObject） | `oss:PutObject` |
 | `copyOssObject`（改名/移动） | `oss:CopyObject` + `oss:PutObject` |
 | `deleteOssObjectIfExists`（删除） | `oss:DeleteObject` |
-| `generateWebofficeToken` / `refreshWebofficeToken`（IMM 在线预览，启用预览时） | `imm:GenerateWebofficeToken` + `imm:RefreshWebofficeToken` |
 
 > 注意：后端**只签名**、不代理文件流，上传流量走浏览器直传，所以后端不需要 `oss:GetObject` 之外的读权限。
-> ⚠️ **IMM 预览是另一套权限**：`GenerateWebofficeToken` 是 IMM 的 OpenAPI（`imm.<region>.aliyuncs.com`），RAM 里必须显式授权 `imm:*` 动作；只给 OSS 动作的密钥能正常下载/上传，但一调预览就返回
-> `AccessDenied: You are not authorized to operate imm:GenerateWebofficeToken on the specified resources acs:imm:<region>:<账号ID>:project/<项目名>`，
-> 前端只会显示「预览服务出错，暂时无法在线预览」（后端按设计只回 502 泛化文案，真实原因在 `journalctl -u zyxf`）。
-> 另外**这两个动作不支持资源级授权**，策略里 `Resource` 必须写 `*`（写项目 ARN 会一直 AccessDenied）。不启用预览就删掉下面第二段 statement。
+> 在线预览已下线（原 IMM WebOffice），RAM 策略里**不需要任何 `imm:*` 动作**；日后重做预览时再补授权。
 
 自定义策略（把 bucket 名替换成你自己的；`acs:oss:*:*:<bucket>/*` 用来覆盖对象级操作）：
 
@@ -180,14 +189,6 @@ sudo -u www node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync
         "acs:oss:*:*:<bucket>",
         "acs:oss:*:*:<bucket>/*"
       ]
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "imm:GenerateWebofficeToken",
-        "imm:RefreshWebofficeToken"
-      ],
-      "Resource": ["*"]
     }
   ]
 }
@@ -209,7 +210,7 @@ aliyun ram AttachPolicyToUser --PolicyType Custom --PolicyName zyxf-oss-app \
 # 3) 建 AccessKey，把密钥填进 .env 的 OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET
 aliyun ram CreateAccessKey --UserName zyxf-oss --region cn-beijing
 
-# 4) 之后若要给策略补动作（例如加 IMM 预览权限），改文档后发新版本并置为默认
+# 4) 之后若要给策略补动作，改文档后发新版本并置为默认
 #    （--SetAsDefault 要写成小写 true；写成 True 或不带值会报 InvalidSetAsDefault）：
 aliyun ram CreatePolicyVersion --PolicyName zyxf-oss-app \
   --PolicyDocument "$(cat oss-policy.json)" --SetAsDefault true --region cn-beijing
@@ -217,7 +218,7 @@ aliyun ram CreatePolicyVersion --PolicyName zyxf-oss-app \
 
 验证：用新密钥访问**其他** bucket 应返回 `AccessDenied`（越权被拒），访问目标 bucket 正常——两者都满足才算最小权限生效。
 
-> ⚠️ **轮换密钥后必须同步服务器上的 `.env`**（`/opt/zyxf/.env`）并 `systemctl restart zyxf`。只改控制台/本地 `.env` 而漏掉服务器时，旧密钥一旦被删除，OSS 会回 `InvalidAccessKeyId`——症状是**上传（PostObject 签名）、下载（签名直链）、在线预览（IMM）全线失效**，而接口本身照常返回 URL（签名是本地计算、不校验），前端只看到「下载失败 / 预览服务出错」。自查：`curl -sS "$(curl -s 'https://<域名>/api/files/<id>/url' | jq -r .url)" | head -3`，看是否 `InvalidAccessKeyId`。
+> ⚠️ **轮换密钥后必须同步服务器上的 `.env`**（`/opt/zyxf/.env`）并 `systemctl restart zyxf`。只改控制台/本地 `.env` 而漏掉服务器时，旧密钥一旦被删除，OSS 会回 `InvalidAccessKeyId`——症状是**上传（PostObject 签名）、下载（签名直链）全线失效**，而接口本身照常返回 URL（签名是本地计算、不校验），前端只看到「下载失败」。自查：`curl -sS "$(curl -s 'https://<域名>/api/files/<id>/url' | jq -r .url)" | head -3`，看是否 `InvalidAccessKeyId`。
 
 ### 2.3 DirectMail 凭证（注册验证码）
 
@@ -365,9 +366,10 @@ server {
     # CSP 管不到页面。若某个 location 自己写了 add_header，会屏蔽本级继承，需重复声明。
     # 策略含义：script-src 仅 self（构建产物无内联脚本）；style-src 需 unsafe-inline
     # （React 内联 style）再加 fonts.googleapis.com（index.html 引入的 DM Sans 样式表，
-    # 缺它会被静默拦掉）；connect-src https: 覆盖 OSS 与用户自带 LLM；frame-src https:
-    # 给 IMM WebOffice 预览；font-src 给 Google Fonts。建议先用 Report-Only 观察。
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+    # 缺它会被静默拦掉）；connect-src https: 覆盖 OSS 与用户自带 LLM；frame-src 需要
+    # 'self' + blob:（PDF 预览把文件转成 blob URL 再塞进 iframe）；font-src 给 Google Fonts。
+    # 建议先用 Report-Only 观察。
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
@@ -407,7 +409,7 @@ nginx -t && systemctl reload nginx
 - **`add_header` 不会被子级 location 继承**：任何自己写了 `add_header` 的 location 都会屏蔽 server 级的 HSTS / 安全头，所以模板里每个 location 都把 `Strict-Transport-Security` / `X-Content-Type-Options` / `Referrer-Policy` / CSP 重复声明了一遍。
 - **`index.html` 必须 `Cache-Control: no-cache`**：它没有内容 hash，缓存里的旧 HTML 引用构建后**已被删除**的 chunk 文件名，那次请求落到 SPA 回退拿到 HTML，浏览器按 `type="module"` 解析失败 → **整页白屏**（BUG-100，发版后最容易复现的事故）。前端另有一层兜底：路由出口的 `ErrorBoundary` 会给出可恢复界面，且识别到「懒 chunk 加载失败」时把「重试」直接接成整页重载——`React.lazy` 会把失败的 import 缓存在模块级 payload 上，原地重试不可能恢复（issue #63）。
 - **不存在的 `/assets/*` 必须回 404**：回 200 + `text/html` 同样会让模块脚本因 MIME 不符拒绝执行。
-- **CSP 先以 `Content-Security-Policy-Report-Only` 上线**（模板现为 Report-Only）。⚠️ `script-src` **必须放行 `https://g.alicdn.com`**：`OfficeViewer.jsx` 会从那里注入 WPS WebOffice SDK，该脚本随后再加载同目录的 `wps.js`——漏了这条，**在线预览会整块失效**。真实浏览器把预览 / 上传 / 图谱 / AI 搜索全点一遍、控制台无违规后，再去掉每处 `-Report-Only`（模板里共 4 处）。
+- **CSP 先以 `Content-Security-Policy-Report-Only` 上线**（模板现为 Report-Only）。真实浏览器把预览 / 下载 / 上传 / 图谱 / AI 搜索全点一遍、控制台无违规后，再去掉每处 `-Report-Only`（模板里共 4 处）。⚠️ `frame-src` 必须含 `blob:`：PDF 预览是 `fetch` 成 blob URL 后塞进 iframe（见 `Preview/PdfViewer.jsx`），少了它生产环境 PDF 会整块白屏；日后若引入外链 SDK（如 `g.alicdn.com` 的 WebOffice），还要放行对应域名。
 - **`/api` 反代必须覆写 `X-Forwarded-For` 为 `$remote_addr`**（不能 append 透传客户端带来的值）：后端按 trust proxy 取 XFF 做限流，可直连时伪造 XFF 能绕过所有限流（BUG-36）。这条成立的前提是后端只监听 `127.0.0.1`、无法被公网直连。
 - **`X-Forwarded-For` 必须覆盖而不是追加**。宝塔的 `proxy/<域名>/*.conf` 默认写的是 `$proxy_add_x_forwarded_for`（追加），而 `backend/src/index.js` 的 `app.set('trust proxy', 1)` 明确要求 nginx 用 `$remote_addr` 覆盖，否则客户端自带的 XFF 会一并传进后端，限流按伪造 IP 计数（BUG-36 的前提被破坏）。改成：
 
@@ -442,7 +444,7 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 - [ ] `https://zyxf.top` 能看到首页
 - [ ] 展开右侧菜单 → 底部账户卡右侧箭头展开菜单 → 「登录」 → 用 `.env` 账号密码能登录
 - [ ] 上传一个 PDF → 不报 CORS 错
-- [ ] 点击 PDF → 能预览（需先开通 IMM、把 bucket 绑到 IMM 项目、并给该 RAM 用户 `imm:GenerateWebofficeToken`；报「预览服务暂不可用」时先看 `journalctl -u zyxf` 里的真实错误码）
+- [ ] 点击 PDF → 能在浮层里直接看；点击 TXT → 显示文本；Word / PPT / 压缩包 → 给出下载按钮（在线预览只覆盖浏览器原生可渲染的两类）
 - [ ] 点「下载」→ 文件名是原中文文件名
 
 ---
@@ -494,7 +496,6 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 | 后端启动即退（无正常启动日志） | `JWT_SECRET`/`ADMIN_PASSWORD` 不合生产校验（会打印 `[index] FATAL...` 到 stderr） | 用 `openssl rand -hex 32` + 12 位强密码 |
 | 上传报 CORS | OSS 跨域规则没加域名 | 回 0.2 节加 `https://zyxf.top` |
 | 上传报 SignatureDoesNotMatch | 服务器时间不准 | `sudo timedatectl set-ntp true` |
-| 下载/上传/预览全都不通，接口却返回 200 | **密钥已失效**：`OSS_ACCESS_KEY_ID` 指向被删除/停用的 AccessKey（轮换后漏改服务器 `.env` 最常见）。签名是本地算的、不校验，所以接口照常给 URL，真链一取就 `InvalidAccessKeyId`。改 `/opt/zyxf/.env` → `systemctl restart zyxf` |
-| 预览报「预览服务暂不可用」/「预览服务出错」 | 先看真实原因：`journalctl -u zyxf --since "30 min ago" \| grep 预览服务 -A2`（后端按设计只回 502 泛化文案）。① `InvalidAccessKeyId` → 见上一行；② `AccessDenied ... imm:GenerateWebofficeToken` → 该 RAM 用户缺 IMM 动作授权，按 2.2 的第二段 statement 补授权（OSS 权限正常不代表 IMM 可用）；③ `InvalidProjectName` → `IMM_PROJECT` 与 IMM 控制台项目名不一致；④ 超时/连接失败 → 网络或 IMM 侧故障 |
+| 下载/上传全都不通，接口却返回 200 | **密钥已失效**：`OSS_ACCESS_KEY_ID` 指向被删除/停用的 AccessKey（轮换后漏改服务器 `.env` 最常见）。签名是本地算的、不校验，所以接口照常给 URL，真链一取就 `InvalidAccessKeyId`。改 `/opt/zyxf/.env` → `systemctl restart zyxf` |
 | 首页白屏 / `https` 连不上 | SSL 未配或证书没生效 | 见第 5 节申请 Let's Encrypt |
 | 访问命中默认站点（旧页） | 按 IP 访问，非域名 | 用域名 `zyxf.top` 访问；确认域名已解析 |
