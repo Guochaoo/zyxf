@@ -133,6 +133,9 @@ const en = {
     todayDl_other: '{{count}} downloads',
     todayUp_one: '{{count}} upload',
     todayUp_other: '{{count}} uploads',
+    // 卡片首行最右侧的累计口径（目前只有下载有可靠数据，上传不显示）。
+    totalDl_one: '{{count}} download all time',
+    totalDl_other: '{{count}} downloads all time',
     download: 'Download',
     upload: 'Upload',
     noData: 'No data',

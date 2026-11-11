@@ -70,14 +70,20 @@ CREATE INDEX IF NOT EXISTS idx_files_folder ON files(folder_id);
 CREATE INDEX IF NOT EXISTS idx_files_created ON files(created_at);
 `);
 
-// --- migration: download_logs table ---
+// --- download_logs ---
+// 下载历史必须比文件活得久：file_id 可空 + ON DELETE SET NULL，配合 file_name /
+// oss_key 快照，删文件后仍能统计（#87）。旧库（NOT NULL + CASCADE）由下面的重建
+// 迁移升级。
 db.exec(`
 CREATE TABLE IF NOT EXISTS download_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  file_id INTEGER NOT NULL,
+  file_id INTEGER,
   file_name TEXT NOT NULL,
+  oss_key TEXT,
   downloaded_at INTEGER NOT NULL,
-  FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+  ip TEXT,
+  ua TEXT,
+  FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_download_logs_at ON download_logs(downloaded_at);
 -- top_downloads 是 GROUP BY dl.file_id + 每组「取最近一次」相关子查询：只有
@@ -103,6 +109,50 @@ if (!hasColumn('download_logs', 'ip')) {
 }
 if (!hasColumn('download_logs', 'ua')) {
   db.exec(`ALTER TABLE download_logs ADD COLUMN ua TEXT`);
+}
+
+// --- migration: download_logs 保留删文件后的历史（issue #87）---
+// 旧表是 `file_id INTEGER NOT NULL ... ON DELETE CASCADE`：管理员删文件或 sync 清理
+// 失联文件时，它名下的下载记录被一并清空，「累计下载」会随时间缩水。SQLite 改不了
+// 外键动作，只能重建表；幂等判据是外键动作 / 可空性 / 快照列三者任一不符。
+// 迁移时用 LEFT JOIN files 回填 oss_key 快照，旧行字段（含 ip / ua）原样搬过来。
+const downloadLogsFk = db
+  .prepare('PRAGMA foreign_key_list(download_logs)')
+  .all()
+  .find((f) => f.table === 'files');
+const downloadLogsFileId = db
+  .prepare('PRAGMA table_info(download_logs)')
+  .all()
+  .find((c) => c.name === 'file_id');
+if (
+  downloadLogsFk?.on_delete !== 'SET NULL' ||
+  downloadLogsFileId?.notnull === 1 ||
+  !hasColumn('download_logs', 'oss_key')
+) {
+  transaction(() => {
+    // 表名不能直接复用：DROP 掉旧表后再 RENAME，否则 SQLite 不允许同 schema 重名。
+    db.exec(`
+      CREATE TABLE download_logs_rebuild (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_id INTEGER,
+        file_name TEXT NOT NULL,
+        oss_key TEXT,
+        downloaded_at INTEGER NOT NULL,
+        ip TEXT,
+        ua TEXT,
+        FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE SET NULL
+      );
+      INSERT INTO download_logs_rebuild (id, file_id, file_name, oss_key, downloaded_at, ip, ua)
+        SELECT dl.id, dl.file_id, dl.file_name, f.oss_key, dl.downloaded_at, dl.ip, dl.ua
+          FROM download_logs dl
+          LEFT JOIN files f ON f.id = dl.file_id;
+      DROP TABLE download_logs;
+      ALTER TABLE download_logs_rebuild RENAME TO download_logs;
+      CREATE INDEX idx_download_logs_at ON download_logs(downloaded_at);
+      CREATE INDEX idx_download_logs_file ON download_logs(file_id, downloaded_at DESC);
+    `);
+  })();
+  console.log('[db] migrated download_logs: file_id nullable + ON DELETE SET NULL + oss_key snapshot');
 }
 db.exec(`
 CREATE INDEX IF NOT EXISTS idx_folders_sort ON folders(parent_id, sort_order);

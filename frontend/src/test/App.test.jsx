@@ -53,6 +53,7 @@ const emptyStats = {
   range: 30,
   today_downloads: 0,
   yesterday_downloads: 0,
+  total_downloads: 0,
   downloads_7d: 0,
   downloads_prev_7d: 0,
   total_files: 0,

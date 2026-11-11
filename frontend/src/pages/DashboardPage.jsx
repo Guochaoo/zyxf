@@ -173,6 +173,7 @@ export default function DashboardPage() {
         value: stats.today_downloads,
         thresholdText: t('dashboard.peak', { count: insights.peakDl.downloads }),
         footer: t('dashboard.todayDl', { count: stats.today_downloads }),
+        totalText: t('dashboard.totalDl', { count: stats.total_downloads ?? 0 }),
         delta: dlDod,
         vsText: t('dashboard.vsYesterday'),
         formatValue: (v) => `${Math.round(v)} ${t('dashboard.times')}`,

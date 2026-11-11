@@ -136,6 +136,8 @@ const zh = {
     peak: '峰值 {{count}} 次',
     todayDl: '{{count}} 次下载',
     todayUp: '{{count}} 次上传',
+    // 卡片首行最右侧的累计口径（目前只有下载有可靠数据，上传不显示）。
+    totalDl: '累计下载 {{count}} 次',
     download: '下载',
     upload: '上传',
     noData: '暂无数据',

@@ -99,8 +99,17 @@ const out = {
   folders: db.prepare('SELECT id, sort_order FROM folders ORDER BY id').all(),
   fileCols: cols('files'),
   logCols: cols('download_logs'),
+  logSql: db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='download_logs'").get().sql,
+  logFk: db.prepare('PRAGMA foreign_key_list(download_logs)').all(),
+  logIndexes: db.prepare('PRAGMA index_list(download_logs)').all().map((i) => i.name),
+  logRows: db.prepare('SELECT id, file_id, file_name, oss_key, downloaded_at FROM download_logs ORDER BY id').all(),
   codeCols: cols('email_codes'),
 };
+// #87：删文件后下载历史必须活下来（file_id 置 NULL、快照仍在），而不是被级联删除
+db.prepare('DELETE FROM files WHERE id = 3').run();
+out.logsAfterFileDelete = db
+  .prepare('SELECT id, file_id, file_name, oss_key FROM download_logs ORDER BY id')
+  .all();
 // BUG-73 的实际保护点：漏写 role 的写入必须落到 'user'，而不是旧的 'admin'
 // （先清掉同名行，脚本可重复执行——幂等性用例会跑第二遍）
 db.prepare("DELETE FROM users WHERE username = 'norole'").run();
@@ -162,12 +171,42 @@ describe('db.js 迁移分支（旧 schema → 新 schema）', () => {
     assert.ok(out.codeCols.includes('uses'));
   });
 
+  test('download_logs 重建：file_id 可空 + ON DELETE SET NULL + oss_key 快照回填（#87）', () => {
+    const { out, stdout } = runMigrationProbe(seedLegacyDb());
+
+    assert.match(stdout, /migrated download_logs/);
+    assert.match(out.logSql, /ON DELETE SET NULL/);
+    assert.doesNotMatch(out.logSql, /file_id INTEGER NOT NULL/);
+
+    // 外键动作必须是 SET NULL，CASCADE 会让累计下载随删文件缩水
+    const fk = out.logFk.find((f) => f.table === 'files');
+    assert.equal(fk.on_delete, 'SET NULL');
+
+    // 旧行原样搬移，并按 file_id 回填 OSS key 快照
+    assert.deepEqual(out.logRows, [
+      { id: 1, file_id: 3, file_name: 'a.pdf', oss_key: 'zyxf-test/a.pdf', downloaded_at: 99 },
+    ]);
+    // 重建后索引不能丢（否则 top_downloads / 清理任务会全表扫）
+    assert.ok(out.logIndexes.includes('idx_download_logs_at'));
+    assert.ok(out.logIndexes.includes('idx_download_logs_file'));
+  });
+
+  test('删文件后下载历史保留，file_id 置 NULL 且快照不变（#87）', () => {
+    const { out } = runMigrationProbe(seedLegacyDb());
+    assert.deepEqual(out.logsAfterFileDelete, [
+      { id: 1, file_id: null, file_name: 'a.pdf', oss_key: 'zyxf-test/a.pdf' },
+    ]);
+  });
+
   test('已是最新 schema 的库再跑一次是幂等的（不再重建表）', () => {
     const file = seedLegacyDb();
     runMigrationProbe(file); // 第一次：执行迁移
     const { out, stdout } = runMigrationProbe(file); // 第二次：应无迁移动作
     assert.doesNotMatch(stdout, /migrated users\.role default/);
+    assert.doesNotMatch(stdout, /migrated download_logs/);
     assert.equal(out.roleDefault, "'user'");
     assert.deepEqual(out.folders.map((f) => f.sort_order), [7, 9]);
+    // 表不能越迁越少数据：第二次跑完后历史行仍在
+    assert.equal(out.logRows.length, 1);
   });
 });
