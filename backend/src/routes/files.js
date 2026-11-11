@@ -114,7 +114,7 @@ router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => 
     const ip = req.ip || req.socket?.remoteAddress || '';
     const ua = String(req.headers['user-agent'] || '').slice(0, 256);
     if (shouldLogDownload(file.id, ip)) {
-      logDownload(file.id, file.name, ip, ua);
+      logDownload(file.id, file.name, { ip, ua, ossKey: file.oss_key });
     }
   }
 

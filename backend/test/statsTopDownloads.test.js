@@ -53,30 +53,34 @@ describe('BUG-15: top_downloads 按 file_id 分组', () => {
     assert.equal(row.file_name, 'new.pdf');
   });
 
-  test('文件删除后（无 files 行）仍按 file_id 聚合，取组内最新名字，元数据不报 null 行重复', async () => {
+  test('文件被删除后从榜单消失，但下载历史保留（#87）', async () => {
     const token = await adminLogin();
-    // 直接写入一个在 files 表中不存在（已被删除）的下载日志。
-    // DB 外键为 ON，模拟「文件删除后遗留」需临时关闭外键。
+    const reg = await request('POST', '/api/files', {
+      token,
+      body: { name: 'gone.txt', oss_key: 'zyxf-test/gone.txt', size: 10, mime_type: 'text/plain' },
+    });
+    const fileId = reg.body.id;
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const t0 = todayStart.getTime() + 1;
-    const dl = db.prepare('INSERT INTO download_logs (file_id, file_name, downloaded_at) VALUES (?, ?, ?)');
-    db.exec('PRAGMA foreign_keys = OFF');
-    try {
-      dl.run(777777, 'deleted-a.txt', t0);
-      dl.run(777777, 'deleted-b.txt', t0 + 1000);
-    } finally {
-      db.exec('PRAGMA foreign_keys = ON');
-    }
+    db.prepare(
+      'INSERT INTO download_logs (file_id, file_name, oss_key, downloaded_at) VALUES (?, ?, ?, ?)'
+    ).run(fileId, 'gone.txt', 'zyxf-test/gone.txt', t0);
+
+    const del = await request('DELETE', `/api/files/${fileId}`, { token });
+    assert.equal(del.status, 200);
+
+    // 历史行不能被级联删除：外键改成 ON DELETE SET NULL，file_id 置空、快照保留
+    const log = db
+      .prepare('SELECT file_id, file_name, oss_key FROM download_logs WHERE file_name = ?')
+      .get('gone.txt');
+    assert.ok(log, '下载历史应保留，而不是随文件删除');
+    assert.equal(log.file_id, null);
+    assert.equal(log.oss_key, 'zyxf-test/gone.txt');
 
     const { body } = await request('GET', '/api/stats', { token });
-    const row = body.top_downloads.find((r) => r.file_id === 777777);
-    assert.ok(row, '删除后的一行仍应出现');
-    assert.equal(row.count, 2);
-    // 无 files 行时取组内最新名字（deleted-b.txt 后写），而不是固定一个或 null。
-    assert.equal(row.file_name, 'deleted-b.txt');
-    assert.equal(row.ext, null);
-    assert.equal(row.size, null);
+    assert.equal(body.total_downloads, 1, '累计下载不因删文件而减少');
+    assert.equal(body.top_downloads.filter((r) => r.file_id === fileId).length, 0, '已删文件不再进榜');
   });
 
   test('保留 file_name 字段（前端兼容），字段名不变', async () => {
@@ -171,26 +175,18 @@ describe('recent_downloads 按文件去重取最近一次', () => {
     assert.equal(row.name, 'new.txt');
   });
 
-  test('文件已从 files 表消失时仍出现，取组内最新日志名且元数据为 null', async () => {
+  test('文件被删除后不再出现在近期下载，历史只计入累计（#87）', async () => {
     const token = await adminLogin();
-    // 先做一次 API 写以跳过缓存无关紧要（test 环境缓存本就关闭），
-    // 再直接写入一条指向不存在 file_id 的日志（外键临时关闭）。
-    await mkFile(token, 'unrelated.txt');
+    const id = await mkFile(token, 'gone-recent.txt');
     const t = t0();
-    db.exec('PRAGMA foreign_keys = OFF');
-    try {
-      logDownload(424242, 'gone-a.txt', t);
-      logDownload(424242, 'gone-b.txt', t + 1000); // 组内最新
-    } finally {
-      db.exec('PRAGMA foreign_keys = ON');
-    }
+    logDownload(id, 'gone-recent.txt', t);
+
+    const del = await request('DELETE', `/api/files/${id}`, { token });
+    assert.equal(del.status, 200);
 
     const { body } = await request('GET', '/api/stats', { token });
-    const row = body.recent_downloads.find((r) => r.id === 424242);
-    assert.ok(row, 'files 表无对应行时仍按 file_id 聚合成一行');
-    assert.equal(row.name, 'gone-b.txt');
-    assert.equal(row.ext, null);
-    assert.equal(row.size, null);
+    assert.equal(body.recent_downloads.filter((r) => r.id === id).length, 0, '已删文件不进「近期下载」');
+    assert.equal(body.total_downloads, 1, '但那次下载仍留在累计里');
   });
 
   test('没有任何下载记录时返回空数组（前端显示「暂无数据」）', async () => {

@@ -246,6 +246,8 @@ aliyun ram CreateAccessKey --UserName zyxf-mail --region cn-beijing
 
 下载日志含访问者 `ip`/`ua`，属个人信息。后端启动时按 `DOWNLOAD_LOG_RETENTION_DAYS`（默认 400，略大于仪表盘热力图的近一年窗口）清理超期记录；无需保留访问明细时可调小。
 
+删除文件**不会**再连带删除它的下载记录（外键 `ON DELETE SET NULL`，见 issue #87）：行里保留 `file_name` / `oss_key` 快照，只为「累计下载」与热力图计数，文件名不再关联到现存文件。要彻底抹掉某段历史只能靠上面的保留期，或手工 `DELETE FROM download_logs`。
+
 ### 2.5 文件夹剪枝（刷新时回收死目录）
 
 点「刷新」触发的是 `POST /api/sync`：以 OSS 为准对账（补新对象、删失联记录），并回收**死文件夹**——子树里既没有文件、也没有 OSS 占位对象（`<路径>/` 空对象）的目录。

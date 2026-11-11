@@ -110,7 +110,8 @@ router.get('/', (req, res) => {
     prevSevenStart,
     sevenAgo
   );
-  // #87：file_id 是 CASCADE，删文件会连带删历史，累计值只代表现存记录。
+  // 建站以来累计下载：不分时间窗；文件删除后记录仍保留（#87 的 SET NULL），
+  // 只受 DOWNLOAD_LOG_RETENTION_DAYS 的保留期约束。
   const total_downloads = cnt('SELECT COUNT(*) c FROM download_logs');
 
   const total_files = cnt('SELECT COUNT(*) c FROM files');
@@ -144,24 +145,22 @@ router.get('/', (req, res) => {
   // ---- Top downloads (last 30 days) ----
   // 按 file_id 分组（而非 file_id + file_name）：窗口内文件被重命名时应只出现
   // 一行，删除后也不会出现 null 元数据行（BUG-15）。
-  // 文件名聚合：优先取当前 files 表里的持久 name（LEFT JOIN），无则取组内最新名字。
+  // 内连接 files：文件删除后历史仍留在 download_logs（#87 的 SET NULL，累计口径要用），
+  // 但它们已无法跳转、也没有 ext/size，不该出现在榜单里——所以这里只要现存文件。
   const last30Start = todayStart - 29 * DAY;
   const top_downloads = prepareOnce(
     `SELECT
          dl.file_id,
-         COALESCE(f.name,
-                  (SELECT dl2.file_name FROM download_logs dl2
-                   WHERE dl2.file_id = dl.file_id
-                   ORDER BY dl2.downloaded_at DESC, dl2.id DESC LIMIT 1)) AS file_name,
+         f.name AS file_name,
          COUNT(*) AS count,
          f.ext AS ext,
          f.size AS size,
          f.folder_id AS folder_id
        FROM download_logs dl
-       LEFT JOIN files f ON f.id = dl.file_id
+       JOIN files f ON f.id = dl.file_id
        WHERE dl.downloaded_at >= ?
        GROUP BY dl.file_id
-       ORDER BY count DESC, file_name ASC
+       ORDER BY count DESC, f.name ASC
        LIMIT 10`
   ).all(last30Start);
 
@@ -178,20 +177,18 @@ router.get('/', (req, res) => {
   // 因此列表是「最近被下载过的 8 个文件」，而不是「最近 8 条下载记录」。
   // 刻意不加时间窗——加了之后低活跃期整卡会空掉，而「最近下载」本来就该一直有内容。
   // 字段名与 recent_uploads 对齐（id / name），前端两张卡共用同一个列表组件。
-  // 文件名聚合与 top_downloads 同口径：优先 files 表持久名，无则取组内最新日志名。
+  // 内连接 files（同 top_downloads）：每行都要链到文件所在目录，被删文件没有可跳转目标；
+  // 它们的历史仍留在 download_logs 里，只服务累计口径与热力图。
   const recent_downloads = prepareOnce(
     `SELECT
          dl.file_id AS id,
-         COALESCE(f.name,
-                  (SELECT dl2.file_name FROM download_logs dl2
-                   WHERE dl2.file_id = dl.file_id
-                   ORDER BY dl2.downloaded_at DESC, dl2.id DESC LIMIT 1)) AS name,
+         f.name AS name,
          MAX(dl.downloaded_at) AS downloaded_at,
          f.ext AS ext,
          f.size AS size,
          f.folder_id AS folder_id
        FROM download_logs dl
-       LEFT JOIN files f ON f.id = dl.file_id
+       JOIN files f ON f.id = dl.file_id
        GROUP BY dl.file_id
        ORDER BY downloaded_at DESC
        LIMIT 8`

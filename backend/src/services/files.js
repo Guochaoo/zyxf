@@ -102,8 +102,9 @@ setInterval(() => {
   for (const [k, e] of recentDownloads) if (e <= now) recentDownloads.delete(k);
 }, DOWNLOAD_DEDUP_WINDOW_MS).unref?.();
 
-export function logDownload(fileId, fileName, ip, ua) {
+// oss_key 是快照：文件行被删后 file_id 会被置 NULL（#87），留下 key 才能追溯下载过的是哪个对象。
+export function logDownload(fileId, fileName, { ip, ua, ossKey } = {}) {
   prepareOnce(
-    'INSERT INTO download_logs (file_id, file_name, downloaded_at, ip, ua) VALUES (?, ?, ?, ?, ?)'
-  ).run(fileId, fileName, Date.now(), ip || null, ua || null);
+    'INSERT INTO download_logs (file_id, file_name, oss_key, downloaded_at, ip, ua) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(fileId, fileName, ossKey || null, Date.now(), ip || null, ua || null);
 }
