@@ -198,6 +198,10 @@ export function AnomalyCard({ title, metrics, className = '' }) {
         </span>
         <SubLabel tone={m.delta >= 0 ? 'green' : 'red'}>{formatPercent(m.delta)}</SubLabel>
         <span className="text-[11px] text-ink-3">{m.vsText}</span>
+        {/* 累计值只在提供该口径的指标上出现（上传没有可靠的累计口径），靠 ml-auto 贴右 */}
+        {m.totalText && (
+          <span className="ml-auto shrink-0 text-[11px] text-ink-3 tabular-nums">{m.totalText}</span>
+        )}
       </div>
       <div className="mt-2 flex flex-1 flex-col overflow-hidden rounded-control bg-inset">
         <div className="flex shrink-0 items-center justify-between px-2.5 py-1.5">

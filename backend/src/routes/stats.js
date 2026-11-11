@@ -110,6 +110,8 @@ router.get('/', (req, res) => {
     prevSevenStart,
     sevenAgo
   );
+  // #87：file_id 是 CASCADE，删文件会连带删历史，累计值只代表现存记录。
+  const total_downloads = cnt('SELECT COUNT(*) c FROM download_logs');
 
   const total_files = cnt('SELECT COUNT(*) c FROM files');
   const total_folders = cnt('SELECT COUNT(*) c FROM folders');
@@ -205,6 +207,7 @@ router.get('/', (req, res) => {
     yesterday_downloads,
     downloads_7d,
     downloads_prev_7d,
+    total_downloads,
     total_files,
     total_folders,
     total_size,

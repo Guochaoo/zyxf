@@ -49,6 +49,7 @@ vi.mock('../api.js', () => {
         range: 30,
         today_downloads: 0,
         yesterday_downloads: 0,
+        total_downloads: 735,
         downloads_7d: 2,
         downloads_prev_7d: 0,
         total_files: 850,
@@ -167,6 +168,20 @@ describe('DashboardPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '下载' }));
     await waitFor(() => expect(screen.getByText('0 次下载')).toBeInTheDocument());
     expect(document.querySelector('.bg-red svg.lucide-arrow-down')).toBeTruthy();
+  });
+
+  test('下载卡片首行最右侧显示累计下载，切到上传后隐藏', async () => {
+    renderApp();
+    await waitFor(() => expect(screen.getByText('累计下载 735 次')).toBeInTheDocument(), { timeout: 3000 });
+
+    // 贴右边：必须是首行 flex 的最后一个元素，并带 ml-auto
+    const total = screen.getByText('累计下载 735 次');
+    expect(total.parentElement.lastElementChild).toBe(total);
+    expect(total.className).toContain('ml-auto');
+
+    // 上传没有可靠的累计口径，不显示（否则「累计上传」会被误读成总文件数）
+    fireEvent.click(screen.getByRole('button', { name: '上传' }));
+    await waitFor(() => expect(screen.queryByText('累计下载 735 次')).toBeNull());
   });
 
   // 标题行只剩品牌块：时间范围切换（近 7/30/90 日）与刷新按钮已移除。
