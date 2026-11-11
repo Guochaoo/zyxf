@@ -174,15 +174,38 @@ export async function* chatStream({ messages, tools, signal, config }) {
 
   const req = buildRequest({ baseUrl, apiKey, model, messages, tools });
 
-  const res = await fetch(req.url, {
-    method: 'POST',
-    headers: req.headers,
-    body: JSON.stringify(req.body),
-    signal,
-  });
-
-  if (!res.ok) {
+  // 免费额度（智谱 GLM-*-Flash、硅基流动免费模型）在高峰期会直接回 429/503，
+  // 但重试一两次大多能成功；不做重试时用户看到的就是「AI 服务暂时不可用」。
+  // 只在**尚未消费响应体**时重试，所以不会重复输出半截内容。
+  const RETRY_STATUSES = new Set([429, 503]);
+  const MAX_ATTEMPTS = 3;
+  let res;
+  for (let attempt = 1; ; attempt++) {
+    res = await fetch(req.url, {
+      method: 'POST',
+      headers: req.headers,
+      body: JSON.stringify(req.body),
+      signal,
+    });
+    if (res.ok) break;
     const detail = await res.text().catch(() => '');
+    if (RETRY_STATUSES.has(res.status) && attempt < MAX_ATTEMPTS && !signal?.aborted) {
+      const delay = 400 * attempt;
+      console.warn(
+        `[llm] upstream ${res.status} (attempt ${attempt}/${MAX_ATTEMPTS}), retry in ${delay}ms: ${detail.slice(0, 120)}`
+      );
+      await new Promise((resolve) => {
+        const timer = setTimeout(resolve, delay);
+        signal?.addEventListener?.('abort', () => {
+          clearTimeout(timer);
+          resolve();
+        }, { once: true });
+      });
+      if (signal?.aborted) throw new Error('LLM 请求已取消');
+      continue;
+    }
+    // 落日志（不含 key / 请求体）：否则线上只能看到一句通用提示，无从排查配置类错误。
+    console.error(`[llm] upstream ${res.status}: ${detail.slice(0, 300)}`);
     const err = new Error(`LLM 上游错误 ${res.status}: ${detail.slice(0, 300)}`);
     err.status = 502;
     throw err;
