@@ -104,6 +104,8 @@ OSS_ENDPOINT=
 
 # 可选：AI 助手
 # AI 助手：三个变量齐备才启用（地址填到版本层，如 https://open.bigmodel.cn/api/paas/v4）
+# ⚠️ 模型必须支持 function calling：AI 搜索第一轮固定带 tools，不支持的模型会被上游
+#    拒绝（400 "Function call is not supported"），前端只显示「AI 服务暂时不可用」。
 LLM_API_KEY=
 LLM_BASE_URL=
 LLM_MODEL=
