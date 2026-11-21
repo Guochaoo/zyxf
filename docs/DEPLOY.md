@@ -423,6 +423,8 @@ nginx -t && systemctl reload nginx
 > 模板里两处容易踩的性能配置（2026-11 修）：
 > - `listen 443 ssl http2;` —— HTTP/2 必须写在 `listen` 上。Ubuntu 22.04 自带 nginx 1.18.0，没有 1.25.1 才引入的 `http2 on;` 指令，只写 `listen 443 ssl;` 会让整站退回 HTTP/1.1（每域 6 个并发连接）。
 > - `gzip on` + `gzip_types` —— nginx 默认的 `gzip_types` **只有 `text/html`**，所以 HTML 是压过的、`.js/.css` 一直明文外传（实测主 bundle 172,825 字节无 `content-encoding`）。`/api/` 里单独写了 `gzip off`：SSE 走 gzip 会把增量输出攒进缓冲区，反而拉高首字延迟。
+>
+> **限流（2026-11 加）**：`zyxf_req` 20 r/s（burst 60，nodelay）、`zyxf_api` 6 r/s（burst 20）、单 IP 并发连接 24，超限一律 429。burst 给这么大是因为首屏本身就要拉十几个静态资源——限流只压「持续高频」这一种形态，不误伤正常打开页面。注意它只保护**源站**：文件下载走 `oss.zyxf.top` 直连 OSS，根本不经过 nginx，防不到 OSS 那边的流出流量。
 
 #### 4.2.1 `/games/`：仓库外的独立服务
 
@@ -434,6 +436,27 @@ nginx -t && systemctl reload nginx
 - `client_max_body_size 4k` 是那个服务的约定，不随主站的 `10m` 调整。
 - 现在部署会整份覆盖 `zyxf.conf`，因此这块**只能改仓库模板**；只改服务器上的会被下次发布冲掉。
 
+#### 4.2.2 `dzhz.zyxf.top` 的静态加速（ESA，2026-11 迁入）
+
+`dzhz.zyxf.top` **不经过本仓库的 nginx**——它是岱宗盒子（xjtu-toolbox）的发布桶 `xjtu-toolbox-dzhz`（OSS 北京，**私有**）对外分发 APK / 静态资源的域名，2026-11 从「阿里云 CDN（`dzhz.zyxf.top.w.kunlunaq.com`）」迁到了**阿里云 ESA 免费版**。
+
+| 项 | 值 |
+|---|---|
+| ESA 站点 | `zyxf.top`（SiteId `190304393599084`），套餐 `entranceplan`（免费版，**0 元**） |
+| 加速记录 | `dzhz.zyxf.top` **CNAME → `dzhz.zyxf.top.a1.initrr.com`** |
+| 回源 | 源站类型 **OSS**、回源 HOST **跟随源站域名**、鉴权 **私有访问（STS 临时令牌）** |
+| 证书 | ESA 免费证书（Let's Encrypt，3 个月），托管 DCV：`_acme-challenge.dzhz` CNAME → `dzhz.zyxf.top.190304393599084.dcv.aliyun-esa.com` |
+| 回滚 | 把 `dzhz` 的 CNAME 改回 `dzhz.zyxf.top.w.kunlunaq.com` |
+
+几条必须记住的约束：
+
+- **bucket 不能改公共读。** 改成公共访问后任何人拿到 `xjtu-toolbox-dzhz.oss-cn-beijing.aliyuncs.com` 就能绕过 ESA 直连下载，按 OSS 外网流出（忙时 ¥0.5/GB）记在账上——这正是加这一层要防的事。回源鉴权只能在控制台走「私有访问」，API 的 `AuthConf` 字段结构没有公开文档。
+- **回源 HOST 必须「跟随源站域名」。** 跟随请求 HOST 会把 Host 变成 `dzhz.zyxf.top`，OSS 侧对不上 bucket 直接 403。
+- **免费版不含 WAF / 边缘函数 / 七层 DDoS**（`EdgeWaf: waf_off`、`EdgeCompute: er_off`、`EdgeDdos7Layer: ddos_off`），只有加速。站点级防护仍然靠 nginx 的限流（见 §4.2 末尾）。
+- **子域不能单独作为站点**（`SubSiteUnavailable`，只有企业版支持），所以站点建在根域 `zyxf.top` 上，`dzhz` 是它下面的一条记录。
+- 免费版套餐参数里 `PlanTraffic: 0`，官方口径是「流量和请求数不计费」，但**限速阈值没有公开**；若大文件被明显限速要重新评估是否值得留在这条链路上。
+- 旧 CDN 域名先别删：它是上面那条回滚路径的前提。确认稳定后再删（见 issue #96）。
+
 #### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 
 - **刷新任何前端路由都是 404**（`/folder/6`、`/dashboard`、`/about`、`/settings`）：缺 `location / { try_files $uri $uri/ /index.html; }`（BUG-97）。dist/ 里没有这些文件，必须交给 index.html 由前端路由接管。
@@ -443,6 +466,13 @@ nginx -t && systemctl reload nginx
   - `location ~* \.(?:ttf|otf|woff2?|png|jpe?g|webp|gif|svg|ico)$`（文件名无 hash，如 `/favicon.png`、`/images/*.webp`）→ `max-age=604800`。
   - ⚠️ **`^~` 不能省**：nginx 的**正则 location 优先级高于普通前缀 location**，而扩展名正则也含 `woff2`——写成普通前缀时 `/assets/*.woff2` 会被正则抢走、只拿到 7 天（线上实测确认过）。
 - **`add_header` 不会被子级 location 继承**：任何自己写了 `add_header` 的 location 都会屏蔽 server 级那一组。所以安全头（CSP / HSTS / `X-Content-Type-Options` / `Referrer-Policy` / `Permissions-Policy` / `COOP`）统一放在 [frontend/security-headers.conf](../frontend/security-headers.conf)，每个这类 location `include /etc/nginx/snippets/zyxf-headers.conf;` 一次——**加头或改策略只改那一个文件**，不要再往 location 里手抄。
+- **限流 zone 的 IP 来源是真的还是假的**：`limit_req_zone $binary_remote_addr` 成立的前提是「nginx 直接面向客户端」。主站现在是 A 记录直连，成立；**一旦把站点挂到 CDN / ESA 后面**，`$binary_remote_addr` 就变成节点 IP，全站会被当成同一个来源限流（等于自伤）。届时必须先加：
+  ```nginx
+  set_real_ip_from <CDN/ESA 回源网段>;
+  real_ip_header X-Forwarded-For;
+  real_ip_recursive on;
+  ```
+  并确认对方回源时确实带 `X-Forwarded-For`。ESA 的源站防护 / 回源 IP 网段可在控制台查到。
 - **`index.html` 必须 `Cache-Control: no-cache`**：它没有内容 hash，缓存里的旧 HTML 引用构建后**已被删除**的 chunk 文件名，那次请求落到 SPA 回退拿到 HTML，浏览器按 `type="module"` 解析失败 → **整页白屏**（BUG-100，发版后最容易复现的事故）。前端另有一层兜底：路由出口的 `ErrorBoundary` 会给出可恢复界面，且识别到「懒 chunk 加载失败」时把「重试」直接接成整页重载——`React.lazy` 会把失败的 import 缓存在模块级 payload 上，原地重试不可能恢复（issue #63）。
 - **不存在的 `/assets/*` 必须回 404**：回 200 + `text/html` 同样会让模块脚本因 MIME 不符拒绝执行。
 - **CSP 已转为强制模式**（2026-11，原为 Report-Only）：切换前做过静态审计——构建产物里 `eval(` / `new Function(` 均 0 命中、无内联 `<script>`、无 Web Worker，因此 `script-src 'self'` 不需要 `unsafe-eval`。⚠️ `frame-src` 必须含 `blob:`：PDF 预览是 `fetch` 成 blob URL 后塞进 iframe（见 `Preview/PdfViewer.jsx`），少了它生产环境 PDF 会整块白屏。日后若再接入外链预览 SDK（如旧版 WebOffice），要把它的域名同时加进该文件的 `script-src` / `style-src` / `frame-src`。若某个功能被拦，最快的回退是把 snippet 第一行改回 `Content-Security-Policy-Report-Only`（只改一处，因为头已经收敛到单个文件）。
