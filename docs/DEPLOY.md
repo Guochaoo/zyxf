@@ -390,15 +390,10 @@ server {
     root /opt/zyxf/frontend/dist;
     index index.html;
 
-    # 安全响应头。CSP 必须由托管 HTML 的 nginx 下发——后端只服务 /api，那里的
-    # CSP 管不到页面。若某个 location 自己写了 add_header，会屏蔽本级继承，需重复声明。
-    # 策略含义：script-src 仅 self（构建产物无内联脚本）；style-src 需 unsafe-inline
-    # （React 内联 style）；connect-src https: 覆盖 OSS 与用户自带 LLM；frame-src 需要
-    # 'self' + blob:（PDF 预览把文件转成 blob URL 再塞进 iframe）；font-src 仅 self + data:
-    # （字体自托管，无 Google Fonts 外链）。建议先用 Report-Only 观察。
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    # 安全响应头不在这里手写：统一放在 frontend/security-headers.conf（部署拷到
+    # /etc/nginx/snippets/zyxf-headers.conf），server 级与每个自写 add_header 的
+    # location 都 include 它。原因：nginx 的 add_header 在子级一旦出现就不再继承父级，
+    # 以前手抄 4 遍，HSTS 漏抄了半年没人发现（2026-11 修）。
 
     location /api/ {
         proxy_pass http://127.0.0.1:4000;
@@ -431,7 +426,9 @@ nginx -t && systemctl reload nginx
 
 #### 4.2.1 `/games/`：仓库外的独立服务
 
-`frontend/nginx.conf` 里有一块 `location ^~ /games/`，反代到 `127.0.0.1:4100` 的 **小游戏全服榜**（systemd: `xjtu-games`，代码在 `/opt/xjtu-games`，不在本仓库）。这块原先只存在于生产服务器上——按「整文件覆盖」的姿势改配置会把它删掉，全服榜与提交分数直接挂掉（issue #86，2026-11 收进模板）。
+`frontend/nginx.conf` 里有一块 `location ^~ /games/`，反代到 `127.0.0.1:4100` 的 **游戏排行榜后端**——它服务于**岱宗盒子（`dzhz.zyxf.top`，即 `xjtu-toolbox` 项目）**，是仓库外的独立服务（systemd: `xjtu-games`，代码在 `/opt/xjtu-games`）。这块原先只存在于生产服务器上——按「整文件覆盖」的姿势改配置会把它删掉，排行榜与提交分数直接挂掉（issue #86，2026-11 收进模板）。
+
+> ⚠️ 探活时注意：`/games/` 根路径**本身没有路由**，会返回该服务自己的 JSON 404（`{"error":"没有这个接口"}`）。这是正常现象，不代表反代挂了——真正的接口挂在 `/games/` 之下。反代是否生效看的是响应来自谁：nginx 若没有这条 location 会走 SPA 回落返回 200 HTML。
 
 - 它的 `X-Forwarded-For` 用 `$proxy_add_x_forwarded_for`（**追加**），与主站 `/api/` 的 `$remote_addr`（**覆盖**，BUG-36 要求）不同。改成覆盖前先确认 `xjtu-games` 自己的 trust proxy 取法，别顺手套用主站写法。
 - `client_max_body_size 4k` 是那个服务的约定，不随主站的 `10m` 调整。
@@ -445,10 +442,10 @@ nginx -t && systemctl reload nginx
   - `location ^~ /assets/`（文件名带内容 hash，含 `opposans-subset-<hash>.woff2`）→ `max-age=31536000, immutable` + `try_files $uri =404`；
   - `location ~* \.(?:ttf|otf|woff2?|png|jpe?g|webp|gif|svg|ico)$`（文件名无 hash，如 `/favicon.png`、`/images/*.webp`）→ `max-age=604800`。
   - ⚠️ **`^~` 不能省**：nginx 的**正则 location 优先级高于普通前缀 location**，而扩展名正则也含 `woff2`——写成普通前缀时 `/assets/*.woff2` 会被正则抢走、只拿到 7 天（线上实测确认过）。
-- **`add_header` 不会被子级 location 继承**：任何自己写了 `add_header` 的 location 都会屏蔽 server 级的 HSTS / 安全头，所以模板里每个 location 都把 `Strict-Transport-Security` / `X-Content-Type-Options` / `Referrer-Policy` / CSP 重复声明了一遍。
+- **`add_header` 不会被子级 location 继承**：任何自己写了 `add_header` 的 location 都会屏蔽 server 级那一组。所以安全头（CSP / HSTS / `X-Content-Type-Options` / `Referrer-Policy` / `Permissions-Policy` / `COOP`）统一放在 [frontend/security-headers.conf](../frontend/security-headers.conf)，每个这类 location `include /etc/nginx/snippets/zyxf-headers.conf;` 一次——**加头或改策略只改那一个文件**，不要再往 location 里手抄。
 - **`index.html` 必须 `Cache-Control: no-cache`**：它没有内容 hash，缓存里的旧 HTML 引用构建后**已被删除**的 chunk 文件名，那次请求落到 SPA 回退拿到 HTML，浏览器按 `type="module"` 解析失败 → **整页白屏**（BUG-100，发版后最容易复现的事故）。前端另有一层兜底：路由出口的 `ErrorBoundary` 会给出可恢复界面，且识别到「懒 chunk 加载失败」时把「重试」直接接成整页重载——`React.lazy` 会把失败的 import 缓存在模块级 payload 上，原地重试不可能恢复（issue #63）。
 - **不存在的 `/assets/*` 必须回 404**：回 200 + `text/html` 同样会让模块脚本因 MIME 不符拒绝执行。
-- **CSP 先以 `Content-Security-Policy-Report-Only` 上线**（模板现为 Report-Only）。真实浏览器把预览 / 下载 / 上传 / 图谱 / AI 搜索全点一遍、控制台无违规后，再去掉每处 `-Report-Only`（模板里共 4 处）。⚠️ `frame-src` 必须含 `blob:`：PDF 预览是 `fetch` 成 blob URL 后塞进 iframe（见 `Preview/PdfViewer.jsx`），少了它生产环境 PDF 会整块白屏。日后若再接入外链预览 SDK（如旧版 WebOffice），要把它的域名同时加进 `script-src` / `style-src` / `frame-src`。
+- **CSP 已转为强制模式**（2026-11，原为 Report-Only）：切换前做过静态审计——构建产物里 `eval(` / `new Function(` 均 0 命中、无内联 `<script>`、无 Web Worker，因此 `script-src 'self'` 不需要 `unsafe-eval`。⚠️ `frame-src` 必须含 `blob:`：PDF 预览是 `fetch` 成 blob URL 后塞进 iframe（见 `Preview/PdfViewer.jsx`），少了它生产环境 PDF 会整块白屏。日后若再接入外链预览 SDK（如旧版 WebOffice），要把它的域名同时加进该文件的 `script-src` / `style-src` / `frame-src`。若某个功能被拦，最快的回退是把 snippet 第一行改回 `Content-Security-Policy-Report-Only`（只改一处，因为头已经收敛到单个文件）。
 - **`/api` 反代必须覆写 `X-Forwarded-For` 为 `$remote_addr`**（不能 append 透传客户端带来的值）：后端按 trust proxy 取 XFF 做限流，可直连时伪造 XFF 能绕过所有限流（BUG-36）。这条成立的前提是后端只监听 `127.0.0.1`、无法被公网直连。
 - **`X-Forwarded-For` 必须覆盖而不是追加**。宝塔的 `proxy/<域名>/*.conf` 默认写的是 `$proxy_add_x_forwarded_for`（追加），而 `backend/src/index.js` 的 `app.set('trust proxy', 1)` 明确要求 nginx 用 `$remote_addr` 覆盖，否则客户端自带的 XFF 会一并传进后端，限流按伪造 IP 计数（BUG-36 的前提被破坏）。改成：
 

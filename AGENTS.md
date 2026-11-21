@@ -94,16 +94,20 @@ cd frontend && npm install && npm run dev
 
 ### 2.4 外网访问与代理
 - 访问 GitHub（push / pull）、npm registry、外网 API 等出现**连接超时 / 连接被重置**时，先判断是否为网络可达性问题（如 `curl -sI https://github.com` 超时），再尝试走本地代理，而不是反复重试或直接判定失败。
-- 本机代理默认端口 **`7897`**（Clash 等）。PowerShell：
+- 代理端口**不要写死**：`7897` 是 Clash 的 mixed 口、`7890` 是它的 HTTP 口，机器上常常只监听其中一个。先确认再拼 env：
 
   ```powershell
-  $env:HTTP_PROXY="http://127.0.0.1:7897"; $env:HTTPS_PROXY="http://127.0.0.1:7897"
+  # 先看哪个在听，再用它
+  Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 7890,7891,7897,10809 } | Select-Object LocalPort -Unique
+  $env:HTTP_PROXY="http://127.0.0.1:7890"; $env:HTTPS_PROXY="http://127.0.0.1:7890"
   ```
 
-  Git Bash / Bash（或仅给单条命令加前缀）：
+  > 2026-11-21 实测：按 7897 设完报 `Could not connect to server`，而实际只有 7890 在听；同一次故障里 `api.github.com` 可达、`github.com:443` 超时（对 github.com 的干扰），走代理后 push 立刻成功。
+
+  Git Bash / Bash（或仅给单条命令加前缀；端口同上，按实际监听的填）：
 
   ```bash
-  export HTTP_PROXY=http://127.0.0.1:7897 HTTPS_PROXY=http://127.0.0.1:7897
+  export HTTP_PROXY=http://127.0.0.1:7890 HTTPS_PROXY=http://127.0.0.1:7890
   git push origin dev
   ```
 
