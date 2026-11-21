@@ -658,9 +658,12 @@ certbot renew --dry-run --cert-name zyxf.top
 ## 7. 日常运维
 
 - 后端日志：`journalctl -u zyxf -f`
-- 外部可用性探测：`.github/workflows/uptime.yml` 每 5 分钟检查 `/api/health`、首页、证书剩余
-  天数（<14 天即失败），失败由 GitHub 发邮件告警。可在 Actions 页面手动 Run 一次验证；
-  注意 GitHub 对**连续 60 天无提交**的仓库会自动停用 schedule，长期停更时需人工确认它还在跑。
+- 外部可用性探测：`.github/workflows/uptime.yml` 检查 `/api/health`、首页、`www` 跳转、证书剩余
+  天数（<14 天即失败），失败由 GitHub 发邮件告警。可在 Actions 页面手动 Run 一次验证。
+  ⚠️ **这是「尽力而为」，不是 SLA**：2026-11-21 实测该 workflow 合入 main 后一个多小时里
+  `gh run list --event schedule` 仍然是 **0 次**（workflow `state=active`、cron 也在 main 上），
+  即 GitHub 的 cron 既会延迟也可能长期不触发；它还会对**连续 60 天无提交**的仓库直接停用 schedule。
+  需要确定性时手跑一次：`gh workflow run uptime.yml --repo Guochaoo/zyxf`。
 - 后端重启：`systemctl restart zyxf`
 - 后端状态：`systemctl status zyxf`
 - nginx 配置变更：改仓库 [frontend/nginx.conf](../frontend/nginx.conf) → 走正常发布（`deploy/deploy.sh` 会覆盖 + `nginx -t` + reload，失败自动还原）
