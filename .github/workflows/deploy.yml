@@ -67,8 +67,7 @@ jobs:
           test -s dist/index.html
           test "$(find dist/assets -name '*.js' | wc -l)" -gt 0
           test "$(find dist/assets -name '*.css' | wc -l)" -gt 0
-          tar -czf "$RUNNER_TEMP/dist.tar.gz" -C dist .
-          du -h "$RUNNER_TEMP/dist.tar.gz"
+          du -sh dist
 
       - name: 上传产物并部署
         env:
@@ -88,19 +87,24 @@ jobs:
           common=(-i "$key" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15
                   -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
           ssh_opts=("${common[@]}" -p "$SERVER_PORT")
-          scp_opts=("${common[@]}" -P "$SERVER_PORT")
 
-          # 只有前端变了才传产物（约 4.4 MB）。上限给到 15 分钟：正常要 6 分钟，
-          # 但这个上限是为了兜住「彻底传不动」的挂死，不是为了卡正常发布。
+          # 前端变了才传产物。rsync 的 --checksum 只传内容真的变了的文件：
+          # 每份 dist 里约 2.75 MB 是不会变的字体 woff2、还有图片，整包重传（实测约 11 KB/s
+          # → 6 分钟）纯属浪费。先在服务器上把 dist 硬链接成 .incoming 当种子，
+          # 这样 rsync 能按校验和跳过未变的文件，只把变化的 chunk 传过去。
           if [ "$FRONTEND_CHANGED" = "true" ]; then
-            timeout 900 scp "${scp_opts[@]}" "$RUNNER_TEMP/dist.tar.gz" \
-              "$SERVER_USER@$SERVER_HOST:/tmp/zyxf-dist.tar.gz"
+            ssh "${ssh_opts[@]}" "$SERVER_USER@$SERVER_HOST" \
+              'rm -rf /opt/zyxf/frontend/.incoming && mkdir -p /opt/zyxf/frontend/.incoming &&
+               if [ -d /opt/zyxf/frontend/dist ]; then cp -al /opt/zyxf/frontend/dist/. /opt/zyxf/frontend/.incoming/; fi'
+            # --stats 会打在日志里：以后每次前端发布都能看到实际传了多少字节。
+            rsync -az --checksum --delete --stats --timeout=120 \
+              -e "ssh -i $key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -p $SERVER_PORT" \
+              frontend/dist/ "$SERVER_USER@$SERVER_HOST:/opt/zyxf/frontend/.incoming/"
           fi
 
           # 对齐工作区必须在仓库里的 deploy/deploy.sh 之外：新脚本要等 reset 之后才落到
           # 服务器上，而第一次跑新流程时工作区里还是旧修订。
-          # 产物路径是固定约定（/tmp/zyxf-dist.tar.gz，存在即「前端变了」），
-          # 所以这里不需要往远端注任何变量。
+          # 「前端有没有变」只通过 `frontend/.incoming/` 存不存在表达，远端命令不注入变量。
           ssh "${ssh_opts[@]}" "$SERVER_USER@$SERVER_HOST" '
             set -euo pipefail
             cd /opt/zyxf
