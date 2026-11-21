@@ -1,0 +1,46 @@
+name: Uptime
+
+# 外部可用性探测（issue #90）。部署链只在发布那一刻做健康检查，之后后端挂了、证书过期、
+# 域名解析错乱都不会有人知道——只有用户来投诉。
+#
+# 5 分钟一次（GitHub schedule 的最小粒度，实际触发常延迟几分钟，对本站够用）；
+# 失败即 job 失败 → GitHub 给仓库 owner 发失败邮件，这就是告警通道。
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  # 便于手工验证/debug：Actions 页面点 Run workflow。
+  workflow_dispatch:
+
+# 只读探测，不碰仓库内容。
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 后端健康检查
+        run: |
+          set -euo pipefail
+          body=$(curl -fsS --max-time 10 https://zyxf.top/api/health)
+          echo "GET /api/health -> $body"
+          echo "$body" | grep -q '"ok":true'
+
+      - name: 首页
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 https://zyxf.top/)
+          echo "GET / -> $code"
+          [ "$code" = 200 ]
+
+      - name: 证书剩余天数
+        run: |
+          set -euo pipefail
+          end=$(echo | openssl s_client -servername zyxf.top -connect zyxf.top:443 2>/dev/null \
+                | openssl x509 -noout -enddate | cut -d= -f2)
+          [ -n "$end" ]
+          expiry=$(date -d "$end" +%s)
+          days=$(( (expiry - $(date +%s)) / 86400 ))
+          echo "证书有效期至 $end（剩 ${days} 天）"
+          # 留 14 天余量：certbot 的 timer 每天跑一次，连续失败两周才该吵醒人。
+          [ "$days" -ge 14 ]

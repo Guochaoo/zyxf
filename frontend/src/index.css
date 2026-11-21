@@ -251,8 +251,11 @@ a:focus-visible,
     0 0 0 1px rgba(255, 255, 255, 0.08) inset;
 }
 
-.rb-search-dropdown,
-.rb-search-dropdown * {
+/* 只给容器定色，**不要**再写 `.rb-search-dropdown *`：未分层（unlayered）规则按
+   CSS Cascade Level 5 优先于任何 @layer，递归选中所有子元素会把候选框内的
+   text-slate-500 / text-red / text-amber-400 等 utilities 全部压成墨色（issue #69）。
+   子元素没有显式定色时仍会继承这里的 --ink，观感不变。 */
+.rb-search-dropdown {
   color: var(--ink);
 }
 
@@ -362,7 +365,7 @@ a:focus-visible,
   background: var(--hover);
 }
 
-/* 次级文字：同样要压过 `.rb-search-dropdown *` 的墨色（同特异性，靠源码顺序取胜）。 */
+/* 次级文字：AI 卡自己的次级色（不再需要压过 `.rb-search-dropdown *`，见上方 #69 的说明）。 */
 .rb-ai-card__sub {
   color: var(--ink-2);
 }

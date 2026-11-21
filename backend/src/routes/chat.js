@@ -15,6 +15,27 @@ const MAX_TOOL_ROUNDS = 2;
 const TOOL_RESULT_LIMIT = 8;
 const OVERALL_TIMEOUT_MS = 90 * 1000;
 
+// 上游错误 → 可操作的提示（issue #89）。llm.js 已经把原文写进 journal（含 status 与
+// 上游 body 截断），这里只负责让前端那句话指向「该改什么」，而不是一律「稍后再试」。
+// 判断依据是 llm.js 抛出的 `LLM 上游错误 <status>: <detail>` 形状。
+export function classifyLlmError(err) {
+  const msg = err?.message || '';
+  if (!msg.includes('LLM')) return msg || 'AI 服务出错';
+  if (/function call is not supported|tools? (?:are )?not supported/i.test(msg)) {
+    return '当前模型不支持工具调用（function calling），请联系管理员更换 LLM_MODEL';
+  }
+  if (/\b402\b|insufficient|余额不足/i.test(msg)) {
+    return 'AI 服务额度不足，请联系管理员充值';
+  }
+  if (/\b401\b|\b403\b|invalid.*(?:key|token)|unauthori[sz]ed/i.test(msg)) {
+    return 'AI 服务鉴权失败，请检查 API Key 是否有效';
+  }
+  if (/\b429\b|\b503\b/.test(msg)) {
+    return 'AI 服务限流或暂时不可用，请稍后再试';
+  }
+  return 'AI 服务暂时不可用，请稍后再试';
+}
+
 const SEARCH_TOOL = {
   type: 'function',
   function: {
@@ -187,11 +208,7 @@ router.post('/', chatLimiterShort, chatLimiterLong, wrapAsync(async (req, res) =
     send({ type: 'done' });
   } catch (err) {
     if (res.writable) {
-      const isUpstream = err.message?.includes('LLM');
-      send({
-        type: 'error',
-        message: isUpstream ? 'AI 服务暂时不可用，请稍后再试' : err.message || 'AI 服务出错',
-      });
+      send({ type: 'error', message: classifyLlmError(err) });
     }
   } finally {
     clearTimeout(timer);

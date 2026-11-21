@@ -191,7 +191,7 @@
 - **位置**：宽屏（`lg` 及以上）下常驻于中列工具栏左侧，弹性自适应延展至排序分段按钮前（`flex-1 max-w-none`，34px 高度与右侧工具按钮严格齐平），左栏不再放置搜索框；移动端（`lg` 以下）独立一行（`w-[92%]` 居中），位于品牌行下方
 - **胶囊 `.rb-search-pill`**：白底、圆角 14px、**无描边**；`focus-within` 只加一层极浅投影 rgba(0,0,0,.05) 0 2px 4px；内部 `input` 背景 / 描边 / 焦点环全部清空
 - **下拉 `.rb-search-dropdown`**：圆角 14px、毛玻璃背景（`blur(16px) saturate(180%)` + 亮色 65% / 暗色 72% 表面色半透明）、1px 细环 + 内嵌高光 + 柔光投影；结果行 hover 浅灰半透遮罩（`bg-black/5` / `dark:bg-white/5`），纵向高度按候选条目自适应包裹（无底部空白），上限 **70vh**——候选很多时面板涨到浏览器高度的 70% 后在结果区内部滚动；矮窗口下再被「输入框下方剩余高度」夹住，绝不溢出视口底部。**有输入就展开**（不再等本地搜索返回）：AI 入口不依赖命中结果，等请求回来才展开会让入口慢半拍
-- ⚠️ 下拉内的文字颜色被 `.rb-search-dropdown *` 统一刷成 `var(--ink)`（非分层规则，压过 Tailwind 的 utilities 层）——需要次级色 / 语义色时不能用 `text-slate-400` / `text-red` 之类的类，得用同特异性、靠后定义的类（如 `.rb-ai-card__sub` / `.rb-ai-card__error`）。下拉里既有的 `text-slate-*` / `text-amber-400` 按此规则实际渲染为墨色（待办见 issue #69）
+- 下拉容器自身定色 `.rb-search-dropdown { color: var(--ink) }`，子元素靠继承；**不要写成 `.rb-search-dropdown *`**——未分层（unlayered）规则按 Cascade Level 5 优先于任何 `@layer`，递归刷色会把框内 `text-slate-400` / `text-red` / `text-amber-400` 全部压成墨色（issue #69，2026-11 修）。次级色 / 语义色直接用 utilities 即可；`.rb-ai-card__sub` / `.rb-ai-card__error` 保留为组件自有类，不再承担「压过层外规则」的职责。
 - **AI 搜索卡 `.rb-ai-card`**（下拉顶部常驻，三态）：
   - **入口态**：一行 hover 高亮（与结果行同语汇，不是卡片）＝ 渐变填充的 AI 图标 `RiSearchAiLine`（19px、**透明底**，紫→粉→蓝）+ 「AI 搜索更多结果」+ 右 chevron
   - **查找中**：换成渐变描边卡片——外层 1.5px 渐变环 + 内层 `var(--surface)`，环外再叠一层 `blur(7px)` 的模糊泛光（`rb-ai-card__halo`，呼吸 + 流动），标题行「AI 搜索正在查找…」+ 转圈

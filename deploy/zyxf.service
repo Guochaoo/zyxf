@@ -1,6 +1,10 @@
 [Unit]
 Description=zyxf backend (Express, Node 24)
 After=network.target
+# 配置错误（.env 写坏、端口被占）时不要无限重启刷日志：60 秒内失败 5 次就进入 failed，
+# 交给 journal / 外部探测来叫人（issue #93）。
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -11,6 +15,16 @@ Environment=NODE_ENV=production
 ExecStart=/usr/bin/node src/index.js
 Restart=always
 RestartSec=3
+
+# --- 加固（issue #93）---
+# 这些选项不影响正常读写：进程仍然能读整机文件、写自己的数据目录，但拿不到提权/写系统目录的能力。
+NoNewPrivileges=true
+PrivateTmp=true
+# 整机只读，只放行数据库目录。⚠️ 必须列出 ReadWritePaths：漏了会让 SQLite 打不开 data.db，
+# 表现为服务启动即退、日志里只有 SQLITE_CANTOPEN。
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/zyxf/backend
 
 [Install]
 WantedBy=multi-user.target
