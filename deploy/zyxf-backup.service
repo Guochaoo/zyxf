@@ -1,0 +1,16 @@
+[Unit]
+Description=zyxf 数据库备份（SQLite 快照 → OSS）
+# 备份要等网络可用；After=network.target 不够，oneshot 可能在 DNS 就绪前就跑。
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=www
+WorkingDirectory=/opt/zyxf/backend
+# 脚本自己会读 /opt/zyxf/.env，不需要外部注入；给个合理的超时避免钉死。
+TimeoutStartSec=300
+ExecStart=/usr/bin/node scripts/backup-db.mjs
+
+[Install]
+WantedBy=multi-user.target

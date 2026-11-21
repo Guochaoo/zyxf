@@ -1,0 +1,15 @@
+[Unit]
+Description=每日触发 zyxf 数据库备份
+
+[Timer]
+# 避开整点（整点是各家定时任务的高峰，OSS 请求也容易排队）。
+# 服务器时区为 Asia/Shanghai，04:17 是站内流量最低的时段。
+OnCalendar=*-*-* 04:17:00
+# 服务器在触发点恰好宕机/重启时，开机后补跑一次；否则那一天就静默漏备份了。
+Persistent=true
+# 抖动 10 分钟，避免和别的定时任务同时压 OSS。
+RandomizedDelaySec=600
+Unit=zyxf-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,7 +1,7 @@
 # 部署到阿里云轻量应用服务器（systemd + nginx）
 
 > 后端用 **systemd** 托管（`deploy/zyxf.service`），前端构建产物由 **nginx** 托管并反代 `/api`，HTTPS 用 Let's Encrypt。
-> 服务器上**没有面板**：nginx、Node 24、certbot 全部是系统级安装（2026-09-12 起宝塔已彻底卸载）。部署由 `.github/workflows/deploy.yml` 全自动完成——SSH 上服务器 `git fetch + reset --hard`（对齐 origin/main）+ 装依赖 + 构建 + `systemctl restart zyxf`；**流程中任何一步失败**（装依赖、构建、健康检查 `/api/health`）都会触发回滚：workflow 在 `git reset --hard origin/main` 后挂了 `EXIT` trap，失败时把服务器退回部署前的修订并重建。这条覆盖是 BUG-102 的两个教训——① 回滚原先只挂在健康检查上，`npm install` 挂掉时脚本只是停在原地，服务器留在「新代码 + 缺依赖」的中间态（旧进程还在跑所以看起来正常，下次重启才起不来）；② 健康检查失败时前端 `dist/` 已被新构建覆盖，不回滚就会持续 502。
+> 服务器上**没有面板**：nginx、Node 24、certbot 全部是系统级安装（2026-09-12 起宝塔已彻底卸载）。部署由 `.github/workflows/deploy.yml` 全自动完成——SSH 上服务器 `git fetch + reset --hard`（对齐 origin/main）+ 装依赖 + 构建 + 安装 systemd 单元（含每日备份定时器）+ 同步并校验 nginx 配置 + `systemctl restart zyxf`；**流程中任何一步失败**（装依赖、构建、健康检查、nginx 校验）都会触发回滚：workflow 在 `git reset --hard origin/main` 后挂了 `EXIT` trap，失败时把服务器退回部署前的修订并重建。这条覆盖是 BUG-102 的两个教训——① 回滚原先只挂在健康检查上，`npm install` 挂掉时脚本只是停在原地，服务器留在「新代码 + 缺依赖」的中间态（旧进程还在跑所以看起来正常，下次重启才起不来）；② 健康检查失败时前端 `dist/` 已被新构建覆盖，不回滚就会持续 502。
 
 架构：
 
@@ -69,6 +69,16 @@ aliyun ossutil api put-bucket-https-config --bucket <bucket> --region cn-beijing
 - **systemd**（Linux 标配，无需额外安装）
 
 > `deploy/zyxf.service` 的 `ExecStart` 与 deploy workflow 都直接用 `/usr/bin/node`，不需要任何软链或 PATH 定制。
+
+> **务必加 2 GB swap。** 前端 `npm run build` 的 `prebuild` 会跑 WASM harfbuzz 字体子集化（21 MB 源字体 → 2.75 MB woff2），再叠加 vite/rolldown，这是整条部署链里最容易 OOM 的一步；2 核 2 GB 的机器在内存峰值上没有余量。
+>
+> ```bash
+> fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+> echo '/swapfile none swap sw 0 0' >> /etc/fstab      # 重启后仍然生效
+> swapon --show                                        # 确认
+> ```
+>
+> `vm.swappiness` 保持默认即可：swap 在这里只用于兜住构建峰值，不参与日常运行。
 
 ---
 
@@ -354,7 +364,7 @@ cd /opt/zyxf/frontend && npm install && npm run build   # prebuild 会自动跑 
 
 ### 4.2 nginx 站点配置
 
-在 `/etc/nginx/conf.d/zyxf.conf` 写一份配置，把 `/` 静态托管与 `/api` 反代分开（**当前生产就是这份**，由仓库 [frontend/nginx.conf](../frontend/nginx.conf) 逐字落地，证书路径指向 `/etc/letsencrypt/live/zyxf.top/`）：
+在 `/etc/nginx/conf.d/zyxf.conf` 写一份配置，把 `/` 静态托管与 `/api` 反代分开。**这份配置不再手工维护**：部署时 workflow 会把仓库 [frontend/nginx.conf](../frontend/nginx.conf) 拷到该路径，`nginx -t` 通过且用 `--resolve` 本地取到首页后才 `reload`，任一环节失败就还原上一份（备份存为同目录下的 `zyxf.conf.bak`）并让部署失败。证书路径指向 `/etc/letsencrypt/live/zyxf.top/`。
 
 > 下面是**简版模板**（仅 `listen 80`，用于起步验证）。完整版（含 80→443 跳转、`/assets/` 长缓存、Let's Encrypt 证书路径）见仓库里的 [frontend/nginx.conf](../frontend/nginx.conf)，证书申请见第 5 节。
 
@@ -399,7 +409,11 @@ server {
 nginx -t && systemctl reload nginx
 ```
 
-> 完整模板就是仓库的 [frontend/nginx.conf](../frontend/nginx.conf)——生产 `/etc/nginx/conf.d/zyxf.conf` 与它逐字一致。**改配置的正确姿势**：改仓库模板 → 覆盖服务器上的 `/etc/nginx/conf.d/zyxf.conf` → `nginx -t && systemctl reload nginx`。证书由 certbot 签发到 `/etc/letsencrypt/live/zyxf.top/`（见第 5 节），`certbot.timer` 每天自动续期。
+> 完整模板就是仓库的 [frontend/nginx.conf](../frontend/nginx.conf)。**改配置的正确姿势**：只改仓库这份文件，走正常发布即可（部署会自动覆盖 + 校验 + reload；校验失败会自动还原，线上不会停在坏配置上）。要在服务器上临时验证可以手工跑 `cp /opt/zyxf/frontend/nginx.conf /etc/nginx/conf.d/zyxf.conf && nginx -t && systemctl reload nginx`，但**不要把它当成常态**——2026-11 之前正是靠手工 scp，才出现「文档写着已下发 HSTS、线上其实没有」的漂移。证书由 certbot 签发到 `/etc/letsencrypt/live/zyxf.top/`（见第 5 节），`certbot.timer` 每天自动续期。
+>
+> 模板里两处容易踩的性能配置（2026-11 修）：
+> - `listen 443 ssl http2;` —— HTTP/2 必须写在 `listen` 上。Ubuntu 22.04 自带 nginx 1.18.0，没有 1.25.1 才引入的 `http2 on;` 指令，只写 `listen 443 ssl;` 会让整站退回 HTTP/1.1（每域 6 个并发连接）。
+> - `gzip on` + `gzip_types` —— nginx 默认的 `gzip_types` **只有 `text/html`**，所以 HTML 是压过的、`.js/.css` 一直明文外传（实测主 bundle 172,825 字节无 `content-encoding`）。`/api/` 里单独写了 `gzip off`：SSE 走 gzip 会把增量输出攒进缓冲区，反而拉高首字延迟。
 
 #### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 
@@ -468,10 +482,36 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 
   干跑走的是与真实同步完全相同的事务体，只是在 COMMIT 前回滚，所以「会删什么」是精确的；
   怀疑剪枝会误删时先跑它，再决定要不要调 `FOLDER_PRUNE_MIN_AGE_DAYS`（见 §2.5）。
-- 数据库备份（重要）：**注意后端启用了 WAL 模式**（`db.js` 的 `PRAGMA journal_mode = WAL`），
-  只 `cp data.db` 会得到一个**空库或严重陈旧的库**——已提交事务可能全在 `data.db-wal` 里。
-  本仓库开发库就是现成反例：`data.db` 仅 4 KB，而 `data.db-wal` 有 600 KB，单独拷贝后
-  `SELECT COUNT(*) FROM files` 直接报 `no such table: files`。
+- 数据库备份（**已自动化**，2026-11 起）：`deploy/zyxf-backup.timer` 每天 04:17 触发
+  `backend/scripts/backup-db.mjs`——`VACUUM INTO` 产出一致性快照 → gzip → 上传到 OSS 的
+  `backup/` 前缀（`BACKUP_OSS_PREFIX` 可改，默认在 `OSS_KEY_PREFIX` 之外，不会被 sync 当成站内文件），
+  默认保留 7 天（`BACKUP_RETENTION_DAYS`）。service/timer 由部署自动安装并 `enable --now`，
+  首发那次部署还会立刻跑一遍。
+
+  ```bash
+  systemctl list-timers zyxf-backup.timer              # 下次触发时间
+  systemctl start zyxf-backup.service                  # 立刻备份一次
+  journalctl -u zyxf-backup -n 50                      # 上次结果（JSON 摘要 / 失败原因）
+  node /opt/zyxf/backend/scripts/backup-db.mjs --dry   # 只算不写：报告快照大小与目标 key
+  ```
+
+  ⚠️ 只备份数据库、**不备份 `.env`**：它含密钥，塞进对象存储等于多开一处泄露面；丢了只是
+  `JWT_SECRET` / `ADMIN_PASSWORD` / OSS 密钥需要重新生成，属于可恢复项（请自行在密码管理器留一份）。
+
+  **恢复**：取 OSS 上最新的 `.db.gz` 解压，停服后覆盖 `/opt/zyxf/backend/data.db`，并**连同
+  `data.db-wal` / `data.db-shm` 一起删掉**（旧 WAL 配新库会直接损坏），确认属主是 `www` 后启动：
+
+  ```bash
+  systemctl stop zyxf
+  rm -f /opt/zyxf/backend/data.db-wal /opt/zyxf/backend/data.db-shm
+  gunzip -c zyxf-data-YYYYMMDDTHHMMSSZ.db.gz > /opt/zyxf/backend/data.db
+  chown www:www /opt/zyxf/backend/data.db && chmod 600 /opt/zyxf/backend/data.db
+  systemctl start zyxf && curl -fsS http://127.0.0.1:4000/api/health
+  ```
+
+- 手工备份（**注意 WAL 模式**）：`db.js` 的 `PRAGMA journal_mode = WAL` 意味着已提交事务可能
+  全在 `data.db-wal` 里，只 `cp data.db` 会得到一个**空库或严重陈旧的库**（早期开发库出现过
+  「`data.db` 4 KB、`data.db-wal` 600 KB，拷出来连 `files` 表都没有」）。临时手工备份用：
 
   ```bash
   # 方式一：停服后整组拷贝（最稳）
@@ -487,7 +527,8 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
   node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync('/opt/zyxf/backend/data.db').exec(\"VACUUM INTO '/root/data.db.bak'\")"
   ```
 
-  建议加 crontab 每日备份，并**定期抽查**备份能打开（`sqlite3 ~/data.db.bak-xxxx '.tables'`）。
+  无论哪条路，**定期抽查备份能打开**（`sqlite3 ~/data.db.bak-xxxx '.tables'`）——没验证过的备份
+  等于没有备份。
 
 ---
 

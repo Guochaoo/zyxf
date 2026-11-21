@@ -2,7 +2,7 @@ name: Deploy to Server
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
 
 # 同一次生产部署串行化：两次 push 挨得近时两个 job 会并发在同一台服务器上执行
 # git reset --hard + npm install + systemctl start，互相覆盖文件并把服务停在
@@ -16,7 +16,8 @@ permissions:
   contents: read
 
 # 标准 SSH 部署：后端用 systemd 托管（zyxf.service），前端构建产物交给 nginx。
-# 流程：SSH 上服务器 → git pull → 装依赖 → 构建前端 → systemctl 重启后端。
+# 流程：SSH 上服务器 → git pull → 装依赖 → 构建前端 → 装服务/备份定时器 →
+#       systemctl 重启后端 → 同步 nginx 配置并校验重载。
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -65,6 +66,13 @@ jobs:
               echo "::error::deploy failed on $(git rev-parse --short HEAD), rolling back to ${PREV}"
               cd /opt/zyxf
               git reset --hard "$PREV"
+              # 单元文件拷到 /etc/systemd/system 后就脱离了 git 工作区：只 reset 代码会留下
+              # 「旧代码 + 新 unit」的混合态。这里把单元也退回 PREV 的版本。
+              cp /opt/zyxf/deploy/zyxf.service /etc/systemd/system/zyxf.service 2>/dev/null || true
+              systemctl daemon-reload 2>/dev/null || true
+              # 回退到的修订可能还没有备份脚本；留着 timer 只会每天静默失败一次。
+              [ -f /opt/zyxf/backend/scripts/backup-db.mjs ] ||
+                systemctl disable --now zyxf-backup.timer 2>/dev/null || true
               cd /opt/zyxf/backend
               npm install --no-audit --no-fund
               cd /opt/zyxf/frontend
@@ -100,10 +108,14 @@ jobs:
             fi
             npm run build
 
-            # 安装/更新 systemd 服务并重启后端（首次部署也会自举：enable + daemon-reload）。
+            # 安装/更新 systemd 服务（首次部署也会自举：enable + daemon-reload）。
             cp /opt/zyxf/deploy/zyxf.service /etc/systemd/system/zyxf.service
+            # 每日数据库备份：service + timer 一起装，enable --now 保证首发当天就生效。
+            cp /opt/zyxf/deploy/zyxf-backup.service /etc/systemd/system/zyxf-backup.service
+            cp /opt/zyxf/deploy/zyxf-backup.timer /etc/systemd/system/zyxf-backup.timer
             systemctl daemon-reload
             systemctl enable zyxf
+            systemctl enable --now zyxf-backup.timer
 
             # 先优雅停掉 systemd 旧实例，再清理仍占用 4000 的残留进程。
             # 从宝塔/nohup 迁移到 systemd 的过渡期，旧后端可能不是 systemd 启动、
@@ -122,3 +134,30 @@ jobs:
             # 留在新修订上会让线上持续 502）。
             sleep 3
             curl -fsS http://127.0.0.1:4000/api/health
+
+            # 每次部署顺手做一次备份，不等 04:17。放在健康检查之后：库是后端启动时
+            # 才创建的，太早跑会「数据库不存在」。失败只警告不阻塞——备份不该挡住发布，
+            # 但每次部署都真的走一遍上传，等于给自己留了个持续验证。
+            systemctl start zyxf-backup.service ||
+              echo "::warning::备份失败，检查 journalctl -u zyxf-backup"
+
+            # nginx：以仓库 frontend/nginx.conf 为唯一来源。原先靠手工 scp 同步，配置与
+            # 仓库必然漂移——2026-11 实测就发现文档声称下发 HSTS，线上完全没有。
+            # 备份文件名用 .bak 而不是 .conf：nginx 只 include *.conf，备份不会被误加载。
+            NGINX_CONF=/etc/nginx/conf.d/zyxf.conf
+            if [ -f /opt/zyxf/frontend/nginx.conf ]; then
+              cp "$NGINX_CONF" "$NGINX_CONF.bak" 2>/dev/null || true
+              cp /opt/zyxf/frontend/nginx.conf "$NGINX_CONF"
+              # 语法校验 + 重载后真的能取到首页，两者都过才算成功；否则还原上一份配置。
+              # 这里不能用后端健康检查代替：它只打 127.0.0.1:4000，nginx 挂了它照样绿。
+              if nginx -t && systemctl reload nginx &&
+                 curl -fsS --resolve zyxf.top:443:127.0.0.1 https://zyxf.top/ -o /dev/null; then
+                echo "nginx reloaded with repo config"
+              else
+                echo "::error::nginx 配置校验失败或站点取不到首页，已还原上一份配置"
+                # 首次部署时没有 .bak：此时宁可删掉新配置回落到其它 vhost，也不留坏配置。
+                cp "$NGINX_CONF.bak" "$NGINX_CONF" 2>/dev/null || rm -f "$NGINX_CONF"
+                nginx -t && systemctl reload nginx || true
+                exit 1
+              fi
+            fi
