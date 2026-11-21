@@ -618,12 +618,29 @@ openssl x509 -in /etc/letsencrypt/live/zyxf.top/cert.pem -noout -text |
 
 `--expand` 之后 renewal 配置里自动带上两个域名，续期不需要再管。⚠️ 加 `www` 前先把 DNS 的 `www` 记录建好（CNAME → `zyxf.top`），否则 HTTP-01 验证会失败。
 
+> ⚠️ **重签会重写 renewal 配置并丢掉自定义键**：`--force-renewal` 重签或 `--expand` 加域名时，certbot 会按当时的参数重写 `[renewalparams]`，`renew_hook = systemctl reload nginx` 已经因此被删过两次（2026-11）。所以每次动完证书都要补一遍：
+>
+> ```bash
+> grep -q '^renew_hook' /etc/letsencrypt/renewal/zyxf.top.conf || \
+>   echo 'renew_hook = systemctl reload nginx' >> /etc/letsencrypt/renewal/zyxf.top.conf
+> ```
+>
+> `installer = nginx` 时 certbot 续期本身也会 reload，这一行是双保险；但没有它时，任何一次「证书换了、nginx 没 reload」都会让站点继续用旧证书直到下次重启。
+
+> **`--nginx` 验证器会临时改写 `/etc/nginx/conf.d/zyxf.conf`**（插入 challenge 的 location，验证完还原）。而本仓库每次部署都会用仓库版本整份覆盖这个文件——两者一般不会撞上，但**不要在发布的同时手动跑 certbot**。真撞上了那次验证会失败，等下一次 `certbot.timer`（每天 00:00 / 12:00）重试即可。
+
 自检：
 
 ```bash
-certbot certificates | grep -E "Certificate Name|Expiry"
-certbot renew --dry-run --cert-name zyxf.top   # 约 30s，验证 HTTP-01 全链路
+certbot certificates | grep -E "Certificate Name|Domains|Expiry"
+certbot renew --dry-run --cert-name zyxf.top
 ```
+
+> ⚠️ **`--dry-run` 在这台机器上会去连 Let's Encrypt 的 staging**（certbot 强制把 CA 换成 staging 做演练），而从北京访问 `acme-staging-v02.api.letsencrypt.org` 经常 `Read timed out`（2026-11-21 实测：23:05 通过，23:49 超时）。这**不是**续期配置有问题——同一天对 ZeroSSL 的真实签发两次都成功（单域 + `--expand` 双域）。判断续期是否健康，看这三处而不是 dry-run：
+>
+> - `certbot certificates` 的到期时间（现在是 2027-02-19，90 天）；
+> - `journalctl -u certbot --since "-7 days"`，成功的运行只有 `Starting`/`Finished`、没有 `Failed to renew`；
+> - `uptime.yml` 每天探测线上证书剩余天数（少于 14 天即失败告警）——它才是真正兜底的那一层。
 
 ---
 

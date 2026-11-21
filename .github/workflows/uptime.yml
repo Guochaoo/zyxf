@@ -33,6 +33,17 @@ jobs:
           echo "GET / -> $code"
           [ "$code" = 200 ]
 
+      # www 是 2026-11 加的：证书要同时覆盖两个名字，nginx 里 www 必须 301 到裸域。
+      # 这两件事任一坏掉，用户看到的都是证书警告或打不开，而主域探测完全正常。
+      - name: www 跳转
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 https://www.zyxf.top/)
+          loc=$(curl -sS -o /dev/null -D - --max-time 10 https://www.zyxf.top/ | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}')
+          echo "GET https://www.zyxf.top/ -> $code, location=$loc"
+          [ "$code" = 301 ]
+          case "$loc" in https://zyxf.top/*) ;; *) echo "www 应 301 到裸域"; exit 1;; esac
+
       - name: 证书剩余天数
         run: |
           set -euo pipefail
