@@ -77,13 +77,13 @@ aliyun ossutil api put-bucket-https-config --bucket <bucket> --region cn-beijing
 
 将域名 A 记录指向服务器公网 IP（在云控制台的实例详情里查看）。文档统一用 RFC 5737 保留段 `203.0.113.10` 作示例占位——**不要把真实 IP 写进仓库**。
 
-生产 `zyxf.top` 区里**只有 11 条记录**，每条都有明确归属（2026-11 实测，`aliyun alidns DescribeDomainRecords --DomainName zyxf.top`）。这个区是全站唯一的入口配置，改任何一条之前先对一遍这张表：
+生产 `zyxf.top` 区里**只有 11 条记录**，每条都有明确归属（2026-11-22 实测，`aliyun alidns DescribeDomainRecords --DomainName zyxf.top`）。这个区是全站唯一的入口配置，改任何一条之前先对一遍这张表：
 
 | RR | 类型 | 值 | 干什么用 | 删了会怎样 |
 |---|---|---|---|---|
-| `@` | A | 服务器公网 IP | 主站入口（nginx，不经 CDN/ESA） | 全站打不开 |
+| `@` | CNAME | `zyxf.top.a1.initrr.com` | 主站入口经 ESA（§4.2.5） | 全站打不开 |
+| `origin` | A | 服务器公网 IP | **源站主机名**，ESA 记录只能填 CNAME（不能填 IP） | ESA 回源失败（522） |
 | `www` | CNAME | `zyxf.top` | 主站别名，nginx 里 301 到裸域 | `www.zyxf.top` 打不开 |
-| `@` | TXT | `v=spf1 -all` | 声明裸域**不用于发信**，阻止伪造 | 别人可以伪造 `@zyxf.top` 发信 |
 | `_dmarc` | TXT | `v=DMARC1;p=none;rua=…` | 收 DMARC 报告（不拦截） | 伪造邮件无报告可查 |
 | `dzhz` | CNAME | `dzhz.zyxf.top.a1.initrr.com` | ESA 加速的 APK/静态分发（§4.2.2） | 岱宗盒子下载 404 |
 | `_acme-challenge.dzhz` | CNAME | `dzhz.zyxf.top.<siteId>.dcv.aliyun-esa.com` | ESA **托管 DCV**，证书自动续期 | 证书到期后 dzhz 全线 TLS 失败 |
@@ -93,7 +93,8 @@ aliyun ossutil api put-bucket-https-config --bucket <bucket> --region cn-beijing
 | `aliyun-cn-hangzhou._domainkey.mail` | TXT | `v=DKIM1; …` | 发信签名（DKIM） | 同上 |
 | `_dmarc.mail` | TXT | `v=DMARC1;p=none;rua=…` | DMARC 报告 | 退信策略失效（暂不拦） |
 
-> - **发信身份是 `system@mail.zyxf.top`**（`DM_ACCOUNT_NAME`），SPF/DKIM/DMARC 都挂在 `mail` 子域；裸域那条 `v=spf1 -all` 与它不冲突——裸域本来就不发信，`-all` 只是把「冒充裸域」这条路堵死。
+> - **发信身份是 `system@mail.zyxf.top`**（`DM_ACCOUNT_NAME`），SPF/DKIM/DMARC 都挂在 `mail` 子域，与主站接入 ESA 无关。
+> - ⚠️ **裸域原来那条 `@ TXT "v=spf1 -all"` 已被删除**：apex 改成 CNAME 后不能与任何其它记录共存（DNS 规范），所以裸域的防伪造能力没了。`_dmarc` 仍能收到报告，`mail` 子域的 SPF/DKIM 不受影响。要恢复裸域 SPF 就得放弃 apex CNAME（即放弃主站走 ESA）。
 > - **没有 `oss`**：bucket 上**没有任何自定义域名**（`aliyun ossutil api list-cname --bucket <bucket>` 返回空），后端签名 URL 直接用 `<bucket>.<region>.aliyuncs.com`。所以下载链路上没有 CDN/ESA，也就没有边缘缓存——这是 OSS 流出按 ¥0.5/GB 计费的直接原因。
 > - 原来还有一条 `verification` TXT（`verify_257ecc…`），是早期 CDN 域名归属验证留下的孤儿。2026-11-21 已删除：CDN 域名数为 0、DCDN 未开通、OSS 无自定义域名、ESA 用的是另一套 `_esaauth`，没有任何在用产品认领它；删除后主站、dzhz 下载、发信均正常。
 
@@ -599,6 +600,66 @@ aliyun esa DescribeSiteTopData --SiteId <id> --Limit 10 \
 
 > 流量结构很说明问题：**90% 的流量是 APK 下载**。所以这条链路上真正影响「速度」的是大文件分发，而不是 HTML/JS 压缩——把它放在含免费流量的 ESA 后面（而不是 OSS 直连按 ¥0.5/GB 计费）才是省钱的那一步。
 
+#### 4.2.5 主站 `zyxf.top` 也在 ESA 后面（2026-11-22 迁入）
+
+主站从「A 记录直连服务器」改成「CNAME → ESA → `origin.zyxf.top` → 服务器」。目的：边缘统一
+处理 HTTP/2 与 TLS、源站能看到真实客户端 IP、顺带用掉免费版那 1 条网页监测额度。
+
+| 项 | 值 |
+|---|---|
+| ESA 记录 | `zyxf.top` → CNAME `origin.zyxf.top`（源类型 `Domain`、HostPolicy `follow_hostname`、Proxied） |
+| 边缘 CNAME | `zyxf.top.a1.initrr.com` |
+| 源站主机名 | `origin.zyxf.top` A → 服务器公网 IP。**ESA 记录里不能直接写 IP**：CNAME 接入的站点只接受 CNAME 记录（`InvalidParameter.CnameSiteRecordUnsupport`），所以先给服务器起一个主机名 |
+| 边缘证书 | ESA 免费证书（Let's Encrypt，`ApplyCertificate --Type lets_encrypt`）。DCV 是 **HTTP** 类型：把挑战文件放进源站 `/var/www/letsencrypt/.well-known/acme-challenge/`，几分钟后自动验证通过，不需要加 DNS 记录 |
+| 源站证书 | 仍是 certbot 那张（ZeroSSL），现在只用于 **ESA → 源站** 这一段 |
+
+> **`www` 也要单独加一条 ESA 记录和一张证书**（踩过）：DNS 里 `www` 是 CNAME 到 `zyxf.top`，
+> 解析到 ESA 之后，ESA 需要为 `www.zyxf.top` 也有记录才能回源——只配了 apex 的话，
+> `http://www.zyxf.top` 会返回 **530**（ESA 找不到源站），而 apex 完全正常。
+> `ApplyCertificate --Domains "www.zyxf.top"` 单独签一张，DCV 同样是 HTTP 挑战文件。
+
+**翻 DNS 之前必须先做的两件事**（不做就会自伤）：
+
+1. **真实客户端 IP**：ESA「托管转换 → 添加真实客户端 IP 标头」注入 `ali-real-client-ip`
+   （`UpdateManagedTransform --AddRealClientIpHeader on`），nginx 用
+   `set_real_ip_from 0.0.0.0/0` + `real_ip_header ali-real-client-ip` 换回真实 IP。
+   不做的话 `$binary_remote_addr` 是节点 IP，`limit_conn 24` 会把**整个 ESA 节点**当成一个
+   客户端来限流，正常用户直接 429。
+   ⚠️ 免费版没有「源站防护」（`CreateOriginProtection` → `FunctionQuotaCheckFailed`），
+   拿不到回源网段列表，所以 `set_real_ip_from` 只能写 `0.0.0.0/0`：**直连源站并自带该标头
+   的人可以伪装来源、绕过按 IP 的限流**。这是接 CDN 的固有代价，要堵死得把防火墙收窄到
+   ESA 回源网段（付费版或手工维护 IP 列表）。
+2. **缓存规则**：`/api/`、`/.well-known/`、`/games/` 一律 **bypass**
+   （`CreateCacheRule --BypassCache bypass_all --Rule "(http.request.uri.path contains \"/api/\" or …)"`）。
+   不设的话 API 响应和证书挑战会被边缘缓存——API 缓存会串用户数据，证书挑战被缓存会让
+   续期偶发失败。
+
+**DNS 切换（含回滚）**：
+
+```bash
+# 切过去：CNAME 不能与其它记录共存，所以必须先删掉 @ A 与 @ TXT
+aliyun alidns DeleteDomainRecord --RecordId <@ A 的 RecordId>
+aliyun alidns DeleteDomainRecord --RecordId <@ TXT 的 RecordId>      # 见下方「代价」
+aliyun alidns AddDomainRecord --DomainName zyxf.top --RR @ --Type CNAME \
+  --Value zyxf.top.a1.initrr.com --TTL 600
+
+# 回滚：删掉 @ CNAME，再把 A 与 TXT 加回去（TTL 600，最长 10 分钟内完成迁移）
+```
+
+> ⚠️ **代价：apex 不能同时有 CNAME 和其它记录**，所以裸域那条 `@ TXT "v=spf1 -all"` 被删了。
+> `_dmarc` 与 `mail` 子域那套 SPF/DKIM/DMARC 不受影响（发信身份一直是 `system@mail.zyxf.top`），
+> 但裸域因此可以被人伪造发信。这是「把 apex 挂 CDN」的固有取舍。
+
+**验证**（本地 DNS 可能还缓存着旧 A 记录，以服务器或 `+trace` 为准）：
+
+```bash
+curl -sI https://zyxf.top/ | grep -iE '^(server|http/)'      # 期望 HTTP/2 + server: ESA
+curl -s  https://zyxf.top/api/health                          # 期望 JSON，且每次时间戳都变（没被缓存）
+echo | openssl s_client -servername zyxf.top -connect zyxf.top:443 2>/dev/null |
+  openssl x509 -noout -issuer -enddate                        # 期望 Let's Encrypt（ESA 边缘证书）
+tail -3 /var/log/nginx/access.log    # 第一列应是真实客户端 IP，不是 ESA 节点 IP
+```
+
 #### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 
 - **刷新任何前端路由都是 404**（`/folder/6`、`/dashboard`、`/about`、`/settings`）：缺 `location / { try_files $uri $uri/ /index.html; }`（BUG-97）。dist/ 里没有这些文件，必须交给 index.html 由前端路由接管。
@@ -631,22 +692,37 @@ aliyun esa DescribeSiteTopData --SiteId <id> --Limit 10 \
 
 ---
 
-## 5. HTTPS（certbot + ZeroSSL，HTTP-01）
+## 5. HTTPS（两层证书：ESA 边缘 + 源站 certbot）
 
-生产是 **ZeroSSL 签发、certbot 的 nginx 插件做 HTTP-01 验证**：
+**2026-11-22 起有两张证书，不要混为一谈**（§4.2.5）：
+
+| 层 | 谁签的 | 干什么用 | 怎么续 |
+|---|---|---|---|
+| **边缘**（浏览器看到的） | ESA 免费证书（Let's Encrypt） | 客户端 ↔ ESA | ESA 自动；申请时用 **HTTP DCV**：把挑战文件放进源站 `/var/www/letsencrypt/.well-known/acme-challenge/`，几分钟自动通过。可用 `aliyun esa GetCertificate` 看 `DCV` 与状态 |
+| **源站**（下面的 certbot） | ZeroSSL | 仅 **ESA → 源站** 这一段（`origin.zyxf.top`，Host 跟随 `zyxf.top`） | certbot timer + webroot，见下 |
+
+源站证书原先由 certbot 的 **nginx 插件**做 HTTP-01，现在改成 **webroot**：站点挂到 ESA 之后，
+LE 的验证请求要穿过边缘才能到源站，而 nginx 插件会临时改写 `conf.d/zyxf.conf`——那个文件
+每次部署都会被仓库版本整份覆盖，两条路径会打架。所以：
 
 ```bash
-certbot certonly --nginx -d zyxf.top --cert-name zyxf.top \
+certbot certonly --webroot -w /var/www/letsencrypt -d zyxf.top --cert-name zyxf.top \
   --server https://acme.zerossl.com/v2/DV90
 ```
 
-证书落在 `/etc/letsencrypt/live/zyxf.top/`（`frontend/nginx.conf` 里的路径就是这个）。`certbot.timer` 每 12 小时跑一次 `certbot renew`，续期后由 renewal 配置里的 `renew_hook = systemctl reload nginx` 让 nginx 加载新证书。
+`frontend/nginx.conf` 在 80 与 443 各留了一个 `/.well-known/acme-challenge/` → `/var/www/letsencrypt`
+的 location（80 那个必须用 location 而不是 server 级 `return 301`，否则挑战请求会被一起重定向走），
+`deploy/deploy.sh` 负责 `mkdir -p`。ESA 侧用缓存规则把 `/.well-known/` 设为不缓存。
 
-> **2026-11 改过方式**：之前是 **DNS-01**（手工在阿里云 DNS 加 `_acme-challenge` TXT），依赖 3 个不在仓库里的 `/usr/local/bin/*.sh` 钩子、`/root/.zyxf-certbot.env`（AK/SK）和服务器上的 `aliyun` CLI——机器重建时这套东西补不回来，而文档里写的却是 `certbot --nginx`（issue #98）。现在 80 端口本来就开着（`listen 80` 只做 301），验证不需要任何凭据和钩子，那 4 个仓库外的活动件已全部删除。
+证书落在 `/etc/letsencrypt/live/zyxf.top/`，`certbot.timer` 每 12 小时跑 `certbot renew`，
+续期后由 `renew_hook = systemctl reload nginx` 让 nginx 加载（`installer = nginx` 也会 reload，双保险）。
+
+> **2026-11 改过方式**：之前是 **DNS-01**（手工在阿里云 DNS 加 `_acme-challenge` TXT），依赖 3 个不在仓库里的 `/usr/local/bin/*.sh` 钩子、`/root/.zyxf-certbot.env`（AK/SK）和服务器上的 `aliyun` CLI——机器重建时这套东西补不回来，而文档里写的却是 `certbot --nginx`（issue #98）。那 4 个仓库外的活动件已全部删除。
 >
-> 同时删掉了 `dzhz.zyxf.top` 的证书谱系：它已由 ESA 提供证书（§4.2.2），而这本证书的 `renew_hook` 指向**已删除的旧 CDN 域名**（`aliyun cdn SetCdnDomainSSLCertificate`），且 `_acme-challenge.dzhz` 已改成指向 ESA 托管 DCV 的 CNAME、DNS-01 根本加不进 TXT——留着只会在 2026-12-22（到期前 30 天）起每天失败两次，而 `uptime.yml` 只探测 `zyxf.top`，不会有人收到告警。
+> 同时删掉了 `dzhz.zyxf.top` 的证书谱系：它已由 ESA 提供证书（§4.2.2），而这本证书的 `renew_hook` 指向**已删除的旧 CDN 域名**，留着只会在 2026-12-22（到期前 30 天）起每天失败两次。
 
-前提：域名 A 记录指向服务器公网 IP，80/443 对公网开放。
+前提：域名解析指向 ESA（边缘侧），且 **让 LE 能验证到源站**——`_acme-challenge` 走 80 端口时会被
+ESA 转发回源站（`/.well-known/` 已设为不缓存）。
 
 **一张证书覆盖两个域名**（裸域 + `www`）。首次只签裸域，后来加 `www` 时用 `--expand`：
 
@@ -675,14 +751,16 @@ openssl x509 -in /etc/letsencrypt/live/zyxf.top/cert.pem -noout -text |
 
 ```bash
 certbot certificates | grep -E "Certificate Name|Domains|Expiry"
-certbot renew --dry-run --cert-name zyxf.top
+certbot renew --dry-run --cert-name zyxf.top --non-interactive --no-random-sleep-on-renew
 ```
 
-> ⚠️ **`--dry-run` 在这台机器上会去连 Let's Encrypt 的 staging**（certbot 强制把 CA 换成 staging 做演练），而从北京访问 `acme-staging-v02.api.letsencrypt.org` 经常 `Read timed out`（2026-11-21 实测：23:05 通过，23:49 超时）。这**不是**续期配置有问题——同一天对 ZeroSSL 的真实签发两次都成功（单域 + `--expand` 双域）。判断续期是否健康，看这三处而不是 dry-run：
+> ⚠️ **`--dry-run` 会去连 Let's Encrypt 的 staging**（certbot 强制把 CA 换成 staging 做演练），而从北京访问 `acme-staging-v02.api.letsencrypt.org` 经常 `Read timed out`（2026-11-21 实测：23:05 通过，23:49 超时）。这**不是**续期配置有问题——同一天对 ZeroSSL 的真实签发多次都成功。判断续期是否健康，看这三处而不是 dry-run：
 >
 > - `certbot certificates` 的到期时间（现在是 2027-02-19，90 天）；
 > - `journalctl -u certbot --since "-7 days"`，成功的运行只有 `Starting`/`Finished`、没有 `Failed to renew`；
 > - `uptime.yml` 每天探测线上证书剩余天数（少于 14 天即失败告警）——它才是真正兜底的那一层。
+>
+> ⚠️ 另外**非交互模式会先随机睡最多 5 分钟**再开始验证（`Non-interactive renewal: random delay of …`）。用 `timeout` 包着跑时会被误判成「卡住/失败」，务必加 `--no-random-sleep-on-renew`。2026-11-22 用这个参数实测：`zyxf.top` 与 `www.zyxf.top` 都通过（webroot 经 ESA 回源站）。
 
 ---
 
@@ -798,7 +876,7 @@ certbot renew --dry-run --cert-name zyxf.top
 |---|---|---|
 | 轻量应用服务器 | 1 台 `swas.s.c2m2s40b1.linux`（2C2G/40G），到期 2027-01-03 | 唯一生产机 |
 | OSS Bucket | 业务桶（文件库，私有 + 签名直链）+ 发布桶（`dzhz` APK/静态，私有 + ESA 私有回源） | 都在用 |
-| ESA | 站点 1 个（`zyxf.top`，免费版 `entranceplan`）+ 加速记录 1 条（`dzhz`） | 在用，只加速 |
+| ESA | 站点 1 个（`zyxf.top`，免费版 `entranceplan`）+ 加速记录 **2 条**（`zyxf.top` 主站、`dzhz` 分发）+ 压缩规则 1 条（Brotli+Gzip）+ 缓存绕过规则 1 条 | 主站与 dzhz 都走它；WAF / 边缘函数仍需另购 |
 | 阿里云 CDN | 域名 **0**（旧域名 2026-11-21 已删） | 已下线，回滚成本见 §4.2.2 |
 | SWAS 防火墙 | 22 / 80 / 443 / ICMP，来源均 `0.0.0.0/0` | 见 §0.1（22 无法收窄） |
 | VPC | **0 个**（原有一个空的 `172.16.0.0/12`，0 交换机 0 ENI，2026-11-21 已删） | 轻量服务器不走 VPC，VPC 在这里没有用途 |
