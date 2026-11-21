@@ -473,7 +473,14 @@ nginx -t && systemctl reload nginx
 - **免费版不含 WAF / 边缘函数 / 七层 DDoS**（`EdgeWaf: waf_off`、`EdgeCompute: er_off`、`EdgeDdos7Layer: ddos_off`），只有加速。站点级防护仍然靠 nginx 的限流（见 §4.2 末尾）。
 - **子域不能单独作为站点**（`SubSiteUnavailable`，只有企业版支持），所以站点建在根域 `zyxf.top` 上，`dzhz` 是它下面的一条记录。
 - 免费版套餐参数里 `PlanTraffic: 0`，官方口径是「流量和请求数不计费」，但**限速阈值没有公开**；若大文件被明显限速要重新评估是否值得留在这条链路上。
-- 旧 CDN 域名 `dzhz.zyxf.top` 已于 2026-11-21 删除（issue #96），所以「切回去」不再是一条 DNS 的事——DELETED 之后回滚只能重建：CDN 建域名 → 源站选 OSS bucket → 开私有回源授权 → 配证书 → 改 CNAME。删之前已验证 ESA 侧 APK 回源 200、证书 OK、缓存命中。
+- 旧 CDN 域名 `dzhz.zyxf.top` 已于 2026-11-21 删除（issue #96），所以「切回去」不再是一条 DNS 的事——DELETED 之后回滚只能重建：CDN 建域名 → 源站选 OSS bucket → 开私有回源授权 → 配证书 → 改 CNAME。
+- **探活必须用真实 key**：桶里没有 `apk` 这个对象，只有 `xjtu-toolbox/apk/latest/app-release.apk`（站点里用的就是这个完整路径，`content.html` 的下载按钮）。ESA 只做加速、**不重写路径**，所以 `/apk` 回源就是 `NoSuchKey` 404、`/` 是 `AccessDenied` 403——这两个状态都正常，不代表加速坏了。验证回源（绕过边缘缓存）用带查询串的请求：
+
+  ```bash
+  curl -sI -H 'Cache-Control: no-cache' \
+    'https://dzhz.zyxf.top/xjtu-toolbox/apk/latest/app-release.apk?probe=$(date +%s)' | head -5
+  # 期望 200 + content-type: application/vnd.android.package-archive + Server: ESA
+  ```
 
 #### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 
