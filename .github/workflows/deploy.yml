@@ -73,14 +73,26 @@ jobs:
               # 回退到的修订可能还没有备份脚本；留着 timer 只会每天静默失败一次。
               [ -f /opt/zyxf/backend/scripts/backup-db.mjs ] ||
                 systemctl disable --now zyxf-backup.timer 2>/dev/null || true
+              # 回滚路径刻意保留 npm install 而不是 npm ci：这里的目标是「把服务恢复回来」，
+              # 旧修订的 lockfile 万一与 package.json 有细微不一致，npm ci 会直接失败，把一次
+              # 可恢复的发布问题变成「站点起不来」。
               cd /opt/zyxf/backend
               npm install --no-audit --no-fund
               cd /opt/zyxf/frontend
               npm install --no-audit --no-fund
               npm run build
               systemctl restart zyxf
-              sleep 3
-              curl -fsS http://127.0.0.1:4000/api/health || true
+              # 回滚后的自检也用重试：一次连接被拒不能说明回滚失败。
+              ok=0
+              for i in $(seq 1 10); do
+                if curl -fsS --max-time 2 http://127.0.0.1:4000/api/health >/dev/null 2>&1; then
+                  ok=1
+                  break
+                fi
+                sleep 1
+              done
+              echo "rollback health: ${ok}"
+              journalctl -u zyxf -n 40 --no-pager || true
               echo "::error::rolled back to ${PREV}: 回滚已完成，但本次部署判定为失败"
             }
             # 末尾的 exit 不能省：EXIT trap 的最终退出码取自最后一条命令，而最后一条是
@@ -108,13 +120,14 @@ jobs:
               fi
             fi
 
-            # 后端：装依赖
+            # 后端：装依赖（npm ci 按 lockfile 精确安装；lockfile 与 package.json 不一致时
+            # 会直接失败——那正是我们想尽早知道的信号，而不是让 npm install 悄悄改写它）。
             cd /opt/zyxf/backend
-            npm install --no-audit --no-fund
+            npm ci --no-audit --no-fund
 
             # 前端：装依赖 + 构建（产物交给 nginx，无需常驻进程）
             cd /opt/zyxf/frontend
-            npm install --no-audit --no-fund
+            npm ci --no-audit --no-fund
 
             # vite build 会先清空 dist/，若残留带 immutable 位的 .user.ini
             # 会导致 emptyDir 阶段 EPERM，先解锁删除再构建。
@@ -130,6 +143,11 @@ jobs:
             cp /opt/zyxf/deploy/zyxf-backup.service /etc/systemd/system/zyxf-backup.service
             cp /opt/zyxf/deploy/zyxf-backup.timer /etc/systemd/system/zyxf-backup.timer
             systemctl daemon-reload
+            # journald 容量上限（issue #93）：40 GB 系统盘上日志无上限增长，撑满后 SQLite
+            # 写入失败 → 服务直接不可用。用 drop-in 幂等落盘，不改发行版原配置。
+            mkdir -p /etc/systemd/journald.conf.d
+            printf '[Journal]\nSystemMaxUse=200M\n' > /etc/systemd/journald.conf.d/zyxf.conf
+            systemctl restart systemd-journald || true
             systemctl enable zyxf
             systemctl enable --now zyxf-backup.timer
 
@@ -145,10 +163,23 @@ jobs:
             fi
             systemctl start zyxf
 
-            # 健康检查：确认后端起来（写库/加载环境变量失败会在此暴露）。
-            # 失败即非零退出 → EXIT trap 回滚到 PREV（前端 dist 已被新构建覆盖，
-            # 留在新修订上会让线上持续 502）。
-            sleep 3
+            # 健康检查：有上限的重试（最多约 15s）。原先固定 `sleep 3` + 单次 curl，
+            # 2026-10-28 真踩到过「启动比 3 秒慢」被判死、整批回滚（issue #80）。
+            # 失败时把 systemd 状态与最近日志打进构建日志，省掉靠猜的排障。
+            ok=0
+            for i in $(seq 1 15); do
+              if curl -fsS --max-time 2 http://127.0.0.1:4000/api/health >/dev/null 2>&1; then
+                ok=1
+                break
+              fi
+              sleep 1
+            done
+            if [ "$ok" != 1 ]; then
+              echo "::error::后端 15s 内未通过健康检查"
+              systemctl status zyxf --no-pager || true
+              journalctl -u zyxf -n 80 --no-pager || true
+              exit 1
+            fi
             curl -fsS http://127.0.0.1:4000/api/health
 
             # 每次部署顺手做一次备份，不等 04:17。放在健康检查之后：库是后端启动时

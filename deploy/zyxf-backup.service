@@ -12,5 +12,13 @@ WorkingDirectory=/opt/zyxf/backend
 TimeoutStartSec=300
 ExecStart=/usr/bin/node scripts/backup-db.mjs
 
+# --- 加固（issue #93，与主服务同一套口径）---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# 需要读 data.db（同目录）并在 PrivateTmp 里写快照临时文件，因此只放行数据目录。
+ReadWritePaths=/opt/zyxf/backend
+
 [Install]
 WantedBy=multi-user.target

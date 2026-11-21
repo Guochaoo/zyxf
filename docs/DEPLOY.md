@@ -296,6 +296,16 @@ journalctl -u zyxf -f           # 跟踪日志
 
 验证：`curl http://127.0.0.1:4000/api/health` → 返回 `{"ok":true,...}`。
 
+> **单元加固与日志上限（issue #93，2026-11）**：`zyxf.service` 与 `zyxf-backup.service` 都带
+> `NoNewPrivileges` / `PrivateTmp` / `ProtectSystem=strict` / `ProtectHome` +
+> `ReadWritePaths=/opt/zyxf/backend`；主服务另有 `StartLimitIntervalSec=60` + `StartLimitBurst=5`，
+> 配置错误时 5 次失败即停，不会无限重启刷日志。
+> ⚠️ 改这两个 unit 时**别删 `ReadWritePaths`**：`ProtectSystem=strict` 下没有它，SQLite 写不了
+> `data.db`，症状是服务启动即退、日志里只有 `SQLITE_CANTOPEN`。
+>
+> journald 的容量上限由部署写入 `/etc/systemd/journald.conf.d/zyxf.conf`（`SystemMaxUse=200M`）——
+> 40 GB 系统盘上无上限的日志增长会在撑满后让 SQLite 写入失败。
+
 ---
 
 ## 4. 前端：构建 + nginx
@@ -304,9 +314,11 @@ journalctl -u zyxf -f           # 跟踪日志
 
 ```bash
 cd /opt/zyxf/frontend
-npm install
+npm ci
 npm run build        # 生成 dist/
 ```
+
+> 用 `npm ci` 而不是 `npm install`：按 lockfile 精确安装，lockfile 与 `package.json` 不一致时会**直接失败**——那是想尽早看到的信号，而不是让 npm 悄悄改写 lockfile。
 
 > **图片与图标是预处理的产物，不在构建里现做**。`frontend/public/images/*.webp`、`favicon.png`、
 > `apple-touch-icon.png` 由 [`frontend/scripts/optimize-assets.py`](../frontend/scripts/optimize-assets.py)
@@ -336,7 +348,7 @@ OPPO Sans 4.0 的**源字体不入库**，走 npm devDependency `@fontpkg/oppo-s
 两层产物均 gitignore，由 `predev` / `prebuild` / `pretest` 自动生成，**部署无需额外操作**：
 
 ```bash
-cd /opt/zyxf/frontend && npm install && npm run build   # prebuild 会自动跑 fonts
+cd /opt/zyxf/frontend && npm ci && npm run build   # prebuild 会自动跑 fonts
 ```
 
 - **字符集 = GB2312（6,763 汉字）+ ASCII + 常用标点 + 源码里实际出现的全部 CJK 字**（脚本自动从
@@ -417,6 +429,14 @@ nginx -t && systemctl reload nginx
 > - `listen 443 ssl http2;` —— HTTP/2 必须写在 `listen` 上。Ubuntu 22.04 自带 nginx 1.18.0，没有 1.25.1 才引入的 `http2 on;` 指令，只写 `listen 443 ssl;` 会让整站退回 HTTP/1.1（每域 6 个并发连接）。
 > - `gzip on` + `gzip_types` —— nginx 默认的 `gzip_types` **只有 `text/html`**，所以 HTML 是压过的、`.js/.css` 一直明文外传（实测主 bundle 172,825 字节无 `content-encoding`）。`/api/` 里单独写了 `gzip off`：SSE 走 gzip 会把增量输出攒进缓冲区，反而拉高首字延迟。
 
+#### 4.2.1 `/games/`：仓库外的独立服务
+
+`frontend/nginx.conf` 里有一块 `location ^~ /games/`，反代到 `127.0.0.1:4100` 的 **小游戏全服榜**（systemd: `xjtu-games`，代码在 `/opt/xjtu-games`，不在本仓库）。这块原先只存在于生产服务器上——按「整文件覆盖」的姿势改配置会把它删掉，全服榜与提交分数直接挂掉（issue #86，2026-11 收进模板）。
+
+- 它的 `X-Forwarded-For` 用 `$proxy_add_x_forwarded_for`（**追加**），与主站 `/api/` 的 `$remote_addr`（**覆盖**，BUG-36 要求）不同。改成覆盖前先确认 `xjtu-games` 自己的 trust proxy 取法，别顺手套用主站写法。
+- `client_max_body_size 4k` 是那个服务的约定，不随主站的 `10m` 调整。
+- 现在部署会整份覆盖 `zyxf.conf`，因此这块**只能改仓库模板**；只改服务器上的会被下次发布冲掉。
+
 #### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 
 - **刷新任何前端路由都是 404**（`/folder/6`、`/dashboard`、`/about`、`/settings`）：缺 `location / { try_files $uri $uri/ /index.html; }`（BUG-97）。dist/ 里没有这些文件，必须交给 index.html 由前端路由接管。
@@ -471,10 +491,13 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
 ## 7. 日常运维
 
 - 后端日志：`journalctl -u zyxf -f`
+- 外部可用性探测：`.github/workflows/uptime.yml` 每 5 分钟检查 `/api/health`、首页、证书剩余
+  天数（<14 天即失败），失败由 GitHub 发邮件告警。可在 Actions 页面手动 Run 一次验证；
+  注意 GitHub 对**连续 60 天无提交**的仓库会自动停用 schedule，长期停更时需人工确认它还在跑。
 - 后端重启：`systemctl restart zyxf`
 - 后端状态：`systemctl status zyxf`
 - nginx 配置变更：改仓库 [frontend/nginx.conf](../frontend/nginx.conf) → 覆盖服务器 `/etc/nginx/conf.d/zyxf.conf` → `nginx -t && systemctl reload nginx`
-- 前端重构：`cd /opt/zyxf/frontend && npm install && npm run build`
+- 前端重构：`cd /opt/zyxf/frontend && npm ci && npm run build`
 - 同步干跑（核对「会新增/会删除什么」，**一个字节都不落库**；游客即可调用，限 2 次/分钟）：
 
   ```bash
