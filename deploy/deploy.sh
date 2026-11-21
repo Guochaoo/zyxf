@@ -151,6 +151,9 @@ systemctl start zyxf-backup.service || log "⚠️ 备份失败，检查 journal
 
 # --- nginx：以仓库 frontend/nginx.conf 为唯一来源 ---
 # 备份文件名用 .bak 而不是 .conf：nginx 只 include *.conf，备份不会被误加载。
+# ACME 验证目录（certbot --webroot 写入）要在 reload 前就存在，否则 nginx 的
+# /.well-known/acme-challenge/ 会 404，证书续期静默失败。
+mkdir -p /var/www/letsencrypt
 if [ -f "$REPO/frontend/nginx.conf" ]; then
   cp "$NGINX_CONF" "$NGINX_CONF.bak" 2>/dev/null || true
   # 安全头 snippet 必须先就位：nginx.conf 的 server 与每个自写 add_header 的 location
