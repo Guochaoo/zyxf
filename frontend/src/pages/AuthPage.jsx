@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { useTranslation } from 'react-i18next';
@@ -6,8 +6,13 @@ import { requestRegisterCode } from '../api.js';
 import { Loader2 } from 'lucide-react';
 import { BsCaretLeftFill, BsEyeFill, BsEyeSlashFill } from 'react-icons/bs';
 import { errMsg } from '../utils.js';
-import Silk from '../components/Silk.jsx';
 import Toast from '../components/Toast.jsx';
+import useMediaQuery from '../hooks/useMediaQuery.js';
+
+// three.js 的 Silk 背景（521 KB 的独立 chunk）懒加载，并只在品牌面板真正可见时挂载。
+// 面板是 `hidden sm:flex`，但 CSS 隐藏不会阻止 React 挂载——不判断断点的话，手机用户
+// 照样要下载 521 KB 并创建一个 WebGL 上下文，去渲染一块看不见的区域。
+const Silk = lazy(() => import('../components/Silk.jsx'));
 
 /* ─────────────────────────────────────────────────────────
  * AUTH — 登录/注册合并页。/login 与 /register 渲染同一组件
@@ -275,6 +280,8 @@ function RegisterForm() {
 export default function AuthPage() {
   const { t } = useTranslation();
   const mode = useLocation().pathname === '/register' ? 'register' : 'login';
+  // 与品牌面板的 `hidden sm:flex` 同一个断点（Tailwind 的 sm = 640px）。
+  const showBrandPanel = useMediaQuery('(min-width: 640px)');
 
   return (
     <div className="flex min-h-[calc(100vh_-_24px)] items-center justify-center">
@@ -282,13 +289,17 @@ export default function AuthPage() {
       {/* Left — silky brand panel with animated Silk background */}
       <div className="rb-dark relative z-0 hidden sm:flex sm:flex-col sm:justify-between p-12 overflow-hidden">
         <div className="absolute inset-0 -z-10">
-          <Silk
-            speed={1}
-            scale={0.9}
-            color="#2d2d31"
-            noiseIntensity={0.8}
-            rotation={0}
-          />
+          {showBrandPanel && (
+            <Suspense fallback={null}>
+              <Silk
+                speed={1}
+                scale={0.9}
+                color="#2d2d31"
+                noiseIntensity={0.8}
+                rotation={0}
+              />
+            </Suspense>
+          )}
         </div>
         <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-black/20 via-transparent to-black/40" />
         <Link

@@ -638,6 +638,10 @@ input:-webkit-autofill:active {
   pointer-events: none;
 }
 
+[data-theme='dark'] .insight-chart-cursor {
+  background: rgba(237, 237, 237, 0.18);
+}
+
 .insight-chart-tooltip-anchor {
   position: absolute;
   top: 6px;
@@ -649,13 +653,21 @@ input:-webkit-autofill:active {
   min-width: 132px;
   padding: 6px 10px;
   border-radius: 10px;
-  background: #ffffff;
+  /* 用 surface token 而不是写死 #ffffff：暗色下 --ink 会变浅，白底白字等于看不见（issue #77）。 */
+  background: var(--surface);
   color: var(--ink);
   font-size: 11px;
   white-space: nowrap;
   box-shadow:
     rgba(23, 23, 23, 0.08) 0px 0px 0px 1px,
     rgba(23, 23, 23, 0.12) 0px 8px 24px;
+}
+
+/* 暗色下墨色投影等于没有，换成浅色细环 + 更深的投影来维持层级。 */
+[data-theme='dark'] .insight-chart-tooltip {
+  box-shadow:
+    rgba(255, 255, 255, 0.1) 0px 0px 0px 1px,
+    rgba(0, 0, 0, 0.5) 0px 8px 24px;
 }
 
 .insight-chart-tooltip-time {

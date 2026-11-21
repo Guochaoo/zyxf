@@ -1,6 +1,7 @@
 import { Liveline } from 'liveline';
 import { useEffect, useState } from 'react';
 import { formatMonthDay } from '../utils.js';
+import useResolvedTheme from '../hooks/useResolvedTheme.js';
 
 /* ─────────────────────────────────────────────────────────
  * INSIGHT CARDS
@@ -173,6 +174,9 @@ function HoverMarker({ x, children }) {
 export function AnomalyCard({ title, metrics, className = '' }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [hover, setHover] = useState(null);
+  // liveline 的坐标轴/刻度是画在 canvas 上的，theme 必须显式传；写死 "light" 会让
+  // 暗色下的轴文字变成深色叠深色（issue #77）。
+  const resolvedTheme = useResolvedTheme();
   const m = metrics[activeIdx];
   const data = m.points;
   const hoverIdx = hover ? nearestIndexByTime(data, hover.time) : null;
@@ -233,7 +237,7 @@ export function AnomalyCard({ title, metrics, className = '' }) {
             key={m.key}
             data={data}
             value={value}
-            theme="light"
+            theme={resolvedTheme}
             color="#ee5c61"
             grid={false}
             scrub
