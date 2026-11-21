@@ -22,7 +22,8 @@ REPO=/opt/zyxf
 DIST=$REPO/frontend/dist
 NGINX_CONF=/etc/nginx/conf.d/zyxf.conf
 PREV_SHA=${PREV_SHA:-$(git -C "$REPO" rev-parse HEAD)}
-BUNDLE=${BUNDLE:-}
+# 产物路径固定（CI 只用「传了没有」表达「前端变没变」），调用方不必注入任何变量。
+BUNDLE=${BUNDLE:-/tmp/zyxf-dist.tar.gz}
 
 log() { echo "[deploy] $*"; }
 
@@ -73,11 +74,6 @@ rollback() {
 # 会把失败掩盖成绿灯。
 trap 'code=$?; if [ "$code" -ne 0 ]; then rollback; exit 1; fi; exit 0' EXIT
 
-[ -n "$BUNDLE" ] && [ -s "$BUNDLE" ] || {
-  log "缺少前端产物：BUNDLE=${BUNDLE:-<未设置>}"
-  exit 1
-}
-
 log "部署 $(git -C "$REPO" rev-parse --short HEAD)（回滚基线 ${PREV_SHA:0:7}）"
 
 # 服务器在境内，npmmirror 明显更快。
@@ -89,17 +85,23 @@ npm ci --no-audit --no-fund
 
 # --- 前端产物：解到 dist.new → 校验 → 两次 rename 换上去 ---
 # 正常路径下 dist 任何时刻都是完整的一份，nginx 不会读到半个目录。
-NEW=$DIST.new
-rm -rf "$NEW"
-mkdir -p "$NEW"
-tar -xzf "$BUNDLE" -C "$NEW" --no-same-owner
-[ -s "$NEW/index.html" ] || { log "产物里没有 index.html"; exit 1; }
-[ -d "$NEW/assets" ] || { log "产物里没有 assets/"; exit 1; }
-chattr -R -i "$DIST.prev" 2>/dev/null || true
-rm -rf "$DIST.prev"
-if [ -d "$DIST" ]; then mv "$DIST" "$DIST.prev"; fi
-mv "$NEW" "$DIST"
-log "前端产物已替换（$(du -sh "$DIST" | cut -f1)）"
+# 没有产物文件就表示本次改动没碰 frontend，沿用现有 dist：跨太平洋传 4.4 MB 的代价
+# （实测 runner → 服务器约 11 KB/s）不值得为一次纯后端/文档发布付。
+if [ -s "$BUNDLE" ]; then
+  NEW=$DIST.new
+  rm -rf "$NEW"
+  mkdir -p "$NEW"
+  tar -xzf "$BUNDLE" -C "$NEW" --no-same-owner
+  [ -s "$NEW/index.html" ] || { log "产物里没有 index.html"; exit 1; }
+  [ -d "$NEW/assets" ] || { log "产物里没有 assets/"; exit 1; }
+  chattr -R -i "$DIST.prev" 2>/dev/null || true
+  rm -rf "$DIST.prev"
+  if [ -d "$DIST" ]; then mv "$DIST" "$DIST.prev"; fi
+  mv "$NEW" "$DIST"
+  log "前端产物已替换（$(du -sh "$DIST" | cut -f1)）"
+else
+  log "没有新产物，沿用现有 dist（$(du -sh "$DIST" | cut -f1)）"
+fi
 
 # --- systemd 单元 + journald 上限 ---
 cp "$REPO/deploy/zyxf.service" /etc/systemd/system/zyxf.service
