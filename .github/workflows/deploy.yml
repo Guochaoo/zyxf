@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   # 手工重跑：只改了服务器状态（或想复跑一次部署）时不必再制造一个提交。
+  # 手工触发时判定不出「动了哪些文件」，按最保守的「前端要重建」处理。
   workflow_dispatch:
 
 # 同一次生产部署串行化：两次 push 挨得近时两个 job 会并发在同一台服务器上执行
@@ -21,20 +22,37 @@ permissions:
 # 这样做的原因：2C2G 的生产机跑 vite + WASM 字体子集化是整条链的内存峰值（原先要靠
 # 一个 2 GB swap 兜 OOM），而它真正需要做的只是把 5.7 MB 的 dist 派发出去。
 #
-# 构建和部署放在同一个 job 里：跑的就是刚构建出来的那一份，省掉 artifact 上传/下载这一跳，
-# 也避免「部署了一份跟构建结果不一致的产物」。
+# 构建和部署放在同一个 job 里：跑的就是刚构建出来的那一份，省掉 artifact 上传/下载这一跳。
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # 需要上一个提交来判定这次改动有没有碰 frontend。
+          fetch-depth: 2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: 判断前端是否需要重建
+        id: scope
+        run: |
+          set -euo pipefail
+          # runner 在境外、服务器在境内，实测上传约 11 KB/s：4.4 MB 的产物要 6 分钟。
+          # 纯后端 / 文档 / 配置的发布没必要付这笔钱——服务器上留着的 dist 就是对的。
+          if git diff --name-only HEAD^ HEAD -- frontend | grep -q .; then
+            echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
+            echo "frontend 有改动 → 构建并上传产物"
+          else
+            echo "frontend_changed=false" >> "$GITHUB_OUTPUT"
+            echo "frontend 无改动 → 跳过构建与上传，服务器沿用现有 dist"
+          fi
+
       - name: 构建前端产物
+        if: steps.scope.outputs.frontend_changed == 'true'
         working-directory: frontend
         run: |
           set -euo pipefail
@@ -46,6 +64,7 @@ jobs:
           test "$(find dist/assets -name '*.js' | wc -l)" -gt 0
           test "$(find dist/assets -name '*.css' | wc -l)" -gt 0
           tar -czf "$RUNNER_TEMP/dist.tar.gz" -C dist .
+          du -h "$RUNNER_TEMP/dist.tar.gz"
 
       - name: 上传产物并部署
         env:
@@ -53,6 +72,7 @@ jobs:
           SERVER_USER: ${{ secrets.SERVER_USER }}
           SERVER_PORT: ${{ secrets.SERVER_PORT || '22' }}
           SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          FRONTEND_CHANGED: ${{ steps.scope.outputs.frontend_changed }}
         run: |
           set -euo pipefail
           key="$RUNNER_TEMP/deploy_key"
@@ -60,12 +80,23 @@ jobs:
           chmod 600 "$key"
           # 未知主机指纹采用 accept-new：runner 是一次性的，没有可复用的 known_hosts
           # （与原 appleboy/ssh-action 的信任模型一致，没有额外放宽）。
-          ssh_opts=(-i "$key" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -p "$SERVER_PORT")
-          scp_opts=(-i "$key" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -P "$SERVER_PORT")
-          scp "${scp_opts[@]}" "$RUNNER_TEMP/dist.tar.gz" "$SERVER_USER@$SERVER_HOST:/tmp/zyxf-dist.tar.gz"
+          # ServerAlive* 让「对端其实已经断了」在 1 分钟左右暴露，而不是无限挂住。
+          common=(-i "$key" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15
+                  -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
+          ssh_opts=("${common[@]}" -p "$SERVER_PORT")
+          scp_opts=("${common[@]}" -P "$SERVER_PORT")
 
-          # 对齐工作区这一步必须在仓库里的 deploy/deploy.sh 之外：新脚本要等 reset 之后
-          # 才落到服务器上，而第一次跑新流程时工作区里还是旧修订。
+          # 只有前端变了才传产物（约 4.4 MB）。上限给到 15 分钟：正常要 6 分钟，
+          # 但这个上限是为了兜住「彻底传不动」的挂死，不是为了卡正常发布。
+          if [ "$FRONTEND_CHANGED" = "true" ]; then
+            timeout 900 scp "${scp_opts[@]}" "$RUNNER_TEMP/dist.tar.gz" \
+              "$SERVER_USER@$SERVER_HOST:/tmp/zyxf-dist.tar.gz"
+          fi
+
+          # 对齐工作区必须在仓库里的 deploy/deploy.sh 之外：新脚本要等 reset 之后才落到
+          # 服务器上，而第一次跑新流程时工作区里还是旧修订。
+          # 产物路径是固定约定（/tmp/zyxf-dist.tar.gz，存在即「前端变了」），
+          # 所以这里不需要往远端注任何变量。
           ssh "${ssh_opts[@]}" "$SERVER_USER@$SERVER_HOST" '
             set -euo pipefail
             cd /opt/zyxf
@@ -74,5 +105,5 @@ jobs:
             PREV=$(git rev-parse HEAD)
             git fetch --quiet origin main
             git reset --hard --quiet origin/main
-            PREV_SHA=$PREV BUNDLE=/tmp/zyxf-dist.tar.gz bash deploy/deploy.sh
+            PREV_SHA=$PREV bash deploy/deploy.sh
           '

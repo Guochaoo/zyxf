@@ -6,6 +6,7 @@
 > 部署由 `.github/workflows/deploy.yml` 全自动完成，**构建与运行分家**：
 >
 > - **构建在 GitHub runner 上**（`ubuntu-latest`）：`npm ci` + `vite build` + 产物断言，打成 `dist.tar.gz` 传到服务器 `/tmp`。生产机只有 2C2G，而 vite + WASM 字体子集化是整条链的内存峰值——原先要在部署脚本里补 2 GB swap 兜 OOM，而它真正要做的只是把 5.7 MB 的 `dist` 派发出去。
+>   ⚠️ **代价是跨境传输**：实测 runner → 服务器约 **11 KB/s**（243 ms RTT、丢包受限），4.4 MB 的产物要 6 分钟左右。所以只有 `frontend/` 真有改动时才构建并上传；纯后端 / 文档 / 配置的发布沿用服务器上已有的 `dist`，全程约 40 秒。
 > - **部署在服务器上**（[deploy/deploy.sh](../deploy/deploy.sh)，仓库内、可单独 review、可在服务器直接重跑）：对齐 `origin/main` → 后端 `npm ci` → 产物解到 `dist.new` 校验后两次 `rename` 换上去（旧的留作 `dist.prev`）→ 安装 systemd 单元（含每日备份定时器）→ 重启后端并健康检查 → 同步并校验 nginx 配置。
 >
 > **流程中任何一步失败**（装依赖、产物校验、健康检查、nginx 校验）都会触发回滚：脚本挂了 `EXIT` trap，退回部署前的修订、把 `dist.prev` 换回 `dist`、重装依赖并重启。这条覆盖是 BUG-102 的两个教训——① 回滚原先只挂在健康检查上，`npm install` 挂掉时服务器留在「新代码 + 缺依赖」的中间态（旧进程还在跑所以看起来正常，下次重启才起不来）；② 健康检查失败时前端 `dist/` 已被新产物覆盖，不回滚就会持续 502。
@@ -325,6 +326,8 @@ cd frontend && npm ci && npm run build   # 产物断言后打成 dist.tar.gz
 
 再由 `deploy/deploy.sh` 解到 `/opt/zyxf/frontend/dist.new` 校验、两次 `rename` 换成 `dist`（上一份留作 `dist.prev` 供回滚）。所以服务器上**不需要也不再有** `frontend/node_modules`。
 
+`frontend/` 没有改动的发布**不会重建也不会传输**：workflow 用 `git diff --name-only HEAD^ HEAD -- frontend` 判定，产物文件不存在时 `deploy.sh` 直接沿用服务器上现有的 `dist`。这条在跨境链路上很关键（实测上传约 11 KB/s）。
+
 本地要验证构建结果时照常跑（构建期会改写 `src/assets/fonts/opposans.css` 的子集，属正常现象）：
 
 ```bash
@@ -553,7 +556,8 @@ certbot renew --dry-run --cert-name zyxf.top   # 约 30s，验证 HTTP-01 全链
 
   ```bash
   cd /opt/zyxf && git fetch origin main && git reset --hard origin/main
-  PREV_SHA=$(git rev-parse HEAD) BUNDLE=/tmp/zyxf-dist.tar.gz bash deploy/deploy.sh
+  PREV_SHA=<部署前的 sha> bash deploy/deploy.sh
+  # 产物约定路径是 /tmp/zyxf-dist.tar.gz：存在就替换 dist，不存在就沿用现有 dist
   ```
 - 同步干跑（核对「会新增/会删除什么」，**一个字节都不落库**；游客即可调用，限 2 次/分钟）：
 
