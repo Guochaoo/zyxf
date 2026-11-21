@@ -194,6 +194,10 @@ jobs:
             NGINX_CONF=/etc/nginx/conf.d/zyxf.conf
             if [ -f /opt/zyxf/frontend/nginx.conf ]; then
               cp "$NGINX_CONF" "$NGINX_CONF.bak" 2>/dev/null || true
+              # 安全头 snippet 必须先就位：nginx.conf 里 server 级与每个自写 add_header 的
+              # location 都 include 它，缺文件会让 nginx -t 直接失败。
+              mkdir -p /etc/nginx/snippets
+              cp /opt/zyxf/frontend/security-headers.conf /etc/nginx/snippets/zyxf-headers.conf
               cp /opt/zyxf/frontend/nginx.conf "$NGINX_CONF"
               # 语法校验 + 重载后真的能取到首页，两者都过才算成功；否则还原上一份配置。
               # 这里不能用后端健康检查代替：它只打 127.0.0.1:4000，nginx 挂了它照样绿。
