@@ -92,6 +92,22 @@ jobs:
             # 旧写法 export PATH="/www/server/nodejs/..." 随宝塔卸载已废弃（IMPROVE-48）。
             npm config set registry https://registry.npmmirror.com
 
+            # 首次部署补 2 GB swap：prebuild 的 WASM harfbuzz 字体子集化 + vite 是整条链的
+            # 内存峰值，2C2G 没有余量。幂等（已有任何 swap 就跳过），失败只警告不挡发布。
+            if ! swapon --show | grep -q .; then
+              if fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none; then
+                chmod 600 /swapfile
+                if mkswap /swapfile >/dev/null && swapon /swapfile; then
+                  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+                  echo "swap enabled: $(swapon --show | tail -1)"
+                else
+                  echo "::warning::swap 启用失败，构建可能 OOM"
+                fi
+              else
+                echo "::warning::swap 文件创建失败，构建可能 OOM"
+              fi
+            fi
+
             # 后端：装依赖
             cd /opt/zyxf/backend
             npm install --no-audit --no-fund

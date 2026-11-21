@@ -70,7 +70,9 @@ aliyun ossutil api put-bucket-https-config --bucket <bucket> --region cn-beijing
 
 > `deploy/zyxf.service` 的 `ExecStart` 与 deploy workflow 都直接用 `/usr/bin/node`，不需要任何软链或 PATH 定制。
 
-> **务必加 2 GB swap。** 前端 `npm run build` 的 `prebuild` 会跑 WASM harfbuzz 字体子集化（21 MB 源字体 → 2.75 MB woff2），再叠加 vite/rolldown，这是整条部署链里最容易 OOM 的一步；2 核 2 GB 的机器在内存峰值上没有余量。
+> **swap：部署会自动补，不需要你动手。** 前端 `npm run build` 的 `prebuild` 会跑 WASM harfbuzz 字体子集化（21 MB 源字体 → 2.75 MB woff2），再叠加 vite/rolldown，这是整条部署链里最容易 OOM 的一步；2 核 2 GB 的机器在内存峰值上没有余量。`deploy.yml` 每次发布会检查 `swapon --show`，为空就建 2 GB 的 `/swapfile` 并写进 `/etc/fstab`（幂等，失败只告警不阻塞发布）。
+>
+> 手工等价命令（例如想立刻补上、不等下一次发布）：
 >
 > ```bash
 > fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
