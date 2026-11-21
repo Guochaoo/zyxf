@@ -4,10 +4,10 @@
 # 为什么放在仓库里而不是内联进 YAML：部署逻辑要能被单独 review，线上排障时能直接
 # 重跑一遍，而不是从 Actions 日志里拷一段 shell 出来改（内联版本有 190 行）。
 #
-# 调用方的前置约定：工作区已对齐到待部署修订（git fetch + reset --hard origin/main）。
+# 调用方的前置约定：工作区已对齐到待部署修订（git fetch + reset --hard origin/main），
+# 且前端有改动时 CI 已经把产物 rsync 到 `frontend/.incoming/`（只传内容真的变了的文件）。
 # 环境变量：
 #   PREV_SHA  部署前的修订，即回滚基线；缺省取当前 HEAD
-#   BUNDLE    前端产物 tar.gz（CI 构建，dist/ 的内容在包的根层级）
 set -euo pipefail
 
 # 本文件会被 rollback 里的 `git reset --hard` 改写，而 bash 是按偏移增量读脚本的：
@@ -20,10 +20,10 @@ fi
 
 REPO=/opt/zyxf
 DIST=$REPO/frontend/dist
+# CI 用 rsync 把新产物铺到 .incoming/（以 dist 为种子做硬链接，只传变了的文件）。
+STAGE=$REPO/frontend/.incoming
 NGINX_CONF=/etc/nginx/conf.d/zyxf.conf
 PREV_SHA=${PREV_SHA:-$(git -C "$REPO" rev-parse HEAD)}
-# 产物路径固定（CI 只用「传了没有」表达「前端变没变」），调用方不必注入任何变量。
-BUNDLE=${BUNDLE:-/tmp/zyxf-dist.tar.gz}
 
 log() { echo "[deploy] $*"; }
 
@@ -83,21 +83,19 @@ npm config set registry https://registry.npmmirror.com
 cd "$REPO/backend"
 npm ci --no-audit --no-fund
 
-# --- 前端产物：解到 dist.new → 校验 → 两次 rename 换上去 ---
+# --- 前端产物：CI 已 rsync 到 .incoming → 校验 → 两次 rename 换上去 ---
 # 正常路径下 dist 任何时刻都是完整的一份，nginx 不会读到半个目录。
-# 没有产物文件就表示本次改动没碰 frontend，沿用现有 dist：跨太平洋传 4.4 MB 的代价
-# （实测 runner → 服务器约 11 KB/s）不值得为一次纯后端/文档发布付。
-if [ -s "$BUNDLE" ]; then
-  NEW=$DIST.new
-  rm -rf "$NEW"
-  mkdir -p "$NEW"
-  tar -xzf "$BUNDLE" -C "$NEW" --no-same-owner
-  [ -s "$NEW/index.html" ] || { log "产物里没有 index.html"; exit 1; }
-  [ -d "$NEW/assets" ] || { log "产物里没有 assets/"; exit 1; }
+# 没有 .incoming 就表示本次改动没碰 frontend，沿用现有 dist：跨境传产物实测约 11 KB/s，
+# 不值得为一次纯后端/文档发布付（而且 rsync 只传变了的文件，见 deploy.yml）。
+if [ -s "$STAGE/index.html" ]; then
+  [ -d "$STAGE/assets" ] || { log "产物里没有 assets/"; exit 1; }
+  # 与 ci.yml 的产物断言同口径：空 assets 也会让 vite 成功退出，这里再挡一次。
+  [ "$(find "$STAGE/assets" -name '*.js' | wc -l)" -gt 0 ] || { log "产物 assets 里没有 .js"; exit 1; }
+  [ "$(find "$STAGE/assets" -name '*.css' | wc -l)" -gt 0 ] || { log "产物 assets 里没有 .css"; exit 1; }
   chattr -R -i "$DIST.prev" 2>/dev/null || true
   rm -rf "$DIST.prev"
   if [ -d "$DIST" ]; then mv "$DIST" "$DIST.prev"; fi
-  mv "$NEW" "$DIST"
+  mv "$STAGE" "$DIST"
   log "前端产物已替换（$(du -sh "$DIST" | cut -f1)）"
 else
   log "没有新产物，沿用现有 dist（$(du -sh "$DIST" | cut -f1)）"
@@ -174,5 +172,4 @@ if [ -f "$REPO/frontend/nginx.conf" ]; then
   fi
 fi
 
-rm -f "$BUNDLE"
 log "完成"

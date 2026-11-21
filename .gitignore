@@ -1,5 +1,7 @@
 node_modules
 dist
+# 部署时 CI 先用硬链接把上一份 dist 铺到这里当 rsync 种子，失败时可能残留
+frontend/.incoming/
 .env
 .env.local
 # 手工留的 .env 备份（.env.bak-*、.env.<name>.bak）也含密钥，绝不入库；
