@@ -3,10 +3,12 @@ name: Deploy to Server
 on:
   push:
     branches: [main]
+  # 手工重跑：只改了服务器状态（或想复跑一次部署）时不必再制造一个提交。
+  workflow_dispatch:
 
 # 同一次生产部署串行化：两次 push 挨得近时两个 job 会并发在同一台服务器上执行
-# git reset --hard + npm install + systemctl start，互相覆盖文件并把服务停在
-# 两次修订混合的中间态。cancel-in-progress: false 让排队的那次等前一次跑完。
+# git reset --hard + npm ci + systemctl，互相覆盖文件并把服务停在两次修订混合的中间态。
+# cancel-in-progress: false 让排队的那次等前一次跑完。
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -15,200 +17,62 @@ concurrency:
 permissions:
   contents: read
 
-# 标准 SSH 部署：后端用 systemd 托管（zyxf.service），前端构建产物交给 nginx。
-# 流程：SSH 上服务器 → git pull → 装依赖 → 构建前端 → 装服务/备份定时器 →
-#       systemctl 重启后端 → 同步 nginx 配置并校验重载。
+# 前端在 GitHub runner 上构建，服务器只负责「装后端依赖 + 换产物 + 重启 + reload nginx」。
+# 这样做的原因：2C2G 的生产机跑 vite + WASM 字体子集化是整条链的内存峰值（原先要靠
+# 一个 2 GB swap 兜 OOM），而它真正需要做的只是把 5.7 MB 的 dist 派发出去。
+#
+# 构建和部署放在同一个 job 里：跑的就是刚构建出来的那一份，省掉 artifact 上传/下载这一跳，
+# 也避免「部署了一份跟构建结果不一致的产物」。
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy via SSH
-        # appleboy/ssh-action@v1 固定到不可变 commit SHA，避免上游 tag 被
-        # 篡改/重定向（供应链风险）。v1 为轻量 tag，直接指向提交
-        # 0ff4204d...（与 v1.2.5 同一提交）。依赖机器人（如 Renovate 的
-        # digest 更新）应用 `git ls-remote https://github.com/appleboy/ssh-action.git refs/tags/v1`
-        # 重新解析该 tag 对应的 SHA，并把新 SHA 同步到此处。
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_PORT || '22' }}
-          script: |
-            set -e
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 构建前端产物
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run build
+          # 退出码 0 不代表产物可用：outDir/插件配置改错时 vite 照样成功退出并产出空目录，
+          # 交给 nginx 就是白屏。与 ci.yml 的断言同口径。
+          test -s dist/index.html
+          test "$(find dist/assets -name '*.js' | wc -l)" -gt 0
+          test "$(find dist/assets -name '*.css' | wc -l)" -gt 0
+          tar -czf "$RUNNER_TEMP/dist.tar.gz" -C dist .
+
+      - name: 上传产物并部署
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT || '22' }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/deploy_key"
+          printf '%s\n' "$SERVER_SSH_KEY" > "$key"
+          chmod 600 "$key"
+          # 未知主机指纹采用 accept-new：runner 是一次性的，没有可复用的 known_hosts
+          # （与原 appleboy/ssh-action 的信任模型一致，没有额外放宽）。
+          ssh_opts=(-i "$key" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -p "$SERVER_PORT")
+          scp_opts=(-i "$key" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -P "$SERVER_PORT")
+          scp "${scp_opts[@]}" "$RUNNER_TEMP/dist.tar.gz" "$SERVER_USER@$SERVER_HOST:/tmp/zyxf-dist.tar.gz"
+
+          # 对齐工作区这一步必须在仓库里的 deploy/deploy.sh 之外：新脚本要等 reset 之后
+          # 才落到服务器上，而第一次跑新流程时工作区里还是旧修订。
+          ssh "${ssh_opts[@]}" "$SERVER_USER@$SERVER_HOST" '
+            set -euo pipefail
             cd /opt/zyxf
-            # 回滚基线：本次部署前的修订。任何步骤失败都据此回退（人工排障也可直接执行
-            # `git reset --hard <该 SHA>` + 重新构建）。
+            # 工作区属主是 admin、部署以 root 执行，git 会以 dubious ownership 拒绝操作。
+            git config --global --replace-all safe.directory /opt/zyxf
             PREV=$(git rev-parse HEAD)
-            git config --global --add safe.directory /opt/zyxf
-            mkdir -p ~/.ssh
-            ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-
-            # 强制对齐到远程 main：服务器是部署目标，工作区不应保留任何被 git
-            # 跟踪文件的本地改动（如 npm install 改过的 package-lock.json）。
-            # reset --hard 只碰被跟踪文件，.env / data.db 均被 gitignore 不受影响。
-            git fetch origin main
-            git reset --hard origin/main
-
-            # BUG-102：把「安装/构建阶段」也纳入回滚。原先 set -e 只让脚本停在原地——
-            # 此时 reset --hard 已经跑过，服务器停在「新代码 + 缺依赖」的中间态：旧进程
-            # 还在跑所以站点看起来正常，但下一次重启就会因缺依赖起不来；而回滚分支只挂在
-            # 健康检查失败上，更早的 npm install 挂掉根本走不到那里（上次事故就是人工
-            # revert 整批才恢复的）。现在用 EXIT trap 兜住所有非零退出，不管失败发生在
-            # npm install、vite build 还是健康检查，都退回 PREV 重建。
-            # ⚠️ trap 处理函数里第一件事必须 set +e：回滚自身任何一步失败都不能打断回滚，
-            # 且 ROLLED_BACK 保证只回滚一次（健康检查失败会正常退出，由同一个 trap 接管）。
-            ROLLED_BACK=0
-            rollback() {
-              set +e
-              [ "$ROLLED_BACK" = 1 ] && return 0
-              ROLLED_BACK=1
-              echo "::error::deploy failed on $(git rev-parse --short HEAD), rolling back to ${PREV}"
-              cd /opt/zyxf
-              git reset --hard "$PREV"
-              # 单元文件拷到 /etc/systemd/system 后就脱离了 git 工作区：只 reset 代码会留下
-              # 「旧代码 + 新 unit」的混合态。这里把单元也退回 PREV 的版本。
-              cp /opt/zyxf/deploy/zyxf.service /etc/systemd/system/zyxf.service 2>/dev/null || true
-              systemctl daemon-reload 2>/dev/null || true
-              # 回退到的修订可能还没有备份脚本；留着 timer 只会每天静默失败一次。
-              [ -f /opt/zyxf/backend/scripts/backup-db.mjs ] ||
-                systemctl disable --now zyxf-backup.timer 2>/dev/null || true
-              # 回滚路径刻意保留 npm install 而不是 npm ci：这里的目标是「把服务恢复回来」，
-              # 旧修订的 lockfile 万一与 package.json 有细微不一致，npm ci 会直接失败，把一次
-              # 可恢复的发布问题变成「站点起不来」。
-              cd /opt/zyxf/backend
-              npm install --no-audit --no-fund
-              cd /opt/zyxf/frontend
-              npm install --no-audit --no-fund
-              npm run build
-              systemctl restart zyxf
-              # 回滚后的自检也用重试：一次连接被拒不能说明回滚失败。
-              ok=0
-              for i in $(seq 1 10); do
-                if curl -fsS --max-time 2 http://127.0.0.1:4000/api/health >/dev/null 2>&1; then
-                  ok=1
-                  break
-                fi
-                sleep 1
-              done
-              echo "rollback health: ${ok}"
-              journalctl -u zyxf -n 40 --no-pager || true
-              echo "::error::rolled back to ${PREV}: 回滚已完成，但本次部署判定为失败"
-            }
-            # 末尾的 exit 不能省：EXIT trap 的最终退出码取自最后一条命令，而最后一条是
-            # echo（成功），会把失败掩盖成绿灯。统一以 1 结束（失败码本身已记在日志里），
-            # 与旧脚本「回滚后 exit 1」的约定一致。
-            trap 'code=$?; if [ "$code" -ne 0 ]; then rollback; exit 1; fi; exit 0' EXIT
-
-            # Node 24 走系统包（NodeSource，/usr/bin/node，v24.21+）。
-            # 旧写法 export PATH="/www/server/nodejs/..." 随宝塔卸载已废弃（IMPROVE-48）。
-            npm config set registry https://registry.npmmirror.com
-
-            # 首次部署补 2 GB swap：prebuild 的 WASM harfbuzz 字体子集化 + vite 是整条链的
-            # 内存峰值，2C2G 没有余量。幂等（已有任何 swap 就跳过），失败只警告不挡发布。
-            if ! swapon --show | grep -q .; then
-              if fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none; then
-                chmod 600 /swapfile
-                if mkswap /swapfile >/dev/null && swapon /swapfile; then
-                  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
-                  echo "swap enabled: $(swapon --show | tail -1)"
-                else
-                  echo "::warning::swap 启用失败，构建可能 OOM"
-                fi
-              else
-                echo "::warning::swap 文件创建失败，构建可能 OOM"
-              fi
-            fi
-
-            # 后端：装依赖（npm ci 按 lockfile 精确安装；lockfile 与 package.json 不一致时
-            # 会直接失败——那正是我们想尽早知道的信号，而不是让 npm install 悄悄改写它）。
-            cd /opt/zyxf/backend
-            npm ci --no-audit --no-fund
-
-            # 前端：装依赖 + 构建（产物交给 nginx，无需常驻进程）
-            cd /opt/zyxf/frontend
-            npm ci --no-audit --no-fund
-
-            # vite build 会先清空 dist/，若残留带 immutable 位的 .user.ini
-            # 会导致 emptyDir 阶段 EPERM，先解锁删除再构建。
-            if [ -f /opt/zyxf/frontend/dist/.user.ini ]; then
-              chattr -i /opt/zyxf/frontend/dist/.user.ini 2>/dev/null || true
-              rm -f /opt/zyxf/frontend/dist/.user.ini || true
-            fi
-            npm run build
-
-            # 安装/更新 systemd 服务（首次部署也会自举：enable + daemon-reload）。
-            cp /opt/zyxf/deploy/zyxf.service /etc/systemd/system/zyxf.service
-            # 每日数据库备份：service + timer 一起装，enable --now 保证首发当天就生效。
-            cp /opt/zyxf/deploy/zyxf-backup.service /etc/systemd/system/zyxf-backup.service
-            cp /opt/zyxf/deploy/zyxf-backup.timer /etc/systemd/system/zyxf-backup.timer
-            systemctl daemon-reload
-            # journald 容量上限（issue #93）：40 GB 系统盘上日志无上限增长，撑满后 SQLite
-            # 写入失败 → 服务直接不可用。用 drop-in 幂等落盘，不改发行版原配置。
-            mkdir -p /etc/systemd/journald.conf.d
-            printf '[Journal]\nSystemMaxUse=200M\n' > /etc/systemd/journald.conf.d/zyxf.conf
-            systemctl restart systemd-journald || true
-            systemctl enable zyxf
-            systemctl enable --now zyxf-backup.timer
-
-            # 先优雅停掉 systemd 旧实例，再清理仍占用 4000 的残留进程。
-            # 从宝塔/nohup 迁移到 systemd 的过渡期，旧后端可能不是 systemd 启动、
-            # 仍占着 4000，若不释放会让 systemd 起服务报 EADDRINUSE 反复重启失败。
-            # 按端口精确定位，避免 `pkill -f` 误杀本部署脚本自身。
-            systemctl stop zyxf 2>/dev/null || true
-            if command -v fuser >/dev/null 2>&1; then
-              fuser -k 4000/tcp 2>/dev/null || true
-            else
-              ss -tlnp 2>/dev/null | awk '/:4000 /{match($0, /pid=([0-9]+)/, m); if (m[1]) print m[1]}' | sort -u | xargs -r kill 2>/dev/null || true
-            fi
-            systemctl start zyxf
-
-            # 健康检查：有上限的重试（最多约 15s）。原先固定 `sleep 3` + 单次 curl，
-            # 2026-10-28 真踩到过「启动比 3 秒慢」被判死、整批回滚（issue #80）。
-            # 失败时把 systemd 状态与最近日志打进构建日志，省掉靠猜的排障。
-            ok=0
-            for i in $(seq 1 15); do
-              if curl -fsS --max-time 2 http://127.0.0.1:4000/api/health >/dev/null 2>&1; then
-                ok=1
-                break
-              fi
-              sleep 1
-            done
-            if [ "$ok" != 1 ]; then
-              echo "::error::后端 15s 内未通过健康检查"
-              systemctl status zyxf --no-pager || true
-              journalctl -u zyxf -n 80 --no-pager || true
-              exit 1
-            fi
-            curl -fsS http://127.0.0.1:4000/api/health
-
-            # 每次部署顺手做一次备份，不等 04:17。放在健康检查之后：库是后端启动时
-            # 才创建的，太早跑会「数据库不存在」。失败只警告不阻塞——备份不该挡住发布，
-            # 但每次部署都真的走一遍上传，等于给自己留了个持续验证。
-            systemctl start zyxf-backup.service ||
-              echo "::warning::备份失败，检查 journalctl -u zyxf-backup"
-
-            # nginx：以仓库 frontend/nginx.conf 为唯一来源。原先靠手工 scp 同步，配置与
-            # 仓库必然漂移——2026-11 实测就发现文档声称下发 HSTS，线上完全没有。
-            # 备份文件名用 .bak 而不是 .conf：nginx 只 include *.conf，备份不会被误加载。
-            NGINX_CONF=/etc/nginx/conf.d/zyxf.conf
-            if [ -f /opt/zyxf/frontend/nginx.conf ]; then
-              cp "$NGINX_CONF" "$NGINX_CONF.bak" 2>/dev/null || true
-              # 安全头 snippet 必须先就位：nginx.conf 里 server 级与每个自写 add_header 的
-              # location 都 include 它，缺文件会让 nginx -t 直接失败。
-              mkdir -p /etc/nginx/snippets
-              cp /opt/zyxf/frontend/security-headers.conf /etc/nginx/snippets/zyxf-headers.conf
-              cp /opt/zyxf/frontend/nginx.conf "$NGINX_CONF"
-              # 语法校验 + 重载后真的能取到首页，两者都过才算成功；否则还原上一份配置。
-              # 这里不能用后端健康检查代替：它只打 127.0.0.1:4000，nginx 挂了它照样绿。
-              if nginx -t && systemctl reload nginx &&
-                 curl -fsS --resolve zyxf.top:443:127.0.0.1 https://zyxf.top/ -o /dev/null; then
-                echo "nginx reloaded with repo config"
-              else
-                echo "::error::nginx 配置校验失败或站点取不到首页，已还原上一份配置"
-                # 首次部署时没有 .bak：此时宁可删掉新配置回落到其它 vhost，也不留坏配置。
-                cp "$NGINX_CONF.bak" "$NGINX_CONF" 2>/dev/null || rm -f "$NGINX_CONF"
-                nginx -t && systemctl reload nginx || true
-                exit 1
-              fi
-            fi
+            git fetch --quiet origin main
+            git reset --hard --quiet origin/main
+            PREV_SHA=$PREV BUNDLE=/tmp/zyxf-dist.tar.gz bash deploy/deploy.sh
+          '

@@ -28,7 +28,7 @@
 | 搜索辅助 | pinyin-pro | 拼音全拼 / 首字母 / 汉字缩写匹配 |
 | 云服务（阿里云） | OSS · DirectMail | 文件前端直传 OSS（后端仅签名）；注册验证码邮件 |
 | AI（可选） | OpenAI `/chat/completions` · OpenAI `/responses` · Anthropic `/messages` | 三种上游协议，均支持 SSE 流式 + 工具调用 |
-| 部署 | systemd · nginx · Let's Encrypt | 后端 systemd 托管；nginx 托管前端静态产物并反代 `/api`（见 [docs/DEPLOY.md](docs/DEPLOY.md)） |
+| 部署 | systemd · nginx · certbot（ZeroSSL） | 前端在 GitHub Actions 上构建，服务器只跑后端 + 托管产物；nginx 反代 `/api`（见 [docs/DEPLOY.md](docs/DEPLOY.md)） |
 
 ## 快速开始
 
@@ -106,11 +106,11 @@ cd backend  && npm test    # node:test（API / 搜索 / 聊天路由）
 cd frontend && npm test    # vitest + Testing Library
 ```
 
-推送到 `dev`、或 Pull Request 到 `main` 时，GitHub Actions 自动跑前后端测试（另含依赖漏洞门禁 `npm audit` 与前端构建产物校验）；合并到 `main` 触发 SSH 部署到生产服务器，若部署后健康检查失败会自动回滚到部署前的修订。
+推送到 `dev`、或 Pull Request 到 `main` 时，GitHub Actions 自动跑前后端测试（另含依赖漏洞门禁 `npm audit` 与前端构建产物校验）；合并到 `main` 触发部署：前端在 runner 上构建、`deploy/deploy.sh` 在服务器上换产物并重启后端，任一步失败都会自动回滚到部署前的修订与上一份产物。
 
 ## 部署
 
-生产部署（阿里云 ECS + **systemd 托管后端 + nginx 托管前端 + Let's Encrypt 配 HTTPS**）见 **[docs/DEPLOY.md](docs/DEPLOY.md)**，含安全组、OSS 跨域与常见故障排查。
+生产部署（阿里云轻量应用服务器 + **systemd 托管后端 + nginx 托管前端 + certbot/ZeroSSL 配 HTTPS**）见 **[docs/DEPLOY.md](docs/DEPLOY.md)**，含防火墙、OSS 跨域与常见故障排查。
 
 ## 设计规范
 

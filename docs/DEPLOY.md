@@ -1,7 +1,14 @@
 # 部署到阿里云轻量应用服务器（systemd + nginx）
 
-> 后端用 **systemd** 托管（`deploy/zyxf.service`），前端构建产物由 **nginx** 托管并反代 `/api`，HTTPS 用 Let's Encrypt。
-> 服务器上**没有面板**：nginx、Node 24、certbot 全部是系统级安装（2026-09-12 起宝塔已彻底卸载）。部署由 `.github/workflows/deploy.yml` 全自动完成——SSH 上服务器 `git fetch + reset --hard`（对齐 origin/main）+ 装依赖 + 构建 + 安装 systemd 单元（含每日备份定时器）+ 同步并校验 nginx 配置 + `systemctl restart zyxf`；**流程中任何一步失败**（装依赖、构建、健康检查、nginx 校验）都会触发回滚：workflow 在 `git reset --hard origin/main` 后挂了 `EXIT` trap，失败时把服务器退回部署前的修订并重建。这条覆盖是 BUG-102 的两个教训——① 回滚原先只挂在健康检查上，`npm install` 挂掉时脚本只是停在原地，服务器留在「新代码 + 缺依赖」的中间态（旧进程还在跑所以看起来正常，下次重启才起不来）；② 健康检查失败时前端 `dist/` 已被新构建覆盖，不回滚就会持续 502。
+> 后端用 **systemd** 托管（`deploy/zyxf.service`），前端构建产物由 **nginx** 托管并反代 `/api`，HTTPS 用 **ZeroSSL**（certbot + nginx 插件，HTTP-01，见第 5 节）。
+> 服务器上**没有面板**：nginx、Node 24、certbot 全部是系统级安装（2026-09-12 起宝塔已彻底卸载）。
+>
+> 部署由 `.github/workflows/deploy.yml` 全自动完成，**构建与运行分家**：
+>
+> - **构建在 GitHub runner 上**（`ubuntu-latest`）：`npm ci` + `vite build` + 产物断言，打成 `dist.tar.gz` 传到服务器 `/tmp`。生产机只有 2C2G，而 vite + WASM 字体子集化是整条链的内存峰值——原先要在部署脚本里补 2 GB swap 兜 OOM，而它真正要做的只是把 5.7 MB 的 `dist` 派发出去。
+> - **部署在服务器上**（[deploy/deploy.sh](../deploy/deploy.sh)，仓库内、可单独 review、可在服务器直接重跑）：对齐 `origin/main` → 后端 `npm ci` → 产物解到 `dist.new` 校验后两次 `rename` 换上去（旧的留作 `dist.prev`）→ 安装 systemd 单元（含每日备份定时器）→ 重启后端并健康检查 → 同步并校验 nginx 配置。
+>
+> **流程中任何一步失败**（装依赖、产物校验、健康检查、nginx 校验）都会触发回滚：脚本挂了 `EXIT` trap，退回部署前的修订、把 `dist.prev` 换回 `dist`、重装依赖并重启。这条覆盖是 BUG-102 的两个教训——① 回滚原先只挂在健康检查上，`npm install` 挂掉时服务器留在「新代码 + 缺依赖」的中间态（旧进程还在跑所以看起来正常，下次重启才起不来）；② 健康检查失败时前端 `dist/` 已被新产物覆盖，不回滚就会持续 502。
 
 架构：
 
@@ -70,17 +77,15 @@ aliyun ossutil api put-bucket-https-config --bucket <bucket> --region cn-beijing
 
 > `deploy/zyxf.service` 的 `ExecStart` 与 deploy workflow 都直接用 `/usr/bin/node`，不需要任何软链或 PATH 定制。
 
-> **swap：部署会自动补，不需要你动手。** 前端 `npm run build` 的 `prebuild` 会跑 WASM harfbuzz 字体子集化（21 MB 源字体 → 2.75 MB woff2），再叠加 vite/rolldown，这是整条部署链里最容易 OOM 的一步；2 核 2 GB 的机器在内存峰值上没有余量。`deploy.yml` 每次发布会检查 `swapon --show`，为空就建 2 GB 的 `/swapfile` 并写进 `/etc/fstab`（幂等，失败只告警不阻塞发布）。
+> **swap：生产机上不再需要，但已有的别删。** 前端构建（`prebuild` 的 WASM harfbuzz 字体子集化 + vite/rolldown）是整条链唯一的内存峰值，而它现在跑在 GitHub runner 上（见文首），服务器只解包 5.7 MB 的产物。2026-11 之前的 `deploy.yml` 会自动补 2 GB swap，这段逻辑已随构建一起下线；机器上原有的 1 GB swap 保留，当作 `npm ci` 或异常情况下的兜底。
 >
-> 手工等价命令（例如想立刻补上、不等下一次发布）：
+> 如果将来又要在服务器上手工构建（不推荐），先确认 `free -m` 有 ≥ 1 GB 可用并挂上 swap：
 >
 > ```bash
 > fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
 > echo '/swapfile none swap sw 0 0' >> /etc/fstab      # 重启后仍然生效
 > swapon --show                                        # 确认
 > ```
->
-> `vm.swappiness` 保持默认即可：swap 在这里只用于兜住构建峰值，不参与日常运行。
 
 ---
 
@@ -310,12 +315,20 @@ journalctl -u zyxf -f           # 跟踪日志
 
 ## 4. 前端：构建 + nginx
 
-### 4.1 构建（一次，代码变更后再构建）
+### 4.1 构建（在 CI 里，不在服务器上）
+
+生产构建**不再发生在服务器上**：`.github/workflows/deploy.yml` 在 GitHub runner 上跑
 
 ```bash
-cd /opt/zyxf/frontend
-npm ci
-npm run build        # 生成 dist/
+cd frontend && npm ci && npm run build   # 产物断言后打成 dist.tar.gz
+```
+
+再由 `deploy/deploy.sh` 解到 `/opt/zyxf/frontend/dist.new` 校验、两次 `rename` 换成 `dist`（上一份留作 `dist.prev` 供回滚）。所以服务器上**不需要也不再有** `frontend/node_modules`。
+
+本地要验证构建结果时照常跑（构建期会改写 `src/assets/fonts/opposans.css` 的子集，属正常现象）：
+
+```bash
+cd frontend && npm ci && npm run build && npm run preview
 ```
 
 > 用 `npm ci` 而不是 `npm install`：按 lockfile 精确安装，lockfile 与 `package.json` 不一致时会**直接失败**——那是想尽早看到的信号，而不是让 npm 悄悄改写 lockfile。
@@ -345,11 +358,13 @@ OPPO Sans 4.0 的**源字体不入库**，走 npm devDependency `@fontpkg/oppo-s
 - `opposans-ext.woff2` **生僻层**（约 1.35 MB）：二级汉字中不在常用层的部分，浏览器仅在页面
   真的渲染到这些字（典型是用户上传的文件名）时才按 `unicode-range` 下载。
 
-两层产物均 gitignore，由 `predev` / `prebuild` / `pretest` 自动生成，**部署无需额外操作**：
+两层产物均 gitignore，由 `predev` / `prebuild` / `pretest` 自动生成，**部署无需额外操作**（CI 的 `npm run build` 会自动触发 `prebuild`）：
 
 ```bash
-cd /opt/zyxf/frontend && npm ci && npm run build   # prebuild 会自动跑 fonts
+cd frontend && npm ci && npm run build   # prebuild 会自动跑 fonts
 ```
+
+> ⚠️ 子集化会**就地改写** `src/assets/fonts/opposans.css`（仓库里那份是上一次构建的产物）。所以构建完工作区会显示它被修改，`git checkout --` 回去即可；服务器上也一样——构建搬到 CI 之后服务器不再被这个副作用弄脏。
 
 - **字符集 = GB2312（6,763 汉字）+ ASCII + 常用标点 + 源码里实际出现的全部 CJK 字**（脚本自动从
   `src/` 提取并并入，实测约 980 个），合计约 8,289 个码点。子集外的字**不会变成方块**——会落到
@@ -489,18 +504,27 @@ nginx -t && systemctl reload nginx
 
 ---
 
-## 5. HTTPS（Let's Encrypt）
+## 5. HTTPS（certbot + ZeroSSL，HTTP-01）
 
-用 certbot 直接申请（不经过宝塔）：
+生产是 **ZeroSSL 签发、certbot 的 nginx 插件做 HTTP-01 验证**：
 
 ```bash
-apt install -y certbot python3-certbot-nginx   # 或 yum install certbot python3-certbot-nginx
-certbot --nginx -d zyxf.top
+certbot certonly --nginx -d zyxf.top --cert-name zyxf.top \
+  --server https://acme.zerossl.com/v2/DV90
 ```
 
-certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续期（`certbot renew` 由系统 timer 自动跑）。之后用 `https://zyxf.top` 访问。
+证书落在 `/etc/letsencrypt/live/zyxf.top/`（`frontend/nginx.conf` 里的路径就是这个）。`certbot.timer` 每 12 小时跑一次 `certbot renew`，续期后由 renewal 配置里的 `renew_hook = systemctl reload nginx` 让 nginx 加载新证书。
 
-> 前提：域名已解析到服务器公网 IP，80/443 端口开放（Let's Encrypt 验证与续期都依赖）。
+> **2026-11 改过方式**：之前是 **DNS-01**（手工在阿里云 DNS 加 `_acme-challenge` TXT），依赖 3 个不在仓库里的 `/usr/local/bin/*.sh` 钩子、`/root/.zyxf-certbot.env`（AK/SK）和服务器上的 `aliyun` CLI——机器重建时这套东西补不回来，而文档里写的却是 `certbot --nginx`（issue #98）。现在 80 端口本来就开着（`listen 80` 只做 301），验证不需要任何凭据和钩子，那 4 个仓库外的活动件已全部删除。
+>
+> 同时删掉了 `dzhz.zyxf.top` 的证书谱系：它已由 ESA 提供证书（§4.2.2），而这本证书的 `renew_hook` 指向**已删除的旧 CDN 域名**（`aliyun cdn SetCdnDomainSSLCertificate`），且 `_acme-challenge.dzhz` 已改成指向 ESA 托管 DCV 的 CNAME、DNS-01 根本加不进 TXT——留着只会在 2026-12-22（到期前 30 天）起每天失败两次，而 `uptime.yml` 只探测 `zyxf.top`，不会有人收到告警。
+
+前提：域名 A 记录指向服务器公网 IP，80/443 对公网开放。自检：
+
+```bash
+certbot certificates | grep -E "Certificate Name|Expiry"
+certbot renew --dry-run --cert-name zyxf.top   # 约 30s，验证 HTTP-01 全链路
+```
 
 ---
 
@@ -523,8 +547,14 @@ certbot 会自动改写上面的 nginx 配置加入 443 与证书，并配置续
   注意 GitHub 对**连续 60 天无提交**的仓库会自动停用 schedule，长期停更时需人工确认它还在跑。
 - 后端重启：`systemctl restart zyxf`
 - 后端状态：`systemctl status zyxf`
-- nginx 配置变更：改仓库 [frontend/nginx.conf](../frontend/nginx.conf) → 覆盖服务器 `/etc/nginx/conf.d/zyxf.conf` → `nginx -t && systemctl reload nginx`
-- 前端重构：`cd /opt/zyxf/frontend && npm ci && npm run build`
+- nginx 配置变更：改仓库 [frontend/nginx.conf](../frontend/nginx.conf) → 走正常发布（`deploy/deploy.sh` 会覆盖 + `nginx -t` + reload，失败自动还原）
+- 前端产物：**服务器上不构建**。发布流程由 CI 构建并替换 `dist/`；只想重跑一次部署而不改代码时，在 Actions 页面手动 `Deploy to Server` → **Run workflow**（`workflow_dispatch`）。上一份产物留在 `/opt/zyxf/frontend/dist.prev`
+- 部署脚本单独运行（线上排障时不需要重新构建）：
+
+  ```bash
+  cd /opt/zyxf && git fetch origin main && git reset --hard origin/main
+  PREV_SHA=$(git rev-parse HEAD) BUNDLE=/tmp/zyxf-dist.tar.gz bash deploy/deploy.sh
+  ```
 - 同步干跑（核对「会新增/会删除什么」，**一个字节都不落库**；游客即可调用，限 2 次/分钟）：
 
   ```bash
