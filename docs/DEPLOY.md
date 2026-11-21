@@ -30,9 +30,21 @@
 
 | 协议 | 端口 | 来源 | 用途 |
 |---|---|---|---|
-| TCP | 22 | 你的本地 IP | SSH（**不要开 0.0.0.0/0**）|
-| TCP | 80 | 0.0.0.0/0 | HTTP |
+| TCP | 22 | `0.0.0.0/0` | SSH（**见下方说明，这里开不了白名单**）|
+| TCP | 80 | 0.0.0.0/0 | HTTP（certbot 做 HTTP-01 验证也依赖它）|
 | TCP | 443 | 0.0.0.0/0 | HTTPS |
+
+> **为什么 22 是 `0.0.0.0/0` 而不是「你的本地 IP」**：部署由 GitHub Actions 发起，runner 的出口 IP 每次都在变（官方只发布周更的网段列表，跟着它维护规则不现实）。所以这里无法收窄，安全边界只能落在 sshd 上。生产机的实际配置（2026-11 实测）：
+>
+> ```
+> permitrootlogin without-password   # 只允许密钥，root 不接受密码
+> passwordauthentication no
+> kbdinteractiveauthentication no
+> permitemptypasswords no
+> maxauthtries 6
+> ```
+>
+> 近 3 天 `journalctl -u ssh | grep -c "Failed password"` = 0（没有密码爆破可试）。**改这几项等于把机器开到公网上，动之前先确认 `authorized_keys` 里还有你的公钥**；没装 fail2ban，也暂时不需要装——没有密码可爆破时它只是降噪。
 
 > 后端默认绑定 `127.0.0.1`（`HOST` 环境变量可覆盖），因此**不依赖防火墙规则**也不会被公网直连。这同时是限流的前提：后端信任 `X-Forwarded-For` 取客户端 IP，只有不可直连时该信任才安全——否则外部可伪造 XFF 绕过所有限流（BUG-36）。防火墙仍建议不开 4000，作为纵深防御。
 
@@ -64,6 +76,24 @@ aliyun ossutil api put-bucket-https-config --bucket <bucket> --region cn-beijing
 ### 0.4 域名解析
 
 将域名 A 记录指向服务器公网 IP（在云控制台的实例详情里查看）。文档统一用 RFC 5737 保留段 `203.0.113.10` 作示例占位——**不要把真实 IP 写进仓库**。
+
+生产 `zyxf.top` 区里**只有 9 条记录**，每条都有明确归属（2026-11 实测，`aliyun alidns DescribeDomainRecords --DomainName zyxf.top`）。这个区是全站唯一的入口配置，改任何一条之前先对一遍这张表：
+
+| RR | 类型 | 值 | 干什么用 | 删了会怎样 |
+|---|---|---|---|---|
+| `@` | A | 服务器公网 IP | 主站入口（nginx，不经 CDN/ESA） | 全站打不开 |
+| `dzhz` | CNAME | `dzhz.zyxf.top.a1.initrr.com` | ESA 加速的 APK/静态分发（§4.2.2） | 岱宗盒子下载 404 |
+| `_acme-challenge.dzhz` | CNAME | `dzhz.zyxf.top.<siteId>.dcv.aliyun-esa.com` | ESA **托管 DCV**，证书自动续期 | 证书到期后 dzhz 全线 TLS 失败 |
+| `_esaauth` | TXT | `verify_…` | ESA 站点归属验证 | 站点被判未验证/离线 |
+| `mail` | MX | `mx01.dm.aliyun.com` | 阿里云 DirectMail 收信 | 验证码邮件收不到回执 |
+| `mail` | TXT | `v=spf1 include:spf1.dm.aliyun.com -all` | 发信身份（SPF） | 邮件进垃圾箱 |
+| `aliyun-cn-hangzhou._domainkey.mail` | TXT | `v=DKIM1; …` | 发信签名（DKIM） | 同上 |
+| `_dmarc.mail` | TXT | `v=DMARC1;p=none;rua=…` | DMARC 报告 | 退信策略失效（暂不拦） |
+| `verification` | TXT | `verify_257ecc…` | **旧 CDN 归属验证遗留**，无在用产品认领 | 无影响（刻意保留，避免误删别处依赖） |
+
+> - **没有 `www`**：`www.zyxf.top` 解析不出来，是现状而不是故障；要支持就得加记录并决定是 301 还是同站。
+> - **没有 `oss`**：bucket 上**没有任何自定义域名**（`aliyun ossutil api list-cname --bucket <bucket>` 返回空），后端签名 URL 直接用 `<bucket>.<region>.aliyuncs.com`。所以下载链路上没有 CDN/ESA，也就没有边缘缓存——这是 OSS 流出按 ¥0.5/GB 计费的直接原因。
+> - 发信身份是 `system@mail.zyxf.top`（`DM_ACCOUNT_NAME`），SPF/DKIM/DMARC 都挂在 `mail` 子域上，配置是自洽的；根域 `zyxf.top` 没有任何 SPF/DMARC，意味着裸域可以被任意伪造发信（想堵就加 `@ TXT "v=spf1 -all"` 与 `_dmarc TXT "v=DMARC1;p=none"`）。
 
 ---
 
@@ -442,7 +472,7 @@ nginx -t && systemctl reload nginx
 > - `listen 443 ssl http2;` —— HTTP/2 必须写在 `listen` 上。Ubuntu 22.04 自带 nginx 1.18.0，没有 1.25.1 才引入的 `http2 on;` 指令，只写 `listen 443 ssl;` 会让整站退回 HTTP/1.1（每域 6 个并发连接）。
 > - `gzip on` + `gzip_types` —— nginx 默认的 `gzip_types` **只有 `text/html`**，所以 HTML 是压过的、`.js/.css` 一直明文外传（实测主 bundle 172,825 字节无 `content-encoding`）。`/api/` 里单独写了 `gzip off`：SSE 走 gzip 会把增量输出攒进缓冲区，反而拉高首字延迟。
 >
-> **限流（2026-11 加）**：`zyxf_req` 20 r/s（burst 60，nodelay）、`zyxf_api` 6 r/s（burst 20）、单 IP 并发连接 24，超限一律 429。burst 给这么大是因为首屏本身就要拉十几个静态资源——限流只压「持续高频」这一种形态，不误伤正常打开页面。注意它只保护**源站**：文件下载走 `oss.zyxf.top` 直连 OSS，根本不经过 nginx，防不到 OSS 那边的流出流量。
+> **限流（2026-11 加）**：`zyxf_req` 20 r/s（burst 60，nodelay）、`zyxf_api` 6 r/s（burst 20）、单 IP 并发连接 24，超限一律 429。burst 给这么大是因为首屏本身就要拉十几个静态资源——限流只压「持续高频」这一种形态，不误伤正常打开页面。注意它只保护**源站**：文件下载走 `backend/src/oss.js` 签发的直链（`<bucket>.oss-cn-beijing.aliyuncs.com`；bucket 上**没有绑定任何自定义域名**，见 §0.4），根本不经过 nginx，防不到 OSS 那边的流出流量。
 
 #### 4.2.1 `/games/`：仓库外的独立服务
 
@@ -481,6 +511,26 @@ nginx -t && systemctl reload nginx
     'https://dzhz.zyxf.top/xjtu-toolbox/apk/latest/app-release.apk?probe=$(date +%s)' | head -5
   # 期望 200 + content-type: application/vnd.android.package-archive + Server: ESA
   ```
+
+#### 4.2.3 刷新缓存 / 预热缓存：只有一个场景真用得上
+
+两者都是**边缘**操作，对主站 `zyxf.top` 完全无效——主站是 nginx 直出，没有边缘缓存，改了文件立刻生效，「刷新」没有对象。
+
+对 `dzhz.zyxf.top` 有意义的只有一条：**`latest` 这个别名是被覆盖写的**。
+
+- 发版时 CI 把新包写到 `xjtu-toolbox/apk/latest/app-release.apk`（**同一个 key，内容变了**），边缘仍按旧缓存条目分发；
+- 2026-11-21 实测该对象 `age: 3868`——边缘缓存了约 1 小时；而它自身还带 `Cache-Control: no-cache`（ESA 并没有遵守这个响应头，实际缓存策略与对象元数据不一致）；
+- 后果：发版后最长 1 小时内，一部分用户点「下载」拿到的是**旧包**，且这种错误在服务器侧完全看不出来。
+
+| 操作 | 值不值得 | 说明 |
+|---|---|---|
+| 发版后刷新 `…/apk/latest/app-release.apk` 与 `…/stable.json` | **值得**，应急回滚时尤其必要 | 控制台「刷新缓存」；CLI 侧有 `DescribePurgeTasks` 可查任务 |
+| 预热新包 | **基本没用** | 回源是同区域的 OSS 北京，冷回源只多一次内网读；受众集中、PoP 少，收益抵不过配额与配置成本 |
+| 用「记得手动刷新」当长期方案 | **不建议** | 依赖人肉记性，回滚时最容易漏 |
+
+**更根本的修法（推荐）**：不要覆盖写。新包发布到 `apk/<version>/app-release.apk` 这类**不可变路径**，`stable.json` 里带上版本与路径（现在这个文件已经带 `version` 字段），客户端与下载按钮只读 `stable.json` 决定去哪拿。这样 APK 永不失效、可以放心长缓存，需要刷新的只剩一个小 JSON——把它的边缘 TTL 压到 30–60 秒，连刷新都不必点。
+
+> 这处改动落在 xjtu-toolbox 的发版流水线（不在本仓库），但它决定了这条链路要不要人肉运维。
 
 #### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 
@@ -636,3 +686,23 @@ certbot renew --dry-run --cert-name zyxf.top   # 约 30s，验证 HTTP-01 全链
 | 下载/上传全都不通，接口却返回 200 | **密钥已失效**：`OSS_ACCESS_KEY_ID` 指向被删除/停用的 AccessKey（轮换后漏改服务器 `.env` 最常见）。签名是本地算的、不校验，所以接口照常给 URL，真链一取就 `InvalidAccessKeyId`。改 `/opt/zyxf/.env` → `systemctl restart zyxf` |
 | 首页白屏 / `https` 连不上 | SSL 未配或证书没生效 | 见第 5 节申请 Let's Encrypt |
 | 访问命中默认站点（旧页） | 按 IP 访问，非域名 | 用域名 `zyxf.top` 访问；确认域名已解析 |
+
+---
+
+## 9. 账号级资源清单（2026-11 盘点）
+
+部署架构不止服务器上的东西，还包括账号里"存在但可能在空转"的部分。当前账号（cn-beijing 为主）实盘如下，**空转项的判定依据一并列出**，避免下次还要重新查一遍：
+
+| 资源 | 现状 | 判定 |
+|---|---|---|
+| 轻量应用服务器 | 1 台 `swas.s.c2m2s40b1.linux`（2C2G/40G），到期 2027-01-03 | 唯一生产机 |
+| OSS Bucket | 业务桶（文件库，私有 + 签名直链）+ 发布桶（`dzhz` APK/静态，私有 + ESA 私有回源） | 都在用 |
+| ESA | 站点 1 个（`zyxf.top`，免费版 `entranceplan`）+ 加速记录 1 条（`dzhz`） | 在用，只加速 |
+| 阿里云 CDN | 域名 **0**（旧域名 2026-11-21 已删） | 已下线，回滚成本见 §4.2.2 |
+| SWAS 防火墙 | 22 / 80 / 443 / ICMP，来源均 `0.0.0.0/0` | 见 §0.1（22 无法收窄） |
+| VPC | 1 个（`172.16.0.0/12`），**0 个交换机、0 个 ENI** | **空转**：轻量服务器不走 VPC，这个 VPC 没有任何东西挂在里面，可删 |
+| EIP | 0 个 | 无 |
+| NAS / 云备份 HBR / 日志服务 SLS | 0 个实例；SLS 仅有 OSS 自动创建的日志库（免费额度内） | 无可清理 |
+| docker / containerd | 2026-11 已整包卸载（此前有 6.2 GB 只读构建缓存） | 已清 |
+
+> 盘点命令：`aliyun swas-open ListInstances`、`aliyun oss ls`、`aliyun esa ListSites`、`aliyun cdn DescribeUserDomains`、`aliyun vpc DescribeVpcs`、`aliyun vpc DescribeVSwitches`、`aliyun ecs DescribeNetworkInterfaces`、`aliyun vpc DescribeEipAddresses`。
