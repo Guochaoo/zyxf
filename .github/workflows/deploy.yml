@@ -43,7 +43,11 @@ jobs:
           set -euo pipefail
           # runner 在境外、服务器在境内，实测上传约 11 KB/s：4.4 MB 的产物要 6 分钟。
           # 纯后端 / 文档 / 配置的发布没必要付这笔钱——服务器上留着的 dist 就是对的。
-          if git diff --name-only HEAD^ HEAD -- frontend | grep -q .; then
+          # nginx.conf 与 security-headers.conf 虽然放在 frontend/ 下，但它们是**服务器侧
+          # 配置**，不参与 vite 构建：改它们不该触发一次整包上传。
+          if git diff --name-only HEAD^ HEAD -- frontend \
+               ':(exclude)frontend/nginx.conf' \
+               ':(exclude)frontend/security-headers.conf' | grep -q .; then
             echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
             echo "frontend 有改动 → 构建并上传产物"
           else

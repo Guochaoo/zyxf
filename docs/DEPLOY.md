@@ -77,11 +77,14 @@ aliyun ossutil api put-bucket-https-config --bucket <bucket> --region cn-beijing
 
 将域名 A 记录指向服务器公网 IP（在云控制台的实例详情里查看）。文档统一用 RFC 5737 保留段 `203.0.113.10` 作示例占位——**不要把真实 IP 写进仓库**。
 
-生产 `zyxf.top` 区里**只有 9 条记录**，每条都有明确归属（2026-11 实测，`aliyun alidns DescribeDomainRecords --DomainName zyxf.top`）。这个区是全站唯一的入口配置，改任何一条之前先对一遍这张表：
+生产 `zyxf.top` 区里**只有 11 条记录**，每条都有明确归属（2026-11 实测，`aliyun alidns DescribeDomainRecords --DomainName zyxf.top`）。这个区是全站唯一的入口配置，改任何一条之前先对一遍这张表：
 
 | RR | 类型 | 值 | 干什么用 | 删了会怎样 |
 |---|---|---|---|---|
 | `@` | A | 服务器公网 IP | 主站入口（nginx，不经 CDN/ESA） | 全站打不开 |
+| `www` | CNAME | `zyxf.top` | 主站别名，nginx 里 301 到裸域 | `www.zyxf.top` 打不开 |
+| `@` | TXT | `v=spf1 -all` | 声明裸域**不用于发信**，阻止伪造 | 别人可以伪造 `@zyxf.top` 发信 |
+| `_dmarc` | TXT | `v=DMARC1;p=none;rua=…` | 收 DMARC 报告（不拦截） | 伪造邮件无报告可查 |
 | `dzhz` | CNAME | `dzhz.zyxf.top.a1.initrr.com` | ESA 加速的 APK/静态分发（§4.2.2） | 岱宗盒子下载 404 |
 | `_acme-challenge.dzhz` | CNAME | `dzhz.zyxf.top.<siteId>.dcv.aliyun-esa.com` | ESA **托管 DCV**，证书自动续期 | 证书到期后 dzhz 全线 TLS 失败 |
 | `_esaauth` | TXT | `verify_…` | ESA 站点归属验证 | 站点被判未验证/离线 |
@@ -89,11 +92,10 @@ aliyun ossutil api put-bucket-https-config --bucket <bucket> --region cn-beijing
 | `mail` | TXT | `v=spf1 include:spf1.dm.aliyun.com -all` | 发信身份（SPF） | 邮件进垃圾箱 |
 | `aliyun-cn-hangzhou._domainkey.mail` | TXT | `v=DKIM1; …` | 发信签名（DKIM） | 同上 |
 | `_dmarc.mail` | TXT | `v=DMARC1;p=none;rua=…` | DMARC 报告 | 退信策略失效（暂不拦） |
-| `verification` | TXT | `verify_257ecc…` | **旧 CDN 归属验证遗留**，无在用产品认领 | 无影响（刻意保留，避免误删别处依赖） |
 
-> - **没有 `www`**：`www.zyxf.top` 解析不出来，是现状而不是故障；要支持就得加记录并决定是 301 还是同站。
+> - **发信身份是 `system@mail.zyxf.top`**（`DM_ACCOUNT_NAME`），SPF/DKIM/DMARC 都挂在 `mail` 子域；裸域那条 `v=spf1 -all` 与它不冲突——裸域本来就不发信，`-all` 只是把「冒充裸域」这条路堵死。
 > - **没有 `oss`**：bucket 上**没有任何自定义域名**（`aliyun ossutil api list-cname --bucket <bucket>` 返回空），后端签名 URL 直接用 `<bucket>.<region>.aliyuncs.com`。所以下载链路上没有 CDN/ESA，也就没有边缘缓存——这是 OSS 流出按 ¥0.5/GB 计费的直接原因。
-> - 发信身份是 `system@mail.zyxf.top`（`DM_ACCOUNT_NAME`），SPF/DKIM/DMARC 都挂在 `mail` 子域上，配置是自洽的；根域 `zyxf.top` 没有任何 SPF/DMARC，意味着裸域可以被任意伪造发信（想堵就加 `@ TXT "v=spf1 -all"` 与 `_dmarc TXT "v=DMARC1;p=none"`）。
+> - 原来还有一条 `verification` TXT（`verify_257ecc…`），是早期 CDN 域名归属验证留下的孤儿。2026-11-21 已删除：CDN 域名数为 0、DCDN 未开通、OSS 无自定义域名、ESA 用的是另一套 `_esaauth`，没有任何在用产品认领它；删除后主站、dzhz 下载、发信均正常。
 
 ---
 
@@ -524,9 +526,32 @@ nginx -t && systemctl reload nginx
 
 | 操作 | 值不值得 | 说明 |
 |---|---|---|
-| 发版后刷新 `…/apk/latest/app-release.apk` 与 `…/stable.json` | **值得**，应急回滚时尤其必要 | 控制台「刷新缓存」；CLI 侧有 `DescribePurgeTasks` 可查任务 |
+| 发版后刷新 `…/apk/latest/app-release.apk` 与 `…/stable.json` | **值得**，应急回滚时尤其必要 | 见下面的命令；也可在控制台点「刷新缓存」 |
 | 预热新包 | **基本没用** | 回源是同区域的 OSS 北京，冷回源只多一次内网读；受众集中、PoP 少，收益抵不过配额与配置成本 |
 | 用「记得手动刷新」当长期方案 | **不建议** | 依赖人肉记性，回滚时最容易漏 |
+
+命令行刷新（字段形状踩过坑：`Content` 是**对象**，file 类型要把 URL 放进 `Files` 数组；写成 `--Content.1` 之类会被 API 以 `InvalidContent` 拒绝）：
+
+```bash
+# 发版流水线里调用，传完 OSS 立刻执行
+ESA_SITE_ID=<站点 ID> deploy/purge-esa-cache.sh \
+  https://dzhz.zyxf.top/xjtu-toolbox/apk/latest/app-release.apk \
+  https://dzhz.zyxf.top/xjtu-toolbox/stable.json
+# → 已提交刷新任务 TaskId=…
+
+# 等价的手工命令
+aliyun esa PurgeCaches --SiteId <站点 ID> --Type file \
+  --Content '{"Files":["https://dzhz.zyxf.top/xjtu-toolbox/stable.json"]}'
+
+# 查最近的任务（没有按 TaskId 过滤的参数，只能按类型/状态/时间窗）
+aliyun esa DescribePurgeTasks --SiteId <站点 ID> --Type file --PageSize 5
+```
+
+免费版文件刷新额度 **1000 次**（`aliyun esa GetPurgeQuota --SiteId <id> --Type file`），一次提交多个 URL 仍算 1 个任务。刷新生效的验证方式是看响应头里的 `Age` 消失（回源重新取）：
+
+```bash
+curl -sI https://dzhz.zyxf.top/xjtu-toolbox/stable.json | grep -i '^age'   # 刷新后应无 Age
+```
 
 **更根本的修法（推荐）**：不要覆盖写。新包发布到 `apk/<version>/app-release.apk` 这类**不可变路径**，`stable.json` 里带上版本与路径（现在这个文件已经带 `version` 字段），客户端与下载按钮只读 `stable.json` 决定去哪拿。这样 APK 永不失效、可以放心长缓存，需要刷新的只剩一个小 JSON——把它的边缘 TTL 压到 30–60 秒，连刷新都不必点。
 
@@ -579,7 +604,21 @@ certbot certonly --nginx -d zyxf.top --cert-name zyxf.top \
 >
 > 同时删掉了 `dzhz.zyxf.top` 的证书谱系：它已由 ESA 提供证书（§4.2.2），而这本证书的 `renew_hook` 指向**已删除的旧 CDN 域名**（`aliyun cdn SetCdnDomainSSLCertificate`），且 `_acme-challenge.dzhz` 已改成指向 ESA 托管 DCV 的 CNAME、DNS-01 根本加不进 TXT——留着只会在 2026-12-22（到期前 30 天）起每天失败两次，而 `uptime.yml` 只探测 `zyxf.top`，不会有人收到告警。
 
-前提：域名 A 记录指向服务器公网 IP，80/443 对公网开放。自检：
+前提：域名 A 记录指向服务器公网 IP，80/443 对公网开放。
+
+**一张证书覆盖两个域名**（裸域 + `www`）。首次只签裸域，后来加 `www` 时用 `--expand`：
+
+```bash
+certbot certonly --nginx -d zyxf.top -d www.zyxf.top --cert-name zyxf.top \
+  --expand --server https://acme.zerossl.com/v2/DV90
+# SAN 应包含 DNS:zyxf.top, DNS:www.zyxf.top
+openssl x509 -in /etc/letsencrypt/live/zyxf.top/cert.pem -noout -text |
+  grep -A1 "Subject Alternative Name"
+```
+
+`--expand` 之后 renewal 配置里自动带上两个域名，续期不需要再管。⚠️ 加 `www` 前先把 DNS 的 `www` 记录建好（CNAME → `zyxf.top`），否则 HTTP-01 验证会失败。
+
+自检：
 
 ```bash
 certbot certificates | grep -E "Certificate Name|Expiry"
@@ -700,7 +739,7 @@ certbot renew --dry-run --cert-name zyxf.top   # 约 30s，验证 HTTP-01 全链
 | ESA | 站点 1 个（`zyxf.top`，免费版 `entranceplan`）+ 加速记录 1 条（`dzhz`） | 在用，只加速 |
 | 阿里云 CDN | 域名 **0**（旧域名 2026-11-21 已删） | 已下线，回滚成本见 §4.2.2 |
 | SWAS 防火墙 | 22 / 80 / 443 / ICMP，来源均 `0.0.0.0/0` | 见 §0.1（22 无法收窄） |
-| VPC | 1 个（`172.16.0.0/12`），**0 个交换机、0 个 ENI** | **空转**：轻量服务器不走 VPC，这个 VPC 没有任何东西挂在里面，可删 |
+| VPC | **0 个**（原有一个空的 `172.16.0.0/12`，0 交换机 0 ENI，2026-11-21 已删） | 轻量服务器不走 VPC，VPC 在这里没有用途 |
 | EIP | 0 个 | 无 |
 | NAS / 云备份 HBR / 日志服务 SLS | 0 个实例；SLS 仅有 OSS 自动创建的日志库（免费额度内） | 无可清理 |
 | docker / containerd | 2026-11 已整包卸载（此前有 6.2 GB 只读构建缓存） | 已清 |
