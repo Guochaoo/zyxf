@@ -6,12 +6,6 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>仲英学辅</title>
-    <!-- ESA「网页监测」采集 SDK（TTFB / FCP / LCP / CLS / INP / FID）。
-         站点侧原来配的是「自动集成」（由 ESA 往 HTML 里注入脚本），实测没有注入，
-         所以改成手动集成——同一个 SDK，不依赖边缘改写 HTML。
-         async：监测脚本不能挡住首屏，否则它测量的 FCP 反而被自己拖慢。
-         CSP 已放行该 host（见 security-headers.conf）。 -->
-    <script async src="https://rjsperf.myalicdn.com/sdk.js"></script>
   </head>
   <body class="bg-white">
     <div id="root"></div>
