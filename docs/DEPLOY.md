@@ -436,6 +436,27 @@ nginx -t && systemctl reload nginx
 - `client_max_body_size 4k` 是那个服务的约定，不随主站的 `10m` 调整。
 - 现在部署会整份覆盖 `zyxf.conf`，因此这块**只能改仓库模板**；只改服务器上的会被下次发布冲掉。
 
+#### 4.2.2 `dzhz.zyxf.top` 的静态加速（ESA，2026-11 迁入）
+
+`dzhz.zyxf.top` **不经过本仓库的 nginx**——它是岱宗盒子（xjtu-toolbox）的发布桶 `xjtu-toolbox-dzhz`（OSS 北京，**私有**）对外分发 APK / 静态资源的域名，2026-11 从「阿里云 CDN（`dzhz.zyxf.top.w.kunlunaq.com`）」迁到了**阿里云 ESA 免费版**。
+
+| 项 | 值 |
+|---|---|
+| ESA 站点 | `zyxf.top`（SiteId `190304393599084`），套餐 `entranceplan`（免费版，**0 元**） |
+| 加速记录 | `dzhz.zyxf.top` **CNAME → `dzhz.zyxf.top.a1.initrr.com`** |
+| 回源 | 源站类型 **OSS**、回源 HOST **跟随源站域名**、鉴权 **私有访问（STS 临时令牌）** |
+| 证书 | ESA 免费证书（Let's Encrypt，3 个月），托管 DCV：`_acme-challenge.dzhz` CNAME → `dzhz.zyxf.top.190304393599084.dcv.aliyun-esa.com` |
+| 回滚 | 把 `dzhz` 的 CNAME 改回 `dzhz.zyxf.top.w.kunlunaq.com` |
+
+几条必须记住的约束：
+
+- **bucket 不能改公共读。** 改成公共访问后任何人拿到 `xjtu-toolbox-dzhz.oss-cn-beijing.aliyuncs.com` 就能绕过 ESA 直连下载，按 OSS 外网流出（忙时 ¥0.5/GB）记在账上——这正是加这一层要防的事。回源鉴权只能在控制台走「私有访问」，API 的 `AuthConf` 字段结构没有公开文档。
+- **回源 HOST 必须「跟随源站域名」。** 跟随请求 HOST 会把 Host 变成 `dzhz.zyxf.top`，OSS 侧对不上 bucket 直接 403。
+- **免费版不含 WAF / 边缘函数 / 七层 DDoS**（`EdgeWaf: waf_off`、`EdgeCompute: er_off`、`EdgeDdos7Layer: ddos_off`），只有加速。站点级防护仍然靠 nginx 的限流（见 §4.2 末尾）。
+- **子域不能单独作为站点**（`SubSiteUnavailable`，只有企业版支持），所以站点建在根域 `zyxf.top` 上，`dzhz` 是它下面的一条记录。
+- 免费版套餐参数里 `PlanTraffic: 0`，官方口径是「流量和请求数不计费」，但**限速阈值没有公开**；若大文件被明显限速要重新评估是否值得留在这条链路上。
+- 旧 CDN 域名先别删：它是上面那条回滚路径的前提。确认稳定后再删（见 issue #96）。
+
 #### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 
 - **刷新任何前端路由都是 404**（`/folder/6`、`/dashboard`、`/about`、`/settings`）：缺 `location / { try_files $uri $uri/ /index.html; }`（BUG-97）。dist/ 里没有这些文件，必须交给 index.html 由前端路由接管。
