@@ -660,28 +660,6 @@ echo | openssl s_client -servername zyxf.top -connect zyxf.top:443 2>/dev/null |
 tail -3 /var/log/nginx/access.log    # 第一列应是真实客户端 IP，不是 ESA 节点 IP
 ```
 
-#### 网页监测（真实用户性能数据，2026-11-22 接入）
-
-ESA「网页监测」给的是 TTFB / FCP / LCP / CLS / INP / FID 这类**真实客户端**指标（免费版额度 1 条），
-比流量曲线更能回答「用户打开得快不快」：
-
-| 项 | 值 |
-|---|---|
-| 监测目标 | `zyxf.top/`（`ConfigId 531365007255552`；`aliyun esa ListUrlObservations --SiteId <id>`） |
-| 集成方式 | **手动**：`frontend/index.html` 里 `<script async src="https://rjsperf.myalicdn.com/sdk.js">` |
-| 数据查询 | `aliyun esa DescribeUrlObservationData --SiteId <id> --Url "zyxf.top/" --Metric FCP --StartTime … --EndTime …` |
-
-> ⚠️ **为什么不用「自动集成」**：ESA 文档说配置后由边缘自动往 HTML 注入脚本，但 2026-11-22 实测连续
-> 请求 10+ 次，返回的 HTML 与源站**字节数完全一致**、没有任何注入。手动集成用的是同一个 SDK、数据口径
-> 一致，只是不再依赖边缘改写 HTML。
->
-> ⚠️ **CSP 必须放行两个 host**：`rjsperf.myalicdn.com`（我们手动引入的 SDK）与
-> `rjsprbi.myalicdn.com`（headless 里观察到 ESA 边缘还会注入 `rum_common.js`）。少了任何一个，浏览器
-> 都会直接拦掉：监测数据永远为空，而且每个访客控制台都刷 CSP 违规。
->
-> `async` 是刻意的：监测脚本不该挡首屏，否则它测的 FCP 反被自己拖慢。数据**不是实时**的——上报后要经过
-> ESA 侧聚合，通常几十分钟后才有 `UrlDetailData`。
-
 #### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 
 - **刷新任何前端路由都是 404**（`/folder/6`、`/dashboard`、`/about`、`/settings`）：缺 `location / { try_files $uri $uri/ /index.html; }`（BUG-97）。dist/ 里没有这些文件，必须交给 index.html 由前端路由接管。
