@@ -423,6 +423,8 @@ nginx -t && systemctl reload nginx
 > 模板里两处容易踩的性能配置（2026-11 修）：
 > - `listen 443 ssl http2;` —— HTTP/2 必须写在 `listen` 上。Ubuntu 22.04 自带 nginx 1.18.0，没有 1.25.1 才引入的 `http2 on;` 指令，只写 `listen 443 ssl;` 会让整站退回 HTTP/1.1（每域 6 个并发连接）。
 > - `gzip on` + `gzip_types` —— nginx 默认的 `gzip_types` **只有 `text/html`**，所以 HTML 是压过的、`.js/.css` 一直明文外传（实测主 bundle 172,825 字节无 `content-encoding`）。`/api/` 里单独写了 `gzip off`：SSE 走 gzip 会把增量输出攒进缓冲区，反而拉高首字延迟。
+>
+> **限流（2026-11 加）**：`zyxf_req` 20 r/s（burst 60，nodelay）、`zyxf_api` 6 r/s（burst 20）、单 IP 并发连接 24，超限一律 429。burst 给这么大是因为首屏本身就要拉十几个静态资源——限流只压「持续高频」这一种形态，不误伤正常打开页面。注意它只保护**源站**：文件下载走 `oss.zyxf.top` 直连 OSS，根本不经过 nginx，防不到 OSS 那边的流出流量。
 
 #### 4.2.1 `/games/`：仓库外的独立服务
 
@@ -443,6 +445,13 @@ nginx -t && systemctl reload nginx
   - `location ~* \.(?:ttf|otf|woff2?|png|jpe?g|webp|gif|svg|ico)$`（文件名无 hash，如 `/favicon.png`、`/images/*.webp`）→ `max-age=604800`。
   - ⚠️ **`^~` 不能省**：nginx 的**正则 location 优先级高于普通前缀 location**，而扩展名正则也含 `woff2`——写成普通前缀时 `/assets/*.woff2` 会被正则抢走、只拿到 7 天（线上实测确认过）。
 - **`add_header` 不会被子级 location 继承**：任何自己写了 `add_header` 的 location 都会屏蔽 server 级那一组。所以安全头（CSP / HSTS / `X-Content-Type-Options` / `Referrer-Policy` / `Permissions-Policy` / `COOP`）统一放在 [frontend/security-headers.conf](../frontend/security-headers.conf)，每个这类 location `include /etc/nginx/snippets/zyxf-headers.conf;` 一次——**加头或改策略只改那一个文件**，不要再往 location 里手抄。
+- **限流 zone 的 IP 来源是真的还是假的**：`limit_req_zone $binary_remote_addr` 成立的前提是「nginx 直接面向客户端」。主站现在是 A 记录直连，成立；**一旦把站点挂到 CDN / ESA 后面**，`$binary_remote_addr` 就变成节点 IP，全站会被当成同一个来源限流（等于自伤）。届时必须先加：
+  ```nginx
+  set_real_ip_from <CDN/ESA 回源网段>;
+  real_ip_header X-Forwarded-For;
+  real_ip_recursive on;
+  ```
+  并确认对方回源时确实带 `X-Forwarded-For`。ESA 的源站防护 / 回源 IP 网段可在控制台查到。
 - **`index.html` 必须 `Cache-Control: no-cache`**：它没有内容 hash，缓存里的旧 HTML 引用构建后**已被删除**的 chunk 文件名，那次请求落到 SPA 回退拿到 HTML，浏览器按 `type="module"` 解析失败 → **整页白屏**（BUG-100，发版后最容易复现的事故）。前端另有一层兜底：路由出口的 `ErrorBoundary` 会给出可恢复界面，且识别到「懒 chunk 加载失败」时把「重试」直接接成整页重载——`React.lazy` 会把失败的 import 缓存在模块级 payload 上，原地重试不可能恢复（issue #63）。
 - **不存在的 `/assets/*` 必须回 404**：回 200 + `text/html` 同样会让模块脚本因 MIME 不符拒绝执行。
 - **CSP 已转为强制模式**（2026-11，原为 Report-Only）：切换前做过静态审计——构建产物里 `eval(` / `new Function(` 均 0 命中、无内联 `<script>`、无 Web Worker，因此 `script-src 'self'` 不需要 `unsafe-eval`。⚠️ `frame-src` 必须含 `blob:`：PDF 预览是 `fetch` 成 blob URL 后塞进 iframe（见 `Preview/PdfViewer.jsx`），少了它生产环境 PDF 会整块白屏。日后若再接入外链预览 SDK（如旧版 WebOffice），要把它的域名同时加进该文件的 `script-src` / `style-src` / `frame-src`。若某个功能被拦，最快的回退是把 snippet 第一行改回 `Content-Security-Policy-Report-Only`（只改一处，因为头已经收敛到单个文件）。
