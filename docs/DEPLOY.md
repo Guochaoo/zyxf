@@ -559,6 +559,46 @@ curl -sI https://dzhz.zyxf.top/xjtu-toolbox/stable.json | grep -i '^age'   # 刷
 
 > 这处改动落在 xjtu-toolbox 的发版流水线（不在本仓库），但它决定了这条链路要不要人肉运维。
 
+#### 4.2.4 ESA 能看到哪些数据 / 有哪些优化开关
+
+命令行能拉到的（`aliyun esa …`，免登控制台）：
+
+```bash
+# 时序：Traffic(字节) / Requests / RequestTraffic / PageView
+aliyun esa DescribeSiteTimeSeriesData --SiteId <id> \
+  --StartTime <ISO> --EndTime <ISO> --Interval 3600 \
+  --Fields '[{"FieldName":"Traffic","Dimension":["ALL"]}]'
+
+# Top：按路径 / 国家 / 缓存状态 / 状态码 / 协议 / TLS 版本…
+aliyun esa DescribeSiteTopData --SiteId <id> --Limit 10 \
+  --StartTime <ISO> --EndTime <ISO> \
+  --Fields '[{"FieldName":"Traffic","Dimension":["ClientRequestPath"]}]'
+```
+
+2026-11-21 首次接入当天的真实数据（含我自己的压测下载）：
+
+| 维度 | 数据 |
+|---|---|
+| 流量 / 请求 | **85.4 MB / 136 次**（`app-release.apk` 占 76.6 MB，preview 包 8.5 MB，JSON 合计 <0.2 MB） |
+| 来源国家 | CN **99.97%**（US 17 KB、FR 3.9 KB…） |
+| 缓存 | HIT 81 / BYPASS 23 / MISS 20 / NONE 10 → **命中率约 60%** |
+| 状态码 | 200×101、403×22（`/` 目录访问）、404×9（`/apk` 等不存在的 key）、522×4（回源超时）、206×3、304×1 |
+| 协议 / TLS | 请求全是 HTTP/1.1（压测用的 Node `fetch`）、TLSv1.3×115、TLSv1.2×3 |
+
+⚠️ **没有「时延 / 速度」这类指标**。数据分析里只有流量、请求数、请求大小、PV 四个指标 + 一堆维度（缓存状态、状态码、国家、路径、协议…）。想知道「用户下载慢不慢」，ESA 直接给不出来——只能自己从外部测（例如在 CI 里对 APK 拉一小段计时）。这是免费版分析能力的边界，不是配置没开。
+
+优化开关的实际状态：
+
+| 项 | 状态 | 值不值 |
+|---|---|---|
+| 压缩规则（Brotli / Gzip / Zstd） | **已开 Brotli + Gzip**（2026-11 加，ConfigId `531359596607488`） | 对 APK 无意义（已压缩）；JSON 小，收益接近 0。开着是为了将来主站挂 ESA 时不用再配 |
+| 网络优化（`ListNetworkOptimizations`） | 1 条全局配置：上传上限 300 MB、WebSocket off | 默认值即可 |
+| 跨境优化（`GetCrossBorderOptimization`） | **未配置**（返回空） | 受众 99.97% 在境内，没有价值 |
+| 刷新 / 预热 | 文件刷新额度 **1000**，预热接口也在 | 见 §4.2.3：刷新有用，预热没用 |
+| HTTP/3 / QUIC | API 里没有对应开关 | 免费版没有 |
+
+> 流量结构很说明问题：**90% 的流量是 APK 下载**。所以这条链路上真正影响「速度」的是大文件分发，而不是 HTML/JS 压缩——把它放在含免费流量的 ESA 后面（而不是 OSS 直连按 ¥0.5/GB 计费）才是省钱的那一步。
+
 #### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 
 - **刷新任何前端路由都是 404**（`/folder/6`、`/dashboard`、`/about`、`/settings`）：缺 `location / { try_files $uri $uri/ /index.html; }`（BUG-97）。dist/ 里没有这些文件，必须交给 index.html 由前端路由接管。
