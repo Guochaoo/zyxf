@@ -431,7 +431,9 @@ nginx -t && systemctl reload nginx
 
 #### 4.2.1 `/games/`：仓库外的独立服务
 
-`frontend/nginx.conf` 里有一块 `location ^~ /games/`，反代到 `127.0.0.1:4100` 的 **小游戏全服榜**（systemd: `xjtu-games`，代码在 `/opt/xjtu-games`，不在本仓库）。这块原先只存在于生产服务器上——按「整文件覆盖」的姿势改配置会把它删掉，全服榜与提交分数直接挂掉（issue #86，2026-11 收进模板）。
+`frontend/nginx.conf` 里有一块 `location ^~ /games/`，反代到 `127.0.0.1:4100` 的 **游戏排行榜后端**——它服务于**岱宗盒子（`dzhz.zyxf.top`，即 `xjtu-toolbox` 项目）**，是仓库外的独立服务（systemd: `xjtu-games`，代码在 `/opt/xjtu-games`）。这块原先只存在于生产服务器上——按「整文件覆盖」的姿势改配置会把它删掉，排行榜与提交分数直接挂掉（issue #86，2026-11 收进模板）。
+
+> ⚠️ 探活时注意：`/games/` 根路径**本身没有路由**，会返回该服务自己的 JSON 404（`{"error":"没有这个接口"}`）。这是正常现象，不代表反代挂了——真正的接口挂在 `/games/` 之下。反代是否生效看的是响应来自谁：nginx 若没有这条 location 会走 SPA 回落返回 200 HTML。
 
 - 它的 `X-Forwarded-For` 用 `$proxy_add_x_forwarded_for`（**追加**），与主站 `/api/` 的 `$remote_addr`（**覆盖**，BUG-36 要求）不同。改成覆盖前先确认 `xjtu-games` 自己的 trust proxy 取法，别顺手套用主站写法。
 - `client_max_body_size 4k` 是那个服务的约定，不随主站的 `10m` 调整。
