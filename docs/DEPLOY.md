@@ -753,6 +753,7 @@ nginx 侧是 `frontend/nginx.conf` 末尾的白名单 vhost：只放行 `/`、`/
 - `/dzhz` → 301 `https://dzhz.zyxf.top/`；`/dzhz/…` → 301 `https://dzhz.zyxf.top$request_uri`。`/dzhz-assets/` 的前缀是 `/dzhz-`，不会被这两条吃掉。
 - **主站的 `/games/` 反代保留**：旧版 App（≤ 6.0.2）硬编码了 `https://zyxf.top/games`，删了排行榜就断；新版（App 仓库 `dev`）已改指 `dzhz.zyxf.top/games`。
 - 源站证书用 `certbot --expand` 把 `dzhz.zyxf.top` 加进了 SAN（webroot 验证，挑战请求经回源规则到 nginx）；否则 ESA → 源站这段校验不过，只能把回源规则的「源站证书校验」关掉。
+- ⚠️ **nginx 的 301 只管「整页访问」**。站内用客户端路由点进 `/dzhz` 不经过 nginx：URL 会停在 `zyxf.top/dzhz`，盒子页面还会被画进主站版式（左栏、菜单都在）。所以菜单项在 `App.jsx` 里直接写成 `https://dzhz.zyxf.top/` 的站外链接（`StaggeredMenu` 的 `external: true` + `newTab: false`，同标签打开），另加一层兜底：客户端路由落到 `/dzhz…` 时整页 `location.replace` 到盒子域名——只在生产主站生效，本地开发与测试仍按原路由渲染。
 
 验证：
 

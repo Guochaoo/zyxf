@@ -128,6 +128,12 @@ describe('App', () => {
     expect(await screen.findByRole('link', { name: '浏览资料库' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '查看统计仪表盘' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '了解仲英书院学业辅导中心' })).toBeInTheDocument();
+    // 岱宗盒子已迁到独立域名（docs/DEPLOY.md §4.2.7）：菜单项必须是站外绝对链接。
+    // 写成 /dzhz 的话，客户端路由会绕过 nginx 的 301，把盒子页面画在主站版式里。
+    expect(screen.getByRole('link', { name: '查看岱宗盒子介绍页' })).toHaveAttribute(
+      'href',
+      'https://dzhz.zyxf.top/'
+    );
     expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '退出登录' })).not.toBeInTheDocument();
   });
