@@ -816,6 +816,20 @@ zyxf-probe.timer（每分钟）
 | `api` | 接口服务 |
 | `download` | 资料下载 |
 | `app_update` | 岱宗盒子更新 |
+状态页联动（2026-11-22 加）：探针除了推告警，还会**直接改状态页**——
+
+- 故障 → `POST /status-page/change/create`（`type=incident`、`status=investigating`、组件置 `full_outage`），返回的 `change_id` 存进探针状态文件（`.probe-state.json`）
+- 恢复 → `POST /status-page/change/timeline/create`（`status=resolved`、组件回 `operational`）
+- 发布失败只 `console.error`，下一轮巡检会补（「一直故障且没有 changeId」时重试）；探针不会因为状态页报错而中断
+
+为什么必须另外一把 App Key：集成 key 只能推告警事件，状态页 API 走 App Key 鉴权；而且组件本身没有「自动关联告警」的字段（路由只能选频道、automation 是 AI SRE 的提示词编排）。**权限只勾状态页写**，别用全权限 key。
+
+```env
+FLASHDUTY_APP_KEY=<只勾状态页权限的 App Key>
+FLASHDUTY_STATUS_PAGE_ID=<状态页 ID，可用 'GET /status-page/list' 查>
+# 换页面/组件时可覆盖默认映射（JSON：{"site":"01...","api":"01..."}）
+FLASHDUTY_STATUS_COMPONENTS=
+```
 
 三条设计决定：
 
