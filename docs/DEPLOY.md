@@ -744,7 +744,7 @@ aliyun esa CreateCacheRule --SiteId <id> --RuleName 'dzhz-pages-bypass' --RuleEn
 
 ⚠️ **`--DnsRecord` 要填 ESA 站点里已有的记录名**（这里是 `zyxf.top`，它的源站就是 `origin.zyxf.top`），不能填一个只存在于 Aliyun DNS 的主机名——填 `origin.zyxf.top` 会得到 `502 / error=destination_not_found`。
 
-nginx 侧是 `frontend/nginx.conf` 末尾的 vhost，**和主站同一套策略**：静态资源按前缀/扩展名读磁盘（不存在就 404，不能回 HTML），`/games/`、`/api/` 反代本机进程，其余全部 `try_files → /index.html` 交给 SPA。盒子域名上 `/` 渲染落地页、`/legal` 与 `/license` 渲染协议页，其它路由也能打开（只是没人会手打盒子的 `/folder/…`）。<br>早先写过一版「白名单 + 其余 301 回主站」，为的是防止整站出现第二套地址；实际收益太小、每次加页面都要改 nginx，2026-11-22 已改回与主站一致的回退策略。
+nginx 侧是 `frontend/nginx.conf` 末尾的 vhost，**和主站同一套策略**：静态资源按前缀/扩展名读磁盘（不存在就 404，不能回 HTML），`/games/`、`/api/` 反代本机进程，其余全部 `try_files → /index.html` 交给 SPA。盒子域名上 `/` 渲染落地页、`/legal` 与 `/license` 渲染协议页。<br>早先写过一版「nginx 白名单 + 其余 301 回主站」，为的是防止整站出现第二套地址；但每次加页面都要改 nginx，收益太小，2026-11-22 改成「nginx 统一回退 + 前端守卫」：`App.jsx` 在盒子域名上只放行 `/`、`/legal`、`/license`（及 `/dzhz…` 旧路径），其余路径 `location.replace` 到 `https://zyxf.top` 的同一路径。判定在 `frontend/src/dzhz.js` 的 `isDzhzPathBlocked`（有单测），策略写在代码里，加页面不用碰 nginx。
 
 前端仍是**同一个 bundle**：`App.jsx` 用 `isDzhzHost()`（`frontend/src/dzhz.js`）判断，盒子域名上根路径渲染 `DzhzPage`、`/legal` 渲染协议页、`/license` 渲染开源协议，版式走「整页落地页」（不挂左栏 / 搜索 / 知识图谱 / 全站菜单）。
 
