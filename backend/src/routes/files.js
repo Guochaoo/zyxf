@@ -5,6 +5,7 @@ import path from 'node:path';
 import { db, prepareOnce } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { buildPostPolicy, deleteOssObjectIfExists, fileUrl } from '../oss.js';
+import { purgeFileKeys } from '../esaPurge.js';
 import { mimeOf } from '../mime.js';
 import { isUniqueError, folderExists, nextSortOrder } from '../dbHelpers.js';
 import { objectKeyForFile, ossPrefix, parseOptionalFolderId } from '../storagePath.js';
@@ -175,6 +176,9 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
         file.oss_key !== newKey
       );
       invalidateLibraryCaches();
+      // 边缘缓存 7 天（§4.2.6）：旧 key 的链接要立刻失效；新 key 也顺手刷一次，
+      // 免得同路径以前删过、边缘还留着旧内容。
+      await purgeFileKeys([file.oss_key, newKey]);
       return res.json({ ok: true, name: newName, oss_key: newKey });
     } catch (e) {
       return next(e);
@@ -208,6 +212,8 @@ router.patch('/:id', requireAdmin, wrapAsync(async (req, res, next) => {
       );
     });
     invalidateLibraryCaches();
+    // 移动 = copy + delete：旧路径立刻失效，新路径也刷一次（§4.2.6）。
+    await purgeFileKeys([file.oss_key, newKey]);
     res.json({ ok: true });
   } catch (e) {
     return next(e);
@@ -225,6 +231,8 @@ router.delete('/:id', requireAdmin, wrapAsync(async (req, res) => {
   }
   prepareOnce('DELETE FROM files WHERE id = ?').run(file.id);
   invalidateLibraryCaches();
+  // 删完立刻刷边缘缓存：TTL 是 7 天，不刷的话旧链接还能下到（§4.2.6）。
+  await purgeFileKeys([file.oss_key]);
   res.json({ ok: true });
 }));
 
