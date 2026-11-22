@@ -56,6 +56,6 @@ describe('岱宗盒子 · 开源协议', () => {
   });
 
   test('dzhz 页脚的「开源协议」入口存在', () => {
-    expect(dzhzHtml).toContain('href="/dzhz/license">开源协议</a>');
+    expect(dzhzHtml).toContain('href="/license">开源协议</a>');
   });
 });

@@ -85,7 +85,7 @@ aliyun ossutil api put-bucket-https-config --bucket <bucket> --region cn-beijing
 | `origin` | A | 服务器公网 IP | **源站主机名**，ESA 记录只能填 CNAME（不能填 IP） | ESA 回源失败（522） |
 | `www` | CNAME | `zyxf.top` | 主站别名，nginx 里 301 到裸域 | `www.zyxf.top` 打不开 |
 | `_dmarc` | TXT | `v=DMARC1;p=none;rua=…` | 收 DMARC 报告（不拦截） | 伪造邮件无报告可查 |
-| `dzhz` | CNAME | `dzhz.zyxf.top.a1.initrr.com` | ESA 加速的 APK/静态分发（§4.2.2） | 岱宗盒子下载 404 |
+| `dzhz` | CNAME | `dzhz.zyxf.top.a1.initrr.com` | 岱宗盒子全部入口：页面 + 排行榜 + APK/JSON（§4.2.7） | 盒子打不开、App 更新检查失败 |
 | `_acme-challenge.dzhz` | CNAME | `dzhz.zyxf.top.<siteId>.dcv.aliyun-esa.com` | ESA **托管 DCV**，证书自动续期 | 证书到期后 dzhz 全线 TLS 失败 |
 | `oss` | CNAME | `oss.zyxf.top.a1.initrr.com` | **资源库文件下载域**：ESA 边缘 → 私有桶 `xjtu-zyxf`（§4.2.6） | 预览/下载全挂（后端返回的 URL 指向它） |
 | `_esaauth` | TXT | `verify_…` | ESA 站点归属验证 | 站点被判未验证/离线 |
@@ -501,7 +501,7 @@ nginx -t && systemctl reload nginx
 |---|---|
 | ESA 站点 | `zyxf.top`（SiteId `190304393599084`），套餐 `entranceplan`（免费版，**0 元**） |
 | 加速记录 | `dzhz.zyxf.top` **CNAME → `dzhz.zyxf.top.a1.initrr.com`** |
-| 回源 | 源站类型 **OSS**、回源 HOST **跟随源站域名**、鉴权 **私有访问（STS 临时令牌）** |
+| 回源 | 源站类型 **OSS**、回源 HOST **跟随源站域名**、鉴权 **私有访问（STS 临时令牌）**。2026-11-22 起 `/xjtu-toolbox/*` **之外**的请求由回源规则改送 nginx（页面与排行榜），见 §4.2.7 |
 | 证书 | ESA 免费证书（Let's Encrypt，3 个月），托管 DCV：`_acme-challenge.dzhz` CNAME → `dzhz.zyxf.top.190304393599084.dcv.aliyun-esa.com` |
 | 回滚 | 旧 CDN 域名已于 2026-11-21 删除，**回滚不再是改一行 CNAME**：需在 CDN 里重建域名（源站 OSS + 私有回源授权 + 证书），再把 CNAME 指向新分配的加速域名 |
 
@@ -709,6 +709,56 @@ curl -sD- -o /dev/null https://oss.zyxf.top/zyxf/ACM/DP.pptx |
 # 期望 200 + Server: ESA + content-disposition: attachment + x-oss-cdn-auth: success + DYNAMIC
 ```
 
+#### 4.2.7 岱宗盒子收拢到独立域名 `dzhz.zyxf.top`（2026-11-22）
+
+此前盒子的东西散在三处：页面在主站 SPA 的 `/dzhz*` 路由里、排行榜在主站 nginx 的 `/games/` 反代里、APK 与 JSON 在 `dzhz.zyxf.top`（ESA → OSS 私有桶）。现在**全部收在这个域名下**，主站只在 `/dzhz*` 上留 301。
+
+硬约束：**ESA 一条 CNAME 记录只能配一个源站**，而两类请求要的源站相反：
+
+| 路径 | 源站必须是 | 原因 |
+|---|---|---|
+| `/`、`/legal`、`/license`、`/games/*` | nginx（本机） | 页面是 SPA 产物；排行榜是 `127.0.0.1:4100` 的独立进程 |
+| `/xjtu-toolbox/*`（APK、`stable.json`、`bulletin.json`） | OSS 私有桶 | 85 MB 的包走 2C2G 的机器会被带宽卡死；OSS 侧按 CDN 回源计费（¥0.15/GB） |
+
+折中办法是 **ESA 回源规则按路径分流**（免费版可用，2026-11-22 实测）：
+
+```
+dzhz.zyxf.top ──ESA──┬─ 不含 /xjtu-toolbox/  ──► origin.zyxf.top:443（本机 nginx）
+                     └─ /xjtu-toolbox/*      ──► 默认源站：OSS 私有桶（STS 回源，不动）
+```
+
+```bash
+aliyun esa CreateOriginRule --SiteId <id> \
+  --RuleName 'dzhz-pages-to-nginx' --RuleEnable on --Sequence 1 \
+  --Rule '(http.host eq "dzhz.zyxf.top" and not http.request.uri.path contains "/xjtu-toolbox/")' \
+  --DnsRecord 'origin.zyxf.top' --OriginHost 'dzhz.zyxf.top' --OriginScheme https
+```
+
+nginx 侧是 `frontend/nginx.conf` 末尾的白名单 vhost：只放行 `/`、`/legal`、`/license`、`/dzhz/…`、`/assets/`、`/dzhz-assets/`、`/games/`、`/api/`，其余 301 回主站——避免这个域名变成整站副本。
+
+前端仍是**同一个 bundle**：`App.jsx` 用 `isDzhzHost()`（`frontend/src/dzhz.js`）判断，盒子域名上根路径渲染 `DzhzPage`、`/legal` 渲染协议页、`/license` 渲染开源协议，版式走「整页落地页」（不挂左栏 / 搜索 / 知识图谱 / 全站菜单）。
+
+主站侧的收尾：
+
+- `/dzhz` → 301 `https://dzhz.zyxf.top/`；`/dzhz/…` → 301 `https://dzhz.zyxf.top$request_uri`。`/dzhz-assets/` 的前缀是 `/dzhz-`，不会被这两条吃掉。
+- **主站的 `/games/` 反代保留**：旧版 App（≤ 6.0.2）硬编码了 `https://zyxf.top/games`，删了排行榜就断；新版（App 仓库 `dev`）已改指 `dzhz.zyxf.top/games`。
+- 源站证书用 `certbot --expand` 把 `dzhz.zyxf.top` 加进了 SAN（webroot 验证，挑战请求经回源规则到 nginx）；否则 ESA → 源站这段校验不过，只能把回源规则的「源站证书校验」关掉。
+
+验证：
+
+```bash
+curl -sD- -o /dev/null https://dzhz.zyxf.top/ | grep -iE 'HTTP/|server|content-type'
+# 期望 200 + Server: ESA + text/html（落地页）
+
+curl -sD- -o /dev/null https://dzhz.zyxf.top/xjtu-toolbox/apk/latest/app-release.apk |
+  grep -iE 'HTTP/|x-oss-cdn-auth'
+# 期望 200 + x-oss-cdn-auth: success —— 证明它仍从 OSS 出，没被打到 nginx
+
+curl -s -o /dev/null -w '%{http_code}\n' https://dzhz.zyxf.top/games/health   # 排行榜
+curl -sI https://zyxf.top/dzhz | grep -i location                              # 301 到 dzhz
+```
+
+回滚：删掉那条回源规则 → `dzhz.zyxf.top` 恢复成纯 OSS 源（APK/JSON 全程没动过），页面回主站；同时撤掉 nginx 里主站的两条 301 与末尾的 vhost。
 #### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 
 - **刷新任何前端路由都是 404**（`/folder/6`、`/dashboard`、`/about`、`/settings`）：缺 `location / { try_files $uri $uri/ /index.html; }`（BUG-97）。dist/ 里没有这些文件，必须交给 index.html 由前端路由接管。

@@ -35,6 +35,9 @@ import useLocale from './hooks/useLocale.js';
 import { useSettingsRoute } from './hooks/useSettingsRoute.js';
 import NoticeModal from './components/NoticeModal.jsx';
 import { EASE_COLLAPSE } from './components/ui.js';
+// 岱宗盒子（xjtu-toolbox）的独立域名判断：同一个 bundle 在这个域名下只渲染落地页/协议页，
+// 真正的分流在 nginx（白名单 + 其余 301 回主站），见 docs/DEPLOY.md §4.2.7。
+import { isDzhzHost as onDzhzHost } from './dzhz.js';
 
 // Social links shown in the menu footer, static (brand names are not translated).
 const socialItems = [
@@ -130,19 +133,30 @@ export default function App() {
   // 一律基于 pagePath（= 背景位置）：设置弹窗打开时路径是 /settings，但背后仍是原页面，
   // 布局不能跟着切走；直接访问 /settings 时背后渲染资料库，所以也归入 browse 布局。
   const pagePath = pageLocation.pathname;
-  const isBrowse = pagePath === '/' || pagePath.startsWith('/folder/') || pagePath.startsWith('/settings');
+
+  // 岱宗盒子已经迁到独立域名（docs/DEPLOY.md §4.2.7）：在 dzhz.zyxf.top 上，根路径与
+  // /legal、/license 直接渲染盒子页面，版式按「整页落地页」走——不挂资料库的左栏、
+  // 搜索、知识图谱和全站菜单。主站那几条 /dzhz… 由 nginx 301 过去，路由保留只为本地开发。
+  const isDzhzHost = onDzhzHost();
+  // 岱宗盒子是独立落地页：铺满宽度、无内边距，使用须知不拦在它前面。
+  const isDzhz = pagePath === '/dzhz' || pagePath === '/dzhz/' || (isDzhzHost && pagePath === '/');
+  // 协议页 / 开源协议页沿用 /dzhz 的公开属性（不弹使用须知、不叠全局菜单），也
+  // 铺满宽度、内边距归零——版式与顶栏都由页面自己按 /dzhz 那套来。
+  const isDzhzLegal =
+    pagePath === '/dzhz/legal' || pagePath === '/dzhz/legal/' || (isDzhzHost && pagePath === '/legal');
+  const isDzhzLicense =
+    pagePath === '/dzhz/license' || pagePath === '/dzhz/license/' || (isDzhzHost && pagePath === '/license');
+  const isDzhzDoc = isDzhzLegal || isDzhzLicense;
+  // 盒子域名上不套资料库版式（那边的 /folder、/settings 会被 nginx 301 回主站）。
+  const isBrowse =
+    !isDzhz &&
+    !isDzhzDoc &&
+    (pagePath === '/' || pagePath.startsWith('/folder/') || pagePath.startsWith('/settings'));
   const isDashboard = pagePath === '/dashboard';
   const isAbout = pagePath === '/about';
   // 公示栏也是文档流独立页：铺满可用宽度，宽度由页面自己用 max-w-5xl 收窄
   // （读长文 / 看表格都需要比 7xl 更短的测量宽度）。
   const isDisclosure = pagePath === '/disclosure';
-  // 岱宗盒子是独立落地页：铺满宽度、无内边距，使用须知不拦在它前面。
-  const isDzhz = pagePath === '/dzhz' || pagePath === '/dzhz/';
-  // 协议页 / 开源协议页沿用 /dzhz 的公开属性（不弹使用须知、不叠全局菜单），也
-  // 铺满宽度、内边距归零——版式与顶栏都由页面自己按 /dzhz 那套来。
-  const isDzhzLegal = pagePath === '/dzhz/legal' || pagePath === '/dzhz/legal/';
-  const isDzhzLicense = pagePath === '/dzhz/license' || pagePath === '/dzhz/license/';
-  const isDzhzDoc = isDzhzLegal || isDzhzLicense;
   const folderId = Number(pagePath.match(/^\/folder\/(\d+)/)?.[1]) || 0;
 
   // Bottom account card on the menu panel. Logged-in shows username + role;
@@ -343,7 +357,17 @@ export default function App() {
             }
           >
             <Routes location={pageLocation}>
-              <Route path="/" element={<BrowsePage />} />
+              {/* 盒子域名上的根路径是落地页；主站根路径仍是资料库。 */}
+              <Route path="/" element={isDzhzHost ? <DzhzPage /> : <BrowsePage />} />
+              {/* 盒子域名上的两个协议页（主站访问这两个路径时没有意义，回首页）。 */}
+              <Route
+                path="/legal"
+                element={isDzhzHost ? <DzhzLegalPage /> : <Navigate to="/" replace />}
+              />
+              <Route
+                path="/license"
+                element={isDzhzHost ? <DzhzLicensePage /> : <Navigate to="/" replace />}
+              />
               <Route path="/folder/:id" element={<BrowsePage />} />
               {/* 直接访问 /settings 时，弹窗背后渲染资料库（否则会落到下面的通配重定向、把 URL 冲掉） */}
               <Route path="/settings/*" element={<BrowsePage />} />

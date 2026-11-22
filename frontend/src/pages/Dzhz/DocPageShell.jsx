@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import initHeaderScroll from './headerScroll.js';
 import dzhzHtml from './content.html?raw';
+import { isDzhzHost } from '../../dzhz.js';
 import './dzhz.css';
 
 /* ============================================================
@@ -30,6 +31,11 @@ export default function DocPageShell({ title, titleId, otherDoc, children }) {
   const { t } = useTranslation();
   const { hash } = useLocation();
   const rootRef = useRef(null);
+
+  // 盒子域名上路径更短（/ 与 /license、/legal）；主站/本地开发仍走 /dzhz… 那套。
+  const onHost = isDzhzHost();
+  const backTo = onHost ? '/' : '/dzhz';
+  const otherTo = onHost ? otherDoc.to.replace(/^\/dzhz(?=\/|$)/, '') || '/' : otherDoc.to;
 
   // 顶栏滚动收缩与下载下拉（与 /dzhz 同一套行为）。
   useEffect(() => {
@@ -70,10 +76,10 @@ export default function DocPageShell({ title, titleId, otherDoc, children }) {
 
         <footer className="ds-container pb-ds-6">
           <div className="flex flex-col gap-ds-3 py-ds-5 text-[13px] text-ds-description sm:flex-row sm:items-center sm:justify-between">
-            <Link className="legal-back-link transition-colors hover:text-ds-primary" to="/dzhz">
+            <Link className="legal-back-link transition-colors hover:text-ds-primary" to={backTo}>
               ← {t('dzhzLegal.back')}
             </Link>
-            <Link className="transition-colors hover:text-ds-primary" to={otherDoc.to}>
+            <Link className="transition-colors hover:text-ds-primary" to={otherTo}>
               {otherDoc.label}
             </Link>
           </div>

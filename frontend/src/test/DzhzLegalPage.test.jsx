@@ -56,8 +56,8 @@ describe('岱宗盒子 · 用户协议与隐私政策', () => {
   });
 
   test('dzhz 页脚的两个站内入口：开源协议 / 用户协议与隐私政策', () => {
-    expect(dzhzHtml).toContain('href="/dzhz/license">开源协议</a>');
-    expect(dzhzHtml).toContain('href="/dzhz/legal">用户协议与隐私政策</a>');
+    expect(dzhzHtml).toContain('href="/license">开源协议</a>');
+    expect(dzhzHtml).toContain('href="/legal">用户协议与隐私政策</a>');
     expect(dzhzHtml).not.toContain('>隐私政策</a>');
     expect(dzhzHtml).not.toContain('>用户协议</a>');
     expect(dzhzHtml).not.toContain('deepseek.com/harness/privacy');
