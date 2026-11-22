@@ -693,7 +693,12 @@ tail -3 /var/log/nginx/access.log    # 第一列应是真实客户端 IP，不�
 - **CORS 也要求 bypass**：一旦开缓存，先被缓存的「不带 Origin 的版本」会缺 `Access-Control-Allow-Origin`，预览的 `fetch` 会偶发失败。
 - **前端必须继续走 `/api/files/:id/url`**：限流（每 IP 60 次/分、240 次/时）和下载记账都挂在那条接口上，前端自己拼 `oss.zyxf.top/<key>` 会同时绕开两者。
 - **附件头由边缘统一加**：配了下载域名后 `forceDownload` 不再影响 URL；app 的所有预览/下载本来就是 `fetch → blob`（PDF、TXT 也一样），所以 `attachment` 不影响任何页面。
-- **没有内置防盗链**：链接永久可下，被外链就是纯白流量；免费版没有独立的 Referer 白名单配置（`--help-search Referer` 为空）。要防外链只能写在 **WAF 自定义规则**里（`CreateWafRule --Phase http_custom` 支持按表达式拦截，当前自定义规则 0 条、额度未验证），例如把 `oss.zyxf.top` 上 `referer` 不含 `zyxf.top` 的请求拒掉。直下的前提是知道 key，而 key 形如 `zyxf/<目录>/<文件名>`——可猜。这是「去掉签名」的直接代价，接受它是因为资源库本来就对游客开放（`/api/files/:id/url` 没有 `requireAuth`）。
+- **OSS 桶自带的「防盗链」在这条链路上不起作用**（2026-11-22 实测，别再往桶上加）：给桶配 `RefererList` 白名单后——
+  - 直连 OSS 的签名请求：外站 Referer → **403**、本域 Referer → 200、空 Referer → 200（`AllowEmptyReferer: true`），说明 OSS 侧规则本身是生效的；
+  - 同样的三个请求经 `oss.zyxf.top`（ESA → 桶）：外站 Referer 也是 **200**。
+
+  也就是 ESA 回源没有把客户端的 Referer 带到 OSS（或 OSS 对 CDN 回源请求不校验），桶级白名单对「经 ESA 的下载」等于没开，留着只会造成「已经防住外链」的错觉。测试用的临时白名单已撤销（桶上仍是 `AllowEmptyReferer: true` + 空列表）。
+- **所以防外链只能在边缘做**：免费版没有独立的 Referer 配置（`--help-search Referer` 为空），只能用 **WAF 自定义规则**（`CreateWafRule --Phase http_custom`，当前自定义规则 0 条、额度未验证），例如把 `oss.zyxf.top` 上 `referer` 不含 `zyxf.top` 的请求拒掉。直下的前提是知道 key，而 key 形如 `zyxf/<目录>/<文件名>`——可猜。这是「去掉签名」的代价，接受它是因为资源库本来就对游客开放（`/api/files/:id/url` 没有 `requireAuth`）。
 - **路径会带一层前缀**：`oss.zyxf.top/zyxf/<key>`。去掉它得加一条边缘改写（`CreateRewriteUrlRule`），目前不做——多一跳配置就多一个会坏的地方。
 
 验证（`x-oss-cdn-auth: success` 是 STS 回源成功的标记）：
