@@ -510,7 +510,7 @@ nginx -t && systemctl reload nginx
 
 - **bucket 不能改公共读。** 改成公共访问后任何人拿到 `xjtu-toolbox-dzhz.oss-cn-beijing.aliyuncs.com` 就能绕过 ESA 直连下载，按 OSS 外网流出（忙时 ¥0.5/GB）记在账上——这正是加这一层要防的事。回源鉴权只能在控制台走「私有访问」，API 的 `AuthConf` 字段结构没有公开文档。
 - **回源 HOST 必须「跟随源站域名」。** 跟随请求 HOST 会把 Host 变成 `dzhz.zyxf.top`，OSS 侧对不上 bucket 直接 403。
-- **免费版不含 WAF / 边缘函数 / 七层 DDoS**（`EdgeWaf: waf_off`、`EdgeCompute: er_off`、`EdgeDdos7Layer: ddos_off`），只有加速。站点级防护仍然靠 nginx 的限流（见 §4.2 末尾）。
+- **免费版的「安全防护」不是空白**（2026-11-22 实测，此前按套餐字段 `waf_off` 写成「不含 WAF」，是错的）：`GetSiteWafSettings` 能看到已生效的基础防护——HTTP 安全等级 `low`、带宽滥用保护 `captcha`、Bots 基础监控 `monitor`；`ListWafPhases` 里托管规则集状态为 `on`。**但源站防护仍不可用**：`CreateOriginProtection` 返回 `FunctionQuotaCheckFailed`（控制台菜单存在，点进去多半引导升级）。边缘函数、自定义 WAF 规则的额度另算，没逐个验证。站点级限流仍然靠 nginx（见 §4.2 末尾）。
 - **子域不能单独作为站点**（`SubSiteUnavailable`，只有企业版支持），所以站点建在根域 `zyxf.top` 上，`dzhz` 是它下面的一条记录。
 - 免费版套餐参数里 `PlanTraffic: 0`，官方口径是「流量和请求数不计费」，但**限速阈值没有公开**；若大文件被明显限速要重新评估是否值得留在这条链路上。
 - 旧 CDN 域名 `dzhz.zyxf.top` 已于 2026-11-21 删除（issue #96），所以「切回去」不再是一条 DNS 的事——DELETED 之后回滚只能重建：CDN 建域名 → 源站选 OSS bucket → 开私有回源授权 → 配证书 → 改 CNAME。
@@ -694,7 +694,7 @@ tail -3 /var/log/nginx/access.log    # 第一列应是真实客户端 IP，不�
 - **CORS 也要求 bypass**：一旦开缓存，先被缓存的「不带 Origin 的版本」会缺 `Access-Control-Allow-Origin`，预览的 `fetch` 会偶发失败。
 - **前端必须继续走 `/api/files/:id/url`**：限流（每 IP 60 次/分、240 次/时）和下载记账都挂在那条接口上，前端自己拼 `oss.zyxf.top/<key>` 会同时绕开两者。
 - **附件头由边缘统一加**：配了下载域名后 `forceDownload` 不再影响 URL；app 的所有预览/下载本来就是 `fetch → blob`（PDF、TXT 也一样），所以 `attachment` 不影响任何页面。
-- **没有防盗链**：链接永久可下，被外链就是纯白流量；免费版 API 里也没有 Referer 相关配置。直下的前提是知道 key，而 key 形如 `zyxf/<目录>/<文件名>`——可猜。这是「去掉签名」的直接代价，接受它是因为资源库本来就对游客开放（`/api/files/:id/url` 没有 `requireAuth`）。
+- **没有内置防盗链**：链接永久可下，被外链就是纯白流量；免费版没有独立的 Referer 白名单配置（`--help-search Referer` 为空）。要防外链只能写在 **WAF 自定义规则**里（`CreateWafRule --Phase http_custom` 支持按表达式拦截，当前自定义规则 0 条、额度未验证），例如把 `oss.zyxf.top` 上 `referer` 不含 `zyxf.top` 的请求拒掉。直下的前提是知道 key，而 key 形如 `zyxf/<目录>/<文件名>`——可猜。这是「去掉签名」的直接代价，接受它是因为资源库本来就对游客开放（`/api/files/:id/url` 没有 `requireAuth`）。
 - **路径会带一层前缀**：`oss.zyxf.top/zyxf/<key>`。去掉它得加一条边缘改写（`CreateRewriteUrlRule`），目前不做——多一跳配置就多一个会坏的地方。
 
 验证（`x-oss-cdn-auth: success` 是 STS 回源成功的标记）：
