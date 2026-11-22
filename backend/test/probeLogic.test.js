@@ -56,9 +56,9 @@ describe('probeLogic', () => {
     assert.equal(isHeartbeatDue(undefined, now, 5), true); // 第一次跑就要有心跳
   });
 
-  test('心跳事件是 Info，且用固定 alert_key', () => {
+  test('心跳事件是 Ok（Info 会开一条永不关闭的低优先级故障）', () => {
     const e = buildHeartbeatEvent();
-    assert.equal(e.event_status, 'Info');
+    assert.equal(e.event_status, 'Ok');
     assert.equal(e.alert_key, 'zyxf-probe-heartbeat');
     assert.equal(e.labels.component, 'probe');
   });

@@ -802,7 +802,7 @@ zyxf-probe.timer（每分钟）
         ├─ HEAD https://dzhz.zyxf.top/        期望 200
         │
         ├─ 状态变化 → POST 标准告警事件（Critical / Ok，alert_key 固定为 zyxf-probe-<组件>）
-        └─ 每 5 分钟 → 心跳事件（Info，alert_key=zyxf-probe-heartbeat）
+        └─ 每 5 分钟 → 心跳事件（Ok，alert_key=zyxf-probe-heartbeat）
 ```
 
 三条设计决定：
