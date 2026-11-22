@@ -77,7 +77,7 @@ aliyun ossutil api put-bucket-https-config --bucket <bucket> --region cn-beijing
 
 将域名 A 记录指向服务器公网 IP（在云控制台的实例详情里查看）。文档统一用 RFC 5737 保留段 `203.0.113.10` 作示例占位——**不要把真实 IP 写进仓库**。
 
-生产 `zyxf.top` 区里**只有 11 条记录**，每条都有明确归属（2026-11-22 实测，`aliyun alidns DescribeDomainRecords --DomainName zyxf.top`）。这个区是全站唯一的入口配置，改任何一条之前先对一遍这张表：
+生产 `zyxf.top` 区里**只有 12 条记录**，每条都有明确归属（2026-11-22 实测，`aliyun alidns DescribeDomainRecords --DomainName zyxf.top`）。这个区是全站唯一的入口配置，改任何一条之前先对一遍这张表：
 
 | RR | 类型 | 值 | 干什么用 | 删了会怎样 |
 |---|---|---|---|---|
@@ -87,6 +87,7 @@ aliyun ossutil api put-bucket-https-config --bucket <bucket> --region cn-beijing
 | `_dmarc` | TXT | `v=DMARC1;p=none;rua=…` | 收 DMARC 报告（不拦截） | 伪造邮件无报告可查 |
 | `dzhz` | CNAME | `dzhz.zyxf.top.a1.initrr.com` | ESA 加速的 APK/静态分发（§4.2.2） | 岱宗盒子下载 404 |
 | `_acme-challenge.dzhz` | CNAME | `dzhz.zyxf.top.<siteId>.dcv.aliyun-esa.com` | ESA **托管 DCV**，证书自动续期 | 证书到期后 dzhz 全线 TLS 失败 |
+| `oss` | CNAME | `oss.zyxf.top.a1.initrr.com` | **资源库文件下载域**：ESA 边缘 → 私有桶 `xjtu-zyxf`（§4.2.6） | 预览/下载全挂（后端返回的 URL 指向它） |
 | `_esaauth` | TXT | `verify_…` | ESA 站点归属验证 | 站点被判未验证/离线 |
 | `mail` | MX | `mx01.dm.aliyun.com` | 阿里云 DirectMail 收信 | 验证码邮件收不到回执 |
 | `mail` | TXT | `v=spf1 include:spf1.dm.aliyun.com -all` | 发信身份（SPF） | 邮件进垃圾箱 |
@@ -95,7 +96,8 @@ aliyun ossutil api put-bucket-https-config --bucket <bucket> --region cn-beijing
 
 > - **发信身份是 `system@mail.zyxf.top`**（`DM_ACCOUNT_NAME`），SPF/DKIM/DMARC 都挂在 `mail` 子域，与主站接入 ESA 无关。
 > - ⚠️ **裸域原来那条 `@ TXT "v=spf1 -all"` 已被删除**：apex 改成 CNAME 后不能与任何其它记录共存（DNS 规范），所以裸域的防伪造能力没了。`_dmarc` 仍能收到报告，`mail` 子域的 SPF/DKIM 不受影响。要恢复裸域 SPF 就得放弃 apex CNAME（即放弃主站走 ESA）。
-> - **没有 `oss`**：bucket 上**没有任何自定义域名**（`aliyun ossutil api list-cname --bucket <bucket>` 返回空），后端签名 URL 直接用 `<bucket>.<region>.aliyuncs.com`。所以下载链路上没有 CDN/ESA，也就没有边缘缓存——这是 OSS 流出按 ¥0.5/GB 计费的直接原因。
+> - **`oss` 是唯一一条指向 OSS 桶的记录**（2026-11-22 加，§4.2.6）：`oss.zyxf.top` CNAME → ESA → 私有桶 `xjtu-zyxf`，边缘用 STS 临时令牌回源。bucket 上仍然**没有绑定任何自定义域名**（`aliyun ossutil api list-cname --bucket <bucket>` 返回空）——也就是说 OSS 侧那条「绑定域名」的路没走，走的是 ESA 的「源站类型 OSS + 私有访问」。后果有两面：下载不再走 OSS 外网流出（¥0.5/GB）而是 CDN 回源（¥0.15/GB）；同时因缓存是 **bypass**，删除/改名即时生效、不需要刷新缓存。
+> - **`oss.zyxf.top` 上的 `/.well-known/acme-challenge/*` 由 ESA 边缘直接应答**（证书 HTTP DCV），不需要往桶里放验证文件。
 > - 原来还有一条 `verification` TXT（`verify_257ecc…`），是早期 CDN 域名归属验证留下的孤儿。2026-11-21 已删除：CDN 域名数为 0、DCDN 未开通、OSS 无自定义域名、ESA 用的是另一套 `_esaauth`，没有任何在用产品认领它；删除后主站、dzhz 下载、发信均正常。
 
 ---
@@ -151,7 +153,10 @@ OSS_BUCKET=<bucket名>
 OSS_ACCESS_KEY_ID=<RAM 子账号 AK>
 OSS_ACCESS_KEY_SECRET=<RAM 子账号 SK>
 OSS_KEY_PREFIX=zyxf/
+# 上传直传的 host（PostObject 用）；留空 = <bucket>.<region>.aliyuncs.com
 OSS_ENDPOINT=
+# 下载 URL 的前缀（ESA 边缘，见 §4.2.6）。留空 = 回退到 OSS 签名直链
+OSS_PUBLIC_BASE=https://oss.zyxf.top
 
 # 可选：AI 助手
 # AI 助手：三个变量齐备才启用（地址填到版本层，如 https://open.bigmodel.cn/api/paas/v4）
@@ -214,13 +219,13 @@ sudo -u www node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync
 | 后端调用 | 需要的动作 |
 |---|---|
 | `listOssObjects`（同步扫描） | `oss:ListObjects` |
-| `signedGetUrl`（下载签名） | `oss:GetObject` |
+| `fileUrl` 回退分支（未配 `OSS_PUBLIC_BASE` 时的签名直链） | `oss:GetObject` |
 | `putEmptyOssObject`（文件夹占位符） | `oss:PutObject` |
 | 前端直传（PostObject） | `oss:PutObject` |
 | `copyOssObject`（改名/移动） | `oss:CopyObject` + `oss:PutObject` |
 | `deleteOssObjectIfExists`（删除） | `oss:DeleteObject` |
 
-> 注意：后端**只签名**、不代理文件流，上传流量走浏览器直传，所以后端不需要 `oss:GetObject` 之外的读权限。
+> 注意：后端**只签名**、不代理文件流，上传流量走浏览器直传；下载则由 ESA 边缘用 STS 回源签，所以 `oss:GetObject` 只服务于「未配下载域名」的回退路径，配了 §4.2.6 之后可以视情况收回。
 > 在线预览已下线（原 IMM WebOffice），RAM 策略里**不需要任何 `imm:*` 动作**；日后重做预览时再补授权。
 
 自定义策略（把 bucket 名替换成你自己的；`acs:oss:*:*:<bucket>/*` 用来覆盖对象级操作）：
@@ -271,7 +276,7 @@ aliyun ram CreatePolicyVersion --PolicyName zyxf-oss-app \
 
 验证：用新密钥访问**其他** bucket 应返回 `AccessDenied`（越权被拒），访问目标 bucket 正常——两者都满足才算最小权限生效。
 
-> ⚠️ **轮换密钥后必须同步服务器上的 `.env`**（`/opt/zyxf/.env`）并 `systemctl restart zyxf`。只改控制台/本地 `.env` 而漏掉服务器时，旧密钥一旦被删除，OSS 会回 `InvalidAccessKeyId`——症状是**上传（PostObject 签名）、下载（签名直链）全线失效**，而接口本身照常返回 URL（签名是本地计算、不校验），前端只看到「下载失败」。自查：`curl -sS "$(curl -s 'https://<域名>/api/files/<id>/url' | jq -r .url)" | head -3`，看是否 `InvalidAccessKeyId`。
+> ⚠️ **轮换密钥后必须同步服务器上的 `.env`**（`/opt/zyxf/.env`）并 `systemctl restart zyxf`。只改控制台/本地 `.env` 而漏掉服务器时，旧密钥一旦被删除，OSS 会回 `InvalidAccessKeyId`——症状是**上传（PostObject 签名）失效**，而接口本身照常返回 URL（签名是本地计算、不校验），前端只看到「上传失败」。下载走 ESA（§4.2.6）时用的是边缘自己的 STS，**不受这把 AK 影响**，只有回退到签名直链的部署才会一起挂。自查：`curl -sS "$(curl -s 'https://<域名>/api/files/<id>/url' | jq -r .url)" | head -3`，看是否 `InvalidAccessKeyId`。
 
 ### 2.3 DirectMail 凭证（注册验证码）
 
@@ -477,7 +482,7 @@ nginx -t && systemctl reload nginx
 > - `listen 443 ssl http2;` —— HTTP/2 必须写在 `listen` 上。Ubuntu 22.04 自带 nginx 1.18.0，没有 1.25.1 才引入的 `http2 on;` 指令，只写 `listen 443 ssl;` 会让整站退回 HTTP/1.1（每域 6 个并发连接）。
 > - `gzip on` + `gzip_types` —— nginx 默认的 `gzip_types` **只有 `text/html`**，所以 HTML 是压过的、`.js/.css` 一直明文外传（实测主 bundle 172,825 字节无 `content-encoding`）。`/api/` 里单独写了 `gzip off`：SSE 走 gzip 会把增量输出攒进缓冲区，反而拉高首字延迟。
 >
-> **限流（2026-11 加）**：`zyxf_req` 20 r/s（burst 60，nodelay）、`zyxf_api` 6 r/s（burst 20）、单 IP 并发连接 24，超限一律 429。burst 给这么大是因为首屏本身就要拉十几个静态资源——限流只压「持续高频」这一种形态，不误伤正常打开页面。注意它只保护**源站**：文件下载走 `backend/src/oss.js` 签发的直链（`<bucket>.oss-cn-beijing.aliyuncs.com`；bucket 上**没有绑定任何自定义域名**，见 §0.4），根本不经过 nginx，防不到 OSS 那边的流出流量。
+> **限流（2026-11 加）**：`zyxf_req` 20 r/s（burst 60，nodelay）、`zyxf_api` 6 r/s（burst 20）、单 IP 并发连接 24，超限一律 429。burst 给这么大是因为首屏本身就要拉十几个静态资源——限流只压「持续高频」这一种形态，不误伤正常打开页面。注意它只保护**源站**：文件下载走 `oss.zyxf.top`（ESA 边缘 → 私有桶，见 §4.2.6），根本不经过 nginx。挡下载频率的是 `/api/files/:id/url` 上的 `downloadLimiter*`（每 IP 60 次/分、240 次/时），所以**前端不能自己拼下载路径**，否则限流和下载记账会一起失效。
 
 #### 4.2.1 `/games/`：仓库外的独立服务
 
@@ -519,7 +524,7 @@ nginx -t && systemctl reload nginx
 
 #### 4.2.3 刷新缓存 / 预热缓存：只有一个场景真用得上
 
-两者都是**边缘**操作，对主站 `zyxf.top` 完全无效——主站是 nginx 直出，没有边缘缓存，改了文件立刻生效，「刷新」没有对象。
+两者都是**边缘**操作，对主站 `zyxf.top` 基本无效——nginx 给 HTML 发 `cache-control: no-cache`，边缘对它是 `DYNAMIC`（不回缓存），改了文件刷新一次页面就生效；资源库下载域 `oss.zyxf.top` 是整站 bypass（§4.2.6），刷新对它同样没有意义。
 
 对 `dzhz.zyxf.top` 有意义的只有一条：**`latest` 这个别名是被覆盖写的**。
 
@@ -602,8 +607,7 @@ aliyun esa DescribeSiteTopData --SiteId <id> --Limit 10 \
 
 #### 4.2.5 主站 `zyxf.top` 也在 ESA 后面（2026-11-22 迁入）
 
-主站从「A 记录直连服务器」改成「CNAME → ESA → `origin.zyxf.top` → 服务器」。目的：边缘统一
-处理 HTTP/2 与 TLS、源站能看到真实客户端 IP、顺带用掉免费版那 1 条网页监测额度。
+主站从「A 记录直连服务器」改成「CNAME → ESA → `origin.zyxf.top` → 服务器」。目的：边缘统一处理 HTTP/2 与 TLS、源站能看到真实客户端 IP。
 
 | 项 | 值 |
 |---|---|
@@ -660,6 +664,47 @@ echo | openssl s_client -servername zyxf.top -connect zyxf.top:443 2>/dev/null |
 tail -3 /var/log/nginx/access.log    # 第一列应是真实客户端 IP，不是 ESA 节点 IP
 ```
 
+#### 4.2.6 资源库下载域 `oss.zyxf.top`（2026-11-22 加）
+
+文件预览/下载原本是「后端签一条 30 分钟的 OSS 直链」：`<bucket>.oss-cn-beijing.aliyuncs.com/zyxf/…?Expires&Signature`。现在改成**干净路径 + 边缘回源鉴权**：URL 是 `https://oss.zyxf.top/zyxf/…`，没有签名、也没有有效期。
+
+| 项 | 值 |
+|---|---|
+| ESA 记录 | `oss.zyxf.top` → CNAME `xjtu-zyxf.oss-cn-beijing.aliyuncs.com`；源类型 **OSS**、回源 HOST **跟随源站域名**、鉴权 **私有访问 `private_same_account`**（STS 临时令牌）、Proxied |
+| 边缘 CNAME | `oss.zyxf.top.a1.initrr.com` |
+| 证书 | ESA 免费证书（`ApplyCertificate --Domains oss.zyxf.top --Type lets_encrypt`）。DCV 是 HTTP 挑战，**由 ESA 边缘直接应答**，`/.well-known/acme-challenge/*` 不需要往桶里放文件（与 dzhz 那条 `_acme-challenge.dzhz` 的托管 DCV 是两种路子） |
+| 缓存 | **bypass**：`CreateCacheRule --RuleName oss-bypass --BypassCache bypass_all --Rule '(http.host eq "oss.zyxf.top")'`（ConfigId `531463577600000`） |
+| 响应头 | `CreateHttpResponseHeaderModificationRule`（ConfigId `531463466448896`）：`X-Robots-Tag: noindex`、`Content-Disposition: attachment`、`X-Content-Type-Options: nosniff` |
+| CORS | **不在边缘加**：桶自带 `AllowedOrigin: *` 的跨域规则，ESA 转发的 `Origin` 会让 OSS 自己回 `Access-Control-Allow-Origin`。边缘再 `add` 一遍会变成重复头，浏览器直接判 CORS 失败 |
+| 代码开关 | `OSS_PUBLIC_BASE=https://oss.zyxf.top`（`backend/src/oss.js` 的 `fileUrl()`；留空则回退签名直链） |
+| 回滚 | 服务器 `.env` 删掉 `OSS_PUBLIC_BASE` → `systemctl restart zyxf`，代码自动回退签名直链；DNS 记录留不留都不影响 |
+
+为什么这么做、以及代价：
+
+- **ESA 记录不等于 DNS 记录**（踩过）：`aliyun esa CreateRecord` 只是边缘侧的配置，**不会**在 Aliyun DNS 里自动加解析。必须再补一条：
+
+  ```bash
+  aliyun alidns AddDomainRecord --DomainName zyxf.top --RR oss --Type CNAME \
+    --Value oss.zyxf.top.a1.initrr.com --TTL 600
+  ```
+
+  少了这一步，公网解析不到 `oss.zyxf.top`，证书申请会永远卡在 `Applying` / `pending validation`（HTTP DCV 的验证方也解析不到这个域）。`dzhz` 当初同理。
+- **省钱**：OSS 侧从「外网流出 ¥0.5/GB」变成「CDN 回源 ¥0.15/GB」。实测 11 月 1–22 日资源库外网流出 5.94 GB（¥2.97），同样流量走这条链路降到 ¥0.9 左右。
+- **为什么 bypass 不缓存**：签名取消后 URL 永久有效，边缘若还有缓存，**删了文件、改了名字，旧路径在 TTL 内仍能下到**；要立刻干净就得在每次写操作后调 `PurgeCaches`（后端没有 ESA 凭证，只能靠外部脚本）。bypass 让删除即时生效（`X-Site-Cache-Status: DYNAMIC`），代价是每次都回源——收益本来就来自计费口径，命中率影响很小。
+- **CORS 也要求 bypass**：一旦开缓存，先被缓存的「不带 Origin 的版本」会缺 `Access-Control-Allow-Origin`，预览的 `fetch` 会偶发失败。
+- **前端必须继续走 `/api/files/:id/url`**：限流（每 IP 60 次/分、240 次/时）和下载记账都挂在那条接口上，前端自己拼 `oss.zyxf.top/<key>` 会同时绕开两者。
+- **附件头由边缘统一加**：配了下载域名后 `forceDownload` 不再影响 URL；app 的所有预览/下载本来就是 `fetch → blob`（PDF、TXT 也一样），所以 `attachment` 不影响任何页面。
+- **没有防盗链**：链接永久可下，被外链就是纯白流量；免费版 API 里也没有 Referer 相关配置。直下的前提是知道 key，而 key 形如 `zyxf/<目录>/<文件名>`——可猜。这是「去掉签名」的直接代价，接受它是因为资源库本来就对游客开放（`/api/files/:id/url` 没有 `requireAuth`）。
+- **路径会带一层前缀**：`oss.zyxf.top/zyxf/<key>`。去掉它得加一条边缘改写（`CreateRewriteUrlRule`），目前不做——多一跳配置就多一个会坏的地方。
+
+验证（`x-oss-cdn-auth: success` 是 STS 回源成功的标记）：
+
+```bash
+curl -sD- -o /dev/null https://oss.zyxf.top/zyxf/ACM/DP.pptx |
+  grep -iE '^(http/|server|content-disposition|x-oss-cdn-auth|x-site-cache-status|x-robots-tag)'
+# 期望 200 + Server: ESA + content-disposition: attachment + x-oss-cdn-auth: success + DYNAMIC
+```
+
 #### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 
 - **刷新任何前端路由都是 404**（`/folder/6`、`/dashboard`、`/about`、`/settings`）：缺 `location / { try_files $uri $uri/ /index.html; }`（BUG-97）。dist/ 里没有这些文件，必须交给 index.html 由前端路由接管。
@@ -669,7 +714,7 @@ tail -3 /var/log/nginx/access.log    # 第一列应是真实客户端 IP，不�
   - `location ~* \.(?:ttf|otf|woff2?|png|jpe?g|webp|gif|svg|ico)$`（文件名无 hash，如 `/favicon.png`、`/images/*.webp`）→ `max-age=604800`。
   - ⚠️ **`^~` 不能省**：nginx 的**正则 location 优先级高于普通前缀 location**，而扩展名正则也含 `woff2`——写成普通前缀时 `/assets/*.woff2` 会被正则抢走、只拿到 7 天（线上实测确认过）。
 - **`add_header` 不会被子级 location 继承**：任何自己写了 `add_header` 的 location 都会屏蔽 server 级那一组。所以安全头（CSP / HSTS / `X-Content-Type-Options` / `Referrer-Policy` / `Permissions-Policy` / `COOP`）统一放在 [frontend/security-headers.conf](../frontend/security-headers.conf)，每个这类 location `include /etc/nginx/snippets/zyxf-headers.conf;` 一次——**加头或改策略只改那一个文件**，不要再往 location 里手抄。
-- **限流 zone 的 IP 来源是真的还是假的**：`limit_req_zone $binary_remote_addr` 成立的前提是「nginx 直接面向客户端」。主站现在是 A 记录直连，成立；**一旦把站点挂到 CDN / ESA 后面**，`$binary_remote_addr` 就变成节点 IP，全站会被当成同一个来源限流（等于自伤）。届时必须先加：
+- **限流 zone 的 IP 来源是真的还是假的**：`limit_req_zone $binary_remote_addr` 成立的前提是「nginx 直接面向客户端」。主站 2026-11-22 起挂在 ESA 后面（§4.2.5），所以模板里常驻了 `set_real_ip_from 0.0.0.0/0` + `real_ip_header ali-real-client-ip`；**删掉它，`$binary_remote_addr` 就变回节点 IP，全站会被当成同一个来源限流（等于自伤）**。换到别家 CDN 时同理：
   ```nginx
   set_real_ip_from <CDN/ESA 回源网段>;
   real_ip_header X-Forwarded-For;
@@ -875,8 +920,8 @@ certbot renew --dry-run --cert-name zyxf.top --non-interactive --no-random-sleep
 | 资源 | 现状 | 判定 |
 |---|---|---|
 | 轻量应用服务器 | 1 台 `swas.s.c2m2s40b1.linux`（2C2G/40G），到期 2027-01-03 | 唯一生产机 |
-| OSS Bucket | 业务桶（文件库，私有 + 签名直链）+ 发布桶（`dzhz` APK/静态，私有 + ESA 私有回源） | 都在用 |
-| ESA | 站点 1 个（`zyxf.top`，免费版 `entranceplan`）+ 加速记录 **2 条**（`zyxf.top` 主站、`dzhz` 分发）+ 压缩规则 1 条（Brotli+Gzip）+ 缓存绕过规则 1 条 | 主站与 dzhz 都走它；WAF / 边缘函数仍需另购 |
+| OSS Bucket | 业务桶（文件库，私有 + ESA 私有回源 `oss.zyxf.top`）+ 发布桶（`dzhz` APK/静态，私有 + ESA 私有回源） | 都在用 |
+| ESA | 站点 1 个（`zyxf.top`，免费版 `entranceplan`）+ 加速记录 **3 条**（主站、`dzhz`、`oss`）+ 压缩规则 1 条（Brotli+Gzip）+ 缓存规则 2 条（主站动态路径绕过、`oss` 整站绕过）+ 响应头规则 1 条 | 三条链路都走它；WAF / 边缘函数仍需另购 |
 | 阿里云 CDN | 域名 **0**（旧域名 2026-11-21 已删） | 已下线，回滚成本见 §4.2.2 |
 | SWAS 防火墙 | 22 / 80 / 443 / ICMP，来源均 `0.0.0.0/0` | 见 §0.1（22 无法收窄） |
 | VPC | **0 个**（原有一个空的 `172.16.0.0/12`，0 交换机 0 ENI，2026-11-21 已删） | 轻量服务器不走 VPC，VPC 在这里没有用途 |

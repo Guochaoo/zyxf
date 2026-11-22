@@ -69,11 +69,36 @@ export function buildPostPolicy({ key, maxSizeBytes = 200 * 1024 * 1024, expires
 }
 
 /**
+ * 下载域名（ESA 边缘 → 私有 OSS 源站，边缘用 STS 临时令牌回源）。
+ * 配了它以后客户端不再持有签名：URL 就是 `<base>/<key>`，有效期也没了（跟随文件本身）。
+ * 见 docs/DEPLOY.md §4.2.6。
+ *
+ * 与 `OSS_ENDPOINT`（上传用 PostObject 的 host）是两个方向，别混。
+ */
+export function ossPublicBase() {
+  return (process.env.OSS_PUBLIC_BASE || '').trim().replace(/\/+$/, '');
+}
+
+/**
+ * URL for a library object：配了下载域名走干净路径，否则回退签名直链。
+ * 逐段编码、保留 `/`——key 里可能有中文、空格、`#`、`?`，整段 encodeURIComponent 会把
+ * 目录分隔符也编码掉。
+ */
+export function fileUrl(key, { forceDownload = false, filename } = {}) {
+  const base = ossPublicBase();
+  if (!base) return signedGetUrl(key, 1800, { forceDownload, filename });
+  return `${base}/${key.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+/**
  * Generate a signed GET url for previewing/downloading a file.
  * forceDownload 让 OSS 按签名下发 `Content-Disposition: attachment`——桶绑定了站点自有
  * 域名时，内联 SVG/HTML 会在站点源上执行脚本，所以 extPolicy.shouldForceDownload()
  * 判为「不可内联」的对象必须走这条路径，由服务端强制，而不是指望客户端遵守
  * force_download 字段。
+ *
+ * 现在只有**未配置 OSS_PUBLIC_BASE** 时才走这条（本地开发 / 回滚）；正常链路是
+ * `fileUrl()` 返回的干净 URL，attachment 由边缘统一下发，见 fileUrl 上方注释。
  *
  * ⚠️ 只能覆盖 `response-content-disposition`：OSS **拒绝** `response-content-type`，
  * 带上它整个请求会 400（`InvalidRequest: Can not override response header on

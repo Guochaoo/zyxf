@@ -4,7 +4,7 @@ import { Router } from 'express';
 import path from 'node:path';
 import { db, prepareOnce } from '../db.js';
 import { requireAdmin } from '../auth.js';
-import { buildPostPolicy, deleteOssObjectIfExists, signedGetUrl } from '../oss.js';
+import { buildPostPolicy, deleteOssObjectIfExists, fileUrl } from '../oss.js';
 import { mimeOf } from '../mime.js';
 import { isUniqueError, folderExists, nextSortOrder } from '../dbHelpers.js';
 import { objectKeyForFile, ossPrefix, parseOptionalFolderId } from '../storagePath.js';
@@ -27,12 +27,9 @@ import {
 } from '../services/files.js';
 
 // ---- Anti-abuse: per-IP signed-URL issue limit ----
-// Every call issues a 30-min valid signed URL, so previews and downloads are
-// equally throttled (admins bypass the cap).
+// 预览和下载都先打这个接口拿 URL，所以限流同时管住两者（管理员不受限）。
 const downloadLimiterShort = adminBypassLimiter(60 * 1000, 60, '请求过于频繁,请稍后再试');
 const downloadLimiterLong = adminBypassLimiter(60 * 60 * 1000, 240, '本小时请求次数已达上限,请稍后再试');
-
-const SHORT_SIGN_TTL = 1800; // 30 min — enough for long preview sessions, short enough to limit link-sharing risk
 
 const router = Router();
 
@@ -119,10 +116,9 @@ router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => 
   }
 
   res.json({
-    url: signedGetUrl(file.oss_key, SHORT_SIGN_TTL, {
-      // 不可预览类型由 OSS 强制 attachment：桶绑定站点自有域名时，内联 SVG/HTML
-      // 会在站点源上执行脚本，而 extPolicy 的 default-deny 只有服务端能真正兜住
-      // （前端此前并不消费 force_download 字段）。
+    url: fileUrl(file.oss_key, {
+      // 回退到签名直链时（未配 OSS_PUBLIC_BASE）由 OSS 强制 attachment；配了下载域名
+      // 后这个字段不再影响 URL，attachment 由 ESA 边缘统一加，见 docs/DEPLOY.md §4.2.6。
       forceDownload: isDownload || shouldForceDownload(ext),
       filename: file.name,
     }),

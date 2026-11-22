@@ -5,11 +5,10 @@ import { Download, Loader2 } from 'lucide-react';
 /**
  * PdfViewer — 取回 PDF 后转成 blob URL 交给浏览器原生阅读器。
  *
- * 为什么不直接把签名 URL 塞进 iframe：OSS 默认域名会下发
- * `Content-Disposition: attachment` + `x-oss-force-download: true`
- * （桶开了强制下载 / 默认域名的安全策略），签名里的 response-content-disposition
- * 会被覆盖，iframe 不会渲染、只会触发下载。转成 blob URL 后浏览器按本地文档处理，
- * 与 Content-Disposition 无关——downloadFileById 早就用的是同一招。
+ * 为什么不直接把下载 URL 塞进 iframe：下载域统一下发
+ * `Content-Disposition: attachment`（早期是 OSS 默认域名的强制下载 +
+ * `x-oss-force-download: true`），iframe 不会渲染、只会触发下载。转成 blob URL 后
+ * 浏览器按本地文档处理，与 Content-Disposition 无关——downloadFileById 用的是同一招。
  *
  * 代价：整份 PDF 先落到内存再渲染，没有按页流式加载；学习资料通常几 MB，可接受。
  */
