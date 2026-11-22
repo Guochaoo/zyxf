@@ -744,7 +744,7 @@ aliyun esa CreateCacheRule --SiteId <id> --RuleName 'dzhz-pages-bypass' --RuleEn
 
 ⚠️ **`--DnsRecord` 要填 ESA 站点里已有的记录名**（这里是 `zyxf.top`，它的源站就是 `origin.zyxf.top`），不能填一个只存在于 Aliyun DNS 的主机名——填 `origin.zyxf.top` 会得到 `502 / error=destination_not_found`。
 
-nginx 侧是 `frontend/nginx.conf` 末尾的白名单 vhost：只放行 `/`、`/legal`、`/license`、`/dzhz/…`、`/assets/`、`/dzhz-assets/`、`/games/`、`/api/`，其余 301 回主站——避免这个域名变成整站副本。
+nginx 侧是 `frontend/nginx.conf` 末尾的 vhost，**和主站同一套策略**：静态资源按前缀/扩展名读磁盘（不存在就 404，不能回 HTML），`/games/`、`/api/` 反代本机进程，其余全部 `try_files → /index.html` 交给 SPA。盒子域名上 `/` 渲染落地页、`/legal` 与 `/license` 渲染协议页，其它路由也能打开（只是没人会手打盒子的 `/folder/…`）。<br>早先写过一版「白名单 + 其余 301 回主站」，为的是防止整站出现第二套地址；实际收益太小、每次加页面都要改 nginx，2026-11-22 已改回与主站一致的回退策略。
 
 前端仍是**同一个 bundle**：`App.jsx` 用 `isDzhzHost()`（`frontend/src/dzhz.js`）判断，盒子域名上根路径渲染 `DzhzPage`、`/legal` 渲染协议页、`/license` 渲染开源协议，版式走「整页落地页」（不挂左栏 / 搜索 / 知识图谱 / 全站菜单）。
 
@@ -766,6 +766,8 @@ curl -sD- -o /dev/null https://dzhz.zyxf.top/xjtu-toolbox/apk/latest/app-release
 # 期望 200 + x-oss-cdn-auth: success —— 证明它仍从 OSS 出，没被打到 nginx
 
 curl -s -o /dev/null -w '%{http_code}\n' https://dzhz.zyxf.top/games/health   # 排行榜
+curl -s -o /dev/null -w '%{http_code}\n' https://dzhz.zyxf.top/folder/1   # 200：SPA 回退，不再是 301
+curl -s -o /dev/null -w '%{http_code}\n' https://dzhz.zyxf.top/assets/nope.js # 404：静态缺失不能回 HTML
 curl -sI https://zyxf.top/dzhz | grep -i location                              # 301 到 dzhz
 ```
 
