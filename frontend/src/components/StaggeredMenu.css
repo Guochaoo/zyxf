@@ -677,6 +677,23 @@ button.sm-account-action {
   transform-origin: 50% 100%;
 }
 
+/* 站外链接的小图标（服务状态页）：跟在标题右下角，尺寸跟着 clamp() 的字号走。
+   放在 itemLabel 里是为了跟文字一起做 GSAP 的入场位移，不会提前露出来。 */
+.sm-panel-itemExternal {
+  display: inline-block;
+  vertical-align: top;
+  width: 0.42em;
+  height: 0.42em;
+  margin-top: 0.16em;
+  margin-left: 0.3em;
+  opacity: 0.45;
+  flex-shrink: 0;
+}
+
+.sm-panel-item:hover .sm-panel-itemExternal {
+  opacity: 0.8;
+}
+
 #root .staggered-menu-panel .sm-panel-item:hover,
 #root .staggered-menu-panel .sm-panel-item:hover .sm-panel-itemLabel {
   color: var(--sm-accent, #5227ff) !important;

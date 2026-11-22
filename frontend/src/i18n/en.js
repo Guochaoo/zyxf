@@ -25,6 +25,8 @@ const en = {
     disclosureAria: 'Read lecture plans, writing plans and spending',
     dzhz: 'Daizong Box',
     dzhzAria: 'Explore Daizong Box',
+    status: 'Service status',
+    statusAria: 'Open the status page in a new tab (external site)',
     toggleOpen: 'Menu',
     toggleClose: 'Close',
     openAria: 'Open menu',
