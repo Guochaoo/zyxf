@@ -66,6 +66,7 @@ cd frontend && npm install && npm run dev
 | `CORS_ORIGIN` |  | 跨域来源；同源反代部署可留空 |
 | `OSS_KEY_PREFIX` / `OSS_ENDPOINT` |  | 上传根前缀 / 自定义直传 endpoint |
 | `OSS_PUBLIC_BASE` | 生产必填 | 下载 URL 前缀（如 `https://oss.zyxf.top`）。漏配拒绝启动，见 [docs/DEPLOY.md 4.2.6](docs/DEPLOY.md) |
+| `ESA_SITE_ID` / `ESA_ACCESS_KEY_ID` / `ESA_ACCESS_KEY_SECRET` |  | 删除/改名后刷新 ESA 缓存（`PurgeCaches`）。AK 缺省复用 `OSS_*`；不填则跳过 |
 | `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` |  | 三者齐备才启用 AI 搜索，留空则该接口返回 503 |
 | `LLM_PROTOCOL` |  | 上游协议：`openai-completions`（默认，OpenAI/GLM/DeepSeek 等 `/chat/completions` 接口）/ `openai-responses`（OpenAI `/responses`）/ `anthropic-messages`（Anthropic `/messages`）。旧值 `openai` / `anthropic` 仍兼容。前端设置里的「API 协议」可让用户用自带 Key 覆盖它 |
 | `DM_ACCESS_KEY_ID` / `DM_ACCESS_KEY_SECRET` / `DM_ACCOUNT_NAME` |  | 三者齐备才启用用户注册（阿里云邮件推送 DirectMail 发送邮箱验证码），留空则注册发码接口返回 503 |

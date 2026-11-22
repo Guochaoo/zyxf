@@ -4,6 +4,7 @@ import { Router } from 'express';
 import { db, prepareOnce, transaction } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { deleteOssObjectIfExists } from '../oss.js';
+import { purgeFileKeys } from '../esaPurge.js';
 import { folderExists, isUniqueError, nextSortOrder } from '../dbHelpers.js';
 import { wrapAsync, serviceError } from '../http.js';
 import { parseOptionalFolderId, placeholderKeyForFolderFromMap } from '../storagePath.js';
@@ -316,6 +317,9 @@ router.delete('/:id', requireAdmin, wrapAsync(async (req, res) => {
 
   prepareOnce('DELETE FROM folders WHERE id = ?').run(id);
   invalidateLibraryCaches();
+  // 整棵子树都删了：把这些文件 URL 一并刷掉（边缘缓存 7 天，§4.2.6）。
+  // 占位对象不对外提供内容，不用刷。
+  await purgeFileKeys(files.map((f) => f.oss_key));
   res.json({ ok: true, removed_files: keys.length });
 }));
 
