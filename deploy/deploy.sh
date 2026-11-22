@@ -44,6 +44,9 @@ rollback() {
   # 回退到的修订可能还没有备份脚本；留着 timer 只会每天静默失败一次。
   [ -f "$REPO/backend/scripts/backup-db.mjs" ] ||
     systemctl disable --now zyxf-backup.timer 2>/dev/null || true
+  # 同理：探针脚本不存在时别留一个每分钟失败的 timer。
+  [ -f "$REPO/backend/scripts/status-probe.mjs" ] ||
+    systemctl disable --now zyxf-probe.timer 2>/dev/null || true
   # 前端产物直接切回上一份：产物来自 CI，服务器上没有第二条构建路径可重建。
   if [ -d "$DIST.prev" ]; then
     chattr -R -i "$DIST.prev" 2>/dev/null || true
@@ -105,6 +108,8 @@ fi
 cp "$REPO/deploy/zyxf.service" /etc/systemd/system/zyxf.service
 cp "$REPO/deploy/zyxf-backup.service" /etc/systemd/system/zyxf-backup.service
 cp "$REPO/deploy/zyxf-backup.timer" /etc/systemd/system/zyxf-backup.timer
+cp "$REPO/deploy/zyxf-probe.service" /etc/systemd/system/zyxf-probe.service
+cp "$REPO/deploy/zyxf-probe.timer" /etc/systemd/system/zyxf-probe.timer
 systemctl daemon-reload
 # 40 GB 系统盘上日志无上限增长，撑满后 SQLite 写入失败 → 服务直接不可用（issue #93）。
 # 用 drop-in 幂等落盘，不改发行版原配置。
@@ -113,6 +118,8 @@ printf '[Journal]\nSystemMaxUse=200M\n' > /etc/systemd/journald.conf.d/zyxf.conf
 systemctl restart systemd-journald || true
 systemctl enable zyxf
 systemctl enable --now zyxf-backup.timer
+# 状态探针：每分钟检查站点/接口/下载，状态变化推 FlashDuty（§4.2.8）
+systemctl enable --now zyxf-probe.timer
 
 # --- 重启后端 ---
 # 先优雅停掉 systemd 旧实例，再清理仍占用 4000 的残留进程（从 nohup/面板时代迁来的

@@ -1,0 +1,24 @@
+[Unit]
+Description=zyxf 状态探针（检查站点/接口/下载，推 FlashDuty 标准告警事件）
+# 探针要出网，oneshot 可能在 DNS 就绪前就跑，等 online。
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=www
+WorkingDirectory=/opt/zyxf/backend
+# 脚本自己会读 /opt/zyxf/.env（FLASHDUTY_INTEGRATION_KEY 等），不需要外部注入。
+TimeoutStartSec=120
+ExecStart=/usr/bin/node scripts/status-probe.mjs
+
+# --- 加固（与主服务同一套口径）---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# 只需要写自己的状态文件（.probe-state.json 在 backend 目录下）。
+ReadWritePaths=/opt/zyxf/backend
+
+[Install]
+WantedBy=multi-user.target

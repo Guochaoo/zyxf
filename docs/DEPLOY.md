@@ -787,6 +787,55 @@ curl -sI https://zyxf.top/dzhz | grep -i location                              #
 ```
 
 回滚：删掉那条回源规则 → `dzhz.zyxf.top` 恢复成纯 OSS 源（APK/JSON 全程没动过），页面回主站；同时撤掉 nginx 里主站的两条 301 与末尾的 vhost。
+#### 4.2.8 服务状态页与探针（FlashDuty，2026-11-22）
+
+对外状态页：<https://statuspage.flashcat.cloud/zyxf>（站内菜单「服务状态」入口，外链图标）。
+
+数据从哪来——**服务器自己探自己**，由 systemd timer 每分钟跑一次：
+
+```
+zyxf-probe.timer（每分钟）
+   └─ backend/scripts/status-probe.mjs
+        ├─ GET  https://zyxf.top/api/health   期望 200 且正文含 "ok":true
+        ├─ HEAD https://zyxf.top/             期望 200
+        ├─ HEAD https://oss.zyxf.top/zyxf/…   期望 200（可用 PROBE_DOWNLOAD_URL 覆盖）
+        ├─ HEAD https://dzhz.zyxf.top/        期望 200
+        │
+        ├─ 状态变化 → POST 标准告警事件（Critical / Ok，alert_key 固定为 zyxf-probe-<组件>）
+        └─ 每 5 分钟 → 心跳事件（Info，alert_key=zyxf-probe-heartbeat）
+```
+
+三条设计决定：
+
+- **只在状态变化时推事件**：首次运行只记录不推（否则上线瞬间刷四条假告警），一直故障也不重复刷。
+- **心跳 + FlashDuty 的「无事件检测」兜底整机挂掉**：探针也在那台机器上，服务器死了就没人推事件；在 FlashDuty 集成里把「无事件检测」设成比心跳间隔长（建议 15 分钟），超时即告警。心跳间隔用 `PROBE_HEARTBEAT_MINUTES` 调，设 `0` 关闭。
+- **探针自身失败不标 `failed`**：脚本捕获异常后退出码仍是 0，避免 systemd 每分钟记一条 failed 把 journal 刷满；排查看 `journalctl -u zyxf-probe`。
+
+配置（`/opt/zyxf/.env`）：
+
+```env
+FLASHDUTY_INTEGRATION_KEY=<集成里那个 integration_key>
+PROBE_DOWNLOAD_URL=          # 可选，下载探针换成别的对象
+PROBE_HEARTBEAT_MINUTES=5    # 0 = 关心跳
+PROBE_TIMEOUT_MS=8000
+```
+
+FlashDuty 侧还要做两件 UI 配置（API 没覆盖）：**路由**（事件 → 状态页组件 / 通知人）和**无事件检测**。只配集成不配路由，事件进来就会被丢弃，状态页不会变。
+
+事件长这样（`labels` 用来做路由和组件映射）：
+
+```json
+{
+  "event_status": "Critical",
+  "alert_key": "zyxf-probe-download",
+  "title_rule": "仲英学辅 · 文件下载不可用",
+  "description": "https://oss.zyxf.top/zyxf/ACM/DP.pptx → HTTP 503",
+  "labels": { "service": "zyxf", "component": "download", "url": "…", "check": "HEAD" }
+}
+```
+
+> 下载探针指向一个具体对象，**那个文件被删了就会误报**；换文件时记得改 `PROBE_DOWNLOAD_URL`。
+
 #### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 
 - **刷新任何前端路由都是 404**（`/folder/6`、`/dashboard`、`/about`、`/settings`）：缺 `location / { try_files $uri $uri/ /index.html; }`（BUG-97）。dist/ 里没有这些文件，必须交给 index.html 由前端路由接管。
