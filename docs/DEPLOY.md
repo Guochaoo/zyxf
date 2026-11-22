@@ -85,7 +85,7 @@ aliyun ossutil api put-bucket-https-config --bucket <bucket> --region cn-beijing
 | `origin` | A | 服务器公网 IP | **源站主机名**，ESA 记录只能填 CNAME（不能填 IP） | ESA 回源失败（522） |
 | `www` | CNAME | `zyxf.top` | 主站别名，nginx 里 301 到裸域 | `www.zyxf.top` 打不开 |
 | `_dmarc` | TXT | `v=DMARC1;p=none;rua=…` | 收 DMARC 报告（不拦截） | 伪造邮件无报告可查 |
-| `dzhz` | CNAME | `dzhz.zyxf.top.a1.initrr.com` | ESA 加速的 APK/静态分发（§4.2.2） | 岱宗盒子下载 404 |
+| `dzhz` | CNAME | `dzhz.zyxf.top.a1.initrr.com` | 岱宗盒子全部入口：页面 + 排行榜 + APK/JSON（§4.2.7） | 盒子打不开、App 更新检查失败 |
 | `_acme-challenge.dzhz` | CNAME | `dzhz.zyxf.top.<siteId>.dcv.aliyun-esa.com` | ESA **托管 DCV**，证书自动续期 | 证书到期后 dzhz 全线 TLS 失败 |
 | `oss` | CNAME | `oss.zyxf.top.a1.initrr.com` | **资源库文件下载域**：ESA 边缘 → 私有桶 `xjtu-zyxf`（§4.2.6） | 预览/下载全挂（后端返回的 URL 指向它） |
 | `_esaauth` | TXT | `verify_…` | ESA 站点归属验证 | 站点被判未验证/离线 |
@@ -155,7 +155,7 @@ OSS_ACCESS_KEY_SECRET=<RAM 子账号 SK>
 OSS_KEY_PREFIX=zyxf/
 # 上传直传的 host（PostObject 用）；留空 = <bucket>.<region>.aliyuncs.com
 OSS_ENDPOINT=
-# 下载 URL 的前缀（ESA 边缘，见 §4.2.6）。留空 = 回退到 OSS 签名直链
+# 下载 URL 的前缀（ESA 边缘，见 §4.2.6）。生产必填，漏配拒绝启动
 OSS_PUBLIC_BASE=https://oss.zyxf.top
 
 # 可选：AI 助手
@@ -219,13 +219,13 @@ sudo -u www node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync
 | 后端调用 | 需要的动作 |
 |---|---|
 | `listOssObjects`（同步扫描） | `oss:ListObjects` |
-| `fileUrl` 回退分支（未配 `OSS_PUBLIC_BASE` 时的签名直链） | `oss:GetObject` |
+| 下载 | **不需要**：签名由 ESA 边缘用 STS 临时令牌完成，后端不再读对象 |
 | `putEmptyOssObject`（文件夹占位符） | `oss:PutObject` |
 | 前端直传（PostObject） | `oss:PutObject` |
 | `copyOssObject`（改名/移动） | `oss:CopyObject` + `oss:PutObject` |
 | `deleteOssObjectIfExists`（删除） | `oss:DeleteObject` |
 
-> 注意：后端**只签名**、不代理文件流，上传流量走浏览器直传；下载则由 ESA 边缘用 STS 回源签，所以 `oss:GetObject` 只服务于「未配下载域名」的回退路径，配了 §4.2.6 之后可以视情况收回。
+> 注意：后端**只签名**、不代理文件流，上传流量走浏览器直传；下载则由 ESA 边缘用 STS 回源签，后端完全不参与读对象。所以 `oss:GetObject` 已于 2026-11-22 从策略里删掉（`zyxf-oss-app` v3）；实测 `list` / `put` / `delete` 正常、`get` 返回 `AccessDenied`——AK 就算泄露也拿不走文件。
 > 在线预览已下线（原 IMM WebOffice），RAM 策略里**不需要任何 `imm:*` 动作**；日后重做预览时再补授权。
 
 自定义策略（把 bucket 名替换成你自己的；`acs:oss:*:*:<bucket>/*` 用来覆盖对象级操作）：
@@ -238,7 +238,6 @@ sudo -u www node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync
       "Effect": "Allow",
       "Action": [
         "oss:ListObjects",
-        "oss:GetObject",
         "oss:PutObject",
         "oss:DeleteObject",
         "oss:CopyObject"
@@ -276,7 +275,7 @@ aliyun ram CreatePolicyVersion --PolicyName zyxf-oss-app \
 
 验证：用新密钥访问**其他** bucket 应返回 `AccessDenied`（越权被拒），访问目标 bucket 正常——两者都满足才算最小权限生效。
 
-> ⚠️ **轮换密钥后必须同步服务器上的 `.env`**（`/opt/zyxf/.env`）并 `systemctl restart zyxf`。只改控制台/本地 `.env` 而漏掉服务器时，旧密钥一旦被删除，OSS 会回 `InvalidAccessKeyId`——症状是**上传（PostObject 签名）失效**，而接口本身照常返回 URL（签名是本地计算、不校验），前端只看到「上传失败」。下载走 ESA（§4.2.6）时用的是边缘自己的 STS，**不受这把 AK 影响**，只有回退到签名直链的部署才会一起挂。自查：`curl -sS "$(curl -s 'https://<域名>/api/files/<id>/url' | jq -r .url)" | head -3`，看是否 `InvalidAccessKeyId`。
+> ⚠️ **轮换密钥后必须同步服务器上的 `.env`**（`/opt/zyxf/.env`）并 `systemctl restart zyxf`。只改控制台/本地 `.env` 而漏掉服务器时，旧密钥一旦被删除，OSS 会回 `InvalidAccessKeyId`——症状是**上传（PostObject 签名）失效**，而接口本身照常返回 URL（签名是本地计算、不校验），前端只看到「上传失败」。下载走 ESA（§4.2.6）时用的是边缘自己的 STS，**不受这把 AK 影响**——AK 只管上传，所以症状只会出现在「点上传」上。自查：`curl -sS "$(curl -s 'https://<域名>/api/files/<id>/url' | jq -r .url)" | head -3`，看是否 `InvalidAccessKeyId`。
 
 ### 2.3 DirectMail 凭证（注册验证码）
 
@@ -502,7 +501,7 @@ nginx -t && systemctl reload nginx
 |---|---|
 | ESA 站点 | `zyxf.top`（SiteId `190304393599084`），套餐 `entranceplan`（免费版，**0 元**） |
 | 加速记录 | `dzhz.zyxf.top` **CNAME → `dzhz.zyxf.top.a1.initrr.com`** |
-| 回源 | 源站类型 **OSS**、回源 HOST **跟随源站域名**、鉴权 **私有访问（STS 临时令牌）** |
+| 回源 | 源站类型 **OSS**、回源 HOST **跟随源站域名**、鉴权 **私有访问（STS 临时令牌）**。2026-11-22 起 `/xjtu-toolbox/*` **之外**的请求由回源规则改送 nginx（页面与排行榜），见 §4.2.7 |
 | 证书 | ESA 免费证书（Let's Encrypt，3 个月），托管 DCV：`_acme-challenge.dzhz` CNAME → `dzhz.zyxf.top.190304393599084.dcv.aliyun-esa.com` |
 | 回滚 | 旧 CDN 域名已于 2026-11-21 删除，**回滚不再是改一行 CNAME**：需在 CDN 里重建域名（源站 OSS + 私有回源授权 + 证书），再把 CNAME 指向新分配的加速域名 |
 
@@ -510,7 +509,7 @@ nginx -t && systemctl reload nginx
 
 - **bucket 不能改公共读。** 改成公共访问后任何人拿到 `xjtu-toolbox-dzhz.oss-cn-beijing.aliyuncs.com` 就能绕过 ESA 直连下载，按 OSS 外网流出（忙时 ¥0.5/GB）记在账上——这正是加这一层要防的事。回源鉴权只能在控制台走「私有访问」，API 的 `AuthConf` 字段结构没有公开文档。
 - **回源 HOST 必须「跟随源站域名」。** 跟随请求 HOST 会把 Host 变成 `dzhz.zyxf.top`，OSS 侧对不上 bucket 直接 403。
-- **免费版不含 WAF / 边缘函数 / 七层 DDoS**（`EdgeWaf: waf_off`、`EdgeCompute: er_off`、`EdgeDdos7Layer: ddos_off`），只有加速。站点级防护仍然靠 nginx 的限流（见 §4.2 末尾）。
+- **免费版的「安全防护」不是空白**（2026-11-22 实测，此前按套餐字段 `waf_off` 写成「不含 WAF」，是错的）：`GetSiteWafSettings` 能看到已生效的基础防护——HTTP 安全等级 `low`、带宽滥用保护 `captcha`、Bots 基础监控 `monitor`；`ListWafPhases` 里托管规则集状态为 `on`。**但源站防护仍不可用**：`CreateOriginProtection` 返回 `FunctionQuotaCheckFailed`（控制台菜单存在，点进去多半引导升级）。边缘函数、自定义 WAF 规则的额度另算，没逐个验证。站点级限流仍然靠 nginx（见 §4.2 末尾）。
 - **子域不能单独作为站点**（`SubSiteUnavailable`，只有企业版支持），所以站点建在根域 `zyxf.top` 上，`dzhz` 是它下面的一条记录。
 - 免费版套餐参数里 `PlanTraffic: 0`，官方口径是「流量和请求数不计费」，但**限速阈值没有公开**；若大文件被明显限速要重新评估是否值得留在这条链路上。
 - 旧 CDN 域名 `dzhz.zyxf.top` 已于 2026-11-21 删除（issue #96），所以「切回去」不再是一条 DNS 的事——DELETED 之后回滚只能重建：CDN 建域名 → 源站选 OSS bucket → 开私有回源授权 → 配证书 → 改 CNAME。
@@ -676,8 +675,8 @@ tail -3 /var/log/nginx/access.log    # 第一列应是真实客户端 IP，不�
 | 缓存 | **bypass**：`CreateCacheRule --RuleName oss-bypass --BypassCache bypass_all --Rule '(http.host eq "oss.zyxf.top")'`（ConfigId `531463577600000`） |
 | 响应头 | `CreateHttpResponseHeaderModificationRule`（ConfigId `531463466448896`）：`X-Robots-Tag: noindex`、`Content-Disposition: attachment`、`X-Content-Type-Options: nosniff` |
 | CORS | **不在边缘加**：桶自带 `AllowedOrigin: *` 的跨域规则，ESA 转发的 `Origin` 会让 OSS 自己回 `Access-Control-Allow-Origin`。边缘再 `add` 一遍会变成重复头，浏览器直接判 CORS 失败 |
-| 代码开关 | `OSS_PUBLIC_BASE=https://oss.zyxf.top`（`backend/src/oss.js` 的 `fileUrl()`；留空则回退签名直链） |
-| 回滚 | 服务器 `.env` 删掉 `OSS_PUBLIC_BASE` → `systemctl restart zyxf`，代码自动回退签名直链；DNS 记录留不留都不影响 |
+| 代码开关 | `OSS_PUBLIC_BASE=https://oss.zyxf.top`（`backend/src/oss.js` 的 `fileUrl()`）。**生产必填**：漏配时 `index.js` 直接拒绝启动，不再回退签名直链 |
+| 回滚 | 签名直链的代码已删除（2026-11-22），所以回滚 = `git revert` 该提交 + 重新部署（约 1 分钟）；DNS/ESA 记录留不留都不影响 |
 
 为什么这么做、以及代价：
 
@@ -694,7 +693,12 @@ tail -3 /var/log/nginx/access.log    # 第一列应是真实客户端 IP，不�
 - **CORS 也要求 bypass**：一旦开缓存，先被缓存的「不带 Origin 的版本」会缺 `Access-Control-Allow-Origin`，预览的 `fetch` 会偶发失败。
 - **前端必须继续走 `/api/files/:id/url`**：限流（每 IP 60 次/分、240 次/时）和下载记账都挂在那条接口上，前端自己拼 `oss.zyxf.top/<key>` 会同时绕开两者。
 - **附件头由边缘统一加**：配了下载域名后 `forceDownload` 不再影响 URL；app 的所有预览/下载本来就是 `fetch → blob`（PDF、TXT 也一样），所以 `attachment` 不影响任何页面。
-- **没有防盗链**：链接永久可下，被外链就是纯白流量；免费版 API 里也没有 Referer 相关配置。直下的前提是知道 key，而 key 形如 `zyxf/<目录>/<文件名>`——可猜。这是「去掉签名」的直接代价，接受它是因为资源库本来就对游客开放（`/api/files/:id/url` 没有 `requireAuth`）。
+- **OSS 桶自带的「防盗链」在这条链路上不起作用**（2026-11-22 实测，别再往桶上加）：给桶配 `RefererList` 白名单后——
+  - 直连 OSS 的签名请求：外站 Referer → **403**、本域 Referer → 200、空 Referer → 200（`AllowEmptyReferer: true`），说明 OSS 侧规则本身是生效的；
+  - 同样的三个请求经 `oss.zyxf.top`（ESA → 桶）：外站 Referer 也是 **200**。
+
+  也就是 ESA 回源没有把客户端的 Referer 带到 OSS（或 OSS 对 CDN 回源请求不校验），桶级白名单对「经 ESA 的下载」等于没开，留着只会造成「已经防住外链」的错觉。测试用的临时白名单已撤销（桶上仍是 `AllowEmptyReferer: true` + 空列表）。
+- **所以防外链只能在边缘做**：免费版没有独立的 Referer 配置（`--help-search Referer` 为空），只能用 **WAF 自定义规则**（`CreateWafRule --Phase http_custom`，当前自定义规则 0 条、额度未验证），例如把 `oss.zyxf.top` 上 `referer` 不含 `zyxf.top` 的请求拒掉。直下的前提是知道 key，而 key 形如 `zyxf/<目录>/<文件名>`——可猜。这是「去掉签名」的代价，接受它是因为资源库本来就对游客开放（`/api/files/:id/url` 没有 `requireAuth`）。
 - **路径会带一层前缀**：`oss.zyxf.top/zyxf/<key>`。去掉它得加一条边缘改写（`CreateRewriteUrlRule`），目前不做——多一跳配置就多一个会坏的地方。
 
 验证（`x-oss-cdn-auth: success` 是 STS 回源成功的标记）：
@@ -705,6 +709,56 @@ curl -sD- -o /dev/null https://oss.zyxf.top/zyxf/ACM/DP.pptx |
 # 期望 200 + Server: ESA + content-disposition: attachment + x-oss-cdn-auth: success + DYNAMIC
 ```
 
+#### 4.2.7 岱宗盒子收拢到独立域名 `dzhz.zyxf.top`（2026-11-22）
+
+此前盒子的东西散在三处：页面在主站 SPA 的 `/dzhz*` 路由里、排行榜在主站 nginx 的 `/games/` 反代里、APK 与 JSON 在 `dzhz.zyxf.top`（ESA → OSS 私有桶）。现在**全部收在这个域名下**，主站只在 `/dzhz*` 上留 301。
+
+硬约束：**ESA 一条 CNAME 记录只能配一个源站**，而两类请求要的源站相反：
+
+| 路径 | 源站必须是 | 原因 |
+|---|---|---|
+| `/`、`/legal`、`/license`、`/games/*` | nginx（本机） | 页面是 SPA 产物；排行榜是 `127.0.0.1:4100` 的独立进程 |
+| `/xjtu-toolbox/*`（APK、`stable.json`、`bulletin.json`） | OSS 私有桶 | 85 MB 的包走 2C2G 的机器会被带宽卡死；OSS 侧按 CDN 回源计费（¥0.15/GB） |
+
+折中办法是 **ESA 回源规则按路径分流**（免费版可用，2026-11-22 实测）：
+
+```
+dzhz.zyxf.top ──ESA──┬─ 不含 /xjtu-toolbox/  ──► origin.zyxf.top:443（本机 nginx）
+                     └─ /xjtu-toolbox/*      ──► 默认源站：OSS 私有桶（STS 回源，不动）
+```
+
+```bash
+aliyun esa CreateOriginRule --SiteId <id> \
+  --RuleName 'dzhz-pages-to-nginx' --RuleEnable on --Sequence 1 \
+  --Rule '(http.host eq "dzhz.zyxf.top" and not http.request.uri.path contains "/xjtu-toolbox/")' \
+  --DnsRecord 'origin.zyxf.top' --OriginHost 'dzhz.zyxf.top' --OriginScheme https
+```
+
+nginx 侧是 `frontend/nginx.conf` 末尾的白名单 vhost：只放行 `/`、`/legal`、`/license`、`/dzhz/…`、`/assets/`、`/dzhz-assets/`、`/games/`、`/api/`，其余 301 回主站——避免这个域名变成整站副本。
+
+前端仍是**同一个 bundle**：`App.jsx` 用 `isDzhzHost()`（`frontend/src/dzhz.js`）判断，盒子域名上根路径渲染 `DzhzPage`、`/legal` 渲染协议页、`/license` 渲染开源协议，版式走「整页落地页」（不挂左栏 / 搜索 / 知识图谱 / 全站菜单）。
+
+主站侧的收尾：
+
+- `/dzhz` → 301 `https://dzhz.zyxf.top/`；`/dzhz/…` → 301 `https://dzhz.zyxf.top$request_uri`。`/dzhz-assets/` 的前缀是 `/dzhz-`，不会被这两条吃掉。
+- **主站的 `/games/` 反代保留**：旧版 App（≤ 6.0.2）硬编码了 `https://zyxf.top/games`，删了排行榜就断；新版（App 仓库 `dev`）已改指 `dzhz.zyxf.top/games`。
+- 源站证书用 `certbot --expand` 把 `dzhz.zyxf.top` 加进了 SAN（webroot 验证，挑战请求经回源规则到 nginx）；否则 ESA → 源站这段校验不过，只能把回源规则的「源站证书校验」关掉。
+
+验证：
+
+```bash
+curl -sD- -o /dev/null https://dzhz.zyxf.top/ | grep -iE 'HTTP/|server|content-type'
+# 期望 200 + Server: ESA + text/html（落地页）
+
+curl -sD- -o /dev/null https://dzhz.zyxf.top/xjtu-toolbox/apk/latest/app-release.apk |
+  grep -iE 'HTTP/|x-oss-cdn-auth'
+# 期望 200 + x-oss-cdn-auth: success —— 证明它仍从 OSS 出，没被打到 nginx
+
+curl -s -o /dev/null -w '%{http_code}\n' https://dzhz.zyxf.top/games/health   # 排行榜
+curl -sI https://zyxf.top/dzhz | grep -i location                              # 301 到 dzhz
+```
+
+回滚：删掉那条回源规则 → `dzhz.zyxf.top` 恢复成纯 OSS 源（APK/JSON 全程没动过），页面回主站；同时撤掉 nginx 里主站的两条 301 与末尾的 vhost。
 #### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 
 - **刷新任何前端路由都是 404**（`/folder/6`、`/dashboard`、`/about`、`/settings`）：缺 `location / { try_files $uri $uri/ /index.html; }`（BUG-97）。dist/ 里没有这些文件，必须交给 index.html 由前端路由接管。

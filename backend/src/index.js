@@ -45,6 +45,13 @@ if (isProd) {
     );
     process.exit(1);
   }
+  // 下载 URL 全部由它拼出来；漏配会让下载整条链断掉，别等到用户点下载才发现。
+  if (!process.env.OSS_PUBLIC_BASE) {
+    console.error(
+      '[index] FATAL: in production but OSS_PUBLIC_BASE is not set. Download URLs are built from it (see docs/DEPLOY.md §4.2.6).'
+    );
+    process.exit(1);
+  }
 }
 
 // ---- Loose anti-abuse limit for anonymous API traffic ----

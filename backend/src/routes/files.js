@@ -116,12 +116,8 @@ router.get('/:id/url', downloadLimiterShort, downloadLimiterLong, (req, res) => 
   }
 
   res.json({
-    url: fileUrl(file.oss_key, {
-      // 回退到签名直链时（未配 OSS_PUBLIC_BASE）由 OSS 强制 attachment；配了下载域名
-      // 后这个字段不再影响 URL，attachment 由 ESA 边缘统一加，见 docs/DEPLOY.md §4.2.6。
-      forceDownload: isDownload || shouldForceDownload(ext),
-      filename: file.name,
-    }),
+    // URL 里没有签名：attachment 由边缘统一下发，前端只负责 fetch（见 docs/DEPLOY.md §4.2.6）。
+    url: fileUrl(file.oss_key),
     name: file.name,
     ext: file.ext,
     mime_type: mimeOf(ext) || 'application/octet-stream',
