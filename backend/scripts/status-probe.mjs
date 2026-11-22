@@ -30,20 +30,20 @@ const STATE_FILE =
 const TARGETS = [
   {
     id: 'site',
-    name: '资料库网站',
+    name: '资料库页面',
     url: 'https://zyxf.top/',
     method: 'HEAD',
   },
   {
     id: 'api',
-    name: '资料库接口',
+    name: '接口服务',
     url: 'https://zyxf.top/api/health',
     method: 'GET',
     bodyIncludes: '"ok":true',
   },
   {
     id: 'download',
-    name: '文件下载',
+    name: '资料下载',
     url:
       envStr('PROBE_DOWNLOAD_URL') ||
       'https://oss.zyxf.top/zyxf/ACM/DP.pptx',
@@ -51,9 +51,17 @@ const TARGETS = [
   },
   {
     id: 'dzhz',
-    name: '岱宗盒子',
+    name: '岱宗盒子页面',
     url: 'https://dzhz.zyxf.top/',
     method: 'HEAD',
+  },
+  {
+    id: 'app_update',
+    name: '岱宗盒子更新',
+    // stable.json 很小（几百字节），用 GET 顺便校验正文，HEAD 看不到内容。
+    url: 'https://dzhz.zyxf.top/xjtu-toolbox/stable.json',
+    method: 'GET',
+    bodyIncludes: 'versionName',
   },
 ];
 
