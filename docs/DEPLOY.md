@@ -155,7 +155,7 @@ OSS_ACCESS_KEY_SECRET=<RAM 子账号 SK>
 OSS_KEY_PREFIX=zyxf/
 # 上传直传的 host（PostObject 用）；留空 = <bucket>.<region>.aliyuncs.com
 OSS_ENDPOINT=
-# 下载 URL 的前缀（ESA 边缘，见 §4.2.6）。留空 = 回退到 OSS 签名直链
+# 下载 URL 的前缀（ESA 边缘，见 §4.2.6）。生产必填，漏配拒绝启动
 OSS_PUBLIC_BASE=https://oss.zyxf.top
 
 # 可选：AI 助手
@@ -219,13 +219,13 @@ sudo -u www node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync
 | 后端调用 | 需要的动作 |
 |---|---|
 | `listOssObjects`（同步扫描） | `oss:ListObjects` |
-| `fileUrl` 回退分支（未配 `OSS_PUBLIC_BASE` 时的签名直链） | `oss:GetObject` |
+| 下载 | **不需要**：签名由 ESA 边缘用 STS 临时令牌完成，后端不再读对象 |
 | `putEmptyOssObject`（文件夹占位符） | `oss:PutObject` |
 | 前端直传（PostObject） | `oss:PutObject` |
 | `copyOssObject`（改名/移动） | `oss:CopyObject` + `oss:PutObject` |
 | `deleteOssObjectIfExists`（删除） | `oss:DeleteObject` |
 
-> 注意：后端**只签名**、不代理文件流，上传流量走浏览器直传；下载则由 ESA 边缘用 STS 回源签，所以 `oss:GetObject` 只服务于「未配下载域名」的回退路径，配了 §4.2.6 之后可以视情况收回。
+> 注意：后端**只签名**、不代理文件流，上传流量走浏览器直传；下载则由 ESA 边缘用 STS 回源签，后端完全不参与读对象。所以 `oss:GetObject` 已于 2026-11-22 从策略里删掉（`zyxf-oss-app` v3）；实测 `list` / `put` / `delete` 正常、`get` 返回 `AccessDenied`——AK 就算泄露也拿不走文件。
 > 在线预览已下线（原 IMM WebOffice），RAM 策略里**不需要任何 `imm:*` 动作**；日后重做预览时再补授权。
 
 自定义策略（把 bucket 名替换成你自己的；`acs:oss:*:*:<bucket>/*` 用来覆盖对象级操作）：
@@ -238,7 +238,6 @@ sudo -u www node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync
       "Effect": "Allow",
       "Action": [
         "oss:ListObjects",
-        "oss:GetObject",
         "oss:PutObject",
         "oss:DeleteObject",
         "oss:CopyObject"
@@ -276,7 +275,7 @@ aliyun ram CreatePolicyVersion --PolicyName zyxf-oss-app \
 
 验证：用新密钥访问**其他** bucket 应返回 `AccessDenied`（越权被拒），访问目标 bucket 正常——两者都满足才算最小权限生效。
 
-> ⚠️ **轮换密钥后必须同步服务器上的 `.env`**（`/opt/zyxf/.env`）并 `systemctl restart zyxf`。只改控制台/本地 `.env` 而漏掉服务器时，旧密钥一旦被删除，OSS 会回 `InvalidAccessKeyId`——症状是**上传（PostObject 签名）失效**，而接口本身照常返回 URL（签名是本地计算、不校验），前端只看到「上传失败」。下载走 ESA（§4.2.6）时用的是边缘自己的 STS，**不受这把 AK 影响**，只有回退到签名直链的部署才会一起挂。自查：`curl -sS "$(curl -s 'https://<域名>/api/files/<id>/url' | jq -r .url)" | head -3`，看是否 `InvalidAccessKeyId`。
+> ⚠️ **轮换密钥后必须同步服务器上的 `.env`**（`/opt/zyxf/.env`）并 `systemctl restart zyxf`。只改控制台/本地 `.env` 而漏掉服务器时，旧密钥一旦被删除，OSS 会回 `InvalidAccessKeyId`——症状是**上传（PostObject 签名）失效**，而接口本身照常返回 URL（签名是本地计算、不校验），前端只看到「上传失败」。下载走 ESA（§4.2.6）时用的是边缘自己的 STS，**不受这把 AK 影响**——AK 只管上传，所以症状只会出现在「点上传」上。自查：`curl -sS "$(curl -s 'https://<域名>/api/files/<id>/url' | jq -r .url)" | head -3`，看是否 `InvalidAccessKeyId`。
 
 ### 2.3 DirectMail 凭证（注册验证码）
 
@@ -676,8 +675,8 @@ tail -3 /var/log/nginx/access.log    # 第一列应是真实客户端 IP，不�
 | 缓存 | **bypass**：`CreateCacheRule --RuleName oss-bypass --BypassCache bypass_all --Rule '(http.host eq "oss.zyxf.top")'`（ConfigId `531463577600000`） |
 | 响应头 | `CreateHttpResponseHeaderModificationRule`（ConfigId `531463466448896`）：`X-Robots-Tag: noindex`、`Content-Disposition: attachment`、`X-Content-Type-Options: nosniff` |
 | CORS | **不在边缘加**：桶自带 `AllowedOrigin: *` 的跨域规则，ESA 转发的 `Origin` 会让 OSS 自己回 `Access-Control-Allow-Origin`。边缘再 `add` 一遍会变成重复头，浏览器直接判 CORS 失败 |
-| 代码开关 | `OSS_PUBLIC_BASE=https://oss.zyxf.top`（`backend/src/oss.js` 的 `fileUrl()`；留空则回退签名直链） |
-| 回滚 | 服务器 `.env` 删掉 `OSS_PUBLIC_BASE` → `systemctl restart zyxf`，代码自动回退签名直链；DNS 记录留不留都不影响 |
+| 代码开关 | `OSS_PUBLIC_BASE=https://oss.zyxf.top`（`backend/src/oss.js` 的 `fileUrl()`）。**生产必填**：漏配时 `index.js` 直接拒绝启动，不再回退签名直链 |
+| 回滚 | 签名直链的代码已删除（2026-11-22），所以回滚 = `git revert` 该提交 + 重新部署（约 1 分钟）；DNS/ESA 记录留不留都不影响 |
 
 为什么这么做、以及代价：
 

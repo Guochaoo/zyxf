@@ -2,10 +2,8 @@ import { describe, test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileUrl } from '../src/oss.js';
 
-// 下载链路有两种形态：
-// - 配了 OSS_PUBLIC_BASE：干净路径，签名由 ESA 边缘用 STS 临时令牌完成（docs/DEPLOY.md §4.2.6）；
-// - 没配：退回签名直链（本地开发 / 回滚）。签名只能覆盖 response-content-disposition，
-//   带上 response-content-type 会让 OSS 直接 400（BUG-96）。
+// 下载 URL 全部由 OSS_PUBLIC_BASE 拼出来：签名已经搬到 ESA 边缘（STS 临时令牌回源），
+// 客户端只拿干净路径。见 docs/DEPLOY.md §4.2.6。
 const prev = process.env.OSS_PUBLIC_BASE;
 
 describe('fileUrl', () => {
@@ -19,8 +17,8 @@ describe('fileUrl', () => {
       process.env.OSS_PUBLIC_BASE = 'https://oss.zyxf.top/';
     });
 
-    test('返回干净路径：无签名、无过期参数，forceDownload 也不再影响 URL', () => {
-      const url = fileUrl('zyxf-test/ACM/DP.pptx', { forceDownload: true, filename: 'DP.pptx' });
+    test('返回干净路径：无查询串、无签名/过期参数', () => {
+      const url = fileUrl('zyxf-test/ACM/DP.pptx');
       assert.equal(url, 'https://oss.zyxf.top/zyxf-test/ACM/DP.pptx');
       assert.deepEqual([...new URL(url).searchParams.keys()], []);
     });
@@ -36,22 +34,14 @@ describe('fileUrl', () => {
     });
   });
 
-  describe('未配置下载域名（回退签名直链）', () => {
+  describe('没配下载域名', () => {
     beforeEach(() => {
       delete process.env.OSS_PUBLIC_BASE;
     });
 
-    test('forceDownload 落成 response-content-disposition，且不覆盖 content-type', () => {
-      const url = fileUrl('zyxf-test/ACM/DP.pptx', { forceDownload: true, filename: 'DP.pptx' });
-      assert.match(url, /^https:\/\//);
-      assert.match(url, /[?&]Signature=/);
-      assert.match(url, /response-content-disposition=attachment/);
-      assert.doesNotMatch(url, /response-content-type/);
-    });
-
-    test('不强制下载时显式声明 inline', () => {
-      const url = fileUrl('zyxf-test/a.pdf');
-      assert.match(url, /response-content-disposition=inline/);
+    // 刻意不给「回退签名直链」：那条路会让漏配悄悄变成另一种计费口径（¥0.5/GB）。
+    test('直接报错，而不是悄悄换一条链路', () => {
+      assert.throws(() => fileUrl('zyxf-test/a.pdf'), /OSS_PUBLIC_BASE/);
     });
   });
 });

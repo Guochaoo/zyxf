@@ -80,46 +80,17 @@ export function ossPublicBase() {
 }
 
 /**
- * URL for a library object：配了下载域名走干净路径，否则回退签名直链。
+ * URL for a library object：`<base>/<key>`，签名由边缘用 STS 令牌完成，客户端只拿路径。
  * 逐段编码、保留 `/`——key 里可能有中文、空格、`#`、`?`，整段 encodeURIComponent 会把
  * 目录分隔符也编码掉。
+ *
+ * 没有「回退到签名直链」：那条路会让「漏配环境变量」悄悄变成另一种计费口径
+ * （外网流出 ¥0.5/GB），所以宁可启动时直接失败（生产校验在 index.js）。
  */
-export function fileUrl(key, { forceDownload = false, filename } = {}) {
+export function fileUrl(key) {
   const base = ossPublicBase();
-  if (!base) return signedGetUrl(key, 1800, { forceDownload, filename });
+  if (!base) throw new Error('OSS_PUBLIC_BASE 未配置，无法生成下载 URL（见 docs/DEPLOY.md §4.2.6）');
   return `${base}/${key.split('/').map(encodeURIComponent).join('/')}`;
-}
-
-/**
- * Generate a signed GET url for previewing/downloading a file.
- * forceDownload 让 OSS 按签名下发 `Content-Disposition: attachment`——桶绑定了站点自有
- * 域名时，内联 SVG/HTML 会在站点源上执行脚本，所以 extPolicy.shouldForceDownload()
- * 判为「不可内联」的对象必须走这条路径，由服务端强制，而不是指望客户端遵守
- * force_download 字段。
- *
- * 现在只有**未配置 OSS_PUBLIC_BASE** 时才走这条（本地开发 / 回滚）；正常链路是
- * `fileUrl()` 返回的干净 URL，attachment 由边缘统一下发，见 fileUrl 上方注释。
- *
- * ⚠️ 只能覆盖 `response-content-disposition`：OSS **拒绝** `response-content-type`，
- * 带上它整个请求会 400（`InvalidRequest: Can not override response header on
- * content-type`），下载直接失败。attachment 已经足以阻止内联渲染，不需要再改 MIME。
- *
- * 反向也要显式声明 `inline`：默认域名的对象会带 `x-oss-force-download: true`
- * 与 `Content-Disposition: attachment`（桶开了强制下载 / 默认域名的安全策略），
- * 此时这个参数**会被 OSS 覆盖**，PDF 在 iframe 里仍不渲染——前端因此改成
- * fetch 成 blob URL 再交给阅读器。这里保留 inline 声明，是为了在绑定了备案
- * 自有域名或关掉强制下载之后能直接内嵌。
- */
-export function signedGetUrl(key, expiresSec = 1800, { forceDownload = false, filename } = {}) {
-  const name = encodeURIComponent(filename || key.split('/').pop() || 'download');
-  const options = {
-    expires: expiresSec,
-    response: {
-      'content-disposition': forceDownload ? `attachment; filename="${name}"` : 'inline',
-    },
-  };
-  const url = ossClient().signatureUrl(key, options);
-  return url.replace(/^http:/, 'https:');
 }
 
 /**

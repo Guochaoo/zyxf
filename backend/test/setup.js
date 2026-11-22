@@ -26,7 +26,7 @@ export { ensureTestUser } from './seed.js';
 export const ossObjectStore = { keys: [] };
 
 // Stub the network calls to Aliyun OSS while keeping the pure signature
-// helpers (buildPostPolicy, signedGetUrl) intact.
+// helpers (buildPostPolicy, fileUrl) intact.
 mock.module('../src/oss.js', {
   exports: {
     ...realOss,
