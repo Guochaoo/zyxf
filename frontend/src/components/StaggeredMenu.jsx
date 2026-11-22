@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { CircleUserRound, LogIn, LogOut, Settings } from 'lucide-react';
+import { CircleUserRound, ExternalLink, LogIn, LogOut, Settings } from 'lucide-react';
 import { useClickOutside } from '../hooks/useClickOutside.js';
 import GithubStarButton from './GithubStarButton.jsx';
 import './StaggeredMenu.css';
@@ -583,7 +583,17 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
                     </button>
                   ) : it.external ? (
                     <a className="sm-panel-item" href={it.link} aria-label={it.ariaLabel} data-index={idx + 1} target={it.newTab === false ? undefined : '_blank'} rel="noopener noreferrer">
-                      <span className="sm-panel-itemLabel">{it.label}</span>
+                      <span className="sm-panel-itemLabel">
+                        {it.label}
+                        {it.externalIcon && (
+                          <ExternalLink
+                            className="sm-panel-itemExternal"
+                            size={18}
+                            strokeWidth={2}
+                            aria-hidden="true"
+                          />
+                        )}
+                      </span>
                     </a>
                   ) : (
                     <Link className="sm-panel-item" to={it.link} aria-label={it.ariaLabel} data-index={idx + 1} onClick={closeMenu}>

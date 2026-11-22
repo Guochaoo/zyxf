@@ -28,6 +28,8 @@ const zh = {
     disclosureAria: '查看讲座计划、编写计划与经费支出',
     dzhz: '岱宗盒子',
     dzhzAria: '查看岱宗盒子介绍页',
+    status: '服务状态',
+    statusAria: '在新标签页打开服务状态页（外部站点）',
     toggleOpen: '菜单',
     toggleClose: '关闭',
     openAria: '打开菜单',

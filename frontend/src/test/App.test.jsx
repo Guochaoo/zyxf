@@ -134,6 +134,11 @@ describe('App', () => {
       'href',
       'https://dzhz.zyxf.top/'
     );
+    // 服务状态是外部站点（FlashDuty），走站外链接，别写成站内路由。
+    expect(screen.getByRole('link', { name: '在新标签页打开服务状态页（外部站点）' })).toHaveAttribute(
+      'href',
+      'https://statuspage.flashcat.cloud/zyxf'
+    );
     expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '退出登录' })).not.toBeInTheDocument();
   });

@@ -44,6 +44,9 @@ const socialItems = [
   { label: 'Bilibili', link: 'https://space.bilibili.com/549612395' },
 ];
 
+// 服务状态页（FlashDuty 托管，外部站点）。菜单里用站外链接 + 小图标提示「会跳出去」。
+const STATUS_URL = 'https://statuspage.flashcat.cloud/zyxf';
+
 // 侧边栏开合的缓动曲线与时长（与 KnowledgeGraph 的收缩动画一致）。
 // ⚠️ BUG-94：这两个值**必须**通过内联样式下发，不能拼进模板字符串当 Tailwind 类名
 // （`lg:duration-[${SIDEBAR_MS}ms]`）——Tailwind 只静态扫描源码文本，插值处构建期不存在
@@ -84,6 +87,13 @@ export default function App() {
       { label: t('menu.disclosure'), ariaLabel: t('menu.disclosureAria'), link: '/disclosure' },
       { label: t('menu.dzhz'), ariaLabel: t('menu.dzhzAria'), link: `https://${DZHZ_HOST}/`, external: true, newTab: false },
       { label: t('menu.about'), ariaLabel: t('menu.aboutAria'), link: '/about' },
+      {
+        label: t('menu.status'),
+        ariaLabel: t('menu.statusAria'),
+        link: STATUS_URL,
+        external: true,
+        externalIcon: true,
+      },
     ],
     [t]
   );
