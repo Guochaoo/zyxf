@@ -523,7 +523,7 @@ nginx -t && systemctl reload nginx
 
 #### 4.2.3 刷新缓存 / 预热缓存：只有一个场景真用得上
 
-两者都是**边缘**操作，对主站 `zyxf.top` 基本无效——nginx 给 HTML 发 `cache-control: no-cache`，边缘对它是 `DYNAMIC`（不回缓存），改了文件刷新一次页面就生效；资源库下载域 `oss.zyxf.top` 是整站 bypass（§4.2.6），刷新对它同样没有意义。
+两者都是**边缘**操作，对主站 `zyxf.top` 基本无效——nginx 给 HTML 发 `cache-control: no-cache`，边缘对它是 `DYNAMIC`（不回缓存），改了文件刷新一次页面就生效；资源库下载域 `oss.zyxf.top` 现在吃 1 天缓存（§4.2.6），删了文件想让链接立刻失效，可以用同一套刷新命令。
 
 对 `dzhz.zyxf.top` 有意义的只有 APK 那条：**`latest` 这个别名是被覆盖写的**（页面部分是 bypass，见 §4.2.7，刷新对它们没有意义）。
 
@@ -672,7 +672,7 @@ tail -3 /var/log/nginx/access.log    # 第一列应是真实客户端 IP，不�
 | ESA 记录 | `oss.zyxf.top` → CNAME `xjtu-zyxf.oss-cn-beijing.aliyuncs.com`；源类型 **OSS**、回源 HOST **跟随源站域名**、鉴权 **私有访问 `private_same_account`**（STS 临时令牌）、Proxied |
 | 边缘 CNAME | `oss.zyxf.top.a1.initrr.com` |
 | 证书 | ESA 免费证书（`ApplyCertificate --Domains oss.zyxf.top --Type lets_encrypt`）。DCV 是 HTTP 挑战，**由 ESA 边缘直接应答**，`/.well-known/acme-challenge/*` 不需要往桶里放文件（与 dzhz 那条 `_acme-challenge.dzhz` 的托管 DCV 是两种路子） |
-| 缓存 | **bypass**：`CreateCacheRule --RuleName oss-bypass --BypassCache bypass_all --Rule '(http.host eq "oss.zyxf.top")'`（ConfigId `531463577600000`） |
+| 缓存 | 边缘缓存 **1 天**，且**把 `Origin` 纳入缓存键**：`CreateCacheRule --RuleName oss-cache --EdgeCacheMode override_origin --EdgeCacheTtl 86400 --IncludeHeader origin --Rule '(http.host eq "oss.zyxf.top")'`（ConfigId `531491769622528`） |
 | 响应头 | `CreateHttpResponseHeaderModificationRule`（ConfigId `531463466448896`）：`X-Robots-Tag: noindex`、`Content-Disposition: attachment`、`X-Content-Type-Options: nosniff` |
 | CORS | **不在边缘加**：桶自带 `AllowedOrigin: *` 的跨域规则，ESA 转发的 `Origin` 会让 OSS 自己回 `Access-Control-Allow-Origin`。边缘再 `add` 一遍会变成重复头，浏览器直接判 CORS 失败 |
 | 代码开关 | `OSS_PUBLIC_BASE=https://oss.zyxf.top`（`backend/src/oss.js` 的 `fileUrl()`）。**生产必填**：漏配时 `index.js` 直接拒绝启动，不再回退签名直链 |
@@ -689,8 +689,10 @@ tail -3 /var/log/nginx/access.log    # 第一列应是真实客户端 IP，不�
 
   少了这一步，公网解析不到 `oss.zyxf.top`，证书申请会永远卡在 `Applying` / `pending validation`（HTTP DCV 的验证方也解析不到这个域）。`dzhz` 当初同理。
 - **省钱**：OSS 侧从「外网流出 ¥0.5/GB」变成「CDN 回源 ¥0.15/GB」。实测 11 月 1–22 日资源库外网流出 5.94 GB（¥2.97），同样流量走这条链路降到 ¥0.9 左右。
-- **为什么 bypass 不缓存**：签名取消后 URL 永久有效，边缘若还有缓存，**删了文件、改了名字，旧路径在 TTL 内仍能下到**；要立刻干净就得在每次写操作后调 `PurgeCaches`（后端没有 ESA 凭证，只能靠外部脚本）。bypass 让删除即时生效（`X-Site-Cache-Status: DYNAMIC`），代价是每次都回源——收益本来就来自计费口径，命中率影响很小。
-- **CORS 也要求 bypass**：一旦开缓存，先被缓存的「不带 Origin 的版本」会缺 `Access-Control-Allow-Origin`，预览的 `fetch` 会偶发失败。
+- **缓存策略（2026-11-22 从 bypass 改成缓存）**：文件路径天然不可变（同名上传返回 409、改名是 copy + delete 换新 key），所以给 **1 天 TTL** 是安全的，命中后 `X-Site-Cache-Status: HIT`，不再每次回源。
+  - **必须把 `Origin` 纳入缓存键**（`--IncludeHeader origin`）：CORS 头由 OSS 按请求的 `Origin` 决定回不回。不加的话，先被缓存的「无 Origin 版本」会缺 `Access-Control-Allow-Origin`，预览/下载的 `fetch` 直接失败。实测拆成两份缓存后：无 Origin 的 HIT 没有 CORS 头、带 Origin 的 HIT 只有一个 `Access-Control-Allow-Origin: *`。
+  - ⚠️ 这个参数**只认小写 header 名**，写 `Origin` 会报 `InvalidParameter.ArgValue`。
+  - **删除 / 改名会留残影**：TTL 内旧链接仍可下载，要立刻生效就用 `deploy/purge-esa-cache.sh <url>`（或控制台刷新）。资料库删除频率很低，接受这个延迟。
 - **前端必须继续走 `/api/files/:id/url`**：限流（每 IP 60 次/分、240 次/时）和下载记账都挂在那条接口上，前端自己拼 `oss.zyxf.top/<key>` 会同时绕开两者。
 - **附件头由边缘统一加**：配了下载域名后 `forceDownload` 不再影响 URL；app 的所有预览/下载本来就是 `fetch → blob`（PDF、TXT 也一样），所以 `attachment` 不影响任何页面。
 - **OSS 桶自带的「防盗链」在这条链路上不起作用**（2026-11-22 实测，别再往桶上加）：给桶配 `RefererList` 白名单后——
