@@ -37,7 +37,7 @@ import NoticeModal from './components/NoticeModal.jsx';
 import { EASE_COLLAPSE } from './components/ui.js';
 // 岱宗盒子（xjtu-toolbox）的独立域名判断：同一个 bundle 在这个域名下只渲染落地页/协议页，
 // 真正的分流在 nginx（白名单 + 其余 301 回主站），见 docs/DEPLOY.md §4.2.7。
-import { DZHZ_HOST, isDzhzHost as onDzhzHost } from './dzhz.js';
+import { DZHZ_HOST, MAIN_HOST, isDzhzHost as onDzhzHost, isDzhzPathBlocked } from './dzhz.js';
 
 // Social links shown in the menu footer, static (brand names are not translated).
 const socialItems = [
@@ -138,6 +138,8 @@ export default function App() {
   // /legal、/license 直接渲染盒子页面，版式按「整页落地页」走——不挂资料库的左栏、
   // 搜索、知识图谱和全站菜单。主站那几条 /dzhz… 由 nginx 301 过去，路由保留只为本地开发。
   const isDzhzHost = onDzhzHost();
+  // 盒子域名只认落地页与两个协议页；别的路径（/folder、/dashboard、/settings…）整页跳回主站。
+  const dzhzBlocked = isDzhzHost && isDzhzPathBlocked(pagePath);
   // 岱宗盒子是独立落地页：铺满宽度、无内边距，使用须知不拦在它前面。
   const isDzhz = pagePath === '/dzhz' || pagePath === '/dzhz/' || (isDzhzHost && pagePath === '/');
   // 协议页 / 开源协议页沿用 /dzhz 的公开属性（不弹使用须知、不叠全局菜单），也
@@ -250,7 +252,21 @@ export default function App() {
     window.location.replace(`https://${DZHZ_HOST}${rest || '/'}`);
   }, [isDzhzHost, pagePath]);
 
+  // 盒子域名上只有落地页与两个协议页；别的路径（/folder、/dashboard、/settings…）
+  // 整页跳回主站同一路径——两个域名共用同一份 dist，不拦就会变成整站的第二个入口。
+  // 用 location.replace 而不是 <Navigate>：要换 origin，客户端路由做不到。
+  useEffect(() => {
+    if (!dzhzBlocked) return;
+    const { search, hash } = window.location;
+    window.location.replace(`https://${MAIN_HOST}${pagePath}${search}${hash}`);
+  }, [dzhzBlocked, pagePath]);
+
   if (!ready) {
+    return <div className="h-full flex items-center justify-center text-slate-400">{t('app.loading')}</div>;
+  }
+
+  // 跳转落地前不要先画一帧资料库。
+  if (dzhzBlocked) {
     return <div className="h-full flex items-center justify-center text-slate-400">{t('app.loading')}</div>;
   }
 
