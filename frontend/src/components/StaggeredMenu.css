@@ -677,14 +677,16 @@ button.sm-account-action {
   transform-origin: 50% 100%;
 }
 
-/* 站外链接的小图标（服务状态页）：跟在标题右下角，尺寸跟着 clamp() 的字号走。
-   放在 itemLabel 里是为了跟文字一起做 GSAP 的入场位移，不会提前露出来。 */
+/* 站外链接的小图标（服务状态页）：贴在**文字右下角**，不是浮在右上角。
+   用 baseline 对齐——内联块（svg）的基线就是它的底边，正好落在汉字底线上；
+   margin-bottom 只是抬一点点，避免看起来像掉到基线下面。
+   尺寸跟着 clamp() 的字号走，手机/桌面比例一致。 */
 .sm-panel-itemExternal {
   display: inline-block;
-  vertical-align: top;
+  vertical-align: baseline;
   width: 0.42em;
   height: 0.42em;
-  margin-top: 0.16em;
+  margin-bottom: 0.04em;
   margin-left: 0.3em;
   opacity: 0.45;
   flex-shrink: 0;
