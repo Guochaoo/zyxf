@@ -37,7 +37,7 @@ import NoticeModal from './components/NoticeModal.jsx';
 import { EASE_COLLAPSE } from './components/ui.js';
 // 岱宗盒子（xjtu-toolbox）的独立域名判断：同一个 bundle 在这个域名下只渲染落地页/协议页，
 // 真正的分流在 nginx（白名单 + 其余 301 回主站），见 docs/DEPLOY.md §4.2.7。
-import { isDzhzHost as onDzhzHost } from './dzhz.js';
+import { DZHZ_HOST, isDzhzHost as onDzhzHost } from './dzhz.js';
 
 // Social links shown in the menu footer, static (brand names are not translated).
 const socialItems = [
@@ -82,7 +82,7 @@ export default function App() {
       { label: t('menu.library'), ariaLabel: t('menu.libraryAria'), link: '/' },
       { label: t('menu.dashboard'), ariaLabel: t('menu.dashboardAria'), link: '/dashboard' },
       { label: t('menu.disclosure'), ariaLabel: t('menu.disclosureAria'), link: '/disclosure' },
-      { label: t('menu.dzhz'), ariaLabel: t('menu.dzhzAria'), link: '/dzhz' },
+      { label: t('menu.dzhz'), ariaLabel: t('menu.dzhzAria'), link: `https://${DZHZ_HOST}/`, external: true, newTab: false },
       { label: t('menu.about'), ariaLabel: t('menu.aboutAria'), link: '/about' },
     ],
     [t]
@@ -239,6 +239,16 @@ export default function App() {
           ? t('menu.dzhz')
           : t('app.title');
   }, [t, isDzhz, isDzhzLegal, isDzhzLicense]);
+  // 主站上如果通过客户端路由落到 `/dzhz…`（旧链接、浏览器前进后退、老页面里的 <Link>），
+  // 不要在这儿把盒子页面画进主站版式——整页跳去独立域名。nginx 对「直接访问」的 301 已经
+  // 有了（§4.2.7），这里补的是不经过 nginx 的那一半。
+  // 只在生产主站生效：本地开发（localhost）与测试仍按原来的路由渲染。
+  useEffect(() => {
+    if (isDzhzHost || window.location.hostname !== 'zyxf.top') return;
+    if (pagePath !== '/dzhz' && !pagePath.startsWith('/dzhz/')) return;
+    const rest = pagePath.replace(/^\/dzhz/, '');
+    window.location.replace(`https://${DZHZ_HOST}${rest || '/'}`);
+  }, [isDzhzHost, pagePath]);
 
   if (!ready) {
     return <div className="h-full flex items-center justify-center text-slate-400">{t('app.loading')}</div>;

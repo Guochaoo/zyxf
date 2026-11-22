@@ -582,7 +582,7 @@ const StaggeredMenu = forwardRef(function StaggeredMenu(
                       <span className="sm-panel-itemLabel">{it.label}</span>
                     </button>
                   ) : it.external ? (
-                    <a className="sm-panel-item" href={it.link} aria-label={it.ariaLabel} data-index={idx + 1} target="_blank" rel="noopener noreferrer">
+                    <a className="sm-panel-item" href={it.link} aria-label={it.ariaLabel} data-index={idx + 1} target={it.newTab === false ? undefined : '_blank'} rel="noopener noreferrer">
                       <span className="sm-panel-itemLabel">{it.label}</span>
                     </a>
                   ) : (
