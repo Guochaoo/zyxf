@@ -36,10 +36,16 @@ export function isHeartbeatDue(lastHeartbeatMs, nowMs, minutes) {
   return nowMs - (lastHeartbeatMs || 0) >= minutes * 60 * 1000;
 }
 
-/** 心跳事件：让 FlashDuty 的「无事件检测」知道探针还活着。 */
+/**
+ * 心跳事件：让 FlashDuty 的「无事件检测」知道探针还活着。
+ *
+ * 用 Ok 而不是 Info：实测 Info 会在 FlashDuty 里生成一条**一直开着**的低优先级
+ * 故障（每次心跳都在给它续命），而 Ok 只刷新集成的 last_source_time、
+ * 不会开故障（last_time 也不动），正好是「我还活着、但没出事」的语义。
+ */
 export function buildHeartbeatEvent() {
   return {
-    event_status: 'Info',
+    event_status: 'Ok',
     alert_key: 'zyxf-probe-heartbeat',
     title_rule: '仲英学辅 · 探针心跳',
     description: '探针存活（用于无事件检测，收到即说明服务器与出网正常）',
