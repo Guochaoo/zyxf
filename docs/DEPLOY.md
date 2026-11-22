@@ -525,7 +525,7 @@ nginx -t && systemctl reload nginx
 
 两者都是**边缘**操作，对主站 `zyxf.top` 基本无效——nginx 给 HTML 发 `cache-control: no-cache`，边缘对它是 `DYNAMIC`（不回缓存），改了文件刷新一次页面就生效；资源库下载域 `oss.zyxf.top` 是整站 bypass（§4.2.6），刷新对它同样没有意义。
 
-对 `dzhz.zyxf.top` 有意义的只有一条：**`latest` 这个别名是被覆盖写的**。
+对 `dzhz.zyxf.top` 有意义的只有 APK 那条：**`latest` 这个别名是被覆盖写的**（页面部分是 bypass，见 §4.2.7，刷新对它们没有意义）。
 
 - 发版时 CI 把新包写到 `xjtu-toolbox/apk/latest/app-release.apk`（**同一个 key，内容变了**），边缘仍按旧缓存条目分发；
 - 2026-11-21 实测该对象 `age: 3868`——边缘缓存了约 1 小时；而它自身还带 `Cache-Control: no-cache`（ESA 并没有遵守这个响应头，实际缓存策略与对象元数据不一致）；
@@ -720,19 +720,29 @@ curl -sD- -o /dev/null https://oss.zyxf.top/zyxf/ACM/DP.pptx |
 | `/`、`/legal`、`/license`、`/games/*` | nginx（本机） | 页面是 SPA 产物；排行榜是 `127.0.0.1:4100` 的独立进程 |
 | `/xjtu-toolbox/*`（APK、`stable.json`、`bulletin.json`） | OSS 私有桶 | 85 MB 的包走 2C2G 的机器会被带宽卡死；OSS 侧按 CDN 回源计费（¥0.15/GB） |
 
-折中办法是 **ESA 回源规则按路径分流**（免费版可用，2026-11-22 实测）：
-
-```
-dzhz.zyxf.top ──ESA──┬─ 不含 /xjtu-toolbox/  ──► origin.zyxf.top:443（本机 nginx）
-                     └─ /xjtu-toolbox/*      ──► 默认源站：OSS 私有桶（STS 回源，不动）
-```
+折中办法是 **ESA 回源规则按路径分流**（免费版可用，2026-11-22 实测）。两条规则，优先级靠 `Sequence`（数值越小越先匹配）：
 
 ```bash
+# ① ACME 校验单独走 http：LE 的 HTTP-01 打在 80 端口，用 https 回源会 525
 aliyun esa CreateOriginRule --SiteId <id> \
-  --RuleName 'dzhz-pages-to-nginx' --RuleEnable on --Sequence 1 \
+  --RuleName 'dzhz-acme-http' --RuleEnable on --Sequence 1 \
+  --Rule '(http.host eq "dzhz.zyxf.top" and http.request.uri.path contains "/.well-known/acme-challenge/")' \
+  --DnsRecord 'zyxf.top' --OriginHost 'dzhz.zyxf.top' --OriginScheme http --OriginVerify off
+
+# ② 其余非 /xjtu-toolbox/ 的请求回源到 nginx
+aliyun esa CreateOriginRule --SiteId <id> \
+  --RuleName 'dzhz-pages-to-nginx' --RuleEnable on --Sequence 2 \
   --Rule '(http.host eq "dzhz.zyxf.top" and not http.request.uri.path contains "/xjtu-toolbox/")' \
-  --DnsRecord 'origin.zyxf.top' --OriginHost 'dzhz.zyxf.top' --OriginScheme https
+  --DnsRecord 'zyxf.top' --OriginHost 'dzhz.zyxf.top' --OriginScheme https --OriginVerify on
+
+# ③ 这些请求是动态页面，边缘必须 bypass：实测 HTML 带 no-cache 也会被缓存，
+#    发版后拿到了旧 index.html，里面的 chunk 已被删除 → 白屏
+aliyun esa CreateCacheRule --SiteId <id> --RuleName 'dzhz-pages-bypass' --RuleEnable on --Sequence 3 \
+  --Rule '(http.host eq "dzhz.zyxf.top" and not http.request.uri.path contains "/xjtu-toolbox/")' \
+  --BypassCache bypass_all
 ```
+
+⚠️ **`--DnsRecord` 要填 ESA 站点里已有的记录名**（这里是 `zyxf.top`，它的源站就是 `origin.zyxf.top`），不能填一个只存在于 Aliyun DNS 的主机名——填 `origin.zyxf.top` 会得到 `502 / error=destination_not_found`。
 
 nginx 侧是 `frontend/nginx.conf` 末尾的白名单 vhost：只放行 `/`、`/legal`、`/license`、`/dzhz/…`、`/assets/`、`/dzhz-assets/`、`/games/`、`/api/`，其余 301 回主站——避免这个域名变成整站副本。
 
@@ -975,7 +985,7 @@ certbot renew --dry-run --cert-name zyxf.top --non-interactive --no-random-sleep
 |---|---|---|
 | 轻量应用服务器 | 1 台 `swas.s.c2m2s40b1.linux`（2C2G/40G），到期 2027-01-03 | 唯一生产机 |
 | OSS Bucket | 业务桶（文件库，私有 + ESA 私有回源 `oss.zyxf.top`）+ 发布桶（`dzhz` APK/静态，私有 + ESA 私有回源） | 都在用 |
-| ESA | 站点 1 个（`zyxf.top`，免费版 `entranceplan`）+ 加速记录 **3 条**（主站、`dzhz`、`oss`）+ 压缩规则 1 条（Brotli+Gzip）+ 缓存规则 2 条（主站动态路径绕过、`oss` 整站绕过）+ 响应头规则 1 条 | 三条链路都走它；WAF / 边缘函数仍需另购 |
+| ESA | 站点 1 个（`zyxf.top`，免费版 `entranceplan`）+ 加速记录 **3 条**（主站、`dzhz`、`oss`）+ 压缩规则 1 条（Brotli+Gzip）+ 缓存规则 3 条（主站动态路径、`oss` 整站、`dzhz` 页面）+ 回源规则 2 条（`dzhz` 页面→nginx、ACME→http）+ 响应头规则 1 条 | 三条链路都走它；WAF / 边缘函数仍需另购 |
 | 阿里云 CDN | 域名 **0**（旧域名 2026-11-21 已删） | 已下线，回滚成本见 §4.2.2 |
 | SWAS 防火墙 | 22 / 80 / 443 / ICMP，来源均 `0.0.0.0/0` | 见 §0.1（22 无法收窄） |
 | VPC | **0 个**（原有一个空的 `172.16.0.0/12`，0 交换机 0 ENI，2026-11-21 已删） | 轻量服务器不走 VPC，VPC 在这里没有用途 |
