@@ -14,4 +14,5 @@ process.env.OSS_BUCKET = 'zyxf-test-bucket';
 process.env.OSS_ACCESS_KEY_ID = 'test-access-key-id';
 process.env.OSS_ACCESS_KEY_SECRET = 'test-access-key-secret';
 process.env.OSS_ENDPOINT = 'https://zyxf.test';
+process.env.OSS_PUBLIC_BASE = 'https://oss.test';
 process.env.OSS_KEY_PREFIX = 'zyxf-test/';
