@@ -796,18 +796,30 @@ curl -sI https://zyxf.top/dzhz | grep -i location                              #
 ```
 zyxf-probe.timer（每分钟）
    └─ backend/scripts/status-probe.mjs
-        ├─ GET  https://zyxf.top/api/health   期望 200 且正文含 "ok":true
-        ├─ HEAD https://zyxf.top/             期望 200
-        ├─ HEAD https://oss.zyxf.top/zyxf/…   期望 200（可用 PROBE_DOWNLOAD_URL 覆盖）
-        ├─ HEAD https://dzhz.zyxf.top/        期望 200
+        ├─ id=site        HEAD https://zyxf.top/                          200
+        ├─ id=api         GET  https://zyxf.top/api/health                200 且正文含 "ok":true
+        ├─ id=download    HEAD https://oss.zyxf.top/zyxf/…                200（PROBE_DOWNLOAD_URL 可覆盖）
+        ├─ id=dzhz        HEAD https://dzhz.zyxf.top/                     200
+        ├─ id=app_update  GET  https://dzhz.zyxf.top/xjtu-toolbox/stable.json
+        │                                                                200 且正文含 "versionName"
         │
-        ├─ 状态变化 → POST 标准告警事件（Critical / Ok，alert_key 固定为 zyxf-probe-<组件>）
+        ├─ 状态变化 → POST 标准告警事件（Critical / Ok，alert_key 固定为 zyxf-probe-<id>）
         └─ 每 5 分钟 → 心跳事件（Ok，alert_key=zyxf-probe-heartbeat）
 ```
 
+探针的 5 个 id 与状态页组件一一对应（改 id 就要同步改状态页组件与路由）：
+
+| 探针 id | 状态页组件 |
+|---|---|
+| `site` | 资料库页面 |
+| `dzhz` | 岱宗盒子页面 |
+| `api` | 接口服务 |
+| `download` | 资料下载 |
+| `app_update` | 岱宗盒子更新 |
+
 三条设计决定：
 
-- **只在状态变化时推事件**：首次运行只记录不推（否则上线瞬间刷四条假告警），一直故障也不重复刷。
+- **只在状态变化时推事件**：首次运行只记录不推（否则上线瞬间刷五条假告警），一直故障也不重复刷。
 - **心跳 + FlashDuty 的「无事件检测」兜底整机挂掉**：探针也在那台机器上，服务器死了就没人推事件；在 FlashDuty 集成里把「无事件检测」设成比心跳间隔长（建议 15 分钟），超时即告警。心跳间隔用 `PROBE_HEARTBEAT_MINUTES` 调，设 `0` 关闭。
 - **探针自身失败不标 `failed`**：脚本捕获异常后退出码仍是 0，避免 systemd 每分钟记一条 failed 把 journal 刷满；排查看 `journalctl -u zyxf-probe`。
 
