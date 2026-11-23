@@ -44,8 +44,8 @@ const socialItems = [
   { label: 'Bilibili', link: 'https://space.bilibili.com/549612395' },
 ];
 
-// 服务状态页（FlashDuty 托管，外部站点）。菜单里用站外链接 + 小图标提示「会跳出去」。
-const STATUS_URL = 'https://statuspage.flashcat.cloud/zyxf';
+// 服务状态页（UptimeRobot 托管，外部站点）。菜单里用站外链接 + 小图标提示「会跳出去」。
+const STATUS_URL = 'https://stats.uptimerobot.com/dD0YPS6tpQ';
 
 // 侧边栏开合的缓动曲线与时长（与 KnowledgeGraph 的收缩动画一致）。
 // ⚠️ BUG-94：这两个值**必须**通过内联样式下发，不能拼进模板字符串当 Tailwind 类名

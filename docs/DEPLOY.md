@@ -787,80 +787,33 @@ curl -sI https://zyxf.top/dzhz | grep -i location                              #
 ```
 
 回滚：删掉那条回源规则 → `dzhz.zyxf.top` 恢复成纯 OSS 源（APK/JSON 全程没动过），页面回主站；同时撤掉 nginx 里主站的两条 301 与末尾的 vhost。
-#### 4.2.8 服务状态页与探针（FlashDuty，2026-11-22）
 
-对外状态页：<https://statuspage.flashcat.cloud/zyxf>（站内菜单「服务状态」入口，外链图标）。
+#### 4.2.8 服务状态页与外部拨测（UptimeRobot，2026-11-23）
 
-数据从哪来——**服务器自己探自己**，由 systemd timer 每分钟跑一次：
+对外状态页：<https://stats.uptimerobot.com/dD0YPS6tpQ>（站内菜单「服务状态」入口，外链图标）。
+控制台：<https://dashboard.uptimerobot.com>（账号 2066803627@qq.com，Free 计划：50 个监控项 / 5 分钟间隔 / 单探测区域 / 1 个状态页）。
 
-```
-zyxf-probe.timer（每分钟）
-   └─ backend/scripts/status-probe.mjs
-        ├─ id=site        HEAD https://zyxf.top/                          200
-        ├─ id=api         GET  https://zyxf.top/api/health                200 且正文含 "ok":true
-        ├─ id=download    HEAD https://oss.zyxf.top/zyxf/…                200（PROBE_DOWNLOAD_URL 可覆盖）
-        ├─ id=dzhz        HEAD https://dzhz.zyxf.top/                     200
-        ├─ id=app_update  GET  https://dzhz.zyxf.top/xjtu-toolbox/stable.json
-        │                                                                200 且正文含 "versionName"
-        │
-        ├─ 状态变化 → POST 标准告警事件（Critical / Ok，alert_key 固定为 zyxf-probe-<id>）
-        └─ 每 5 分钟 → 心跳事件（Ok，alert_key=zyxf-probe-heartbeat）
-```
+为什么不再「服务器自己探自己」：2026-11-22 上线的自建探针（`zyxf-probe.timer` + `backend/scripts/status-probe.mjs`）跑在**被监控的那台机器**上——整机宕机时它一起停，只能靠心跳 + FlashDuty 无事件检测兜底（最长 15 分钟才发现），而且它测的是「服务器能不能访问自己」，看不到用户侧可达性。UptimeRobot 从境外探测节点发起请求，机器全挂也照测，自带状态页与邮件告警。自建探针与 FlashDuty 状态页联动已于 2026-11-23 拆除（服务器上执行了 `systemctl disable --now zyxf-probe.timer`，脚本与 systemd 单元从仓库删除，需要时翻 git 历史）。
 
-探针的 5 个 id 与状态页组件一一对应（改 id 就要同步改状态页组件与路由）：
+监控项（tag `zyxf`，告警发到 2066803627@qq.com，间隔 300 s / 超时 15 s / 勾选 `checkSSLErrors`）：
 
-| 探针 id | 状态页组件 |
-|---|---|
-| `site` | 资料库页面 |
-| `dzhz` | 岱宗盒子页面 |
-| `api` | 接口服务 |
-| `download` | 资料下载 |
-| `app_update` | 岱宗盒子更新 |
-状态页联动（2026-11-22 加）：探针除了推告警，还会**直接改状态页**——
+| 名称 | 类型 | 目标 | 判定 |
+|---|---|---|---|
+| ZYXF 主站 | HTTP HEAD | `https://zyxf.top` | 2xx/3xx |
+| ZYXF API | Keyword | `https://zyxf.top/api/health` | 正文含 `"ok":true` |
+| ZYXF 资料下载（OSS） | HTTP HEAD | `https://oss.zyxf.top/zyxf/ACM/DP.pptx` | 2xx/3xx |
+| 岱宗盒子（dzhz） | HTTP HEAD | `https://dzhz.zyxf.top/` | 2xx/3xx |
+| App 更新清单 | Keyword | `https://dzhz.zyxf.top/xjtu-toolbox/stable.json` | 正文含 `"versionName"` |
 
-- 故障 → `POST /status-page/change/create`（`type=incident`、`status=investigating`、组件置 `full_outage`），返回的 `change_id` 存进探针状态文件（`.probe-state.json`）
-- 恢复 → `POST /status-page/change/timeline/create`（`status=resolved`、组件回 `operational`）
-- 发布失败只 `console.error`，下一轮巡检会补（「一直故障且没有 changeId」时重试）；探针不会因为状态页报错而中断
+状态页按「状态优先」排序（`StatusUpDownPaused`），5 个监控项与上表一一对应；改监控项或状态页 URL 时，同步改 `frontend/src/App.jsx` 的 `STATUS_URL` 与 `frontend/src/test/App.test.jsx` 里的断言。
 
-为什么必须另外一把 App Key：集成 key 只能推告警事件，状态页 API 走 App Key 鉴权；而且组件本身没有「自动关联告警」的字段（路由只能选频道、automation 是 AI SRE 的提示词编排）。**权限只勾状态页写**，别用全权限 key。
+用 agent 维护：本机 DSH 装了配置型 bundle `.dsh/plugins/mcp-uptimerobot`（包名 `@local/dsh-mcp-uptimerobot`），把官方远程 MCP `https://mcp.uptimerobot.com/mcp` 接进会话，工具名形如 `mcp__uptimerobot__create-monitor`。认证是 Bearer API Key，密钥存 `~/.dsh/.credentials.yaml` 的 `refs.UPTIMEROBOT_API_KEY`，bundle 的 patch 里只写 `${credential:UPTIMEROBOT_API_KEY}`（配合 `expandTemplates: true`，日志会脱敏）——**密钥不进仓库**（`.dsh/` 已被 `.gitignore` 忽略）。
 
-```env
-FLASHDUTY_APP_KEY=<只勾状态页权限的 App Key>
-FLASHDUTY_STATUS_PAGE_ID=<状态页 ID，可用 'GET /status-page/list' 查>
-# 换页面/组件时可覆盖默认映射（JSON：{"site":"01...","api":"01..."}）
-FLASHDUTY_STATUS_COMPONENTS=
-```
+免费版没有、需要时再升级：SSL 证书到期提醒、维护窗口、监控组、事故评论、更短检查间隔与多探测区域。
 
-三条设计决定：
-
-- **只在状态变化时推事件**：首次运行只记录不推（否则上线瞬间刷五条假告警），一直故障也不重复刷。
-- **心跳 + FlashDuty 的「无事件检测」兜底整机挂掉**：探针也在那台机器上，服务器死了就没人推事件；在 FlashDuty 集成里把「无事件检测」设成比心跳间隔长（建议 15 分钟），超时即告警。心跳间隔用 `PROBE_HEARTBEAT_MINUTES` 调，设 `0` 关闭。
-- **探针自身失败不标 `failed`**：脚本捕获异常后退出码仍是 0，避免 systemd 每分钟记一条 failed 把 journal 刷满；排查看 `journalctl -u zyxf-probe`。
-
-配置（`/opt/zyxf/.env`）：
-
-```env
-FLASHDUTY_INTEGRATION_KEY=<集成里那个 integration_key>
-PROBE_DOWNLOAD_URL=          # 可选，下载探针换成别的对象
-PROBE_HEARTBEAT_MINUTES=5    # 0 = 关心跳
-PROBE_TIMEOUT_MS=8000
-```
-
-FlashDuty 侧还要做两件 UI 配置（API 没覆盖）：**路由**（事件 → 状态页组件 / 通知人）和**无事件检测**。只配集成不配路由，事件进来就会被丢弃，状态页不会变。
-
-事件长这样（`labels` 用来做路由和组件映射）：
-
-```json
-{
-  "event_status": "Critical",
-  "alert_key": "zyxf-probe-download",
-  "title_rule": "仲英学辅 · 文件下载不可用",
-  "description": "https://oss.zyxf.top/zyxf/ACM/DP.pptx → HTTP 503",
-  "labels": { "service": "zyxf", "component": "download", "url": "…", "check": "HEAD" }
-}
-```
-
-> 下载探针指向一个具体对象，**那个文件被删了就会误报**；换文件时记得改 `PROBE_DOWNLOAD_URL`。
+> 下载监控指向一个具体对象，**那个文件被删了就会误报**；换文件时在控制台把该监控项的 URL 改成新对象。
+>
+> 监控是外部服务，改这里不需要部署；只有站内菜单链接（`STATUS_URL`）属于前端改动，要发版才会变。
 
 #### 线上踩过的坑（已固化在模板里，改配置时别弄丢）
 

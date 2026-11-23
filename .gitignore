@@ -40,6 +40,3 @@ frontend/src/assets/fonts/*.woff2
 
 # 本地临时截图与自测用的浏览器 profile
 .tmpimg/
-
-# 状态探针的运行时状态（状态变化判定用，不入库）
-backend/.probe-state.json
