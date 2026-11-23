@@ -211,7 +211,7 @@ sudo -u www test -w /opt/zyxf/backend && echo "backend writable" || echo "not wr
 sudo -u www node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync('/opt/zyxf/backend/data.db').exec('PRAGMA journal_mode=WAL');console.log('db open ok')"
 ```
 
-> ⚠️ `.env` 含密钥，属主交给 `www` 后建议 `chmod 600 /opt/zyxf/.env`（`www` 能读即可）。
+> ⚠️ `.env` 含密钥，属主交给 `www` 后建议 `chown www:www /opt/zyxf/.env && chmod 600`（`www` 能读即可）。**漏了 chown 只改权限**的典型症状是启动报 `Missing env: OSS_BUCKET`——变量明明写在文件里，实际是 `www` 读不到文件；2026-11-23 用 root 重写 `.env` 时踩过一次（部署因此失败并自动回滚）。
 > ⚠️ 之后每次用 root 上传/解压代码（尤其 `tar` 带 `--same-owner` 或覆盖 `backend/`）都要**重跑第 2 步**，否则属主被改回 root，故障会在下次重启时复现。
 
 ### 2.2 OSS 凭证：单独一个 RAM 用户 + 最小权限策略
