@@ -795,23 +795,34 @@ curl -sI https://zyxf.top/dzhz | grep -i location                              #
 
 为什么不再「服务器自己探自己」：2026-11-22 上线的自建探针（`zyxf-probe.timer` + `backend/scripts/status-probe.mjs`）跑在**被监控的那台机器**上——整机宕机时它一起停，只能靠心跳 + FlashDuty 无事件检测兜底（最长 15 分钟才发现），而且它测的是「服务器能不能访问自己」，看不到用户侧可达性。UptimeRobot 从境外探测节点发起请求，机器全挂也照测，自带状态页与邮件告警。自建探针与 FlashDuty 状态页联动已于 2026-11-23 拆除（服务器上执行了 `systemctl disable --now zyxf-probe.timer`，脚本与 systemd 单元从仓库删除，需要时翻 git 历史）。
 
-监控项（tag `zyxf`，告警发到 2066803627@qq.com，间隔 300 s / 超时 15 s / 勾选 `checkSSLErrors`）：
+监控项（tag `zyxf`，告警发到 2066803627@qq.com，间隔 300 s / 超时 15 s / 勾选 `checkSSLErrors` / 告警阈值 `threshold: 1` 分钟）：
 
 | 名称 | 类型 | 目标 | 判定 |
 |---|---|---|---|
-| ZYXF 主站 | HTTP HEAD | `https://zyxf.top` | 2xx/3xx |
-| ZYXF API | Keyword | `https://zyxf.top/api/health` | 正文含 `"ok":true` |
-| ZYXF 资料下载（OSS） | HTTP HEAD | `https://oss.zyxf.top/zyxf/ACM/DP.pptx` | 2xx/3xx |
-| 岱宗盒子（dzhz） | HTTP HEAD | `https://dzhz.zyxf.top/` | 2xx/3xx |
-| App 更新清单 | Keyword | `https://dzhz.zyxf.top/xjtu-toolbox/stable.json` | 正文含 `"versionName"` |
+| 仲英学辅页面 | Keyword GET | `https://zyxf.top/` | 正文含 `id="root"` |
+| 仲英学辅API服务 | Keyword GET | `https://zyxf.top/api/health` | 正文含 `"ok":true` |
+| 仲英学辅资料下载服务 | HTTP HEAD | `https://oss.zyxf.top/zyxf/ACM/DP.pptx` | 2xx/3xx |
+| 岱宗盒子网页 | Keyword GET | `https://dzhz.zyxf.top/` | 正文含 `id="root"` |
+| 岱宗盒子更新服务 | Keyword GET | `https://dzhz.zyxf.top/xjtu-toolbox/stable.json` | 正文含 `"versionName"` |
+| 岱宗盒子下载服务 | HTTP HEAD | `https://dzhz.zyxf.top/xjtu-toolbox/apk/latest/app-release.apk` | 2xx/3xx |
 
-状态页按「状态优先」排序（`StatusUpDownPaused`），5 个监控项与上表一一对应；改监控项或状态页 URL 时，同步改 `frontend/src/App.jsx` 的 `STATUS_URL` 与 `frontend/src/test/App.test.jsx` 里的断言。
+状态页按「状态优先」排序（`StatusUpDownPaused`），6 个监控项与上表一一对应；改监控项或状态页 URL 时，同步改 `frontend/src/App.jsx` 的 `STATUS_URL` 与 `frontend/src/test/App.test.jsx` 里的断言。
+
+三条取舍（2026-11-23 调整，都是实测过的决定）：
+
+- **页面两条用 Keyword 而不是 HEAD**：HEAD 只证明「有响应」，抓不到「200 但内容不是我们的首页」——回源打错主机、ESA 缓存串门、维护页返回 200 都属于这类。`id="root"` 是 `index.html` 里 React 的挂载点，构建产物必然带。但它**抓不到白屏**（chunk 丢失时 index.html 完好），那是无头浏览器的活。
+- **告警阈值 1 分钟**：探测点在北美，跨境偶发一次 15 s 超时很正常；阈值 0 会在第一次失败就发信。阈值只延迟**邮件**，DOWN 判定与状态页变红仍是即时的。
+- **下载服务那条永远用 HEAD**：`apk/latest/app-release.apk` 是 8.5 MB，HEAD 每次只取响应头（约 1.7 KB，每月 15 MB 量级）；一旦改成 GET 做内容校验，就是 8.5 MB × 288 次/天 ≈ **73 GB/月**，OSS 外网流出每月 20–35 元。`latest` 是稳定路径，发版换版本号不用改监控。
 
 用 agent 维护：本机 DSH 装了配置型 bundle `.dsh/plugins/mcp-uptimerobot`（包名 `@local/dsh-mcp-uptimerobot`），把官方远程 MCP `https://mcp.uptimerobot.com/mcp` 接进会话，工具名形如 `mcp__uptimerobot__create-monitor`。认证是 Bearer API Key，密钥存 `~/.dsh/.credentials.yaml` 的 `refs.UPTIMEROBOT_API_KEY`，bundle 的 patch 里只写 `${credential:UPTIMEROBOT_API_KEY}`（配合 `expandTemplates: true`，日志会脱敏）——**密钥不进仓库**（`.dsh/` 已被 `.gitignore` 忽略）。
 
 免费版没有、需要时再升级：SSL 证书到期提醒、维护窗口、监控组、事故评论、更短检查间隔与多探测区域。
 
 > 下载监控指向一个具体对象，**那个文件被删了就会误报**；换文件时在控制台把该监控项的 URL 改成新对象。
+>
+> 资料下载 / 更新清单 / APK 三条都依赖 OSS，OSS 全域故障时会**同时发 3 封邮件、状态页 3 个组件一起变红**——免费版没有监控组，无法折叠，接受这个噪音换「一眼看出是 OSS 挂了」。
+>
+> 这 6 条**都不覆盖写路径**：后端 RAM 的 AK 过期/策略误改会让上传全挂，而下载（走 ESA 的 STS）一切正常、监控全绿。要补这个盲区得给 `/api/health` 加 `?deep=1`（`SELECT 1 FROM folders LIMIT 1` + `oss:ListObjects` 探测；注意策略里已无 `oss:GetObject`，不能用 HeadObject），并要求结果缓存 ≥ 60 s，避免公开端点变成 OSS 调用放大器。
 >
 > 监控是外部服务，改这里不需要部署；只有站内菜单链接（`STATUS_URL`）属于前端改动，要发版才会变。
 
