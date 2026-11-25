@@ -496,15 +496,11 @@ nginx -t && systemctl reload nginx
 >
 > **限流（2026-11 加）**：`zyxf_req` 20 r/s（burst 60，nodelay）、`zyxf_api` 6 r/s（burst 20）、单 IP 并发连接 24，超限一律 429。burst 给这么大是因为首屏本身就要拉十几个静态资源——限流只压「持续高频」这一种形态，不误伤正常打开页面。注意它只保护**源站**：文件下载走 `oss.zyxf.top`（ESA 边缘 → 私有桶，见 §4.2.6），根本不经过 nginx。挡下载频率的是 `/api/files/:id/url` 上的 `downloadLimiter*`（每 IP 60 次/分、240 次/时），所以**前端不能自己拼下载路径**，否则限流和下载记账会一起失效。
 
-#### 4.2.1 `/games/`：仓库外的独立服务
+#### 4.2.1 `/games/`：已下线的旧版排行榜桩
 
-`frontend/nginx.conf` 里有一块 `location ^~ /games/`，反代到 `127.0.0.1:4100` 的 **游戏排行榜后端**——它服务于**岱宗盒子（`dzhz.zyxf.top`，即 `xjtu-toolbox` 项目）**，是仓库外的独立服务（systemd: `xjtu-games`，代码在 `/opt/xjtu-games`）。这块原先只存在于生产服务器上——按「整文件覆盖」的姿势改配置会把它删掉，排行榜与提交分数直接挂掉（issue #86，2026-11 收进模板）。
+`frontend/nginx.conf` 里保留了两处 `location ^~ /games/`（主站 `zyxf.top` 兼容最早写死主站的老包，`dzhz.zyxf.top` 兼容 6.0.x–6.2.1 老包），统一直接返回 `410 Gone` JSON（`{"error":"小游戏全服榜已迁至独立服务，请更新到最新版本继续使用"}`）。
 
-> ⚠️ 探活时注意：`/games/` 根路径**本身没有路由**，会返回该服务自己的 JSON 404（`{"error":"没有这个接口"}`）。这是正常现象，不代表反代挂了——真正的接口挂在 `/games/` 之下。反代是否生效看的是响应来自谁：nginx 若没有这条 location 会走 SPA 回落返回 200 HTML。
-
-- 它的 `X-Forwarded-For` 用 `$proxy_add_x_forwarded_for`（**追加**），与主站 `/api/` 的 `$remote_addr`（**覆盖**，BUG-36 要求）不同。改成覆盖前先确认 `xjtu-games` 自己的 trust proxy 取法，别顺手套用主站写法。
-- `client_max_body_size 4k` 是那个服务的约定，不随主站的 `10m` 调整。
-- 现在部署会整份覆盖 `zyxf.conf`，因此这块**只能改仓库模板**；只改服务器上的会被下次发布冲掉。
+原 `127.0.0.1:4100` 的 `xjtu-games` Node 服务及 `/opt/xjtu-games` 已于 2026-11-25 下线清理，新版 App（6.2.2+）直连 Cloudflare Workers + D1（`https://api.dzhz.top/games/*`，源码在 `Guochaoo/dzhz-server`）。等老版本淘汰差不多后，这两段 `location ^~ /games/` 也可以从 `frontend/nginx.conf` 删掉。
 
 #### 4.2.2 `dzhz.zyxf.top` 的静态加速（ESA，2026-11 迁入）
 
@@ -625,7 +621,7 @@ aliyun esa DescribeSiteTopData --SiteId <id> --Limit 10 \
 |---|---|
 | ESA 记录 | `zyxf.top` → CNAME `origin.zyxf.top`（源类型 `Domain`、HostPolicy `follow_hostname`、Proxied） |
 | 边缘 CNAME | `zyxf.top.a1.initrr.com` |
-| 源站主机名 | `origin.zyxf.top` A → 服务器公网 IP。**ESA 记录里不能直接写 IP**：CNAME 接入的站点只接受 CNAME 记录（`InvalidParameter.CnameSiteRecordUnsupport`），所以先给服务器起一个主机名 |
+| 源地址池 | `zyxf-origin-ip.origin-pool.zyxf.top` → `47.93.224.61`（2026-11-25 已从 `origin.zyxf.top` 域名改为源地址池直指 IP） |
 | 边缘证书 | ESA 免费证书（Let's Encrypt，`ApplyCertificate --Type lets_encrypt`）。DCV 是 **HTTP** 类型：把挑战文件放进源站 `/var/www/letsencrypt/.well-known/acme-challenge/`，几分钟后自动验证通过，不需要加 DNS 记录 |
 | 源站证书 | 仍是 certbot 那张（ZeroSSL），现在只用于 **ESA → 源站** 这一段 |
 
@@ -759,9 +755,14 @@ aliyun esa CreateCacheRule --SiteId <id> --RuleName 'dzhz-pages-bypass' --RuleEn
 
 ⚠️ **`--DnsRecord` 要填 ESA 站点里已有的记录名**（这里是 `zyxf.top`，它的源站就是 `origin.zyxf.top`），不能填一个只存在于 Aliyun DNS 的主机名——填 `origin.zyxf.top` 会得到 `502 / error=destination_not_found`。
 
-nginx 侧是 `frontend/nginx.conf` 末尾的 vhost，**和主站同一套策略**：静态资源按前缀/扩展名读磁盘（不存在就 404，不能回 HTML），`/games/`、`/api/` 反代本机进程，其余全部 `try_files → /index.html` 交给 SPA。盒子域名上 `/` 渲染落地页、`/legal` 与 `/license` 渲染协议页。<br>早先写过一版「nginx 白名单 + 其余 301 回主站」，为的是防止整站出现第二套地址；但每次加页面都要改 nginx，收益太小，2026-11-22 改成「nginx 统一回退 + 前端守卫」：`App.jsx` 在盒子域名上只放行 `/`、`/legal`、`/license`（及 `/dzhz…` 旧路径），其余路径 `location.replace` 到 `https://zyxf.top` 的同一路径。判定在 `frontend/src/dzhz.js` 的 `isDzhzPathBlocked`（有单测），策略写在代码里，加页面不用碰 nginx。
+> **2026-11-25 更新（已彻底拆离页面与排行榜）**：
+> 岱宗盒子的官网（`/`、`/legal`、`/license`）与小游戏全服榜（`api.dzhz.top/games/*`）已全部迁至 `dzhz.top`（Cloudflare，独立仓库 `Guochaoo/dzhz-server`）。
+> 现在本仓库**已删除** `DzhzPage` / 协议页 / `dzhz.js` / `dzhz-assets`：
+> - 主站侧栏菜单「岱宗盒子」直接外链 `https://dzhz.top/`（排在「关于我们」下方，带站外图标）；
+> - `dzhz.zyxf.top` 仍通过阿里云 ESA + OSS 承担 `/xjtu-toolbox/*`（APK / `stable.json` / `bulletin.json`）国内加速（老版本 App 硬编码了该域名，且 ESA 免费版不支持子域建站，故保留）；
+> - `dzhz.zyxf.top` 除 `/xjtu-toolbox/*` 外的请求仍按回源规则送入本机 nginx，由 `nginx.conf` 对 `/games/` 返回 `410 JSON`、其余全部 `301 → https://dzhz.top$request_uri`（主站 `/dzhz*` 同样 `301 → https://dzhz.top/...`）。
 
-前端仍是**同一个 bundle**：`App.jsx` 用 `isDzhzHost()`（`frontend/src/dzhz.js`）判断，盒子域名上根路径渲染 `DzhzPage`、`/legal` 渲染协议页、`/license` 渲染开源协议，版式走「整页落地页」（不挂左栏 / 搜索 / 知识图谱 / 全站菜单）。
+早期（2026-11-22 刚拆子域时）曾由同一份前端 bundle 靠 `isDzhzHost()` 承接落地页与协议页，现已废止，保留下方历史记录备查：
 
 主站侧的收尾：
 
