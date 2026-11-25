@@ -12,9 +12,6 @@ const { __resetResourceStore } = await import('../data/resource.js');
 vi.mock('../components/SearchBar.jsx', () => ({
   default: () => <input aria-label="搜索" placeholder="搜索" />,
 }));
-vi.mock('../pages/DzhzPage.jsx', () => ({
-  default: () => <div data-testid="dzhz-page" />,
-}));
 vi.mock('../components/StaggeredMenu.jsx', () => ({
   default: ({ items, account, onOpenSettings }) => (
     <nav>
@@ -128,12 +125,11 @@ describe('App', () => {
     expect(await screen.findByRole('link', { name: '浏览资料库' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '查看统计仪表盘' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '了解仲英书院学业辅导中心' })).toBeInTheDocument();
-    // 岱宗盒子已迁到独立域名（docs/DEPLOY.md §4.2.7）：菜单项必须是站外绝对链接。
-    // 写成 /dzhz 的话，客户端路由会绕过 nginx 的 301，把盒子页面画在主站版式里。
-    expect(screen.getByRole('link', { name: '查看岱宗盒子介绍页' })).toHaveAttribute(
-      'href',
-      'https://dzhz.zyxf.top/'
-    );
+    // 岱宗盒子官网已迁至独立域名 dzhz.top：菜单项为站外绝对链接，排在「关于我们」之后。
+    const aboutLink = screen.getByRole('link', { name: '了解仲英书院学业辅导中心' });
+    const dzhzLink = screen.getByRole('link', { name: '查看岱宗盒子介绍页' });
+    expect(dzhzLink).toHaveAttribute('href', 'https://dzhz.top/');
+    expect(aboutLink.compareDocumentPosition(dzhzLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // 服务状态是外部站点（UptimeRobot），走站外链接，别写成站内路由。
     expect(screen.getByRole('link', { name: '在新标签页打开服务状态页（外部站点）' })).toHaveAttribute(
       'href',
@@ -154,18 +150,6 @@ describe('App', () => {
   test('active nav item matches the route', async () => {
     renderApp('/dashboard');
     expect(await screen.findByText('统计面板')).toBeInTheDocument();
-  });
-
-  // 线上直接输入 /dzhz 曾 301 到 /dzhz/ 再 403：nginx 把静态资源目录当成了
-  // 路由。资源目录已迁到 /dzhz-assets；这里守住带斜杠的路径也必须走落地页布局
-  // （p-0、不叠全局菜单），否则 /dzhz/ 会按普通页面渲染。
-  test('/dzhz/ 带斜杠也按独立落地页布局', async () => {
-    renderApp('/dzhz/');
-    expect(await screen.findByTestId('dzhz-page')).toBeInTheDocument();
-    const main = screen.getByRole('main');
-    expect(main.className).toContain('p-0');
-    expect(main.className).not.toContain('px-4');
-    expect(screen.queryByRole('navigation')).toBeNull();
   });
 
   test('unknown routes redirect home', async () => {
